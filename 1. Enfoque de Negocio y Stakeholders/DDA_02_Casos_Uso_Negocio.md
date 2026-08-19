@@ -64,7 +64,7 @@ Los CUN se derivan de la cadena de valor observada en el enunciado: captar la de
 
 ### 3.1 Diagrama de casos de uso de negocio de alto nivel
 
-
+![Diagama](/img/Diagrama%20de%20Casos%20de%20Uso%20de%20Negocio%20de%20Alto%20Nivel.png)
 
 **Nota sobre las relaciones:** CUN-09 se modela como `<<extend>>` y no como `<<include>>` de forma deliberada. El enunciado establece que una falla en los canales de comunicación no debe impedir que la operación principal continúe (EV-34), lo que significa que notificar no es parte obligatoria del proceso de venta. Esta decisión de modelado es la traducción directa de PRE-03 y debe sostenerse en la defensa.
 
