@@ -2,10 +2,7 @@
 
 **Curso:** Análisis y Diseño de Sistemas 2, Sección A — USAC  
 **Documento:** Apartado del Documento de Definición de Arquitectura (DDA)  
-**Elaborado por:** Angel Martinez (202300410) — Arquitecto de Negocio y Stakeholders  
-**Depende de:** `DDA_00_Catalogo_Evidencia.md`  
-**Versión:** 0.1 (borrador para revisión del equipo)
-
+**Elaborado por:** Angel Martinez (202300410) 
 ---
 
 ## 1. Alcance y criterios de identificación
@@ -198,8 +195,3 @@ Estos conflictos son el eje de la defensa oral. La columna de estrategia es una 
 
 ---
 
-## 9. Pendientes de este apartado
-
-1. Confirmar con el cliente si "La Dirección" y "La Gerencia" (STK-02) son el mismo stakeholder.
-2. Solicitar los nombres de la Directora de Comercialización (STK-06) y del Jefe de Operaciones (STK-07), o declarar formalmente su ausencia en el DDA.
-3. Validar con el equipo la matriz de la sección 4 antes de derivar los drivers, ya que es el insumo de la matriz de trazabilidad final.

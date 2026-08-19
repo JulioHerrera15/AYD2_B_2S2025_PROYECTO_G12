@@ -2,9 +2,7 @@
 
 **Curso:** Análisis y Diseño de Sistemas 2, Sección A — USAC  
 **Documento:** Apartado del Documento de Definición de Arquitectura (DDA)  
-**Elaborado por:** Angel Martinez (202300410) — Arquitecto de Negocio y Stakeholders  
-**Depende de:** `DDA_00_Catalogo_Evidencia.md`, `DDA_01_Stakeholders_Preocupaciones.md`  
-**Versión:** 0.1 (borrador para revisión del equipo)
+**Elaborado por:** Angel Martinez (202300410) 
 
 ---
 
@@ -267,9 +265,3 @@ Esta priorización es preliminar y debe confirmarse en el apartado de caracterí
 
 ---
 
-## 9. Pendientes de este apartado
-
-1. Resolver `VAC-09` sobre el alcance de CUN-08 antes de cerrar el Diagrama de Contexto.
-2. Validar con Jonathan la lista de CDU candidatos de la sección 8 antes de que inicie el modelado expandido.
-3. Confirmar con Francisco que la delimitación de la sección 6 coincide con los límites que usará en el Diagrama de Contexto.
-4. Revisar que la relación `<<extend>>` de CUN-09 sea aceptada por el equipo, dado que es una decisión de modelado con justificación arquitectónica y no una convención estética.

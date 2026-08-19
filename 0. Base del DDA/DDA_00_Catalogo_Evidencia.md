@@ -2,8 +2,7 @@
 
 **Curso:** Análisis y Diseño de Sistemas 2, Sección A — USAC  
 **Documento:** Insumo base del Documento de Definición de Arquitectura (DDA)  
-**Elaborado por:** Angel Martinez (202300410) — Arquitecto de Negocio y Stakeholders  
-**Versión:** 0.1 (borrador para revisión del equipo)
+**Elaborado por:** Angel Martinez (202300410) 
 
 ---
 
@@ -139,44 +138,5 @@ Formato sugerido de referencia cruzada dentro del DDA: `(EV-15, EV-16)` entre pa
 | EV-52 | Toda la evolución del código y la configuración de infraestructura debe estar centralizada en un repositorio privado de GitHub con la nomenclatura oficial indicada. | Artefacto de gestión obligatorio. Verificar el año correcto de la nomenclatura antes de crear el repositorio. | RES | Jose |
 | EV-53 | Los ADR se utilizarán como registro vivo para el refinamiento continuo de las decisiones, y los diagramas constituirán vistas del DDA. | Define la relación entre artefactos: los diagramas no son anexos independientes sino vistas referenciadas desde el DDA. | RES | Angel |
 
----
 
-## 10. Vacíos de información y supuestos a confirmar
 
-El enunciado no proporciona estos datos y son necesarios para escribir escenarios de calidad medibles. Deben plantearse al cliente (profesor y auxiliar) o declararse explícitamente como supuestos del equipo en el DDA.
-
-| ID | Vacío detectado | Por qué importa | Propuesta de supuesto |
-|---|---|---|---|
-| VAC-01 | Volumen de transacciones en un día normal (órdenes por hora, usuarios concurrentes). | Sin línea base, el factor de 8x de EV-27 no es dimensionable. | Derivar una estimación desde EV-01 y EV-02 y declararla como supuesto documentado. |
-| VAC-02 | Tiempo exacto de expiración de una reserva de inventario (EV-23 dice "acorde con la operación comercial"). | Es un parámetro de negocio que afecta directamente la tasa de sobreventa y el abandono de carrito. | Proponer un valor por canal y marcarlo como configurable. |
-| VAC-03 | Definición precisa de "finalizar la orden" respecto de la facturación SAT (EV-19). | Determina si la certificación fiscal es bloqueante o si la orden puede confirmarse en estado pendiente de certificación. | Interpretar que "finalizar" es el cierre fiscal de la orden, no la confirmación al cliente, y declararlo. |
-| VAC-04 | Objetivos de recuperación ante desastre (RTO y RPO). | Afecta directamente el diseño de respaldo y el costo mensual de EV-42. | Proponer valores y validarlos contra el presupuesto. |
-| VAC-05 | Periodo de retención exigido para la evidencia de auditoría fiscal. | Determina el crecimiento del almacenamiento del registro de auditoría y su costo. | Asumir el periodo legal aplicable y declararlo. |
-| VAC-06 | Inventario de hardware existente on-premises (EV-48 menciona "inversión existente" sin detallarla). | Sin esto, el presupuesto de EV-41 no puede repartirse entre capex y opex. | Solicitar el dato; si no está disponible, declarar una topología mínima supuesta. |
-| VAC-07 | Si el POS puede consultar inventario o solo recibir eventos (EV-16 solo menciona recepción). | Define si la venta en tienda pasa por el motor de reservas central o se registra a posteriori. | Asumir recepción únicamente, y tratar la venta presencial como evento entrante vía adaptador. |
-| VAC-08 | Año correcto en la nomenclatura del repositorio: el enunciado indica `2S2025` pero el cronograma corresponde a 2026. | Bloquea la creación del repositorio oficial. | Confirmar con el auxiliar antes de crearlo. |
-
----
-
-## 11. Conflictos entre stakeholders detectados en la evidencia
-
-Estos conflictos son el material principal de la defensa oral. Se documentan aquí y se desarrollan en el apartado de stakeholders del DDA.
-
-| Conflicto | Evidencia enfrentada | Naturaleza de la tensión |
-|---|---|---|
-| Trazabilidad total frente a rendimiento en picos | EV-38 vs. EV-37 y EV-27 | Todo registro de auditoría adicional agrega latencia de escritura, justo en el momento de mayor carga. Es el conflicto central del caso. |
-| Obligación fiscal sincrónica frente a experiencia del cliente | EV-19 vs. EV-33 | La SAT tiene tiempos variables, pero el cliente no acepta esperas largas al confirmar. |
-| Ambición de resiliencia frente a techo presupuestario | EV-28, EV-49 vs. EV-41, EV-42 | La redundancia real cuesta, y el límite mensual es estrecho. |
-| Autonomía de pagos frente a cumplimiento de datos de tarjeta | EV-28 vs. EV-25 | No se puede ganar independencia del proveedor almacenando datos de tarjeta. |
-| No modificar el legacy frente a consistencia contable oportuna | EV-14, EV-15 vs. EV-10, EV-30 | La ventana de 30 minutos del ERP impone consistencia eventual en la contabilidad. |
-
----
-
-## 12. Próximos pasos que dependen de este documento
-
-1. **STK y PRE** (Angel): derivar el listado formal de stakeholders y preocupaciones a partir de las secciones 7 y 11.
-2. **CUN** (Angel): construir el diagrama de casos de uso de negocio y su primera descomposición a partir de las secciones 3, 4 y 6.
-3. **CAR** (Angel y Jonathan): priorizar características usando EV-43 como criterio declarado por el cliente.
-4. **EAC** (Jose y Julio): escribir escenarios medibles a partir de EV-11, EV-12, EV-17, EV-18, EV-27, EV-30, EV-33 y EV-49, resolviendo antes VAC-01 y VAC-04.
-5. **RES** (Francisco y Julio): formalizar restricciones a partir de las secciones 5, 8 y 9.
-6. **Matrices de trazabilidad** (Angel y Francisco): cruzar `EV` con `PRE`, `DRF`, `EAC`, `RES`, `ADR` y vistas.
