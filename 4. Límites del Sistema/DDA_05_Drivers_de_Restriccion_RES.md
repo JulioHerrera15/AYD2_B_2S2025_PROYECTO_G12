@@ -1,8 +1,11 @@
 # Sección 4 — Límites del Sistema: Drivers de Restricción (RES-##)
 
 **Curso:** Análisis y Diseño de Sistemas 2, Sección A — USAC
+
 **Documento:** Apartado del Documento de Definición de Arquitectura (DDA)
+
 **Elaborado por:** Francisco Gerardo Castillo Sagastume (202300653)
+
 **Basado en:** `DDA_00_Catálogo_Evidencia`, `Restricciones_de_Infraestructura`
 
 ---
@@ -34,10 +37,6 @@ Cada `RES-##` referencia su evidencia (`EV-##`), indica qué alternativas descar
 | RES-13 | Minimizar el consumo energético; mantener la facturación totalmente electrónica | EV-47 | Sostenibilidad | Julio |
 | RES-14 | Despliegue inicial on-premises, reutilizando infraestructura existente | EV-48 | Infraestructura | Julio |
 | RES-15 | La arquitectura debe permitir una migración planificada a la nube sin rediseño | EV-49 | Infraestructura | Julio |
-| RES-16 | Notación UML 2.5.1 obligatoria; toda notación complementaria debe declararse | EV-50 | Proceso | Angel |
-| RES-17 | Tablero Kanban de 6 columnas fijas, priorizando componentes base | EV-51 | Proceso | Jose |
-| RES-18 | Repositorio privado de GitHub centralizado, con nomenclatura oficial | EV-52 | Proceso | Jose |
-| RES-19 | Los ADR son el registro vivo de decisiones; los diagramas son vistas del DDA | EV-53 | Proceso | Angel |
 
 ---
 
@@ -155,19 +154,19 @@ Cada `RES-##` referencia su evidencia (`EV-##`), indica qué alternativas descar
 
 | RES | Decisión que la satisface | Estado |
 |---|---|---|
-| RES-01 | Broker + worker batch, ACL dedicada al ERP (Decisiones §2.4) | Cubierta |
-| RES-02 | Worker de consolidación cada 30 min (Decisiones §2.4) | Cubierta |
-| RES-03 | Pub/Sub con dead-letter exchange + TTL (Decisiones §2.4) | Cubierta |
-| RES-04 | Circuit Breaker + Outbox + Idempotencia en adaptador de Pagos | Cubierta |
+| RES-01 | Broker + worker batch, ACL dedicada al ERP | Cubierta |
+| RES-02 | Worker de consolidación cada 30 min | Cubierta |
+| RES-03 | Pub/Sub con dead-letter exchange + TTL | Cubierta |
+| RES-04 | Patrón de diseño en pagos | Cubierta |
 | RES-05 | ACL + Circuit Breaker en adaptador de LogiExpress | Cubierta |
 | RES-06 | Notificaciones desacopladas vía Pub/Sub | Cubierta |
 | RES-07 | Canal MOM dedicado a SAT | Cubierta, con vacío VAC-03 abierto |
 | RES-08 | Tokenización delegada a PayKlik | Cubierta |
-| RES-09 | — | **Hueco: sin decisión explícita** |
-| RES-10 | Tabla de costos declarados (`Restricciones_de_Infraestructura` §1) | Cubierta |
+| RES-09 | Cifrado por país | Cubierta |
+| RES-10 | Tabla de costos declarados | Cubierta |
 | RES-11 | Stack open source on-premises | Cubierta, con riesgo abierto de dimensionamiento |
 | RES-12 | Capacitación Kubernetes presupuestada | Cubierta |
-| RES-13 | HPA / escalado bajo demanda (Decisiones §2.5) | Cubierta |
+| RES-13 | HPA / escalado bajo demanda | Cubierta |
 | RES-14 | Kubernetes on-premises, Redis on-premises | Cubierta |
 | RES-15 | Contenedores portables; ruta Redis→DynamoDB definida | Cubierta |
 
