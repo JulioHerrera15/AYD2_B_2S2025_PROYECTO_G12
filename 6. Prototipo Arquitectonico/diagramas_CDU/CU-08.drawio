@@ -1,0 +1,71 @@
+<mxfile host="app.diagrams.net" agent="5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/21.8.2 Chrome/116.0.5845.228 Electron/26.3.0 Safari/537.36">
+  <diagram name="CU-08" id="CU-08">
+    <mxGraphModel dx="1677" dy="1167" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1600" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="c2" parent="1" style="rounded=0;html=1;fillColor=none;strokeColor=#23445D;strokeWidth=3;verticalAlign=top;fontSize=12;fontStyle=1;spacingTop=6;spacingLeft=8;" value="CU-08 — Publicar eventos pendientes (Outbox)&#xa;SGO-Logic  |  Todos los contextos de escritura  |  CAR-10  |  EV-16, EV-28" vertex="1">
+          <mxGeometry height="504" width="795" x="200" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c5" parent="1" style="ellipse;html=1;whiteSpace=wrap;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;align=center;" value="Publicar eventos&#xa;pendientes (Outbox)" vertex="1">
+          <mxGeometry height="68" width="195" x="500" y="125" as="geometry" />
+        </mxCell>
+        <mxCell id="c6" parent="1" style="ellipse;html=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=center;" value="Polling de tabla&#xa;outbox en SQL" vertex="1">
+          <mxGeometry height="68" width="195" x="250" y="263" as="geometry" />
+        </mxCell>
+        <mxCell id="c7" parent="1" style="ellipse;html=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=center;" value="Publicar evento&#xa;en RabbitMQ" vertex="1">
+          <mxGeometry height="68" width="195" x="500" y="367" as="geometry" />
+        </mxCell>
+        <mxCell id="c8" parent="1" style="ellipse;html=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=center;" value="Marcar evento&#xa;como publicado" vertex="1">
+          <mxGeometry height="68" width="195" x="250" y="386" as="geometry" />
+        </mxCell>
+        <mxCell id="c9" parent="1" style="ellipse;html=1;whiteSpace=wrap;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;align=center;" value="Mover a dead-letter&#xa;exchange (DLX)" vertex="1">
+          <mxGeometry height="68" width="195" x="750" y="263" as="geometry" />
+        </mxCell>
+        <mxCell id="c10" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fontSize=9;fillColor=#fff2cc;strokeColor=#d6b656;align=left;" value="Aplica a: Órdenes,&#xa;Pagos, Inventario,&#xa;Facturación.&#xa;Garantía exactly-once.&#xa;(CAR-10)" vertex="1">
+          <mxGeometry height="115" width="185" x="1020" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c11" edge="1" parent="1" source="c5" style="dashed=1;endArrow=open;endFill=0;strokeColor=#6c8ebf;fontColor=#6c8ebf;fontSize=10;html=1;" target="c6" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c12" edge="1" parent="1" source="c5" style="dashed=1;endArrow=open;endFill=0;strokeColor=#6c8ebf;fontColor=#6c8ebf;fontSize=10;html=1;" target="c7" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c13" edge="1" parent="1" source="c5" style="dashed=1;endArrow=open;endFill=0;strokeColor=#6c8ebf;fontColor=#6c8ebf;fontSize=10;html=1;" target="c8" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c14" edge="1" parent="1" source="c9" style="dashed=1;endArrow=open;endFill=0;strokeColor=#d79b00;fontColor=#d79b00;fontSize=10;html=1;" target="c5" value="«extend»&amp;#xa;[máx. reintentos agotados]">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c15" edge="1" parent="1" style="endArrow=none;html=1;fontSize=9;strokeColor=#555555;" target="c5" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="150" y="159" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c16" edge="1" parent="1" source="c7" style="endArrow=none;html=1;fontSize=9;strokeColor=#555555;" value="publish">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1040" y="401" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c17" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=9;fontStyle=1;" value="Leyenda" vertex="1">
+          <mxGeometry height="20" width="60" x="200" y="604" as="geometry" />
+        </mxCell>
+        <mxCell id="c18" parent="1" style="ellipse;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=8;fontStyle=1;align=center;" value="CU Principal" vertex="1">
+          <mxGeometry height="24" width="100" x="270" y="604" as="geometry" />
+        </mxCell>
+        <mxCell id="c19" parent="1" style="ellipse;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=8;align=center;" value="«include»" vertex="1">
+          <mxGeometry height="24" width="100" x="380" y="604" as="geometry" />
+        </mxCell>
+        <mxCell id="c20" parent="1" style="ellipse;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=8;align=center;" value="«extend»" vertex="1">
+          <mxGeometry height="24" width="100" x="490" y="604" as="geometry" />
+        </mxCell>
+        <mxCell id="WADWdqmNzK0UK_oySmI0-1" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" value="&lt;span style=&quot;color: rgb(201, 133, 49); font-size: 10px; background-color: rgb(18, 18, 18);&quot;&gt;RabbitMQ&lt;/span&gt;&lt;br style=&quot;color: rgb(201, 133, 49); font-size: 10px;&quot;&gt;&lt;span style=&quot;color: rgb(201, 133, 49); font-size: 10px; background-color: rgb(18, 18, 18);&quot;&gt;(broker)&lt;/span&gt;" vertex="1">
+          <mxGeometry height="60" width="30" x="1040" y="371" as="geometry" />
+        </mxCell>
+        <mxCell id="WADWdqmNzK0UK_oySmI0-2" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" value="&lt;span style=&quot;color: rgb(201, 133, 49); font-size: 10px; background-color: rgb(18, 18, 18);&quot;&gt;Sistema automático&lt;/span&gt;&lt;br style=&quot;color: rgb(201, 133, 49); font-size: 10px;&quot;&gt;&lt;span style=&quot;color: rgb(201, 133, 49); font-size: 10px; background-color: rgb(18, 18, 18);&quot;&gt;(Publicador)&lt;/span&gt;" vertex="1">
+          <mxGeometry height="60" width="30" x="120" y="125" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
