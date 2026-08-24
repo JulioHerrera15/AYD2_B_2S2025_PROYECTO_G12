@@ -268,7 +268,7 @@ Orden según las olas del Backbone. Los casos del núcleo (Ola 1) tienen descrip
 | **Objetivo** | Conservar de forma inmutable quién ejecutó cada operación, cuándo y qué cambió, recuperable en menos de un segundo. |
 | **Precondición** | Ocurre una operación fiscal u operativamente relevante en cualquier contexto. |
 | **Disparador** | El contexto de origen emite el evento correspondiente vía RabbitMQ. |
-| **Flujo principal** | 1. Auditoría recibe el evento con actor, momento, operación y datos del cambio. 2. Lo inserta en la bitácora en SQL-Finanzas, que solo admite inserción: no permite modificar ni borrar (`INSERT` únicamente, sin `UPDATE` ni `DELETE`). 3. Indexa el registro por identificador de transacción para permitir la recuperación inmediata. |
+| **Flujo principal** | 1. Auditoría recibe el evento con actor, momento, operación y datos del cambio. 2. Lo inserta en su propia base de datos de Auditoría — una instancia separada de SQL-Finanzas y de SQL Operacional, que solo admite inserción: no permite modificar ni borrar (`INSERT` únicamente, sin `UPDATE` ni `DELETE`). 3. Indexa el registro por identificador de transacción para permitir la recuperación inmediata. |
 | **Flujo alternativo — consulta de evidencia** | Ante una solicitud de auditoría (ej. inspección de la SAT), el sistema recupera por identificador de transacción todos los registros asociados y los devuelve en menos de un segundo (EV-30). |
 | **Flujo de excepción** | Si la inserción falla, el evento permanece en la cola de RabbitMQ y se reintenta. La bitácora no acepta pérdidas. |
 | **Postcondición** | El evento queda registrado de forma permanente e inalterable. |
