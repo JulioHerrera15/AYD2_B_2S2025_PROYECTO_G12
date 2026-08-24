@@ -27,12 +27,14 @@ Todos los integrantes deben usar esta nomenclatura desde el primer día. Si cada
 | `PRE-##` | Preocupación arquitectónica | Angel |
 | `CAR-##` | Característica priorizada del sistema | Angel |
 | `CUN-##` | Caso de uso de negocio | Angel |
-| `CDU-##` | Caso de uso expandido del sistema | Jonathan / Angel |
+| `CU-##` | Caso de uso expandido del sistema | Jonathan / Angel |
 | `DRF-##` | Driver de requisito funcional | Angel / Jonathan |
 | `EAC-##` | Escenario de atributo de calidad | Jose / Julio |
 | `RES-##` | Driver de restricción | Francisco / Julio |
 | `ADR-###` | Architecture Decision Record | Quien toma la decisión |
 | `RSG-##` | Riesgo técnico identificado | Transversal |
+
+*Nota: el prefijo originalmente previsto para el caso de uso expandido del sistema era `CDU-##`. Se oficializa `CU-##` como el prefijo vigente porque es el que ya está instanciado (15 fichas, CU-01 a CU-15, en `DDA_04_Drivers_Funcionales_CDU.md`); `CDU-##` queda descartado para no numerar el mismo artefacto con dos esquemas distintos.*
 
 Formato sugerido de referencia cruzada dentro del DDA: `(EV-15, EV-16)` entre paréntesis al final de la afirmación que sustenta.
 
