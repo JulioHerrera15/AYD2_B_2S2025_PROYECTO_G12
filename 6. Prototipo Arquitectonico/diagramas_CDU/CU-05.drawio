@@ -1,0 +1,63 @@
+<mxfile host="app.diagrams.net" agent="5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/21.8.2 Chrome/116.0.5845.228 Electron/26.3.0 Safari/537.36">
+  <diagram name="CU-05" id="CU-05">
+    <mxGraphModel dx="1184" dy="824" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1600" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="c2" parent="1" style="rounded=0;html=1;fillColor=none;strokeColor=#23445D;strokeWidth=3;verticalAlign=top;fontSize=12;fontStyle=1;spacingTop=6;spacingLeft=8;" value="CU-05 — Registrar evento de auditoría&#xa;SGO-Logic  |  Contexto: Auditoría  |  CAR-06  |  EV-30" vertex="1">
+          <mxGeometry height="504" width="795" x="200" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c4" parent="1" style="ellipse;html=1;whiteSpace=wrap;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;align=center;" value="Registrar evento&#xa;de auditoría" vertex="1">
+          <mxGeometry height="68" width="195" x="500" y="125" as="geometry" />
+        </mxCell>
+        <mxCell id="c5" parent="1" style="ellipse;html=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=center;" value="Recibir evento&#xa;vía RabbitMQ" vertex="1">
+          <mxGeometry height="68" width="195" x="250" y="263" as="geometry" />
+        </mxCell>
+        <mxCell id="c6" parent="1" style="ellipse;html=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=center;" value="Insertar en bitácora&#xa;append-only (SQL-Finanzas)" vertex="1">
+          <mxGeometry height="68" width="195" x="495" y="263" as="geometry" />
+        </mxCell>
+        <mxCell id="c7" parent="1" style="ellipse;html=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=center;" value="Indexar por ID&#xa;de transacción" vertex="1">
+          <mxGeometry height="68" width="195" x="250" y="386" as="geometry" />
+        </mxCell>
+        <mxCell id="c8" parent="1" style="ellipse;html=1;whiteSpace=wrap;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;align=center;" value="Consultar evidencia&#xa;por ID transacción" vertex="1">
+          <mxGeometry height="68" width="195" x="750" y="263" as="geometry" />
+        </mxCell>
+        <mxCell id="c9" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fontSize=9;fillColor=#fff2cc;strokeColor=#d6b656;align=left;" value="RESTRICCIÓN (CAR-06):&#xa;Solo INSERT en bitácora.&#xa;Sin UPDATE ni DELETE.&#xa;Recuperación &lt; 1 s.&#xa;(EV-30)" vertex="1">
+          <mxGeometry height="115" width="185" x="1025" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="c10" edge="1" parent="1" source="c4" style="dashed=1;endArrow=open;endFill=0;strokeColor=#6c8ebf;fontColor=#6c8ebf;fontSize=10;html=1;" target="c5" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c11" edge="1" parent="1" source="c4" style="dashed=1;endArrow=open;endFill=0;strokeColor=#6c8ebf;fontColor=#6c8ebf;fontSize=10;html=1;" target="c6" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c12" edge="1" parent="1" source="c4" style="dashed=1;endArrow=open;endFill=0;strokeColor=#6c8ebf;fontColor=#6c8ebf;fontSize=10;html=1;" target="c7" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c13" edge="1" parent="1" source="c8" style="dashed=1;endArrow=open;endFill=0;strokeColor=#d79b00;fontColor=#d79b00;fontSize=10;html=1;" target="c4" value="«extend»&amp;#xa;[solicitud de inspección]">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c14" edge="1" parent="1" style="endArrow=none;html=1;fontSize=9;strokeColor=#555555;" target="c4" value="emite evento">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="119.99999999999977" y="202.27973857338316" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c15" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=9;fontStyle=1;" value="Leyenda" vertex="1">
+          <mxGeometry height="20" width="60" x="200" y="604" as="geometry" />
+        </mxCell>
+        <mxCell id="c16" parent="1" style="ellipse;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=8;fontStyle=1;align=center;" value="CU Principal" vertex="1">
+          <mxGeometry height="24" width="100" x="270" y="604" as="geometry" />
+        </mxCell>
+        <mxCell id="c17" parent="1" style="ellipse;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=8;align=center;" value="«include»" vertex="1">
+          <mxGeometry height="24" width="100" x="380" y="604" as="geometry" />
+        </mxCell>
+        <mxCell id="c18" parent="1" style="ellipse;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=8;align=center;" value="«extend»" vertex="1">
+          <mxGeometry height="24" width="100" x="490" y="604" as="geometry" />
+        </mxCell>
+        <mxCell id="ZHkbjwLv6aRIhqCZxRWr-1" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" value="&lt;span style=&quot;color: light-dark(rgb(201, 133, 49), rgb(0, 0, 0));&quot;&gt;&lt;span style=&quot;font-size: 10px; background-color: rgb(18, 18, 18);&quot;&gt;Cualquier contexto&lt;/span&gt;&lt;br style=&quot;font-size: 10px;&quot;&gt;&lt;span style=&quot;font-size: 10px; background-color: rgb(18, 18, 18);&quot;&gt;(sistema)&lt;/span&gt;&lt;/span&gt;" vertex="1">
+          <mxGeometry height="60" width="30" x="80" y="170" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

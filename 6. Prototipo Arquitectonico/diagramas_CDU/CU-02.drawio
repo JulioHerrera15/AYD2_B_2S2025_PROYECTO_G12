@@ -1,0 +1,99 @@
+<mxfile host="app.diagrams.net" agent="5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/21.8.2 Chrome/116.0.5845.228 Electron/26.3.0 Safari/537.36">
+  <diagram name="CU-02" id="CU-02">
+    <mxGraphModel dx="2236" dy="1556" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1600" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="c2" parent="1" style="rounded=0;html=1;fillColor=none;strokeColor=#23445D;strokeWidth=3;verticalAlign=top;fontSize=12;fontStyle=1;spacingTop=6;spacingLeft=8;" value="CU-02 — Confirmar orden&#xa;SGO-Logic  |  Contexto: Órdenes — Saga Orquestador  |  CAR-03  |  EV-04, EV-28, EV-31" vertex="1">
+          <mxGeometry height="627" width="795" x="200" y="70" as="geometry" />
+        </mxCell>
+        <mxCell id="c6" parent="1" style="ellipse;html=1;whiteSpace=wrap;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=11;fontStyle=1;align=center;" value="Confirmar orden&#xa;(Saga Orquestador)" vertex="1">
+          <mxGeometry height="68" width="195" x="500" y="125" as="geometry" />
+        </mxCell>
+        <mxCell id="c7" parent="1" style="ellipse;html=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=center;" value="Solicitar reserva&#xa;de inventario (CU-01)" vertex="1">
+          <mxGeometry height="68" width="195" x="250" y="263" as="geometry" />
+        </mxCell>
+        <mxCell id="c8" parent="1" style="ellipse;html=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=center;" value="Solicitar cobro&#xa;(CU-03)" vertex="1">
+          <mxGeometry height="68" width="195" x="495" y="263" as="geometry" />
+        </mxCell>
+        <mxCell id="c9" parent="1" style="ellipse;html=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=center;" value="Solicitar certificación&#xa;fiscal asíncrona (CU-04)" vertex="1">
+          <mxGeometry height="68" width="195" x="250" y="386" as="geometry" />
+        </mxCell>
+        <mxCell id="c10" parent="1" style="ellipse;html=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=center;" value="Solicitar despacho&#xa;(CU-11)" vertex="1">
+          <mxGeometry height="68" width="195" x="495" y="386" as="geometry" />
+        </mxCell>
+        <mxCell id="c11" parent="1" style="ellipse;html=1;whiteSpace=wrap;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=10;align=center;" value="Actualizar estado&#xa;en Redis" vertex="1">
+          <mxGeometry height="68" width="195" x="250" y="509" as="geometry" />
+        </mxCell>
+        <mxCell id="c12" parent="1" style="ellipse;html=1;whiteSpace=wrap;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;align=center;" value="Ejecutar compensación&#xa;(liberar reserva)" vertex="1">
+          <mxGeometry height="68" width="195" x="750" y="263" as="geometry" />
+        </mxCell>
+        <mxCell id="c13" parent="1" style="ellipse;html=1;whiteSpace=wrap;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=10;align=center;" value="Preservar orden en&#xa;Pago Pendiente" vertex="1">
+          <mxGeometry height="68" width="195" x="750" y="386" as="geometry" />
+        </mxCell>
+        <mxCell id="c14" parent="1" style="shape=note;whiteSpace=wrap;html=1;backgroundOutline=1;fontSize=9;fillColor=#fff2cc;strokeColor=#d6b656;align=left;" value="Estados posibles:&#xa;- Iniciada&#xa;- Pagada&#xa;- Confirmada-Pend.Fiscal&#xa;- Confirmada Fiscalmente&#xa;- Pago Pendiente&#xa;(CAR-03)" vertex="1">
+          <mxGeometry height="115" width="185" x="1160" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="c15" edge="1" parent="1" source="c6" style="dashed=1;endArrow=open;endFill=0;strokeColor=#6c8ebf;fontColor=#6c8ebf;fontSize=10;html=1;" target="c7" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c16" edge="1" parent="1" source="c6" style="dashed=1;endArrow=open;endFill=0;strokeColor=#6c8ebf;fontColor=#6c8ebf;fontSize=10;html=1;" target="c8" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c17" edge="1" parent="1" source="c6" style="dashed=1;endArrow=open;endFill=0;strokeColor=#6c8ebf;fontColor=#6c8ebf;fontSize=10;html=1;" target="c9" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c18" edge="1" parent="1" source="c6" style="dashed=1;endArrow=open;endFill=0;strokeColor=#6c8ebf;fontColor=#6c8ebf;fontSize=10;html=1;" target="c10" value="«include»">
+          <mxGeometry relative="1" x="-0.0995" y="5" as="geometry">
+            <mxPoint as="offset" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c19" edge="1" parent="1" source="c6" style="dashed=1;endArrow=open;endFill=0;strokeColor=#6c8ebf;fontColor=#6c8ebf;fontSize=10;html=1;" target="c11" value="«include»">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c20" edge="1" parent="1" source="c12" style="dashed=1;endArrow=open;endFill=0;strokeColor=#d79b00;fontColor=#d79b00;fontSize=10;html=1;" target="c6" value="«extend»&amp;#xa;[falla cobro definitiva]">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c21" edge="1" parent="1" source="c13" style="dashed=1;endArrow=open;endFill=0;strokeColor=#d79b00;fontColor=#d79b00;fontSize=10;html=1;" target="c6" value="«extend»&amp;#xa;[timeout PayKlik]">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="c22" edge="1" parent="1" style="endArrow=none;html=1;fontSize=9;strokeColor=#555555;" target="c6" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="115" y="370.91844675748575" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c23" edge="1" parent="1" source="c6" style="endArrow=none;html=1;fontSize=9;strokeColor=#555555;" value="registra cada&#xa;transición">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1085" y="317.0825242718448" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c24" edge="1" parent="1" source="c11" style="endArrow=none;html=1;fontSize=9;strokeColor=#555555;" value="">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint x="1085" y="444.66666666666674" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="c25" parent="1" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;whiteSpace=wrap;fontSize=9;fontStyle=1;" value="Leyenda" vertex="1">
+          <mxGeometry height="20" width="60" x="200" y="727" as="geometry" />
+        </mxCell>
+        <mxCell id="c26" parent="1" style="ellipse;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=8;fontStyle=1;align=center;" value="CU Principal" vertex="1">
+          <mxGeometry height="24" width="100" x="270" y="727" as="geometry" />
+        </mxCell>
+        <mxCell id="c27" parent="1" style="ellipse;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=8;align=center;" value="«include»" vertex="1">
+          <mxGeometry height="24" width="100" x="380" y="727" as="geometry" />
+        </mxCell>
+        <mxCell id="c28" parent="1" style="ellipse;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=8;align=center;" value="«extend»" vertex="1">
+          <mxGeometry height="24" width="100" x="490" y="727" as="geometry" />
+        </mxCell>
+        <mxCell id="PCxt7VbNSNIlq2_SILdY-1" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" value="&lt;span&gt;&lt;span style=&quot;font-size: 10px;&quot;&gt;Cliente&lt;/span&gt;&lt;br style=&quot;font-size: 10px;&quot;&gt;&lt;span style=&quot;font-size: 10px;&quot;&gt;(AS-01)&lt;/span&gt;&lt;/span&gt;" vertex="1">
+          <mxGeometry height="60" width="30" x="80" y="331" as="geometry" />
+        </mxCell>
+        <mxCell id="PCxt7VbNSNIlq2_SILdY-4" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" value="&lt;span&gt;&lt;span style=&quot;font-size: 10px;&quot;&gt;Auditoría&lt;/span&gt;&lt;br style=&quot;font-size: 10px;&quot;&gt;&lt;span style=&quot;font-size: 10px;&quot;&gt;(sistema)&lt;/span&gt;&lt;/span&gt;" vertex="1">
+          <mxGeometry height="60" width="30" x="1090" y="280" as="geometry" />
+        </mxCell>
+        <mxCell id="PCxt7VbNSNIlq2_SILdY-5" parent="1" style="shape=umlActor;verticalLabelPosition=bottom;verticalAlign=top;html=1;" value="&lt;span&gt;&lt;span style=&quot;font-size: 10px;&quot;&gt;Redis&lt;/span&gt;&lt;br style=&quot;font-size: 10px;&quot;&gt;&lt;span style=&quot;font-size: 10px;&quot;&gt;(sistema)&lt;/span&gt;&lt;/span&gt;" vertex="1">
+          <mxGeometry height="60" width="30" x="1085" y="410" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
