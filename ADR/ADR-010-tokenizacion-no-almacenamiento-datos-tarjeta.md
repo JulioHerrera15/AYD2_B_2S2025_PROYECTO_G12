@@ -14,7 +14,7 @@ SGO-Logic delega la tokenización de los datos de tarjeta a PayKlik; el contexto
 
 ## Alternativas consideradas
 
-[PENDIENTE-ANGEL: alternativas evaluadas para esta decisión]
+Se evaluaron tres opciones: (1) delegar la tokenización al proveedor de pago y almacenar solo el token y los metadatos del intento; (2) almacenar los datos de tarjeta cifrados en una bóveda propia, descartada porque construir y certificar un almacén PCI-DSS propio excede el alcance, el presupuesto y las competencias del equipo, además de chocar con la prohibición corporativa (EV-25); y (3) no almacenar ninguna referencia de pago, descartada porque impediría reintentar un cobro o auditar los intentos. Se eligió delegar la tokenización al proveedor y guardar únicamente el token y los metadatos (orden, canal, fecha, resultado), lo que elimina el alcance de cumplimiento de datos sensibles y a la vez permite auditar cada intento (EV-28).
 
 ## Consecuencias
 

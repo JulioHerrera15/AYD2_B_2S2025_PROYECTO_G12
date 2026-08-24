@@ -14,7 +14,7 @@ La certificación fiscal se ejecuta de forma asíncrona: la orden pasa a "Confir
 
 ## Alternativas consideradas
 
-[PENDIENTE-ANGEL: alternativas evaluadas para esta decisión]
+Se evaluaron cinco opciones: (1) certificación asíncrona con estado intermedio "Pendiente Fiscal"; (2) certificación síncrona bloqueante, descartada porque la latencia impredecible de la SAT destruiría la experiencia de compra y la resiliencia; (3) un híbrido con intento síncrono de timeout corto y respaldo asíncrono, descartado por añadir complejidad sin beneficio claro sobre la opción asíncrona; (4) certificación en lotes al final del día, descartada por posible incumplimiento de la normativa de facturación en línea; y (5) delegar la certificación al ERP, descartada porque el ERP no se modifica y no puede asumir esa responsabilidad. Se eligió la certificación asíncrona porque permite confirmar la compra al cliente en milisegundos mientras el documento se encola y se reintenta hasta certificarse, cumpliendo la obligación fiscal de forma diferida pero garantizada.
 
 ## Consecuencias
 

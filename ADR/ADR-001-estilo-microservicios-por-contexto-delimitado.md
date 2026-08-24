@@ -14,7 +14,7 @@ Se adopta un estilo de microservicios organizado por contexto delimitado (bounde
 
 ## Alternativas consideradas
 
-[PENDIENTE-ANGEL: alternativas evaluadas para esta decisión]
+Se evaluó un monolito modular desplegable en un solo contenedor, con separación lógica por módulos pero una sola base de datos y un solo despliegue. Ventaja: menor complejidad operativa, alineado con el nivel de Docker básico del equipo. Desventaja: no permite escalar de forma independiente los componentes del Backbone durante el pico de 8x de Black Friday, y un fallo de un módulo compromete todo el proceso. Se descartó porque la exigencia de aislamiento de fallas (PRE-01, PRE-02) y de escalado selectivo del pico pesó más que el ahorro de complejidad, y porque el reparto del trabajo entre integrantes se facilita con contextos independientes. También se consideró un monolito con extracción posterior a microservicios, descartado por implicar rehacer el trabajo en la fase de desarrollo.
 
 ## Consecuencias
 

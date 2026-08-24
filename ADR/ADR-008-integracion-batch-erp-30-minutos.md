@@ -10,11 +10,11 @@ El único mecanismo que el ERP-Core admite para recibir resúmenes de ventas es 
 
 ## Decisión
 
-Un worker del contexto de Integración ERP consolida los eventos de venta confirmados y genera el lote CSV/XML cada 30 minutos, transfiriéndolo al ERP dentro de su ventana admitida, con conciliación de diferencias (ver `RES-02` en `DDA_07_Drivers_de_Restriccion_RES.md` y `CU-13` en `DDA_04_Drivers_Funcionales_CDU.md`).
+Un worker del contexto de Integración ERP consolida los eventos de venta confirmados y genera el lote CSV/XML cada 30 minutos, transfiriéndolo al ERP dentro de su ventana admitida, con conciliación de diferencias (ver `RES-02` en `DDA_07_Drivers_de_Restriccion_RES.md` y `CU-13` en `DDA_04_Drivers_Funcionales_CDU.md`). Además del control por lote (número de secuencia y totales de control por cada archivo), un proceso de reconciliación diario compara el total de ventas registradas en SGO-Logic contra el total efectivamente cargado en el ERP y genera un reporte de diferencias para Finanzas.
 
 ## Alternativas consideradas
 
-[PENDIENTE-ANGEL: alternativas evaluadas para esta decisión]
+Se evaluaron tres opciones: (1) generación de lotes CSV/XML cada 30 minutos por un worker dedicado; (2) integración en tiempo real vía API, descartada porque el ERP AS/400 no expone ninguna interfaz síncrona y no puede modificarse (EV-14, EV-15); y (3) exportación manual de archivos como se hace hoy, descartada por ser el problema mismo que el proyecto busca eliminar (EV-10). Se eligió el lote automático cada 30 minutos por ser el único mecanismo compatible con lo que el ERP admite, y porque automatiza la consolidación que hoy Finanzas hace a mano con hojas de cálculo.
 
 ## Consecuencias
 
@@ -24,7 +24,7 @@ Un worker del contexto de Integración ERP consolida los eventos de venta confir
 
 ### Negativas
 - La consistencia contable entre SGO-Logic y el ERP es eventual, con una ventana de hasta 30 minutos: cualquier reporte gerencial que dependa del ERP en tiempo real no reflejará las ventas de los últimos 30 minutos.
-- Requiere un mecanismo de conciliación de diferencias cuyo detalle exacto de detección y resolución no está completamente especificado en el repositorio (ver marcador dejado en la ficha `CU-13` de `DDA_04_Drivers_Funcionales_CDU.md`).
+- El reporte de reconciliación diario añade un proceso adicional que operar y revisar, a cambio de dar a Finanzas visibilidad verificable de que ninguna venta quedó fuera del ERP.
 
 ## Preocupaciones y evidencia que atiende
 

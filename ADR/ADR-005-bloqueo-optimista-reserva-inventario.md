@@ -14,7 +14,7 @@ La reserva de inventario usa bloqueo optimista mediante una columna de versión 
 
 ## Alternativas consideradas
 
-[PENDIENTE-ANGEL: alternativas evaluadas para esta decisión]
+Se evaluaron cinco opciones: (1) bloqueo pesimista SQL (SELECT ... FOR UPDATE) con un barredor programado, de consistencia fuerte absoluta pero con riesgo de contención de transacciones durante Black Friday; (2) bloqueo optimista con columna de versión más Redis TTL; (3) inventario exclusivamente en Redis, descartado por el riesgo de pérdida de los datos exactos que exigen Finanzas y Logística si Redis cae; (4) saga con compensación sin bloqueo previo, descartada porque permite sobreventas y el costoso proceso de logística inversa (USD 25 por error); y (5) stored procedures de limpieza, descartados por dificultar la portabilidad futura a la nube. Se eligió el bloqueo optimista con versión más Redis TTL para privilegiar el rendimiento de escritura durante los picos de demanda, aceptando como contrapartida la necesidad de manejar reintentos por conflicto de versión en el servicio de Órdenes. El bloqueo pesimista se descartó como opción principal precisamente por el riesgo de contención bajo el pico de 8x, aunque se reconoce que ofrece una garantía de consistencia superior.
 
 ## Consecuencias
 
