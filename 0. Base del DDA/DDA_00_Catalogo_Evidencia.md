@@ -33,6 +33,11 @@ Todos los integrantes deben usar esta nomenclatura desde el primer día. Si cada
 | `RES-##` | Driver de restricción | Francisco / Julio |
 | `ADR-###` | Architecture Decision Record | Quien toma la decisión |
 | `RSG-##` | Riesgo técnico identificado | Transversal |
+| `AN-##` | Actor de negocio (externo al negocio) | Angel |
+| `TN-##` | Trabajador de negocio (rol interno de MegaStore) | Angel |
+| `AS-##` | Actor del sistema (deriva de `AN-##`/`TN-##` hacia SGO-Logic) | Angel / Jonathan |
+| `CON-##` | Conflicto entre preocupaciones arquitectónicas | Angel |
+| `VAC-##` | Vacío de información detectado en el enunciado | Transversal |
 
 *Nota: el prefijo originalmente previsto para el caso de uso expandido del sistema era `CDU-##`. Se oficializa `CU-##` como el prefijo vigente porque es el que ya está instanciado (15 fichas, CU-01 a CU-15, en `DDA_04_Drivers_Funcionales_CDU.md`); `CDU-##` queda descartado para no numerar el mismo artefacto con dos esquemas distintos.*
 
