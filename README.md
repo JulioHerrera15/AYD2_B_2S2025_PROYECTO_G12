@@ -1,6 +1,6 @@
 # SGO-Logic — DDA Fase 1 (Proyecto G12)
 
-**Curso:** Análisis y Diseño de Sistemas 2, Sección A — USAC
+**Curso:** Análisis y Diseño de Sistemas 2, Sección B — USAC
 
 SGO-Logic es el sistema de registro de órdenes y operación omnicanal que se propone para MegaStore, una cadena de tiendas por departamentos con presencia en Guatemala, El Salvador y Costa Rica. Su objetivo es que un cliente pueda iniciar, continuar y completar una compra desde tienda física, web, aplicación móvil o centro de atención con experiencia consistente, sobre una única visión de inventario, cobro, facturación fiscal y despacho — reemplazando los silos actuales entre canales y sistemas.
 

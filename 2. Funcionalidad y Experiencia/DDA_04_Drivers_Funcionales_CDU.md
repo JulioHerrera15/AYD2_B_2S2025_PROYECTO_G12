@@ -1,6 +1,6 @@
 # Drivers de Requisitos Funcionales y Casos de Uso Expandidos — SGO-Logic
 
-**Curso:** Análisis y Diseño de Sistemas 2, Sección A — USAC
+**Curso:** Análisis y Diseño de Sistemas 2, Sección B — USAC
 **Documento:** Apartado del Documento de Definición de Arquitectura (DDA)
 **Elaborado por:** Angel Martinez (202300410) — estructura, contextos y núcleo (CU-01 a CU-06); Jonathan Jeronimo (202300353) — diagramas, referencias de trazabilidad y fichas de olas 2 a 4 (CU-07, CU-10, CU-11, CU-14)
 

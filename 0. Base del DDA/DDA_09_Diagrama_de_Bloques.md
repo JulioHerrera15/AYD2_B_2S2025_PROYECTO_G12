@@ -1,6 +1,6 @@
 # Diagrama de Bloques — SGO-Logic
 
-**Curso:** Análisis y Diseño de Sistemas 2, Sección A — USAC
+**Curso:** Análisis y Diseño de Sistemas 2, Sección B — USAC
 **Documento:** Apartado del Documento de Definición de Arquitectura (DDA)
 **Elaborado por:** Angel Martinez (202300410)
 

@@ -1,6 +1,6 @@
 # Catálogo de Evidencia — Proyecto Fase 1: SGO-Logic
 
-**Curso:** Análisis y Diseño de Sistemas 2, Sección A — USAC  
+**Curso:** Análisis y Diseño de Sistemas 2, Sección B — USAC  
 **Documento:** Insumo base del Documento de Definición de Arquitectura (DDA)  
 **Elaborado por:** Angel Martinez (202300410) 
 
