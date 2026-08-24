@@ -268,7 +268,7 @@ Orden según las olas del Backbone. Los casos del núcleo (Ola 1) tienen descrip
 | **Objetivo** | Conservar de forma inmutable quién ejecutó cada operación, cuándo y qué cambió, recuperable en menos de un segundo. |
 | **Precondición** | Ocurre una operación fiscal u operativamente relevante en cualquier contexto. |
 | **Disparador** | El contexto de origen emite el evento correspondiente vía RabbitMQ. |
-| **Flujo principal** | 1. Auditoría recibe el evento con actor, momento, operación y datos del cambio. 2. Lo inserta en la bitácora en SQL-Finanzas, que solo admite inserción: no permite modificar ni borrar (`INSERT` únicamente, sin `UPDATE` ni `DELETE`). 3. Indexa el registro por identificador de transacción para permitir la recuperación inmediata. |
+| **Flujo principal** | 1. Auditoría recibe el evento con actor, momento, operación y datos del cambio. 2. Lo inserta en su propia base de datos de Auditoría — una instancia separada de SQL-Finanzas y de SQL Operacional, que solo admite inserción: no permite modificar ni borrar (`INSERT` únicamente, sin `UPDATE` ni `DELETE`). 3. Indexa el registro por identificador de transacción para permitir la recuperación inmediata. |
 | **Flujo alternativo — consulta de evidencia** | Ante una solicitud de auditoría (ej. inspección de la SAT), el sistema recupera por identificador de transacción todos los registros asociados y los devuelve en menos de un segundo (EV-30). |
 | **Flujo de excepción** | Si la inserción falla, el evento permanece en la cola de RabbitMQ y se reintenta. La bitácora no acepta pérdidas. |
 | **Postcondición** | El evento queda registrado de forma permanente e inalterable. |
@@ -514,9 +514,26 @@ Orden según las olas del Backbone. Los casos del núcleo (Ola 1) tienen descrip
 </p>
 
 
-#### CU-12.2 Objetivo
+#### CU-12.2 Descripción textual
 
-Incorporar los estados de entrega que comunica LogiExpress (Preparación / Tránsito / Entrega / Incidencia) hasta la recepción por el cliente.
+| Campo | Contenido |
+|---|---|
+| **Contexto** | Despacho |
+| **Actor primario** | LogiExpress (AS-07) |
+| **Actores secundarios** | Operador de logística (AS-04), Cliente (AS-01) — destinatarios de la actualización |
+| **Característica** | CAR-08 — Determinación de origen de despacho y seguimiento |
+| **Objetivo** | Incorporar los estados de entrega que comunica LogiExpress (Preparación / Tránsito / Entrega / Incidencia) hasta la recepción por el cliente. |
+| **Precondición** | Existe una guía generada para la orden, emitida en CU-11, con su número de guía asociado. |
+| **Disparador** | LogiExpress comunica un cambio de estado de la entrega. |
+| **Flujo principal** | 1. Despacho recibe la actualización de estado desde LogiExpress, asociada al número de guía. 2. Valida que la guía corresponda a una orden activa. 3. Actualiza el estado de entrega de la orden (Preparación / Tránsito / Entrega / Incidencia). 4. Publica el evento de cambio de estado para que Consulta de Estado y Notificaciones lo consuman. 5. Registra el evento en Auditoría. |
+| **Flujo alternativo A — incidencia reportada** | Si LogiExpress reporta una incidencia (por ejemplo, dirección no localizada), el estado de la orden refleja la incidencia y se dispara una notificación al cliente sin bloquear el resto del flujo (EV-34). |
+| **Flujo alternativo B — entrega confirmada** | Al recibir el estado "Entrega", la orden se marca como entregada y se cierra su seguimiento de despacho. |
+| **Flujo de excepción** | Si la actualización llega duplicada o fuera de orden — consecuencia posible de los reintentos que LogiExpress hace ante su propia tasa de timeout (EV-18) —, el sistema la trata de forma idempotente y no genera estados inconsistentes en la orden. [PENDIENTE-ANGEL: el mecanismo exacto por el que Despacho recibe las actualizaciones de LogiExpress (notificación push del proveedor vía webhook, o consulta periódica/polling desde SGO-Logic) no está definido en el repositorio; solo se sabe que la solicitud inicial de guía es vía REST (CU-11)]. |
+| **Postcondición** | El estado de entrega de la orden refleja la última actualización confirmada por LogiExpress, visible desde Consulta de Estado. |
+| **Interacciones con otros contextos** | Recibe la actualización de LogiExpress (sistema externo); publica el evento para Consulta de Estado y Notificaciones; registra en Auditoría. |
+| **Evidencia** | EV-18, EV-34 |
+| **Preocupaciones atendidas** | PRE-15 (visibilidad oportuna de órdenes para logística y cliente), PRE-04 (observabilidad de dependencias externas) |
+| **Conflictos que toca** | — |
 
 ---
 
@@ -534,9 +551,25 @@ Incorporar los estados de entrega que comunica LogiExpress (Preparación / Trán
 </p>
 
 
-#### CU-13.2 Objetivo
+#### CU-13.2 Descripción textual
 
-Consolidar las ventas del período y entregarlas al ERP AS/400 en la ventana de 30 minutos que admite, con conciliación automática de diferencias y sin intervención manual (EV-10, EV-15).
+| Campo | Contenido |
+|---|---|
+| **Contexto** | Integración ERP |
+| **Actor primario** | AS-09 — Temporizador del sistema (proceso automático) |
+| **Actores secundarios** | ERP-Core AS/400 (sistema externo; no se modela como actor del sistema porque no interactúa directamente con SGO-Logic, solo recibe archivos — RES-01) |
+| **Característica** | CAR-09 — Sincronización batch con el ERP |
+| **Objetivo** | Consolidar las ventas del período y entregarlas al ERP AS/400 en la ventana de 30 minutos que admite, con conciliación automática de diferencias y sin intervención manual (EV-10, EV-15). |
+| **Precondición** | Existen ventas confirmadas registradas desde el último lote enviado. |
+| **Disparador** | Se cumple el intervalo de 30 minutos de la ventana de procesamiento que admite el ERP (RES-02). |
+| **Flujo principal** | 1. El worker de Integración ERP consulta las ventas confirmadas desde el último lote. 2. Consolida los resúmenes por canal y tienda. 3. Genera el archivo en el formato que el ERP admite (CSV o XML). 4. Transfiere el archivo al ERP-Core por el mecanismo de recepción por lotes que este admite (EV-15). 5. Registra el resultado de la transferencia en Auditoría. |
+| **Flujo alternativo — conciliación de diferencias** | Si el resumen consolidado no coincide con lo confirmado por el ERP en un ciclo posterior, el sistema señala la diferencia para revisión, sin requerir que el personal de Finanzas concilie manualmente hoja por hoja (EV-10). [PENDIENTE-ANGEL: el mecanismo exacto de detección y resolución de diferencias de conciliación no está definido en el repositorio; solo está declarado el objetivo de que sea automática y verificable (CAR-09)]. |
+| **Flujo de excepción** | Si el ERP no puede recibir el archivo en la ventana correspondiente, el lote se conserva y se reintenta en el siguiente ciclo de 30 minutos; ninguna venta consolidada se pierde. |
+| **Postcondición** | El ERP-Core queda actualizado con las ventas del periodo, con diferencias explicadas de forma automática y trazabilidad conservada. |
+| **Interacciones con otros contextos** | Lee eventos de venta confirmados publicados por Órdenes vía RabbitMQ (canal batch); escribe hacia el ERP-Core (sistema externo, sin modificarlo — RES-01); registra en Auditoría. |
+| **Evidencia** | EV-10, EV-15 |
+| **Preocupaciones atendidas** | PRE-11 (información propagada al legacy sin pérdida ni duplicación), PRE-12 (consistencia contable conciliable dentro de la ventana de 30 minutos) |
+| **Conflictos que toca** | CON-05 (prohibición de modificar el legacy vs. necesidad de consistencia contable oportuna) |
 
 ---
 
@@ -591,9 +624,26 @@ Consolidar las ventas del período y entregarlas al ERP AS/400 en la ventana de 
 </p>
 
 
-#### CU-15.2 Objetivo
+#### CU-15.2 Descripción textual
 
-Enviar al cliente el aviso del cambio de estado de su orden (confirmación, preparación, tránsito, entrega, incidencia), sin que la falla del proveedor externo detenga la operación principal (EV-20, EV-34).
+| Campo | Contenido |
+|---|---|
+| **Contexto** | Notificaciones |
+| **Actor primario** | Contextos de Órdenes, Pagos, Facturación y Despacho (sistema origen del evento) |
+| **Actores secundarios** | Proveedor de notificaciones (AS-08), Cliente (AS-01) — receptor final |
+| **Característica** | CAR-14 — Notificaciones al cliente |
+| **Objetivo** | Enviar al cliente el aviso del cambio de estado de su orden (confirmación, preparación, tránsito, entrega, incidencia), sin que la falla del proveedor externo detenga la operación principal (EV-20, EV-34). |
+| **Precondición** | Ocurrió un cambio de estado relevante en el ciclo de vida de la orden (confirmación, cobro, certificación fiscal, despacho, entrega o incidencia). |
+| **Disparador** | El contexto de origen (Órdenes, Pagos, Facturación o Despacho) publica un evento de cambio de estado en RabbitMQ. |
+| **Flujo principal** | 1. Notificaciones consume el evento de cambio de estado desde RabbitMQ (pub/sub). 2. Determina el canal de contacto y el contenido del mensaje según el tipo de evento. 3. Envía la notificación (SMS, correo o push) a través del proveedor externo. 4. Registra el resultado del envío en Auditoría. |
+| **Flujo alternativo A — enlace de reintento de cobro** | Cuando el evento corresponde a un cobro fallido (CU-03), el mensaje incluye el enlace de reintento para que el cliente complete el pago pendiente. |
+| **Flujo alternativo B — incidencia de entrega** | Cuando el evento proviene de una actualización de estado con incidencia (CU-12), el mensaje informa al cliente de la incidencia reportada. |
+| **Flujo de excepción** | Si el proveedor de notificaciones no está disponible o falla el envío, el evento permanece en cola con reintento; si se agotan los reintentos, el mensaje se descarta sin afectar el estado de la orden ni el resto del flujo (EV-20, EV-34). El incidente se registra en Auditoría, pero no bloquea ni revierte la operación principal. |
+| **Postcondición** | El cliente recibe el aviso correspondiente, o el intento fallido queda registrado sin impacto en la orden. |
+| **Interacciones con otros contextos** | Consume eventos publicados por Órdenes, Pagos, Facturación y Despacho vía RabbitMQ; envía hacia el proveedor de notificaciones (sistema externo); registra en Auditoría. No responde de vuelta a ningún contexto: su falla es unidireccional y no propagable (PRE-03). |
+| **Evidencia** | EV-20, EV-34 |
+| **Preocupaciones atendidas** | PRE-03 (fallas de canales secundarios aisladas del flujo principal) |
+| **Conflictos que toca** | — |
 
 ---
 

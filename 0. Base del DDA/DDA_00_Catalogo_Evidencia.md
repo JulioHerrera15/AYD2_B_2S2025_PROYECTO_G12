@@ -1,6 +1,6 @@
 # Catálogo de Evidencia — Proyecto Fase 1: SGO-Logic
 
-**Curso:** Análisis y Diseño de Sistemas 2, Sección A — USAC  
+**Curso:** Análisis y Diseño de Sistemas 2, Sección B — USAC  
 **Documento:** Insumo base del Documento de Definición de Arquitectura (DDA)  
 **Elaborado por:** Angel Martinez (202300410) 
 
@@ -27,12 +27,19 @@ Todos los integrantes deben usar esta nomenclatura desde el primer día. Si cada
 | `PRE-##` | Preocupación arquitectónica | Angel |
 | `CAR-##` | Característica priorizada del sistema | Angel |
 | `CUN-##` | Caso de uso de negocio | Angel |
-| `CDU-##` | Caso de uso expandido del sistema | Jonathan / Angel |
+| `CU-##` | Caso de uso expandido del sistema | Jonathan / Angel |
 | `DRF-##` | Driver de requisito funcional | Angel / Jonathan |
 | `EAC-##` | Escenario de atributo de calidad | Jose / Julio |
 | `RES-##` | Driver de restricción | Francisco / Julio |
 | `ADR-###` | Architecture Decision Record | Quien toma la decisión |
 | `RSG-##` | Riesgo técnico identificado | Transversal |
+| `AN-##` | Actor de negocio (externo al negocio) | Angel |
+| `TN-##` | Trabajador de negocio (rol interno de MegaStore) | Angel |
+| `AS-##` | Actor del sistema (deriva de `AN-##`/`TN-##` hacia SGO-Logic) | Angel / Jonathan |
+| `CON-##` | Conflicto entre preocupaciones arquitectónicas | Angel |
+| `VAC-##` | Vacío de información detectado en el enunciado | Transversal |
+
+*Nota: el prefijo originalmente previsto para el caso de uso expandido del sistema era `CDU-##`. Se oficializa `CU-##` como el prefijo vigente porque es el que ya está instanciado (15 fichas, CU-01 a CU-15, en `DDA_04_Drivers_Funcionales_CDU.md`); `CDU-##` queda descartado para no numerar el mismo artefacto con dos esquemas distintos.*
 
 Formato sugerido de referencia cruzada dentro del DDA: `(EV-15, EV-16)` entre paréntesis al final de la afirmación que sustenta.
 
@@ -137,6 +144,20 @@ Formato sugerido de referencia cruzada dentro del DDA: `(EV-15, EV-16)` entre pa
 | EV-51 | El tablero Kanban debe manejarse con seis columnas obligatorias (To Do, Blocked, In Progress, Ready for Testing, Test/QA, Done) y priorizar los componentes base de la arquitectura antes que las funcionalidades cosméticas. | El backlog es de componentes, patrones y decisiones, no de funcionalidades. Alinea con la priorización de características. | RES | Jose |
 | EV-52 | Toda la evolución del código y la configuración de infraestructura debe estar centralizada en un repositorio privado de GitHub con la nomenclatura oficial indicada. | Artefacto de gestión obligatorio. Verificar el año correcto de la nomenclatura antes de crear el repositorio. | RES | Jose |
 | EV-53 | Los ADR se utilizarán como registro vivo para el refinamiento continuo de las decisiones, y los diagramas constituirán vistas del DDA. | Define la relación entre artefactos: los diagramas no son anexos independientes sino vistas referenciadas desde el DDA. | RES | Angel |
+
+---
+
+## 10. Catálogo de vacíos de información
+
+Un vacío de información (`VAC-##`) es una pregunta que el enunciado del caso no responde y que condiciona una decisión de arquitectura. Esta sección centraliza todos los vacíos detectados en el resto del DDA, que hasta ahora estaban dispersos en cada documento. Cuando un documento detecte un vacío nuevo, debe agregarse aquí con el mismo formato y referenciarse desde el documento de origen con su ID `VAC-##`.
+
+| ID | Vacío | Por qué importa | Detectado en | Afecta a | Estado |
+|---|---|---|---|---|---|
+| VAC-03 | El enunciado no define con precisión qué significa "finalizar la orden" respecto a la obligación fiscal ante la SAT (EV-19). | Sin esta definición no puede decidirse en qué momento exacto del flujo la certificación fiscal deja de ser opcional y bloquea el cierre de la orden; condiciona el diseño de la saga y del estado "Confirmada - Pendiente Fiscal". | `DDA_01_Stakeholders_Preocupaciones.md` (conflicto CON-02), `DDA_07_Drivers_de_Restriccion_RES.md` (RES-07) | RES-07, CU-04 (`DDA_04`) | Supuesto asumido: el equipo adoptó como definición operativa que "finalizar la orden" equivale al cierre fiscal (certificación ante la SAT). Pendiente de confirmar con el cliente. |
+| VAC-06 | No se cuenta con un inventario del hardware existente on-premises de MegaStore. | Sin ese inventario no puede calcularse con precisión cuánta capacidad de cómputo/almacenamiento ya está pagada y disponible, lo que afecta cómo se reparte el presupuesto entre inversión inicial (CAPEX) y costo operativo mensual (OPEX). | `DDA_07_Drivers_de_Restriccion_RES.md` | RES-10, RES-14 | Abierto. Requiere levantamiento con el equipo de TI de MegaStore (Carlos Méndez). |
+| VAC-09 | El enunciado no especifica qué sistema administra hoy el catálogo, los precios, los combos y los planes de financiamiento (EV-03), ni si SGO-Logic debe asumir esa administración o solo consumirla como dependencia externa ("Catálogo Comercial"). | La respuesta cambia el alcance de CUN-08, la definición del contexto externo "Catálogo Comercial" en `DDA_04`, la característica CAR-11 y el contenido del Diagrama de Contexto. | `DDA_02_Casos_Uso_Negocio.md` (sección 6, delimitación del sistema) | CUN-08, CAR-11, contexto externo "Catálogo Comercial" (`DDA_04` sección 2), Diagrama de Contexto | Abierto. Debe consultarse al cliente/stakeholder de comercialización (STK-06) para validar la fuente definitiva. |
+
+---
 
 
 
