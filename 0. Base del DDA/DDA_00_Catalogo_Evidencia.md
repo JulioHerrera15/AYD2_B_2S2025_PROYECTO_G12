@@ -145,5 +145,19 @@ Formato sugerido de referencia cruzada dentro del DDA: `(EV-15, EV-16)` entre pa
 | EV-52 | Toda la evolución del código y la configuración de infraestructura debe estar centralizada en un repositorio privado de GitHub con la nomenclatura oficial indicada. | Artefacto de gestión obligatorio. Verificar el año correcto de la nomenclatura antes de crear el repositorio. | RES | Jose |
 | EV-53 | Los ADR se utilizarán como registro vivo para el refinamiento continuo de las decisiones, y los diagramas constituirán vistas del DDA. | Define la relación entre artefactos: los diagramas no son anexos independientes sino vistas referenciadas desde el DDA. | RES | Angel |
 
+---
+
+## 10. Catálogo de vacíos de información
+
+Un vacío de información (`VAC-##`) es una pregunta que el enunciado del caso no responde y que condiciona una decisión de arquitectura. Esta sección centraliza todos los vacíos detectados en el resto del DDA, que hasta ahora estaban dispersos en cada documento. Cuando un documento detecte un vacío nuevo, debe agregarse aquí con el mismo formato y referenciarse desde el documento de origen con su ID `VAC-##`.
+
+| ID | Vacío | Por qué importa | Detectado en | Afecta a | Estado |
+|---|---|---|---|---|---|
+| VAC-03 | El enunciado no define con precisión qué significa "finalizar la orden" respecto a la obligación fiscal ante la SAT (EV-19). | Sin esta definición no puede decidirse en qué momento exacto del flujo la certificación fiscal deja de ser opcional y bloquea el cierre de la orden; condiciona el diseño de la saga y del estado "Confirmada - Pendiente Fiscal". | `DDA_01_Stakeholders_Preocupaciones.md` (conflicto CON-02), `DDA_07_Drivers_de_Restriccion_RES.md` (RES-07) | RES-07, CU-04 (`DDA_04`) | Supuesto asumido: el equipo adoptó como definición operativa que "finalizar la orden" equivale al cierre fiscal (certificación ante la SAT). Pendiente de confirmar con el cliente. |
+| VAC-06 | No se cuenta con un inventario del hardware existente on-premises de MegaStore. | Sin ese inventario no puede calcularse con precisión cuánta capacidad de cómputo/almacenamiento ya está pagada y disponible, lo que afecta cómo se reparte el presupuesto entre inversión inicial (CAPEX) y costo operativo mensual (OPEX). | `DDA_07_Drivers_de_Restriccion_RES.md` | RES-10, RES-14 | Abierto. Requiere levantamiento con el equipo de TI de MegaStore (Carlos Méndez). |
+| VAC-09 | El enunciado no especifica qué sistema administra hoy el catálogo, los precios, los combos y los planes de financiamiento (EV-03), ni si SGO-Logic debe asumir esa administración o solo consumirla como dependencia externa ("Catálogo Comercial"). | La respuesta cambia el alcance de CUN-08, la definición del contexto externo "Catálogo Comercial" en `DDA_04`, la característica CAR-11 y el contenido del Diagrama de Contexto. | `DDA_02_Casos_Uso_Negocio.md` (sección 6, delimitación del sistema) | CUN-08, CAR-11, contexto externo "Catálogo Comercial" (`DDA_04` sección 2), Diagrama de Contexto | Abierto. Debe consultarse al cliente/stakeholder de comercialización (STK-06) para validar la fuente definitiva. |
+
+---
+
 
 
