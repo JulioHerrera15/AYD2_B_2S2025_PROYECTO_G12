@@ -101,7 +101,13 @@ Orden según las olas del Backbone. Los casos del núcleo (Ola 1) tienen descrip
 
 #### CU-01.1 Diagrama
 
-> **[DIAGRAMA PENDIENTE]** — Diagrama `flowchart LR` con límite del sistema SGO-Logic (contexto Inventario). Actores: Órdenes (sistema solicitante). Nodos principales: verificar disponibilidad, bloqueo optimista, crear reserva con TTL, notificar insuficiencia. Relaciones `<<include>>` y flujo de excepción por conflicto de versión.
+
+<p align="center">
+  <img src="../6. Prototipo Arquitectonico/diagramas_CDU/CU-01.drawio.svg"
+       alt="Diagrama CDU CU-01 — Reservar inventario para una orden"
+       width="100%">
+</p>
+
 
 #### CU-01.2 Descripción textual
 
@@ -132,7 +138,13 @@ Orden según las olas del Backbone. Los casos del núcleo (Ola 1) tienen descrip
 
 #### CU-02.1 Diagrama
 
-> **[DIAGRAMA PENDIENTE]** — Diagrama `flowchart LR` con límite del sistema SGO-Logic (contexto Órdenes — Saga Orquestador). Actor: Cliente (AS-01). Nodos: confirmar compra, crear orden (estado Iniciada), invocar CU-01 (reserva), invocar CU-03 (cobro), invocar CU-04 (fiscal), invocar CU-11 (despacho), actualizar estado en Redis. Flujos de compensación para falla en cobro y falla en reserva.
+
+<p align="center">
+  <img src="../6. Prototipo Arquitectonico/diagramas_CDU/CU-02.drawio.svg"
+       alt="Diagrama CDU CU-02 — Confirmar orden"
+       width="100%">
+</p>
+
 
 #### CU-02.2 Descripción textual
 
@@ -164,7 +176,13 @@ Orden según las olas del Backbone. Los casos del núcleo (Ola 1) tienen descrip
 
 #### CU-03.1 Diagrama
 
-> **[DIAGRAMA PENDIENTE]** — Diagrama `flowchart LR` con límite del sistema SGO-Logic (contexto Pagos). Actores: Órdenes (sistema solicitante), PayKlik (AS-05 sistema externo). Nodos: registrar intento (Outbox en SQL-Finanzas), publicar en RabbitMQ, invocar PayKlik REST, registrar resultado, marcar Pago Pendiente en caso de falla. Nodo de restricción: no almacenar número de tarjeta ni CVV.
+
+<p align="center">
+  <img src="../6. Prototipo Arquitectonico/diagramas_CDU/CU-03.drawio.svg"
+       alt="Diagrama CDU CU-03 — Procesar cobro con preservación de la orden"
+       width="100%">
+</p>
+
 
 #### CU-03.2 Descripción textual
 
@@ -195,7 +213,13 @@ Orden según las olas del Backbone. Los casos del núcleo (Ola 1) tienen descrip
 
 #### CU-04.1 Diagrama
 
-> **[DIAGRAMA PENDIENTE]** — Diagrama `flowchart LR` con límite del sistema SGO-Logic (contexto Facturación). Actores: Órdenes (sistema solicitante), SAT (AS-06 sistema externo). Nodos: generar XML con CUI y serie, publicar en RabbitMQ MOM, orden en estado "Confirmada - Pendiente Fiscal", enviar XML a SAT, recibir CUI+serie autorizados, reintento back-off en falla. Declarar decisión CON-02.
+
+<p align="center">
+  <img src="../6. Prototipo Arquitectonico/diagramas_CDU/CU-04.drawio.svg"
+       alt="Diagrama CDU CU-04 — Certificar documento fiscal ante la SAT"
+       width="100%">
+</p>
+
 
 #### CU-04.2 Descripción textual
 
@@ -225,7 +249,13 @@ Orden según las olas del Backbone. Los casos del núcleo (Ola 1) tienen descrip
 
 #### CU-05.1 Diagrama
 
-> **[DIAGRAMA PENDIENTE]** — Diagrama `flowchart LR` con límite del sistema SGO-Logic (contexto Auditoría). Actor: cualquier contexto de escritura (sistema). Nodos: recibir evento vía RabbitMQ, insertar en bitácora append-only (solo INSERT), indexar por ID de transacción, retornar confirmación. Flujo alternativo: consulta de evidencia por ID de transacción en menos de 1 segundo.
+
+<p align="center">
+  <img src="../6. Prototipo Arquitectonico/diagramas_CDU/CU-05.drawio.svg"
+       alt="Diagrama CDU CU-05 — Registrar evento de auditoría"
+       width="100%">
+</p>
+
 
 #### CU-05.2 Descripción textual
 
@@ -255,7 +285,13 @@ Orden según las olas del Backbone. Los casos del núcleo (Ola 1) tienen descrip
 
 #### CU-06.1 Diagrama
 
-> **[DIAGRAMA PENDIENTE]** — Diagrama `flowchart LR` con límite del sistema SGO-Logic (contexto Inventario). Actor: AS-09 Sistema automático (TTL vencido). Nodos: detectar expiración de TTL en Redis, eliminar reserva, actualizar stock en SQL Operacional, marcar orden "Cancelada - Reserva Vencida", registrar evento en Auditoría. Flujo de excepción: falla en SQL Operacional, reintento desde cola.
+
+<p align="center">
+  <img src="../6. Prototipo Arquitectonico/diagramas_CDU/CU-06.drawio.svg"
+       alt="Diagrama CDU CU-06 — Liberar reserva vencida"
+       width="100%">
+</p>
+
 
 #### CU-06.2 Descripción textual
 
@@ -289,7 +325,13 @@ Orden según las olas del Backbone. Los casos del núcleo (Ola 1) tienen descrip
 
 #### CU-07.1 Diagrama
 
-> **[DIAGRAMA PENDIENTE]** — Diagrama `flowchart LR` con límite del sistema SGO-Logic (contextos Auth + Órdenes). Actores: Cliente (AS-01), Vendedor de tienda (AS-02), Agente de atención (AS-03). Nodos: autenticar y reconocer cliente, recuperar contexto de sesión, presentar carrito unificado desde Redis, agregar/modificar/eliminar ítems, persistir en Redis con TTL, sincronizar entre canales. Flujo alternativo: cliente sin cuenta (modo invitado). Flujo de excepción: Redis no disponible.
+
+<p align="center">
+  <img src="../6. Prototipo Arquitectonico/diagramas_CDU/CU-07.drawio.svg"
+       alt="Diagrama CDU CU-07 — Reconocer cliente y mantener carrito unificado"
+       width="100%">
+</p>
+
 
 #### CU-07.2 Descripción textual
 
@@ -320,7 +362,13 @@ Orden según las olas del Backbone. Los casos del núcleo (Ola 1) tienen descrip
 
 #### CU-08.1 Diagrama
 
-> **[DIAGRAMA PENDIENTE]** — Diagrama `flowchart LR` con límite del sistema SGO-Logic (patrón Outbox transversal). Actor: AS-09 Publicador automático. Nodos: polling periódico de tabla outbox en SQL, publicar evento en RabbitMQ, marcar evento como publicado, dead-letter exchange en caso de fallo de entrega. Nota: aplica a todos los contextos de escritura.
+
+<p align="center">
+  <img src="../6. Prototipo Arquitectonico/diagramas_CDU/CU-08.drawio.svg"
+       alt="Diagrama CDU CU-08 — Publicar eventos pendientes (Outbox)"
+       width="100%">
+</p>
+
 
 #### CU-08.2 Descripción textual
 
@@ -349,7 +397,13 @@ Orden según las olas del Backbone. Los casos del núcleo (Ola 1) tienen descrip
 
 #### CU-09.1 Diagrama
 
-> **[DIAGRAMA PENDIENTE]** — Diagrama `flowchart LR` con límite del sistema SGO-Logic (contexto Integración POS). Actor: Órdenes (sistema origen), POS de la tienda correspondiente (sistema destino — 32 instancias). Nodos: recibir evento de venta desde RabbitMQ, determinar instancia de POS destino, enviar evento con reintentos, dead-letter exchange si falla, registro en Auditoría. Nota de idempotencia.
+
+<p align="center">
+  <img src="../6. Prototipo Arquitectonico/diagramas_CDU/CU-09.drawio.svg"
+       alt="Diagrama CDU CU-09 — Propagar evento de venta al POS"
+       width="100%">
+</p>
+
 
 #### CU-09.2 Descripción textual
 
@@ -378,7 +432,13 @@ Orden según las olas del Backbone. Los casos del núcleo (Ola 1) tienen descrip
 
 #### CU-10.1 Diagrama
 
-> **[DIAGRAMA PENDIENTE]** — Diagrama `flowchart LR` con límite del sistema SGO-Logic (contexto Consulta de Estado). Actores: Cliente (AS-01), Agente de atención (AS-03). Nodos: recibir consulta, leer vista materializada desde Redis, retornar vista 360 en menos de 5 segundos. Flujo alternativo: cache miss — construir desde SQL Operacional + SQL-Finanzas, persistir en Redis.
+
+<p align="center">
+  <img src="../6. Prototipo Arquitectonico/diagramas_CDU/CU-10.drawio.svg"
+       alt="Diagrama CDU CU-10 — Consultar estado de una orden"
+       width="100%">
+</p>
+
 
 #### CU-10.2 Descripción textual
 
@@ -409,7 +469,13 @@ Orden según las olas del Backbone. Los casos del núcleo (Ola 1) tienen descrip
 
 #### CU-11.1 Diagrama
 
-> **[DIAGRAMA PENDIENTE]** — Diagrama `flowchart LR` con límite del sistema SGO-Logic (contexto Despacho). Actor: Órdenes (sistema solicitante), LogiExpress (AS-07 sistema externo), Operador de logística (AS-04). Nodos: determinar origen (CD / tienda / recogida), notificar a logística, solicitar guía a LogiExpress REST, manejar timeout con DLX, registrar estado "guía pendiente" si falla.
+
+<p align="center">
+  <img src="../6. Prototipo Arquitectonico/diagramas_CDU/CU-11.drawio.svg"
+       alt="Diagrama CDU CU-11 — Determinar origen de despacho y solicitar guía"
+       width="100%">
+</p>
+
 
 #### CU-11.2 Descripción textual
 
@@ -440,7 +506,13 @@ Orden según las olas del Backbone. Los casos del núcleo (Ola 1) tienen descrip
 
 #### CU-12.1 Diagrama
 
-> **[DIAGRAMA PENDIENTE]** — Diagrama `flowchart LR` con límite del sistema SGO-Logic (contexto Despacho). Actor: LogiExpress (AS-07 sistema externo que envía estados). Nodos: recibir estado desde LogiExpress, actualizar estado de entrega en la orden, publicar evento para Consulta de Estado y Notificaciones, registrar en Auditoría.
+
+<p align="center">
+  <img src="../6. Prototipo Arquitectonico/diagramas_CDU/CU-12.drawio.svg"
+       alt="Diagrama CDU CU-12 — Actualizar estado de entrega"
+       width="100%">
+</p>
+
 
 #### CU-12.2 Objetivo
 
@@ -454,7 +526,13 @@ Incorporar los estados de entrega que comunica LogiExpress (Preparación / Trán
 
 #### CU-13.1 Diagrama
 
-> **[DIAGRAMA PENDIENTE]** — Diagrama `flowchart LR` con límite del sistema SGO-Logic (contexto Integración ERP). Actor: AS-09 Temporizador. Nodos: consolidar ventas del periodo por canal y tienda, generar archivo CSV/XML, transferir al ERP AS/400 en ventana de 30 minutos, conciliar diferencias de forma automática, registrar en Auditoría. Nota: ERP no se modifica (EV-14).
+
+<p align="center">
+  <img src="../6. Prototipo Arquitectonico/diagramas_CDU/CU-13.drawio.svg"
+       alt="Diagrama CDU CU-13 — Consolidar y transferir ventas al ERP"
+       width="100%">
+</p>
+
 
 #### CU-13.2 Objetivo
 
@@ -468,7 +546,13 @@ Consolidar las ventas del período y entregarlas al ERP AS/400 en la ventana de 
 
 #### CU-14.1 Diagrama
 
-> **[DIAGRAMA PENDIENTE]** — Diagrama `flowchart LR` con límite del sistema SGO-Logic (contexto Órdenes + Inventario + Facturación). Actor: Agente de atención (AS-03). Nodos: consultar historial consolidado (CU-10), registrar devolución ligada a venta original, reingresar unidades al inventario, generar documento fiscal de reversión (CU-04 flujo alternativo B), iniciar reembolso (CU-03 flujo de reembolso), registrar en Auditoría.
+
+<p align="center">
+  <img src="../6. Prototipo Arquitectonico/diagramas_CDU/CU-14.drawio.svg"
+       alt="Diagrama CDU CU-14 — Registrar devolución o cambio"
+       width="100%">
+</p>
+
 
 #### CU-14.2 Descripción textual
 
@@ -499,7 +583,13 @@ Consolidar las ventas del período y entregarlas al ERP AS/400 en la ventana de 
 
 #### CU-15.1 Diagrama
 
-> **[DIAGRAMA PENDIENTE]** — Diagrama `flowchart LR` con límite del sistema SGO-Logic (contexto Notificaciones). Actor: Órdenes (sistema origen), Proveedor de notificaciones (AS-08 sistema externo). Nodos: consumir evento de cambio de estado desde RabbitMQ pub/sub, invocar al proveedor externo (SMS/correo/push), manejar falla del proveedor sin propagar al flujo principal. Nota: la falla del proveedor no bloquea la operación (EV-34, PRE-03).
+
+<p align="center">
+  <img src="../6. Prototipo Arquitectonico/diagramas_CDU/CU-15.drawio.svg"
+       alt="Diagrama CDU CU-15 — Notificar cambio de estado de orden"
+       width="100%">
+</p>
+
 
 #### CU-15.2 Objetivo
 
