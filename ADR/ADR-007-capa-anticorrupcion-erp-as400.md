@@ -14,7 +14,7 @@ Se introduce una capa anticorrupción (Anti-Corruption Layer) dedicada a la inte
 
 ## Alternativas consideradas
 
-[PENDIENTE-ANGEL: alternativas evaluadas para esta decisión]
+Se evaluaron cuatro opciones: (1) capa anticorrupción dedicada que traduce el modelo de SGO-Logic al formato del ERP; (2) que cada contexto genere directamente el formato que el ERP admite, descartada porque esparce la lógica del legacy por todo el sistema y lo acopla al AS/400; (3) modificar el ERP para que acepte el modelo nuevo, descartada de raíz por la restricción de la Junta de no tocarlo (EV-14); y (4) una base de datos intermedia compartida entre SGO-Logic y el ERP, descartada por crear un punto de acoplamiento de datos y violar el principio de que cada contexto es dueño de los suyos. Se eligió la capa anticorrupción dedicada porque concentra en un único punto toda la traducción hacia el legacy, protege al dominio nuevo de la semántica del AS/400 y absorbe cualquier cambio futuro del ERP sin propagarlo al resto del sistema.
 
 ## Consecuencias
 

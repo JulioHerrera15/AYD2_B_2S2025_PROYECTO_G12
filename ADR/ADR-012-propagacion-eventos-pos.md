@@ -14,7 +14,7 @@ El contexto de Integración POS consume los eventos de venta publicados por Órd
 
 ## Alternativas consideradas
 
-[PENDIENTE-ANGEL: alternativas evaluadas para esta decisión]
+Se evaluaron tres opciones: (1) publicación de eventos vía RabbitMQ con identificador único por evento (idempotencia), dead-letter exchange y reintentos con backoff; (2) llamada síncrona directa a cada instancia de POS, descartada porque una tienda sin conexión bloquearía o perdería el evento; y (3) que el POS consulte periódicamente a SGO-Logic (polling desde la tienda), descartada porque exigiría modificar el POS, lo que la restricción prohíbe (EV-16). Se eligió la propagación por eventos con idempotencia y reintentos porque garantiza que ninguna venta se pierda ni se duplique aunque una tienda esté temporalmente fuera de línea, sin exigirle al POS ninguna capacidad nueva.
 
 ## Consecuencias
 

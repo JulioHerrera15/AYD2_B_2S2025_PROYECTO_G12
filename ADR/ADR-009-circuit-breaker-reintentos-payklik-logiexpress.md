@@ -14,7 +14,7 @@ Los adaptadores hacia PayKlik y LogiExpress aplican reintentos con backoff y dea
 
 ## Alternativas consideradas
 
-[PENDIENTE-ANGEL: alternativas evaluadas para esta decisión]
+Se evaluaron cuatro opciones: (1) reintentos con backoff más circuit breaker y dead-letter exchange; (2) reintentos simples sin circuit breaker, descartada porque seguir golpeando un proveedor caído durante Black Friday agrava la saturación en vez de aislarla; (3) llamada síncrona directa sin protección, descartada porque una caída del proveedor bloquearía el flujo de la orden, que es justo lo que ocurrió en el incidente de los USD 150,000 (EV-11); y (4) reemplazar el proveedor por uno más estable, descartada porque los contratos con PayKlik y LogiExpress están vigentes y no son negociables en este horizonte (EV-45). Se eligió el esquema de reintentos con backoff, dead-letter exchange y circuit breaker, porque aísla al sistema de las fallas del proveedor sin bloquear la orden y deja cada intento auditado.
 
 ## Consecuencias
 
@@ -24,7 +24,7 @@ Los adaptadores hacia PayKlik y LogiExpress aplican reintentos con backoff y dea
 
 ### Negativas
 - El cliente puede percibir estados intermedios más largos de lo habitual ("Pago Pendiente", "Guía Pendiente") durante un incidente prolongado del proveedor.
-- El circuit breaker requiere calibrar umbrales de apertura y cierre contra el patrón real de fallas de cada proveedor. [PENDIENTE-ANGEL: los umbrales específicos de apertura/cierre del circuit breaker (tasa de error, ventana de observación, tiempo de reintento) no están definidos en el repositorio].
+- El circuit breaker requiere calibrar sus umbrales de apertura y cierre (tasa de error, ventana de observación y tiempo de reintento) contra el patrón real de fallas de cada proveedor. Estos valores se definirán durante las pruebas de carga que simulan el pico de 8x de Black Friday, el mismo ejercicio en el que se fijan las réplicas mínima y máxima del servicio de Pagos, para no fijar umbrales sin datos de comportamiento real.
 
 ## Preocupaciones y evidencia que atiende
 

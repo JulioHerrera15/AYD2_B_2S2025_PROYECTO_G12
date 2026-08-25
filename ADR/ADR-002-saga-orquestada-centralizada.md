@@ -14,7 +14,7 @@ El contexto de Órdenes actúa como orquestador centralizado de una saga (máqui
 
 ## Alternativas consideradas
 
-[PENDIENTE-ANGEL: alternativas evaluadas para esta decisión]
+Se evaluaron cinco enfoques: (1) saga orquestada centralizada con máquina de estados interna; (2) coreografía pura por eventos, descartada porque impide el rastreo centralizado que exige Finanzas para la auditoría reconstructiva; (3) orquestación basada en base de datos (transactional outbox orchestrator), que aprovecha la SQL existente pero exige lógica de control de estados propia; (4) orquestador con herramienta dedicada tipo Zeebe, descartado por exceder las competencias Java/.NET del equipo; y (5) saga híbrida (orquestación para la orden, coreografía para notificaciones). Se eligió la saga orquestada centralizada apoyada en una máquina de estados interna del servicio de Órdenes, por dar control total del estado, facilitar las compensaciones y dejar un registro exacto de cada paso para Finanzas, sin introducir herramientas fuera del alcance del equipo. En la práctica se incorpora el matiz de la opción 5: las notificaciones sí se resuelven por coreografía, al ser un servicio secundario cuya falla no debe frenar la operación.
 
 ## Consecuencias
 
