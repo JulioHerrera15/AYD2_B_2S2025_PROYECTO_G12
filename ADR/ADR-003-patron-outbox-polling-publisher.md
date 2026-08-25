@@ -14,7 +14,7 @@ Cada contexto de escritura persiste el evento pendiente en una tabla outbox dent
 
 ## Alternativas consideradas
 
-[PENDIENTE-ANGEL: alternativas evaluadas para esta decisión]
+Se evaluaron cinco opciones: (1) Outbox con polling publisher; (2) Outbox con Change Data Capture vía Debezium, más eficiente pero de alta complejidad técnica fuera del alcance del equipo; (3) envío directo sin Outbox, descartado por garantizar pérdida de eventos y violar los requisitos de auditoría; (4) two-phase commit, descartado por su impacto en el rendimiento durante el pico de Black Friday; y (5) Outbox con LISTEN/NOTIFY de PostgreSQL, más eficiente que el polling pero que acopla el código a un motor de base de datos específico. Se eligió el polling publisher por ser el más sencillo de implementar sobre la base SQL existente, alineado con la experiencia Java/.NET del equipo y sin costo adicional de licencias ni de infraestructura. Se asume como contrapartida la necesidad de optimizar el intervalo de consulta para no consumir recursos de más.
 
 ## Consecuencias
 

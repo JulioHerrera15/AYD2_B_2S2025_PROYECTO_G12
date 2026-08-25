@@ -14,7 +14,7 @@ Auditoría es un contexto delimitado con base de datos propia, en una instancia 
 
 ## Alternativas consideradas
 
-[PENDIENTE-ANGEL: alternativas evaluadas para esta decisión]
+Se evaluó mantener la bitácora de auditoría como una tabla más dentro de la instancia SQL de Finanzas, con permisos de solo inserción. Ventaja: una base menos que operar. Desventaja: las lecturas de auditoría competirían por recursos con la carga transaccional de Pagos y Facturación justo durante los picos, poniendo en riesgo el presupuesto de recuperación de menos de un segundo. También se consideró usar una herramienta de auditoría especializada, descartada por costo y por exceder las competencias del equipo. Se eligió una base de datos propia y separada con permisos restringidos a solo inserción, porque garantiza la inmutabilidad a nivel de motor sin tecnología adicional y aísla las lecturas de auditoría de la carga transaccional.
 
 ## Consecuencias
 

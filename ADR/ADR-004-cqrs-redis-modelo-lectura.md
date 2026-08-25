@@ -14,7 +14,7 @@ Se separa un contexto de Consulta de Estado, distinto de Órdenes, que mantiene 
 
 ## Alternativas consideradas
 
-[PENDIENTE-ANGEL: alternativas evaluadas para esta decisión]
+Se evaluaron cinco opciones: (1) Redis como base de lectura materializada; (2) base SQL de solo lectura, con mayor latencia que la memoria pura en picos altos; (3) MongoDB u otro NoSQL operacional, ideal para la vista 360 anidada pero que introduce otro motor a administrar; (4) consultas directas por fan-out, descartadas porque incumplen los 5 segundos si una dependencia externa está lenta; y (5) Elasticsearch, descartado por su alto consumo de recursos que amenaza el techo de USD 1,200/mes. Se eligió Redis materializado porque reutiliza un motor ya aprobado para el carrito, responde en el orden de milisegundos y mantiene el costo al mínimo. Se asume la necesidad de una estrategia de recarga del modelo ante la caída de un nodo.
 
 ## Consecuencias
 
