@@ -719,11 +719,55 @@ El diagrama de casos de uso de negocio de alto nivel presenta los procesos de ne
 
 ![Diagrama de Casos de Uso de Negocio de Alto Nivel](../img/Diagrama%20de%20Casos%20de%20Uso%20de%20Negocio%20de%20Alto%20Nivel.png)
 
-Los casos de uso expandidos CU-01 a CU-15 se representan individualmente en `../diagramas_CDU/` (formatos editable y de imagen). Corresponden uno a uno con las fichas de la sección 6.
+Los casos de uso expandidos CU-01 a CU-15 se representan a continuación. Corresponden uno a uno con las fichas de la sección 6.
 
+**CU-01**
+![CU-01](../diagramas_CDU/CU-01.svg)
+
+**CU-02**
+![CU-02](../diagramas_CDU/CU-02.svg)
+
+**CU-03**
+![CU-03](../diagramas_CDU/CU-03.svg)
+
+**CU-04**
+![CU-04](../diagramas_CDU/CU-04.svg)
+
+**CU-05**
+![CU-05](../diagramas_CDU/CU-05.svg)
+
+**CU-06**
+![CU-06](../diagramas_CDU/CU-06.svg)
+
+**CU-07**
+![CU-07](../diagramas_CDU/CU-07.svg)
+
+**CU-08**
+![CU-08](../diagramas_CDU/CU-08.svg)
+
+**CU-09**
+![CU-09](../diagramas_CDU/CU-09.svg)
+
+**CU-10**
+![CU-10](../diagramas_CDU/CU-10.svg)
+
+**CU-11**
+![CU-11](../diagramas_CDU/CU-11.drawio.svg)
+
+**CU-12**
+![CU-12](../diagramas_CDU/CU-12.drawio.svg)
+
+**CU-13**
+![CU-13](../diagramas_CDU/CU-13.drawio.svg)
+
+**CU-14**
+![CU-14](../diagramas_CDU/CU-14.drawio.svg)
+
+**CU-15**
+![CU-15](../diagramas_CDU/CU-15.drawio.svg)
 El siguiente diagrama presenta el flujo principal del sistema: el recorrido de punta a punta de una compra omnicanal, desde el reconocimiento del cliente hasta la confirmación de la orden.
 
-![Flujo Principal del Sistema](../img/Flujo%20Principal%20del%20Sistema.png)
+![Flujo Principal del Sistema](../img/DDA_05%20-%20Flujo%20Principal%20del%20Sistema_%20Experiencia%20del%20Carrito%20Omnicanal%20(Preliminar%20v0.1).svg)
 
 ## 11.6 Prototipo de Interfaz de Usuario (Mockups)
 
