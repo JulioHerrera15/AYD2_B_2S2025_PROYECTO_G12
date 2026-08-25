@@ -725,6 +725,65 @@ El siguiente diagrama presenta el flujo principal del sistema: el recorrido de p
 
 ![Flujo Principal del Sistema](../img/Flujo%20Principal%20del%20Sistema.png)
 
+## 11.6 Prototipo de Interfaz de Usuario (Mockups)
+
+Este apartado presenta las interfaces gráficas (mockups no funcionales) de la iniciativa **SGO-Logic** de MegaStore. El diseño adopta un enfoque minimalista y de alta fidelidad, asegurando que la experiencia de usuario y del personal interno sea consistente y moderna en todos los canales.
+
+Estas vistas materializan los requerimientos funcionales documentados en la sección 6, demostrando visualmente el concepto de omnicanalidad (Entregable 4).
+
+### Vista Cliente: Checkout Web Omnicanal
+**Asociado a:** CU-01, CU-04 (Procesamiento de cobro y carrito unificado).  
+**Propósito:** Demuestra la unificación del carrito y la selección del método de despacho (Recoger en tienda vs Envío a domicilio), indicando claramente que no se almacena información sensible de pago (EV-25).
+
+**Versión Escritorio (Desktop)**
+<p align="center">
+  <img src="../img/mockups/checkout_desktop.png" width="90%">
+</p>
+
+**Versión Móvil**
+<p align="center">
+  <img src="../img/mockups/checkout_mobile.png" width="40%">
+</p>
+
+### Vista Tienda Física: Punto de Venta (POS)
+**Asociado a:** CU-02, CU-03 (Recuperación de sesión).  
+**Propósito:** Demuestra cómo un cajero en cualquiera de las 32 tiendas puede recuperar un carrito iniciado por el cliente en la nube (Redis) y finalizar el proceso físicamente.
+
+**Pantalla de Cajero / Vendedor (iPad / Desktop)**
+<p align="center">
+  <img src="../img/mockups/POS_desktop.png" width="90%">
+</p>
+
+### Vista Postventa: Visión 360 del Cliente (Call Center)
+**Asociado a:** CU-13, CAR-07.  
+**Propósito:** Resuelve la necesidad de tener todo el historial (compras, despachos, devoluciones) en una sola vista con carga en menos de 5 segundos, reduciendo drásticamente el tiempo de atención al cliente.
+
+**Versión Escritorio (Desktop)**
+<p align="center">
+  <img src="../img/mockups/soporte_desktop.png" width="90%">
+</p>
+
+**Versión Móvil**
+<p align="center">
+  <img src="../img/mockups/soporte_mobile.png" width="40%">
+</p>
+
+### Vista Logística: Dashboard de Despacho
+**Asociado a:** CU-08 (Determinación y ejecución de despacho).  
+**Propósito:** Herramienta interna para que el Jefe de Logística y su equipo vean las órdenes pendientes, el origen (Tienda o CD) y gestionen la integración de guías con LogiExpress, apuntando a reducir errores de envío en un 70%.
+
+**Versión Escritorio (Desktop)**
+<p align="center">
+  <img src="../img/mockups/logistica_desktop.png" width="90%">
+</p>
+
+**Versión Móvil**
+<p align="center">
+  <img src="../img/mockups/logistica_mobile.png" width="40%">
+</p>
+
+> *Nota: Este prototipo visual fue generado basándose en la especificación de diseño arquitectónico de SGO-Logic.*
+
 ---
 
 # 12. Matrices de trazabilidad
