@@ -752,19 +752,19 @@ Los casos de uso expandidos CU-01 a CU-15 se representan a continuación. Corres
 ![CU-10](../diagramas_CDU/CU-10.svg)
 
 **CU-11**
-![CU-11](../diagramas_CDU/CU-11.drawio.svg)
+![CU-11](../diagramas_CDU/CU-11.svg)
 
 **CU-12**
-![CU-12](../diagramas_CDU/CU-12.drawio.svg)
+![CU-12](../diagramas_CDU/CU-12.svg)
 
 **CU-13**
-![CU-13](../diagramas_CDU/CU-13.drawio.svg)
+![CU-13](../diagramas_CDU/CU-13.svg)
 
 **CU-14**
-![CU-14](../diagramas_CDU/CU-14.drawio.svg)
+![CU-14](../diagramas_CDU/CU-14.svg)
 
 **CU-15**
-![CU-15](../diagramas_CDU/CU-15.drawio.svg)
+![CU-15](../diagramas_CDU/CU-15.svg)
 El siguiente diagrama presenta el flujo principal del sistema: el recorrido de punta a punta de una compra omnicanal, desde el reconocimiento del cliente hasta la confirmación de la orden.
 
 ![Flujo Principal del Sistema](../img/DDA_05%20-%20Flujo%20Principal%20del%20Sistema_%20Experiencia%20del%20Carrito%20Omnicanal%20(Preliminar%20v0.1).svg)
