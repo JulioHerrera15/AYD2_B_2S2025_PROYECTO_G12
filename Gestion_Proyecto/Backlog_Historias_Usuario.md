@@ -3,8 +3,6 @@
 **Responsable:** Jose Pirir (202300335) — Administrador del Tablero Kanban
 **Fuente:** `DDA_02_Casos_Uso_Negocio`, `DDA_04_Drivers_Funcionales_CDU`, `DDA_05_Drivers_de_Calidad_EAC`, `DDA_01_Stakeholders_Preocupaciones`
 
-> Nota: el DDA no exige historias de usuario como artefacto (exige CDU); este backlog es la traducción operativa de esos CDU/EAC/PRE para poblar el Tablero Kanban, priorizado por Ola del Backbone (Ola 1 primero). Cada historia referencia su CU-##/EV-##/PRE-## de origen para trazabilidad.
-
 ---
 
 ## Ola 1 — Núcleo transaccional
@@ -565,5 +563,3 @@
 | Gaps sin CDU | HU-016 a HU-022 | 26 |
 | Calidad (EAC) | HU-023 a HU-026 | 16 |
 | **Total** | **26 historias** | **129 SP** |
-
-Este backlog es el insumo directo para poblar el Tablero Kanban (columna `To Do`), priorizando siempre Ola 1 antes que cualquier funcionalidad cosmética, tal como exige el enunciado.
