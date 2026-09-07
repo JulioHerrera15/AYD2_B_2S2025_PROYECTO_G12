@@ -1,190 +1,184 @@
-# Contrato de eventos del contexto Órdenes — v1
+# Contrato de eventos del contexto Órdenes — v1.1
 
 **Proyecto:** SGO-Logic — Fase 2
 **Curso:** Análisis y Diseño de Sistemas 2, Sección B
 **Contexto emisor:** Órdenes
 **Autor:** 202300410 — Angel David Martínez García
-**Estado:** propuesto para congelamiento
-**Fecha de publicación:** 2026-09-07
-**Fecha límite de objeciones:** 2026-09-07, fin del día
+**Estado:** listo para congelamiento
+**Fecha:** 2026-09-07
+**Depende de:** `sgo-eventos-envelope-v1.md`
 
 ---
 
-## 1. Alcance y reglas del contrato
+## 0. Cambios respecto a v1
 
-Este documento define los eventos que **publica** el contexto Órdenes. Es la fuente única de verdad para todo consumidor. Un contexto no infiere campos, no asume campos adicionales y no consume eventos de Órdenes que no estén aquí.
+Esta versión incorpora las objeciones de Julio Herrera (Auditoría, base técnica), Jonathan Jerónimo (Consulta de Estado, Notificaciones) y Francisco Castillo (Integración POS, Integración ERP).
 
-Trazabilidad al DDA: ADR-001 (microservicios por contexto delimitado), ADR-002 (saga orquestada centralizada en Órdenes), ADR-003 (Outbox con polling publisher), ADR-004 (CQRS ligero con Redis), ADR-010 (tokenización, sin procesador propio), ADR-011 (certificación fiscal asíncrona).
+| # | Objeción | Resolución |
+|---|---|---|
+| 1 | El envelope y las enumeraciones compartidas no pueden pertenecer a Órdenes | Extraídos a `sgo-eventos-envelope-v1.md`, propiedad de la base técnica. Auditoría pasa a binding `#`. |
+| 2 | Falta secuencia monotónica por agregado | `sequence` agregado al envelope compartido, con last-writer-wins. Ver sección 3 de ese documento. |
+| 3 | `causationId` no se llena solo | Propagación automática por contexto ambiente en `SgoLogic.Contracts`. Ver sección 4 de ese documento. |
+| 4 | `x-delivery-limit` solo aplica a colas quorum | Los argumentos de cola salen de este contrato. Aquí solo quedan los bindings; el tipo de cola lo decide la base técnica (HU-008). |
+| 5 | Nadie es dueño de la DLQ | Registrado como pendiente con dueño en el documento de envelope, sección 5. |
+| 6 | Casing inconsistente entre enumeraciones | Todo valor de enumeración pasa a MAYUSCULA_CON_GUION_BAJO. `eventType` sigue en PascalCase por ser nombre de tipo. |
+| 7 | Ningún evento entrega el `documentoFiscalId` final | Evento 12 nuevo: `OrdenCertificadaFiscalmente`. Ver sección 6 para por qué no se agregó al evento 2. |
+| 8 | El mismo hecho llega por dos rutas sin orden garantizado | Sección 6: fuente autoritativa declarada por consumidor, reforzada por topología. |
+| 9 | `erp.ordenes` no recibe `OrdenCancelada`: riesgo de venta fantasma en el lote | Binding agregado. Ver sección 4. |
+| 10 | El ERP nunca se entera del folio fiscal | Binding al evento 12 agregado. Ver sección 4. |
 
-### Reglas obligatorias
-
-1. **Órdenes es el único emisor de estos eventos.** Ningún otro contexto publica con routing key `ordenes.*`.
-2. **Toda publicación pasa por Outbox** (ADR-003). Está prohibido publicar directo al broker desde el código de aplicación. El evento se persiste en la tabla outbox del contexto dentro de la misma transacción que el cambio de datos.
-3. **Consumo idempotente obligatorio.** El broker garantiza entrega *al menos una vez*. Todo consumidor deduplica por `eventId`. Un `eventId` procesado dos veces no puede producir dos efectos.
-4. **No hay garantía de orden global.** Solo se garantiza orden por `aggregateId` en condiciones normales. El consumidor que necesite ordenar usa `occurredAt` y, en caso de empate, el par (`estadoAnterior`, `estadoNuevo`).
-5. **Prohibido en todo payload:** número completo de tarjeta (PAN), código de seguridad (CVV/CVC) y fecha de vencimiento completa. Restricción dura de EV-25 y ADR-010. Se transmite únicamente token, últimos cuatro dígitos y marca.
-6. **Montos como cadena decimal**, nunca número de punto flotante. Ejemplo: `"1250.00"`. Moneda en ISO 4217 (`GTQ`, `USD`, `CRC`) por la operación en tres países (EV-01).
-7. **Fechas en ISO 8601 UTC** con sufijo `Z` y milisegundos. Ejemplo: `"2026-09-07T14:32:10.123Z"`.
-8. **Identificadores como cadena**, nunca entero. Formato de orden: `ORD-<año>-<correlativo de 6 dígitos>`.
+Los supuestos 1 y 2 de la v1 quedan cerrados: RabbitMQ.Client directo y PostgreSQL.
 
 ---
 
-## 2. Topología de mensajería
+## 1. Alcance
 
-Modo pub/sub del bus (ADR-001, sección 11 del DDA).
+Este documento define únicamente el contenido de `data` de los eventos que **publica** el contexto Órdenes. El sobre, las reglas de idempotencia y ordenamiento, las enumeraciones compartidas y la topología del bus están en `sgo-eventos-envelope-v1.md` y no se repiten aquí.
 
-| Elemento | Valor |
+Órdenes es el único emisor de eventos con routing key `ordenes.*`. Ningún otro contexto publica bajo ese prefijo.
+
+Trazabilidad al DDA: ADR-001, ADR-002, ADR-003, ADR-004, ADR-008, ADR-010, ADR-011, ADR-012.
+
+---
+
+## 2. Enumeraciones propias del contexto
+
+Las compartidas (`Canal`, `Moneda`, `Pais`, `MetodoEntrega`, `TipoUbicacion`, `MedioPago`) están en el documento de envelope.
+
+### 2.1 `EstadoOrden`
+
+Estados de la máquina de la saga (ADR-002). Lista cerrada.
+
+| Valor | Significado | Terminal |
+|---|---|---|
+| `CREADA` | Orden registrada, aún sin reserva. | no |
+| `RESERVA_SOLICITADA` | Se pidió reserva a Inventario, sin respuesta. | no |
+| `INVENTARIO_RESERVADO` | Reserva confirmada con TTL vigente. | no |
+| `COBRO_SOLICITADO` | Se pidió el cobro a Pagos, sin respuesta. | no |
+| `PAGO_PENDIENTE` | El cobro falló o no respondió. La orden se preserva y se emite enlace de reintento (EV-28, ADR-010). | no |
+| `PAGO_APLICADO` | Cobro aceptado. | no |
+| `CONFIRMADA_PENDIENTE_FISCAL` | Confirmada para el cliente, con certificación SAT en curso (ADR-011). | no |
+| `CONFIRMADA` | Certificada fiscalmente. | no |
+| `DESPACHO_SOLICITADO` | Se pidió despacho al contexto Despacho. | no |
+| `EN_PREPARACION` | Preparación física en la ubicación de origen. | no |
+| `EN_TRANSITO` | En ruta al cliente. | no |
+| `LISTA_PARA_RECOGER` | Disponible para recogida en tienda. | no |
+| `ENTREGADA` | Recibida por el cliente. | sí |
+| `CANCELADA_RESERVA_VENCIDA` | Cancelada por expiración de la reserva (HU-002, EV-23). | sí |
+| `CANCELADA` | Cancelada por el cliente, por un agente o por fraude. | sí |
+| `RECHAZADA` | No se pudo crear por validación o falta de stock. | sí |
+| `DEVOLUCION_EN_PROCESO` | Devolución o cambio en curso sobre una orden entregada. | no |
+| `DEVUELTA` | Devolución completada con reembolso aplicado. | sí |
+
+**Fuera de esta lista a propósito:** `GUIA_PENDIENTE` no es estado de Orden. Es estado interno de Despacho (HU-011) y lo publica ese contexto. Órdenes no lo conoce ni lo replica. Límite de propiedad de datos según ADR-001.
+
+### 2.2 Resto de enumeraciones
+
+| Enumeración | Valores permitidos |
 |---|---|
-| Exchange | `sgo.eventos` |
-| Tipo | `topic`, `durable: true`, `auto_delete: false` |
-| Dead letter exchange | `sgo.eventos.dlx` (`fanout`, durable) |
-| Cola de descarte | `sgo.eventos.dlq` (durable, sin TTL) |
-| Persistencia de mensaje | `delivery_mode: 2` |
-| `content_type` | `application/json` |
-| `content_encoding` | `utf-8` |
+| `TipoDocumentoFiscal` | `FACTURA`, `NOTA_CREDITO` |
+| `TipoDevolucion` | `DEVOLUCION`, `CAMBIO` |
+| `MotivoLiberacionReserva` | `COBRO_RECHAZADO`, `COBRO_SIN_RESPUESTA`, `CANCELACION_CLIENTE`, `TIMEOUT_SAGA` |
+| `MotivoCancelacion` | `CLIENTE`, `AGENTE`, `RESERVA_VENCIDA`, `STOCK_INSUFICIENTE`, `FRAUDE` |
+| `PasoSaga` | `RESERVA`, `COBRO`, `FISCAL`, `DESPACHO`, `DEVOLUCION` |
+| `SolicitanteCambio` | `CLIENTE`, `AGENTE` |
 
-Los otros dos modos del bus no aplican a este contrato: el canal MOM dedicado a la SAT es interno de Facturación (ADR-011) y el canal `direct` de lote hacia el ERP es interno de Integración ERP (ADR-008).
+---
 
-### Convención de routing key
+## 3. Catálogo de eventos
 
-```
-ordenes.<entidad>.<hecho-en-kebab-case>
-```
+Doce eventos. Ninguno más se publica bajo `ordenes.*` en la versión 1.
 
-### Colas y bindings sugeridos por consumidor
+| # | `eventType` | Routing key | CU | Consumidores |
+|---|---|---|---|---|
+| 1 | `OrdenCreada` | `ordenes.orden.creada` | CU-02 | Consulta de Estado |
+| 2 | `OrdenEstadoCambiado` | `ordenes.orden.estado-cambiado` | CU-02 | Consulta de Estado, Notificaciones |
+| 3 | `ReservaInventarioSolicitada` | `ordenes.reserva.solicitada` | CU-01 | Inventario |
+| 4 | `LiberacionReservaSolicitada` | `ordenes.reserva.liberacion-solicitada` | CU-02 (compensación) | Inventario |
+| 5 | `CobroSolicitado` | `ordenes.cobro.solicitado` | CU-03 | Pagos |
+| 6 | `CertificacionFiscalSolicitada` | `ordenes.fiscal.certificacion-solicitada` | CU-04 | Facturación |
+| 7 | `DespachoSolicitado` | `ordenes.despacho.solicitado` | CU-11 | Despacho |
+| 8 | `OrdenConfirmada` | `ordenes.orden.confirmada` | CU-02, CU-09, CU-13 | Integración POS, Integración ERP, Consulta de Estado |
+| 9 | `OrdenCancelada` | `ordenes.orden.cancelada` | CU-02 | Integración POS, Integración ERP, Despacho, Consulta de Estado |
+| 10 | `MetodoEntregaModificado` | `ordenes.orden.metodo-entrega-modificado` | CU-01.5 (EV-31) | Despacho, Consulta de Estado |
+| 11 | `DevolucionRegistrada` | `ordenes.devolucion.registrada` | CU-14 | Inventario, Facturación, Pagos, Integración ERP, Consulta de Estado |
+| 12 | `OrdenCertificadaFiscalmente` | `ordenes.orden.certificada-fiscalmente` | CU-04, CU-13 | Integración ERP, Consulta de Estado |
 
-Cada consumidor declara su propia cola durable, con `x-dead-letter-exchange: sgo.eventos.dlx` y `x-delivery-limit: 5`. El nombre de cola pertenece al consumidor; los bindings son los que exige este contrato.
+Auditoría consume los doce por su binding `#` y no se lista fila por fila.
+
+---
+
+## 4. Bindings
+
+Cada consumidor declara su propia cola durable. El nombre de la cola y sus argumentos pertenecen al consumidor y a la base técnica; los bindings los fija este contrato.
 
 | Cola | Dueño | Bindings |
 |---|---|---|
-| `auditoria.ordenes` | Julio | `ordenes.#` |
 | `consulta-estado.ordenes` | Jonathan | `ordenes.orden.*`, `ordenes.devolucion.*` |
-| `notificaciones.ordenes` | Jonathan | `ordenes.orden.estado-cambiado`, `ordenes.orden.confirmada`, `ordenes.orden.cancelada` |
+| `notificaciones.ordenes` | Jonathan | `ordenes.orden.estado-cambiado` |
 | `inventario.ordenes` | Jose | `ordenes.reserva.*`, `ordenes.devolucion.registrada` |
 | `despacho.ordenes` | Jose | `ordenes.despacho.solicitado`, `ordenes.orden.metodo-entrega-modificado`, `ordenes.orden.cancelada` |
 | `pagos.ordenes` | Angel | `ordenes.cobro.solicitado`, `ordenes.devolucion.registrada` |
 | `facturacion.ordenes` | Angel | `ordenes.fiscal.certificacion-solicitada`, `ordenes.devolucion.registrada` |
 | `pos.ordenes` | Francisco | `ordenes.orden.confirmada`, `ordenes.orden.cancelada` |
-| `erp.ordenes` | Francisco | `ordenes.orden.confirmada`, `ordenes.devolucion.registrada` |
+| `erp.ordenes` | Francisco | `ordenes.orden.confirmada`, `ordenes.orden.cancelada`, `ordenes.orden.certificada-fiscalmente`, `ordenes.devolucion.registrada` |
 
-`auditoria.ordenes` se liga con `ordenes.#` a propósito: Auditoría registra todo, sin excepción (EV-30, EV-38).
+**Por qué `notificaciones.ordenes` solo recibe el evento 2.** Es la respuesta a la objeción 8. Si la cola nunca recibe los eventos 8 y 9, es imposible que Notificaciones emita dos avisos del mismo hecho, aunque alguien se equivoque programando. La restricción vive en la topología, no en la disciplina de quien la implementa.
 
----
+**Por qué `erp.ordenes` recibe ahora `OrdenCancelada` (objeción 9).** El catálogo de estados permite cancelar una orden ya confirmada, por ejemplo con motivo `FRAUDE`. Si eso ocurre dentro de la ventana de 30 minutos anterior a la corrida del worker de consolidación (HU-013, ADR-008), el lote incluiría una venta que ya no existe y la conciliación (HU-022) tendría que descubrirlo después. El diseño no espera que la conciliación absorba ese caso: la conciliación existe para detectar lo que no se pudo prevenir, no para limpiar lo que sí. Con el binding, Integración ERP excluye la venta antes de armar el lote.
 
-## 3. Envelope común
-
-Los once eventos comparten el mismo sobre. La única parte que varía es `data`.
-
-| Campo | Tipo | Obligatorio | Descripción |
-|---|---|---|---|
-| `eventId` | string (UUID v4) | sí | Identificador único e irrepetible del evento. Ancla de idempotencia del consumidor. |
-| `eventType` | string | sí | Nombre del evento. Coincide con la sección de este documento. |
-| `eventVersion` | integer | sí | Versión del contrato de este evento. Actualmente `1` en todos. |
-| `occurredAt` | string (ISO 8601 UTC) | sí | Momento en que ocurrió el hecho de negocio, no el de publicación. |
-| `transactionId` | string (UUID v4) | sí | Correlación. Es el mismo valor en todos los eventos de una misma saga. Auditoría indexa por este campo (EV-30, EAC-03). |
-| `causationId` | string (UUID) \| null | sí | `eventId` del evento que provocó este. `null` si el origen fue una acción directa del usuario. |
-| `aggregateType` | string | sí | `"Orden"` o `"Devolucion"`. |
-| `aggregateId` | string | sí | Identificador del agregado. Para `Orden` es el `ordenId`. |
-| `source` | string | sí | Siempre `"ordenes"`. |
-| `data` | object | sí | Cuerpo específico del evento. |
-
-### Ejemplo del envelope
-
-```json
-{
-  "eventId": "3f5b2c9e-8a41-4d7e-9c02-1b6e5a7d4f30",
-  "eventType": "OrdenEstadoCambiado",
-  "eventVersion": 1,
-  "occurredAt": "2026-09-07T14:32:10.123Z",
-  "transactionId": "a1c4e8b2-77d3-4f19-b5aa-0e93c62d1845",
-  "causationId": "9d21f0ab-3c55-4e88-8f14-77b0a2c9e611",
-  "aggregateType": "Orden",
-  "aggregateId": "ORD-2026-000123",
-  "source": "ordenes",
-  "data": {}
-}
-```
-
-En las secciones siguientes solo se muestra el contenido de `data`, para no repetir el sobre.
+**Por qué `erp.ordenes` recibe el evento 12 (objeción 10).** La sección 4.5 del DDA delimita CUN-07 dejando el cierre contable en el ERP. Un cierre contable necesita el folio fiscal. `OrdenConfirmada` se emite antes de la certificación y por eso lleva `documentoFiscalId` en `null`; el evento 12 entrega el número definitivo cuando la SAT responde.
 
 ---
 
-## 4. Enumeraciones cerradas
+## 5. Envelope aplicado a este contexto
 
-Ningún consumidor debe recibir un valor fuera de estas listas. Si necesitan uno nuevo, se agrega por versión aditiva del contrato.
+Valores fijos para todos los eventos de Órdenes. El resto de campos y sus reglas están en el documento de envelope.
 
-### 4.1 `EstadoOrden`
-
-Estados de la máquina de la saga (ADR-002). Jonathan mapea notificaciones sobre esta lista; Consulta de Estado la materializa tal cual.
-
-| Estado | Significado | Terminal |
-|---|---|---|
-| `Creada` | Orden registrada, aún sin reserva. | no |
-| `ReservaSolicitada` | Se pidió reserva a Inventario, sin respuesta. | no |
-| `InventarioReservado` | Reserva confirmada con TTL vigente. | no |
-| `CobroSolicitado` | Se pidió el cobro a Pagos, sin respuesta. | no |
-| `PagoPendiente` | El cobro falló o no respondió. La orden se preserva y se emite enlace de reintento (EV-28, ADR-010). | no |
-| `PagoAplicado` | Cobro aceptado. | no |
-| `ConfirmadaPendienteFiscal` | Confirmada para el cliente, con certificación SAT en curso (ADR-011). | no |
-| `Confirmada` | Certificada fiscalmente. | no |
-| `DespachoSolicitado` | Se pidió despacho al contexto Despacho. | no |
-| `EnPreparacion` | Preparación física en la ubicación de origen. | no |
-| `EnTransito` | En ruta al cliente. | no |
-| `ListaParaRecoger` | Disponible para recogida en tienda. | no |
-| `Entregada` | Recibida por el cliente. | sí |
-| `CanceladaReservaVencida` | Cancelada por expiración de la reserva (HU-002, EV-23). | sí |
-| `Cancelada` | Cancelada por el cliente o por un agente. | sí |
-| `Rechazada` | No se pudo crear por validación o falta de stock. | sí |
-| `DevolucionEnProceso` | Devolución o cambio en curso sobre una orden entregada. | no |
-| `Devuelta` | Devolución completada con reembolso aplicado. | sí |
-
-**Fuera de esta lista a propósito:** `GuiaPendiente` no es estado de Orden. Es estado interno de Despacho (HU-011) y lo publica ese contexto en su propio evento. Órdenes no lo conoce ni lo replica. Límite de propiedad de datos según ADR-001.
-
-### 4.2 Otras enumeraciones
-
-| Enumeración | Valores permitidos |
+| Campo | Valor en este contexto |
 |---|---|
-| `Canal` | `WEB`, `MOVIL`, `CALL_CENTER`, `TIENDA` |
-| `MetodoEntrega` | `DOMICILIO`, `RECOGIDA_TIENDA` |
-| `TipoUbicacion` | `CENTRO_DISTRIBUCION`, `TIENDA` |
-| `MedioPago` | `TARJETA`, `TRANSFERENCIA`, `BILLETERA_DIGITAL` |
-| `Moneda` | `GTQ`, `USD`, `CRC` |
-| `TipoDocumentoFiscal` | `FACTURA`, `NOTA_CREDITO` |
-| `TipoDevolucion` | `DEVOLUCION`, `CAMBIO` |
-| `MotivoLiberacionReserva` | `COBRO_RECHAZADO`, `COBRO_SIN_RESPUESTA`, `CANCELACION_CLIENTE`, `TIMEOUT_SAGA` |
-| `MotivoCancelacion` | `CLIENTE`, `AGENTE`, `RESERVA_VENCIDA`, `STOCK_INSUFICIENTE`, `FRAUDE` |
+| `source` | `"ordenes"` |
+| `aggregateType` | `"Orden"` en los eventos 1 a 10 y 12; `"Devolucion"` en el evento 11 |
+| `aggregateId` | `ordenId` con formato `ORD-<año>-<correlativo de 6 dígitos>`; `devolucionId` en el evento 11 |
+| `sequence` | Asignado por Órdenes, monotónico por `ordenId`, empieza en 1 con `OrdenCreada` |
 
 ---
 
-## 5. Catálogo de eventos
+## 6. Fuente autoritativa del estado
 
-Once eventos. Ninguno más se publica bajo `ordenes.*` en la versión 1.
+Respuesta a la objeción 8. Regla normativa, no recomendación.
 
-| # | `eventType` | Routing key | CU | Consumidores |
-|---|---|---|---|---|
-| 1 | `OrdenCreada` | `ordenes.orden.creada` | CU-02 | Auditoría, Consulta de Estado |
-| 2 | `OrdenEstadoCambiado` | `ordenes.orden.estado-cambiado` | CU-02 | Auditoría, Consulta de Estado, Notificaciones |
-| 3 | `ReservaInventarioSolicitada` | `ordenes.reserva.solicitada` | CU-01 | Inventario, Auditoría |
-| 4 | `LiberacionReservaSolicitada` | `ordenes.reserva.liberacion-solicitada` | CU-02 (compensación) | Inventario, Auditoría |
-| 5 | `CobroSolicitado` | `ordenes.cobro.solicitado` | CU-03 | Pagos, Auditoría |
-| 6 | `CertificacionFiscalSolicitada` | `ordenes.fiscal.certificacion-solicitada` | CU-04 | Facturación, Auditoría |
-| 7 | `DespachoSolicitado` | `ordenes.despacho.solicitado` | CU-11 | Despacho, Auditoría |
-| 8 | `OrdenConfirmada` | `ordenes.orden.confirmada` | CU-02, CU-09, CU-13 | Integración POS, Integración ERP, Consulta de Estado, Notificaciones, Auditoría |
-| 9 | `OrdenCancelada` | `ordenes.orden.cancelada` | CU-02 | Integración POS, Despacho, Consulta de Estado, Notificaciones, Auditoría |
-| 10 | `MetodoEntregaModificado` | `ordenes.orden.metodo-entrega-modificado` | CU-01.5 (EV-31) | Despacho, Consulta de Estado, Auditoría |
-| 11 | `DevolucionRegistrada` | `ordenes.devolucion.registrada` | CU-14 | Inventario, Facturación, Pagos, Integración ERP, Consulta de Estado, Auditoría |
+1. **El estado inicial lo establece `OrdenCreada` (evento 1), siempre con `sequence` 1.**
+2. **A partir de ahí, el único evento que cambia el estado de una orden es `OrdenEstadoCambiado` (evento 2).**
+3. **Los eventos 8, 9 y 12 están prohibidos como fuente de estado.** Llevan carga comercial y fiscal para POS y ERP, y llegan acompañados de su `OrdenEstadoCambiado` correspondiente. Un consumidor que use el evento 8 para escribir `CONFIRMADA_PENDIENTE_FISCAL` en su modelo de lectura está violando este contrato.
+
+| Consumidor | Ruta autoritativa para el estado | Para qué usa las demás rutas |
+|---|---|---|
+| Consulta de Estado | Eventos 1 y 2 | Eventos 8, 9, 10, 11 y 12 enriquecen la vista 360 con datos comerciales, `documentoFiscalId` y `tiendaDestinoId`, sin tocar el campo de estado. |
+| Notificaciones | Evento 2, único | No recibe otra ruta por topología. |
+| Integración POS | No materializa estado | Eventos 8 y 9 como hechos comerciales. |
+| Integración ERP | No materializa estado | Eventos 8, 9, 11 y 12 para armar y corregir el lote. |
+| Inventario, Pagos, Facturación, Despacho | No materializan estado de Orden | Reciben órdenes de trabajo, no proyecciones. |
+| Auditoría | No materializa estado | Inserta los doce sin sobrescribir. |
+
+**Por qué `documentoFiscalId` no se agregó al evento 2.** Jonathan propuso como alternativa incluirlo en `OrdenEstadoCambiado` cuando `estadoNuevo` fuera `CONFIRMADA`. Se descartó porque reintroduce el problema de su propia objeción 8: dos rutas cargando el mismo dato, con orden no garantizado entre ellas. El evento 12 es el portador único, y el binding `ordenes.orden.*` de Consulta de Estado ya se lo entrega sin cambiar nada de su lado.
 
 ---
 
-### 5.1 `OrdenCreada`
+## 7. Catálogo detallado
 
-Routing key `ordenes.orden.creada`. Se emite al persistir la orden en estado `Creada`, antes de solicitar reserva.
+En las secciones siguientes solo se muestra el contenido de `data`.
+
+### 7.1 `OrdenCreada`
+
+Routing key `ordenes.orden.creada`. Se emite al persistir la orden, antes de solicitar reserva. Siempre con `sequence` 1.
 
 | Campo de `data` | Tipo | Obligatorio | Notas |
 |---|---|---|---|
 | `ordenId` | string | sí | `ORD-2026-000123`. |
 | `numeroOrden` | string | sí | Correlativo visible al cliente. |
 | `clienteId` | string | sí | Identificador de Auth. |
+| `estado` | string | sí | Siempre `"CREADA"`. Presente para que el consumidor use un mapeador uniforme. |
 | `canal` | string | sí | Enum `Canal`. |
 | `metodoEntrega` | string | sí | Enum `MetodoEntrega`. |
 | `ubicacionSolicitadaId` | string \| null | sí | Tienda de recogida cuando aplica; `null` en domicilio. |
@@ -199,7 +193,7 @@ Routing key `ordenes.orden.creada`. Se emite al persistir la orden en estado `Cr
 | `lineas[].precioUnitario` | string | sí | Decimal como cadena. |
 | `lineas[].subtotal` | string | sí | Decimal como cadena. |
 | `direccionEntrega` | object \| null | sí | `null` si es recogida en tienda. |
-| `direccionEntrega.pais` | string | condicional | ISO 3166-1 alfa-2: `GT`, `SV`, `CR`. |
+| `direccionEntrega.pais` | string | condicional | Enum `Pais`. |
 | `direccionEntrega.departamento` | string | condicional | |
 | `direccionEntrega.municipio` | string | condicional | |
 | `direccionEntrega.direccion` | string | condicional | |
@@ -211,6 +205,7 @@ Routing key `ordenes.orden.creada`. Se emite al persistir la orden en estado `Cr
   "ordenId": "ORD-2026-000123",
   "numeroOrden": "000123",
   "clienteId": "CLI-000045",
+  "estado": "CREADA",
   "canal": "WEB",
   "metodoEntrega": "DOMICILIO",
   "ubicacionSolicitadaId": null,
@@ -240,9 +235,9 @@ Routing key `ordenes.orden.creada`. Se emite al persistir la orden en estado `Cr
 
 ---
 
-### 5.2 `OrdenEstadoCambiado`
+### 7.2 `OrdenEstadoCambiado`
 
-Routing key `ordenes.orden.estado-cambiado`. Se emite en **toda** transición de la máquina de estados, sin excepción. Es el evento del que dependen Auditoría, Consulta de Estado y Notificaciones.
+Routing key `ordenes.orden.estado-cambiado`. Se emite en **toda** transición posterior a la creación, sin excepción. Fuente autoritativa del estado.
 
 | Campo de `data` | Tipo | Obligatorio | Notas |
 |---|---|---|---|
@@ -251,9 +246,9 @@ Routing key `ordenes.orden.estado-cambiado`. Se emite en **toda** transición de
 | `clienteId` | string | sí | Notificaciones lo necesita para resolver destinatario. |
 | `estadoAnterior` | string | sí | Enum `EstadoOrden`. |
 | `estadoNuevo` | string | sí | Enum `EstadoOrden`. |
-| `motivo` | string \| null | sí | Texto corto de negocio. `null` en transiciones del camino feliz. |
-| `pasoSaga` | string \| null | sí | `RESERVA`, `COBRO`, `FISCAL`, `DESPACHO`, `DEVOLUCION` o `null`. |
-| `esCompensacion` | boolean | sí | `true` cuando la transición es producto de una compensación. |
+| `motivo` | string \| null | sí | Texto corto de negocio. `null` en el camino feliz. |
+| `pasoSaga` | string \| null | sí | Enum `PasoSaga` o `null`. |
+| `esCompensacion` | boolean | sí | `true` cuando la transición proviene de una compensación. |
 | `cambiadoEn` | string | sí | ISO 8601 UTC. |
 
 ```json
@@ -261,8 +256,8 @@ Routing key `ordenes.orden.estado-cambiado`. Se emite en **toda** transición de
   "ordenId": "ORD-2026-000123",
   "numeroOrden": "000123",
   "clienteId": "CLI-000045",
-  "estadoAnterior": "CobroSolicitado",
-  "estadoNuevo": "PagoPendiente",
+  "estadoAnterior": "COBRO_SOLICITADO",
+  "estadoNuevo": "PAGO_PENDIENTE",
   "motivo": "PayKlik no respondio dentro del timeout configurado",
   "pasoSaga": "COBRO",
   "esCompensacion": true,
@@ -272,7 +267,7 @@ Routing key `ordenes.orden.estado-cambiado`. Se emite en **toda** transición de
 
 ---
 
-### 5.3 `ReservaInventarioSolicitada`
+### 7.3 `ReservaInventarioSolicitada`
 
 Routing key `ordenes.reserva.solicitada`. Órdenes solicita a Inventario la reserva con control de concurrencia (CU-01, ADR-005).
 
@@ -305,9 +300,9 @@ Routing key `ordenes.reserva.solicitada`. Órdenes solicita a Inventario la rese
 
 ---
 
-### 5.4 `LiberacionReservaSolicitada`
+### 7.4 `LiberacionReservaSolicitada`
 
-Routing key `ordenes.reserva.liberacion-solicitada`. Compensación de la saga. Órdenes pide a Inventario devolver las unidades al stock disponible.
+Routing key `ordenes.reserva.liberacion-solicitada`. Compensación de la saga.
 
 Distinto de la expiración por TTL: esa la dispara el temporizador de Inventario (CU-06, HU-002) y la publica Inventario, no Órdenes.
 
@@ -329,11 +324,11 @@ Distinto de la expiración por TTL: esa la dispara el temporizador de Inventario
 
 ---
 
-### 5.5 `CobroSolicitado`
+### 7.5 `CobroSolicitado`
 
 Routing key `ordenes.cobro.solicitado`. Órdenes solicita el cobro a Pagos (CU-03).
 
-**Restricción dura (EV-25, ADR-010):** este payload no contiene ni contendrá PAN, CVV ni fecha de vencimiento completa. Cualquier revisión que encuentre esos campos aquí invalida el contrato.
+**Restricción dura (RES-08, EV-25, ADR-010):** este payload no contiene ni contendrá PAN, CVV ni fecha de vencimiento completa. Cualquier revisión que encuentre esos campos aquí invalida el contrato.
 
 | Campo de `data` | Tipo | Obligatorio | Notas |
 |---|---|---|---|
@@ -367,20 +362,20 @@ Routing key `ordenes.cobro.solicitado`. Órdenes solicita el cobro a Pagos (CU-0
 
 ---
 
-### 5.6 `CertificacionFiscalSolicitada`
+### 7.6 `CertificacionFiscalSolicitada`
 
-Routing key `ordenes.fiscal.certificacion-solicitada`. Órdenes pide a Facturación generar y certificar el documento ante la SAT de forma asíncrona (CU-04, ADR-011). La orden queda en `ConfirmadaPendienteFiscal` mientras tanto.
+Routing key `ordenes.fiscal.certificacion-solicitada`. Órdenes pide a Facturación generar y certificar el documento ante la SAT de forma asíncrona (CU-04, ADR-011, RES-07).
 
 | Campo de `data` | Tipo | Obligatorio | Notas |
 |---|---|---|---|
 | `ordenId` | string | sí | |
 | `tipoDocumento` | string | sí | Enum `TipoDocumentoFiscal`. |
-| `documentoOrigenId` | string \| null | sí | Documento fiscal original cuando es `NOTA_CREDITO`; `null` en factura. |
+| `documentoOrigenId` | string \| null | sí | Documento original cuando es `NOTA_CREDITO`; `null` en factura. |
 | `receptor` | object | sí | Datos fiscales del receptor. |
 | `receptor.cui` | string | sí | CUI o identificador fiscal según país. |
 | `receptor.nombre` | string | sí | |
 | `receptor.direccion` | string | sí | |
-| `receptor.pais` | string | sí | `GT`, `SV`, `CR`. |
+| `receptor.pais` | string | sí | Enum `Pais`. |
 | `moneda` | string | sí | Enum `Moneda`. |
 | `subtotal` | string | sí | Decimal como cadena. |
 | `impuestos` | string | sí | Decimal como cadena. |
@@ -423,7 +418,7 @@ Routing key `ordenes.fiscal.certificacion-solicitada`. Órdenes pide a Facturaci
 
 ---
 
-### 5.7 `DespachoSolicitado`
+### 7.7 `DespachoSolicitado`
 
 Routing key `ordenes.despacho.solicitado`. Órdenes pide a Despacho determinar el origen y coordinar la guía (CU-11).
 
@@ -473,11 +468,13 @@ Routing key `ordenes.despacho.solicitado`. Órdenes pide a Despacho determinar e
 
 ---
 
-### 5.8 `OrdenConfirmada`
+### 7.8 `OrdenConfirmada`
 
-Routing key `ordenes.orden.confirmada`. La venta quedó firme. Es el evento del que se alimentan Integración POS (CU-09) e Integración ERP (CU-13).
+Routing key `ordenes.orden.confirmada`. La venta quedó firme. Alimenta Integración POS (CU-09, ADR-012) e Integración ERP (CU-13, ADR-008).
 
-Se emite al pasar a `ConfirmadaPendienteFiscal`, **no** al certificar. Motivo: la venta ya es firme para el negocio y el POS y el ERP no deben esperar a la SAT (ADR-011). Cuando llegue la certificación, el cambio viaja por `OrdenEstadoCambiado` con `estadoNuevo: "Confirmada"`.
+Se emite al pasar a `CONFIRMADA_PENDIENTE_FISCAL`, **no** al certificar. La venta ya es firme para el negocio y ni el POS ni el ERP deben esperar a la SAT (ADR-011). El folio definitivo llega después en el evento 12.
+
+Prohibido como fuente de estado. Ver sección 6.
 
 | Campo de `data` | Tipo | Obligatorio | Notas |
 |---|---|---|---|
@@ -491,7 +488,7 @@ Se emite al pasar a `ConfirmadaPendienteFiscal`, **no** al certificar. Motivo: l
 | `impuestos` | string | sí | Decimal como cadena. |
 | `total` | string | sí | Decimal como cadena. |
 | `pagoId` | string | sí | Identificador del pago aplicado. |
-| `documentoFiscalId` | string \| null | sí | `null` mientras la certificación esté pendiente. |
+| `documentoFiscalId` | string \| null | sí | Siempre `null` en este evento. El folio viaja en el evento 12. |
 | `lineas` | array | sí | Mínimo un elemento. |
 | `lineas[].sku` | string | sí | |
 | `lineas[].descripcion` | string | sí | |
@@ -528,9 +525,11 @@ Se emite al pasar a `ConfirmadaPendienteFiscal`, **no** al certificar. Motivo: l
 
 ---
 
-### 5.9 `OrdenCancelada`
+### 7.9 `OrdenCancelada`
 
-Routing key `ordenes.orden.cancelada`. Cancelación de la orden por cualquier causa.
+Routing key `ordenes.orden.cancelada`. Cancelación por cualquier causa, incluida la cancelación de una orden ya confirmada.
+
+Prohibido como fuente de estado. Ver sección 6.
 
 | Campo de `data` | Tipo | Obligatorio | Notas |
 |---|---|---|---|
@@ -538,6 +537,7 @@ Routing key `ordenes.orden.cancelada`. Cancelación de la orden por cualquier ca
 | `numeroOrden` | string | sí | |
 | `clienteId` | string | sí | |
 | `tiendaDestinoId` | string \| null | sí | Necesario si el POS ya recibió la venta. |
+| `estabaConfirmada` | boolean | sí | `true` si ya se había emitido `OrdenConfirmada`. Permite al ERP excluir la venta del lote sin consultar su propio histórico. |
 | `motivo` | string | sí | Enum `MotivoCancelacion`. |
 | `detalle` | string \| null | sí | Texto libre corto. |
 | `requiereReembolso` | boolean | sí | `true` si ya se había aplicado un cobro. |
@@ -553,22 +553,23 @@ Routing key `ordenes.orden.cancelada`. Cancelación de la orden por cualquier ca
   "numeroOrden": "000123",
   "clienteId": "CLI-000045",
   "tiendaDestinoId": "TDA-014",
-  "motivo": "RESERVA_VENCIDA",
-  "detalle": "TTL de reserva expirado sin cobro aplicado",
-  "requiereReembolso": false,
-  "pagoId": null,
+  "estabaConfirmada": true,
+  "motivo": "FRAUDE",
+  "detalle": "Cobro revertido por sospecha de fraude antes del cierre del lote",
+  "requiereReembolso": true,
+  "pagoId": "PAG-2026-008877",
   "documentoFiscalId": null,
-  "moneda": null,
-  "montoReembolso": null,
+  "moneda": "GTQ",
+  "montoReembolso": "1400.00",
   "canceladaEn": "2026-09-07T14:47:00.000Z"
 }
 ```
 
 ---
 
-### 5.10 `MetodoEntregaModificado`
+### 7.10 `MetodoEntregaModificado`
 
-Routing key `ordenes.orden.metodo-entrega-modificado`. La orden es un agregado de larga vida y mutable: el método de entrega puede cambiar después de confirmada (EV-31, CUN-01.5). Despacho usa este evento para reasignar guía u origen (HU-011).
+Routing key `ordenes.orden.metodo-entrega-modificado`. La orden es un agregado de larga vida y mutable: el método de entrega puede cambiar después de confirmada (EV-31, CUN-01.5). Despacho lo usa para reasignar guía u origen (HU-011).
 
 | Campo de `data` | Tipo | Obligatorio | Notas |
 |---|---|---|---|
@@ -577,7 +578,7 @@ Routing key `ordenes.orden.metodo-entrega-modificado`. La orden es un agregado d
 | `metodoEntregaNuevo` | string | sí | Enum `MetodoEntrega`. |
 | `ubicacionRecogidaId` | string \| null | sí | Requerido si el nuevo método es `RECOGIDA_TIENDA`. |
 | `direccionEntrega` | object \| null | sí | Requerido si el nuevo método es `DOMICILIO`. Misma forma que en `OrdenCreada`. |
-| `solicitadoPor` | string | sí | `CLIENTE` o `AGENTE`. |
+| `solicitadoPor` | string | sí | Enum `SolicitanteCambio`. |
 | `modificadoEn` | string | sí | ISO 8601 UTC. |
 
 ```json
@@ -594,9 +595,9 @@ Routing key `ordenes.orden.metodo-entrega-modificado`. La orden es un agregado d
 
 ---
 
-### 5.11 `DevolucionRegistrada`
+### 7.11 `DevolucionRegistrada`
 
-Routing key `ordenes.devolucion.registrada`. Devolución o cambio sobre una orden entregada (CU-14, HU-014). Es el único evento con `aggregateType: "Devolucion"`.
+Routing key `ordenes.devolucion.registrada`. Devolución o cambio sobre una orden entregada (CU-14, HU-014). Único evento con `aggregateType: "Devolucion"`.
 
 Dispara tres reacciones en paralelo: reingreso de inventario, nota de crédito y reembolso.
 
@@ -647,61 +648,83 @@ Dispara tres reacciones en paralelo: reingreso de inventario, nota de crédito y
 
 ---
 
-## 6. Matriz de consumo
+### 7.12 `OrdenCertificadaFiscalmente`
 
-Fila por consumidor. Si algo falta para su historia de usuario, se objeta antes del congelamiento.
+Routing key `ordenes.orden.certificada-fiscalmente`. Se emite cuando la SAT devuelve la certificación y la orden pasa de `CONFIRMADA_PENDIENTE_FISCAL` a `CONFIRMADA` (ADR-011).
 
-| Consumidor | Dueño | HU | Eventos que consume | Para qué |
+Portador único del folio fiscal. Cierra las objeciones 7 y 10.
+
+Prohibido como fuente de estado. La transición viaja en su `OrdenEstadoCambiado`; este evento entrega el dato fiscal.
+
+| Campo de `data` | Tipo | Obligatorio | Notas |
+|---|---|---|---|
+| `ordenId` | string | sí | |
+| `numeroOrden` | string | sí | |
+| `tiendaDestinoId` | string \| null | sí | Para que el ERP ubique la venta dentro del lote. |
+| `documentoFiscalId` | string | sí | Identificador interno del documento. |
+| `tipoDocumento` | string | sí | Enum `TipoDocumentoFiscal`. |
+| `serie` | string | sí | Serie asignada. |
+| `numeroDocumento` | string | sí | Número correlativo del documento. |
+| `numeroAutorizacion` | string | sí | Autorización devuelta por la SAT. |
+| `moneda` | string | sí | Enum `Moneda`. |
+| `total` | string | sí | Decimal como cadena. Debe cuadrar con el `total` del evento 8. |
+| `certificadaEn` | string | sí | ISO 8601 UTC, momento de la respuesta de la SAT. |
+
+```json
+{
+  "ordenId": "ORD-2026-000123",
+  "numeroOrden": "000123",
+  "tiendaDestinoId": "TDA-014",
+  "documentoFiscalId": "DOC-2026-005510",
+  "tipoDocumento": "FACTURA",
+  "serie": "A",
+  "numeroDocumento": "005510",
+  "numeroAutorizacion": "4F2A-9C81-7B03-D65E",
+  "moneda": "GTQ",
+  "total": "1400.00",
+  "certificadaEn": "2026-09-07T14:39:12.400Z"
+}
+```
+
+---
+
+## 8. Matriz de consumo
+
+| Consumidor | Dueño | HU | Eventos | Para qué |
 |---|---|---|---|---|
-| Auditoría | Julio | HU-006 | Los once (`ordenes.#`) | Bitácora append-only indexada por `transactionId` (EV-30, EAC-03). |
-| Consulta de Estado | Jonathan | HU-010 | 1, 2, 8, 9, 10, 11 | Vista materializada en Redis y vista 360 (ADR-004, EAC-02). |
-| Notificaciones | Jonathan | HU-015 | 2, 8, 9 | Aviso al cliente por cada cambio relevante (EV-34). |
+| Auditoría | Julio | HU-006 | Los doce, por binding `#` | Bitácora append-only indexada por `transactionId` (EV-30, EAC-03). |
+| Consulta de Estado | Jonathan | HU-010 | 1, 2, 8, 9, 10, 11, 12 | Vista materializada en Redis y vista 360 (ADR-004, EAC-02, CAR-07). Estado solo desde 1 y 2. |
+| Notificaciones | Jonathan | HU-015 | 2 | Aviso al cliente por cambio de estado (EV-34, RES-06). Fuente única. |
 | Inventario | Jose | HU-001, HU-002, HU-014 | 3, 4, 11 | Reservar, liberar por compensación y reingresar por devolución. |
-| Despacho | Jose | HU-011, HU-012, HU-020 | 7, 9, 10 | Origen, guía, reasignación y recogida en tienda. |
+| Despacho | Jose | HU-011, HU-012, HU-020 | 7, 9, 10 | Origen, guía, reasignación, recogida en tienda y cancelación de despacho. |
 | Pagos | Angel | HU-004, HU-014 | 5, 11 | Intento de cobro y reembolso. |
 | Facturación | Angel | HU-005, HU-014 | 6, 11 | Certificación SAT y nota de crédito. |
-| Integración POS | Francisco | HU-009 | 8, 9 | Propagación idempotente a la instancia de tienda (EV-16). |
-| Integración ERP | Francisco | HU-013, HU-022 | 8, 11 | Consolidación del lote de 30 minutos y conciliación (EV-15). |
+| Integración POS | Francisco | HU-009 | 8, 9 | Propagación idempotente a la instancia de tienda (EV-16, ADR-012). |
+| Integración ERP | Francisco | HU-013, HU-022 | 8, 9, 11, 12 | Consolidación del lote de 30 minutos, exclusión de ventas canceladas, folio fiscal y conciliación (EV-15, ADR-008). |
 
-**Qué no está aquí y por qué:** Auth no consume eventos de Órdenes. El carrito unificado (HU-007) es propiedad de Auth y Órdenes sobre Redis y no genera eventos de este contrato.
-
----
-
-## 7. Versionado
-
-**Cambio aditivo (v1.x).** Se permite agregar un campo opcional o un evento nuevo. No requiere renegociar. Se anuncia al grupo y se actualiza este documento. Los consumidores existentes siguen funcionando sin tocarse.
-
-**Cambio rompiente (v2).** Quitar un campo, renombrarlo, cambiar su tipo, o agregar un valor a una enumeración cerrada. Requiere:
-
-1. Nuevo `eventVersion: 2`.
-2. Nueva routing key con sufijo, por ejemplo `ordenes.orden.confirmada.v2`.
-3. Publicación simultánea de v1 y v2 hasta que todos los consumidores migren.
-4. Acuerdo explícito del grupo, registrado como comentario en la tarjeta HU-003.
-
-**Deprecación.** Un evento no se elimina mientras exista un consumidor ligado a él. Se marca como obsoleto en este documento con la fecha de retiro.
+**Qué no está aquí y por qué.** Auth no consume eventos de Órdenes. El carrito unificado (HU-007) vive en Redis y no genera eventos de este contrato.
 
 ---
 
-## 8. Congelamiento
+## 9. Congelamiento
 
-Una vez congelado, cualquier cambio a este documento se avisa al grupo antes de hacerlo, sin excepción. Cuatro contextos dependen de él y un cambio silencioso rompe el trabajo de otras personas.
+Una vez congelado, cualquier cambio se avisa al grupo antes de hacerlo, sin excepción.
 
 | Revisor | Contexto | Estado | Fecha |
 |---|---|---|---|
-| Julio Herrera | Auditoría | pendiente | |
-| Jonathan Jerónimo | Consulta de Estado, Notificaciones | pendiente | |
+| Angel Martínez (202300410) | Órdenes, Pagos, Facturación | autor | 2026-09-07 |
+| Julio Herrera | Auditoría, base técnica | objeciones 1 a 6 incorporadas, pendiente de firma | |
+| Jonathan Jerónimo (202300353) | Consulta de Estado, Notificaciones | objeciones 1 a 8 incorporadas, pendiente de firma | |
+| Francisco Castillo | Integración POS, Integración ERP | objeciones 9 y 10 incorporadas, pendiente de firma | |
 | Jose Pirir | Inventario, Despacho | pendiente | |
-| Francisco Castillo | Integración POS, Integración ERP | pendiente | |
-| Angel Martínez | Órdenes, Pagos, Facturación | autor | 2026-09-07 |
 
 ---
 
-## 9. Supuestos abiertos
+## 10. Supuestos abiertos
 
-Cosas que este contrato asume y que conviene confirmar. Ninguna bloquea el congelamiento, pero todas pueden generar una v1.1.
+Ninguno bloquea el congelamiento. Los supuestos 1 y 2 de la v1 quedaron cerrados.
 
-1. **Cliente de mensajería.** El envelope está diseñado para RabbitMQ.Client directo. Si el grupo adopta MassTransit, ese cliente impone su propio sobre y este contrato pasa a v1.1.
-2. **Motor SQL.** El DDA sostiene el techo de USD 1,200 mensuales afirmando que los motores SQL son software libre (EV-42, sección 10 del DDA). Eso apunta a PostgreSQL. Si se elige SQL Server, hay que revisar esa afirmación del DDA.
-3. **Mapeo de `tiendaDestinoId`.** Órdenes lo emite, pero la tabla tienda a instancia de POS es propiedad de Integración POS (HU-009). Se asume que Francisco resuelve el mapeo del lado receptor.
-4. **TTL de reserva.** Se emite como parámetro en `ReservaInventarioSolicitada`; el valor definitivo lo fija Inventario (HU-001).
-5. **Precios del Catálogo Comercial.** Los precios viajan congelados al momento de la compra. El Catálogo es dependencia externa fuera del alcance y no es fuente de verdad después de creada la orden.
+1. **Mapeo de `tiendaDestinoId`.** Órdenes lo emite; la tabla tienda a instancia de POS es propiedad de Integración POS (HU-009). Se asume que se resuelve del lado receptor.
+2. **TTL de reserva.** Se emite como parámetro en el evento 3; el valor definitivo lo fija Inventario (HU-001).
+3. **Precios del Catálogo Comercial.** Viajan congelados al momento de la compra. El Catálogo es dependencia externa fuera del alcance (CUN-08) y no es fuente de verdad después de creada la orden.
+4. **Ventana de exclusión del lote ERP.** El binding a `OrdenCancelada` permite excluir la venta antes de consolidar, pero una cancelación que llegue **después** de enviado el lote sigue siendo trabajo de la conciliación (HU-022). Ese caso no se puede prevenir por topología.
