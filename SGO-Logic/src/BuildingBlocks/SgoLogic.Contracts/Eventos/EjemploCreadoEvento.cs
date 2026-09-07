@@ -15,6 +15,7 @@ public static class EjemploCreadoEvento
         string transactionId,
         string aggregateId,
         string source,
+        int sequence,
         EjemploCreadoData data,
         string? causationId = null)
     {
@@ -22,6 +23,7 @@ public static class EjemploCreadoEvento
         {
             EventType = TipoEvento,
             TransactionId = transactionId,
+            Sequence = sequence,
             CausationId = causationId,
             AggregateType = TipoAgregado,
             AggregateId = aggregateId,

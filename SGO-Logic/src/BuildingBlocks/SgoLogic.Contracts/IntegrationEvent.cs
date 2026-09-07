@@ -15,6 +15,7 @@ public sealed class IntegrationEvent<TData> : IIntegrationEvent
     public int EventVersion { get; init; } = 1;
 
     public DateTime OccurredAt { get; init; } = DateTime.UtcNow;
+    public required int Sequence { get; init; }
 
     public required string TransactionId { get; init; }
 
