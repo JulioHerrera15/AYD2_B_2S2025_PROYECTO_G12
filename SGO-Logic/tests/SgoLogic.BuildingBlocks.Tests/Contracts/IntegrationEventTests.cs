@@ -16,7 +16,8 @@ public class IntegrationEventTests
             AggregateType = "Ejemplo",
             AggregateId = Guid.NewGuid().ToString(),
             Source = "ejemplo",
-            Data = new DatosEjemplo("x")
+            Data = new DatosEjemplo("x"),
+            Sequence = 1
         };
 
         Assert.True(Guid.TryParse(evento.EventId, out _));
@@ -32,7 +33,8 @@ public class IntegrationEventTests
             AggregateType = "Ejemplo",
             AggregateId = Guid.NewGuid().ToString(),
             Source = "ejemplo",
-            Data = new DatosEjemplo("x")
+            Data = new DatosEjemplo("x"),
+            Sequence = 1
         };
 
         Assert.Equal(1, evento.EventVersion);
@@ -50,7 +52,8 @@ public class IntegrationEventTests
             AggregateType = "Ejemplo",
             AggregateId = Guid.NewGuid().ToString(),
             Source = "ejemplo",
-            Data = new DatosEjemplo("x")
+            Data = new DatosEjemplo("x"),
+            Sequence = 1
         };
 
         var despues = DateTime.UtcNow;
@@ -69,7 +72,8 @@ public class IntegrationEventTests
             AggregateType = "Ejemplo",
             AggregateId = Guid.NewGuid().ToString(),
             Source = "ejemplo",
-            Data = new DatosEjemplo("x")
+            Data = new DatosEjemplo("x"),
+            Sequence = 1
         };
 
         Assert.Null(evento.CausationId);
@@ -88,7 +92,8 @@ public class IntegrationEventTests
             AggregateType = "Ejemplo",
             AggregateId = aggregateId,
             Source = "ejemplo",
-            Data = new DatosEjemplo("x")
+            Data = new DatosEjemplo("x"),
+            Sequence = 1
         };
 
         Assert.Equal(transactionId, evento.TransactionId);

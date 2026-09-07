@@ -10,6 +10,7 @@ public interface IIntegrationEvent
     string EventType { get; }
     int EventVersion { get; }
     DateTime OccurredAt { get; }
+    int Sequence { get; }
     string TransactionId { get; }
     string? CausationId { get; }
     string AggregateType { get; }
