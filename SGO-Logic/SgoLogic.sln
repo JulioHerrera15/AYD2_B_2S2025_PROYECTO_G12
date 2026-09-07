@@ -1,0 +1,54 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# 
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "BuildingBlocks", "BuildingBlocks", "{73638F12-8AB5-4DCF-9349-69947E9591A6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgoLogic.Contracts", "src\BuildingBlocks\SgoLogic.Contracts\SgoLogic.Contracts.csproj", "{C3676945-26F4-47AE-885F-216D39618EAC}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgoLogic.BuildingBlocks", "src\BuildingBlocks\SgoLogic.BuildingBlocks\SgoLogic.BuildingBlocks.csproj", "{506FC598-CB87-49B6-B235-45610EE8662F}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Services", "Services", "{7F8A4397-8E40-4D70-AD4C-3127D296084C}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgoLogic.Sample.Api", "src\Services\SgoLogic.Sample.Api\SgoLogic.Sample.Api.csproj", "{74B62E2D-4CAE-4E71-A097-71835766A790}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgoLogic.Sample.Worker", "src\Services\SgoLogic.Sample.Worker\SgoLogic.Sample.Worker.csproj", "{BCE7582C-105E-4BEB-89A8-FA5720DB3DC4}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{50912FCC-C9E4-4A2C-BA43-67D2C566F82A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgoLogic.BuildingBlocks.Tests", "tests\SgoLogic.BuildingBlocks.Tests\SgoLogic.BuildingBlocks.Tests.csproj", "{C6CC107C-264F-4E87-BF7C-40F5D489A939}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C3676945-26F4-47AE-885F-216D39618EAC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C3676945-26F4-47AE-885F-216D39618EAC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C3676945-26F4-47AE-885F-216D39618EAC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C3676945-26F4-47AE-885F-216D39618EAC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{506FC598-CB87-49B6-B235-45610EE8662F}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{506FC598-CB87-49B6-B235-45610EE8662F}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{506FC598-CB87-49B6-B235-45610EE8662F}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{506FC598-CB87-49B6-B235-45610EE8662F}.Release|Any CPU.Build.0 = Release|Any CPU
+		{74B62E2D-4CAE-4E71-A097-71835766A790}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{74B62E2D-4CAE-4E71-A097-71835766A790}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{74B62E2D-4CAE-4E71-A097-71835766A790}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{74B62E2D-4CAE-4E71-A097-71835766A790}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BCE7582C-105E-4BEB-89A8-FA5720DB3DC4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BCE7582C-105E-4BEB-89A8-FA5720DB3DC4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BCE7582C-105E-4BEB-89A8-FA5720DB3DC4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BCE7582C-105E-4BEB-89A8-FA5720DB3DC4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C6CC107C-264F-4E87-BF7C-40F5D489A939}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C6CC107C-264F-4E87-BF7C-40F5D489A939}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C6CC107C-264F-4E87-BF7C-40F5D489A939}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C6CC107C-264F-4E87-BF7C-40F5D489A939}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{C3676945-26F4-47AE-885F-216D39618EAC} = {73638F12-8AB5-4DCF-9349-69947E9591A6}
+		{506FC598-CB87-49B6-B235-45610EE8662F} = {73638F12-8AB5-4DCF-9349-69947E9591A6}
+		{74B62E2D-4CAE-4E71-A097-71835766A790} = {7F8A4397-8E40-4D70-AD4C-3127D296084C}
+		{BCE7582C-105E-4BEB-89A8-FA5720DB3DC4} = {7F8A4397-8E40-4D70-AD4C-3127D296084C}
+		{C6CC107C-264F-4E87-BF7C-40F5D489A939} = {50912FCC-C9E4-4A2C-BA43-67D2C566F82A}
+	EndGlobalSection
+EndGlobal

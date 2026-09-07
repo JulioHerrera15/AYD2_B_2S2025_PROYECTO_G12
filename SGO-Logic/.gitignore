@@ -1,4 +1,17 @@
 .idea/
+.vs/
+.vscode/
 .DS_Store
 obj/
 bin/
+*.user
+*.suo
+
+# Resultados de pruebas
+[Tt]est[Rr]esult*/
+*.trx
+*.coverage
+*.coveragexml
+
+# Entorno local (no versionar credenciales)
+.env
