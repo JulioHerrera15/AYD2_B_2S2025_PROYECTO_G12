@@ -1,0 +1,84 @@
+using SgoLogic.Contracts.Enumeraciones;
+using SgoLogic.Ordenes.Api.Domain;
+
+namespace SgoLogic.Ordenes.Api.Application.Ordenes;
+
+/// <summary>
+/// Proyeccion de salida de una orden. Se construye desde el agregado con
+/// <see cref="Desde" />; las entidades del dominio no cruzan el borde HTTP.
+/// </summary>
+public sealed record OrdenDto(
+    string Id,
+    string NumeroOrden,
+    string ClienteId,
+    Canal Canal,
+    MetodoEntrega MetodoEntrega,
+    Moneda Moneda,
+    EstadoOrden Estado,
+    int Secuencia,
+    decimal Impuestos,
+    decimal Subtotal,
+    decimal Total,
+    string? UbicacionSolicitadaId,
+    DateTime CreadaEn,
+    IReadOnlyList<LineaOrdenDto> Lineas,
+    IReadOnlyList<TransicionOrdenDto> Transiciones)
+{
+    public static OrdenDto Desde(Orden orden) => new(
+        orden.Id,
+        orden.NumeroOrden,
+        orden.ClienteId,
+        orden.Canal,
+        orden.MetodoEntrega,
+        orden.Moneda,
+        orden.Estado,
+        orden.Secuencia,
+        orden.Impuestos,
+        orden.Subtotal,
+        orden.Total,
+        orden.UbicacionSolicitadaId,
+        orden.CreadaEn,
+        orden.Lineas.Select(LineaOrdenDto.Desde).ToList(),
+        orden.Transiciones
+            .OrderBy(transicion => transicion.Secuencia)
+            .Select(TransicionOrdenDto.Desde)
+            .ToList());
+}
+
+public sealed record LineaOrdenDto(
+    Guid Id,
+    string Sku,
+    string Descripcion,
+    int Cantidad,
+    decimal PrecioUnitario,
+    decimal Subtotal)
+{
+    public static LineaOrdenDto Desde(LineaOrden linea) => new(
+        linea.Id,
+        linea.Sku,
+        linea.Descripcion,
+        linea.Cantidad,
+        linea.PrecioUnitario,
+        linea.Subtotal);
+}
+
+public sealed record TransicionOrdenDto(
+    Guid Id,
+    int Secuencia,
+    EstadoOrden EstadoAnterior,
+    EstadoOrden EstadoNuevo,
+    string? Motivo,
+    PasoSaga? PasoSaga,
+    bool EsCompensacion,
+    DateTime CambiadoEn)
+{
+    public static TransicionOrdenDto Desde(TransicionOrden transicion) => new(
+        transicion.Id,
+        transicion.Secuencia,
+        transicion.EstadoAnterior,
+        transicion.EstadoNuevo,
+        transicion.Motivo,
+        transicion.PasoSaga,
+        transicion.EsCompensacion,
+        transicion.CambiadoEn);
+}
