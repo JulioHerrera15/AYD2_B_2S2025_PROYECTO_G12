@@ -8,14 +8,16 @@ using SgoLogic.Ordenes.Api.Domain;
 namespace SgoLogic.Ordenes.Api.Application.Ordenes;
 
 /// <summary>
-/// Caso de uso de creacion y confirmacion de ordenes. La confirmacion es el paso
-/// FISCAL de la saga: mueve la orden de CONFIRMADA_PENDIENTE_FISCAL a CONFIRMADA,
-/// registra la transicion y deja el evento en el outbox, todo en una sola
-/// transaccion de base de datos.
+/// Casos de uso de creacion y avance de ordenes. La confirmacion es el primer paso
+/// de la saga que sale del estado inicial CREADA: segun MaquinaEstadosOrden, la
+/// unica transicion de avance desde CREADA es hacia RESERVA_SOLICITADA (paso
+/// RESERVA). Todo avance registra la transicion y deja el evento en el outbox en
+/// una sola transaccion de base de datos.
 /// </summary>
 public sealed class ServicioConfirmacionOrden
 {
-    private const PasoSaga PasoDeConfirmacion = PasoSaga.FISCAL;
+    private const EstadoOrden EstadoDeConfirmacion = EstadoOrden.RESERVA_SOLICITADA;
+    private const PasoSaga PasoDeConfirmacion = PasoSaga.RESERVA;
 
     private readonly IRepositorioOrdenes _ordenes;
     private readonly IRepositorioMensajesSalientes _mensajes;
@@ -65,26 +67,70 @@ public sealed class ServicioConfirmacionOrden
     }
 
     /// <summary>
-    /// Confirma una orden. Valida la transicion contra la maquina de estados: si es
-    /// invalida deja subir <see cref="ExcepcionTransicionInvalida" /> sin escribir
-    /// nada. Si la orden ya esta en CONFIRMADA, no escribe nada y responde como
-    /// exitosa (idempotencia).
+    /// Confirma una orden recien creada: aplica la transicion CREADA -&gt;
+    /// RESERVA_SOLICITADA. Valida contra la maquina de estados: si es invalida deja
+    /// subir <see cref="ExcepcionTransicionInvalida" /> sin escribir nada. Si la
+    /// orden ya esta en el estado destino, no escribe nada y responde como exitosa
+    /// (idempotencia).
     /// </summary>
     public async Task<ConfirmacionOrdenDto> ConfirmarOrdenAsync(
         string ordenId,
         string? motivo,
         CancellationToken cancelacion)
     {
+        var (orden, sinCambios) = await AplicarTransicionInternaAsync(
+            ordenId,
+            EstadoDeConfirmacion,
+            PasoDeConfirmacion,
+            motivo,
+            esCompensacion: false,
+            cancelacion);
+
+        return new ConfirmacionOrdenDto(OrdenDto.Desde(orden), YaConfirmada: sinCambios);
+    }
+
+    /// <summary>
+    /// Aplica una transicion arbitraria del ciclo de vida de la orden. Mismo
+    /// contrato que la confirmacion: valida contra la maquina de estados, es
+    /// idempotente y escribe orden + transicion + evento en una sola transaccion.
+    /// </summary>
+    public async Task<ResultadoTransicionOrdenDto> AplicarTransicionAsync(
+        string ordenId,
+        EstadoOrden estadoDestino,
+        PasoSaga? pasoSaga,
+        string? motivo,
+        bool esCompensacion,
+        CancellationToken cancelacion)
+    {
+        var (orden, sinCambios) = await AplicarTransicionInternaAsync(
+            ordenId,
+            estadoDestino,
+            pasoSaga,
+            motivo,
+            esCompensacion,
+            cancelacion);
+
+        return new ResultadoTransicionOrdenDto(OrdenDto.Desde(orden), sinCambios);
+    }
+
+    private async Task<(Orden Orden, bool SinCambios)> AplicarTransicionInternaAsync(
+        string ordenId,
+        EstadoOrden estadoDestino,
+        PasoSaga? pasoSaga,
+        string? motivo,
+        bool esCompensacion,
+        CancellationToken cancelacion)
+    {
         var orden = await _ordenes.ObtenerPorIdAsync(ordenId, cancelacion)
             ?? throw new ExcepcionOrdenNoEncontrada(ordenId);
 
-        if (orden.Estado == EstadoOrden.CONFIRMADA)
+        if (orden.Estado == estadoDestino)
         {
-            return new ConfirmacionOrdenDto(OrdenDto.Desde(orden), YaConfirmada: true);
+            return (orden, true);
         }
 
         // Puede lanzar ExcepcionTransicionInvalida; en ese caso no se escribe nada.
-        var transicion = orden.TransicionarA(EstadoOrden.CONFIRMADA, motivo, PasoDeConfirmacion);
+        var transicion = orden.TransicionarA(estadoDestino, motivo, pasoSaga, esCompensacion);
 
         var evento = OrdenEstadoCambiadoEvento.Crear(
             transactionId: EventContext.TransactionId ?? Guid.NewGuid().ToString(),
@@ -110,6 +156,6 @@ public sealed class ServicioConfirmacionOrden
         // se persisten en la misma transaccion.
         await _unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
 
-        return new ConfirmacionOrdenDto(OrdenDto.Desde(orden), YaConfirmada: false);
+        return (orden, false);
     }
 }
