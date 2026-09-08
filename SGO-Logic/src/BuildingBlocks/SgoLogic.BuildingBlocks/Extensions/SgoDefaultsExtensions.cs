@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
+using Prometheus;
 using Serilog;
 using Serilog.Formatting.Json;
 using SgoLogic.BuildingBlocks.Correlation;
@@ -42,8 +43,10 @@ public static class SgoDefaultsExtensions
     {
         app.UseMiddleware<ErrorHandlingMiddleware>();
         app.UseMiddleware<CorrelationMiddleware>();
+        app.UseHttpMetrics();
 
         app.MapSgoHealthChecks();
+        app.MapMetrics();
 
         return app;
     }
