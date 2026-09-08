@@ -13,7 +13,7 @@ namespace SgoLogic.BuildingBlocks.HealthChecks;
 /// </summary>
 public static class HealthCheckExtensions
 {
-    private const string EtiquetaReady = "ready";
+    public const string EtiquetaReady = "ready";
 
     public static IServiceCollection AddSgoHealthChecks(this IServiceCollection services, IConfiguration configuration)
     {

@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SgoLogic.BuildingBlocks.Extensions;
+using SgoLogic.BuildingBlocks.Messaging;
+using SgoLogic.BuildingBlocks.Outbox;
 using SgoLogic.Sample.Api.Application;
 using SgoLogic.Sample.Api.Infrastructure;
 
@@ -13,6 +15,9 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddDbContext<SampleApiDbContext>(opciones =>
     opciones.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
+
+builder.Services.AddSgoMessaging();
+builder.Services.AddOutbox<SampleApiDbContext>(builder.Configuration);
 
 builder.Services.AddScoped<IItemEjemploService, ItemEjemploService>();
 
