@@ -87,7 +87,7 @@ public static class MapaEventosSagaOrden
                 Canal: orden.Canal,
                 Moneda: orden.Moneda,
                 Monto: orden.Total,
-                MedioPago: MedioPago.TARJETA,
+                MedioPago: orden.MedioPago,
                 TokenMedioPago: null,
                 UltimosCuatro: null,
                 Marca: null,

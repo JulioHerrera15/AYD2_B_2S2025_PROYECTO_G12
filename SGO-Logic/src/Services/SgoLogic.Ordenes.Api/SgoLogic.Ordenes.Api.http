@@ -1,17 +1,21 @@
 @SgoLogic.Ordenes.Api_HostAddress = http://localhost:5255
-@ordenId = ORD-2026-000123
 
-### Crear una orden (estado inicial CREADA, emite OrdenCreada)
+### Medios de pago habilitados para un canal (lo consume el checkout)
+GET {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/medios-pago?canal=WEB
+Accept: application/json
+
+### Crear una orden (estado inicial CREADA, emite OrdenCreada).
+# El servidor genera id (ORD-<anio>-<correlativo 6 digitos>) y numeroOrden.
+# @name crearOrden
 POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/
 Content-Type: application/json
 
 {
-  "id": "{{ordenId}}",
-  "numeroOrden": "000123",
   "clienteId": "CLI-000045",
   "canal": "WEB",
   "metodoEntrega": "DOMICILIO",
   "moneda": "GTQ",
+  "medioPago": "TARJETA",
   "impuestos": 150.00,
   "ubicacionSolicitadaId": null,
   "lineas": [
@@ -21,6 +25,25 @@ Content-Type: application/json
       "cantidad": 1,
       "precioUnitario": 1250.00
     }
+  ]
+}
+
+###
+@ordenId = {{crearOrden.response.body.id}}
+
+### Crear una orden con medio de pago no habilitado para el canal (400 medio_pago_no_habilitado)
+POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/
+Content-Type: application/json
+
+{
+  "clienteId": "CLI-000045",
+  "canal": "CALL_CENTER",
+  "metodoEntrega": "DOMICILIO",
+  "moneda": "GTQ",
+  "medioPago": "BILLETERA_DIGITAL",
+  "impuestos": 150.00,
+  "lineas": [
+    { "sku": "SKU-LB-00871", "descripcion": "Refrigeradora 12 pies", "cantidad": 1, "precioUnitario": 1250.00 }
   ]
 }
 
@@ -45,7 +68,7 @@ Content-Type: application/json
   "pasoSaga": "RESERVA"
 }
 
-### Avanzar la saga: INVENTARIO_RESERVADO -> COBRO_SOLICITADO (emite CobroSolicitado)
+### Avanzar la saga: INVENTARIO_RESERVADO -> COBRO_SOLICITADO (emite CobroSolicitado con el medioPago real)
 POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/transiciones
 Content-Type: application/json
 

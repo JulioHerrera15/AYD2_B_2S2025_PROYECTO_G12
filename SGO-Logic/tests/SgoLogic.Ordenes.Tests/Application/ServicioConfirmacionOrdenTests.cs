@@ -11,6 +11,12 @@ public sealed class ServicioConfirmacionOrdenTests
 {
     private const string OrdenId = "ORD-2026-000777";
 
+    private static readonly MediosPagoPorCanalOptions MediosPago = new()
+    {
+        ["WEB"] = new() { MedioPago.TARJETA, MedioPago.TRANSFERENCIA, MedioPago.BILLETERA_DIGITAL },
+        ["CALL_CENTER"] = new() { MedioPago.TARJETA, MedioPago.TRANSFERENCIA }
+    };
+
     private static Orden CrearOrden() => new(
         OrdenId,
         "000777",
@@ -18,18 +24,20 @@ public sealed class ServicioConfirmacionOrdenTests
         Canal.WEB,
         MetodoEntrega.DOMICILIO,
         Moneda.GTQ,
+        MedioPago.TARJETA,
         new[] { new LineaOrden("SKU-LB-00871", "Refrigeradora 12 pies", 1, 1250.00m) },
         150.00m);
 
-    private static CrearOrdenRequest CrearOrdenRequest() => new(
-        NumeroOrden: "000777",
+    private static CrearOrdenRequest CrearOrdenRequest(
+        Canal canal = Canal.WEB,
+        MedioPago medioPago = MedioPago.TARJETA) => new(
         ClienteId: "CLI-000045",
-        Canal: Canal.WEB,
+        Canal: canal,
         MetodoEntrega: MetodoEntrega.DOMICILIO,
         Moneda: Moneda.GTQ,
+        MedioPago: medioPago,
         Impuestos: 150.00m,
-        Lineas: new[] { new CrearLineaOrdenRequest("SKU-LB-00871", "Refrigeradora 12 pies", 1, 1250.00m) },
-        Id: OrdenId);
+        Lineas: new[] { new CrearLineaOrdenRequest("SKU-LB-00871", "Refrigeradora 12 pies", 1, 1250.00m) });
 
     private static Orden CrearOrdenEn(params EstadoOrden[] camino)
     {
@@ -57,21 +65,30 @@ public sealed class ServicioConfirmacionOrdenTests
     private static (ServicioConfirmacionOrden Servicio,
         RepositorioOrdenesFalso Ordenes,
         OutboxWriterFalso Outbox,
-        UnidadDeTrabajoFalsa Unidad) Construir()
+        UnidadDeTrabajoFalsa Unidad) Construir(long correlativoInicial = 777)
     {
         var ordenes = new RepositorioOrdenesFalso();
         var outbox = new OutboxWriterFalso();
         var unidad = new UnidadDeTrabajoFalsa();
-        var servicio = new ServicioConfirmacionOrden(ordenes, outbox, unidad);
+        var servicio = new ServicioConfirmacionOrden(
+            ordenes,
+            outbox,
+            unidad,
+            new GeneradorCorrelativoOrdenFalso(correlativoInicial),
+            new PoliticaMediosPago(MediosPago));
         return (servicio, ordenes, outbox, unidad);
     }
 
     [Fact]
-    public async Task Crear_orden_encola_OrdenCreada_con_sequence_uno_en_la_misma_transaccion()
+    public async Task Crear_orden_genera_id_con_formato_del_contrato_y_encola_OrdenCreada_con_sequence_uno()
     {
-        var (servicio, _, outbox, unidad) = Construir();
+        var (servicio, _, outbox, unidad) = Construir(correlativoInicial: 42);
 
         var dto = await servicio.CrearOrdenAsync(CrearOrdenRequest(), CancellationToken.None);
+
+        Assert.Matches(@"^ORD-\d{4}-\d{6}$", dto.Id);
+        Assert.Equal($"ORD-{DateTime.UtcNow:yyyy}-000042", dto.Id);
+        Assert.Equal("000042", dto.NumeroOrden);
 
         var evento = Assert.Single(outbox.Eventos);
         Assert.Equal(OrdenCreada.EventType, evento.EventType);
@@ -83,6 +100,49 @@ public sealed class ServicioConfirmacionOrdenTests
         Assert.Equal(EstadoOrden.CREADA, data.Estado);
         Assert.Equal(1400.00m, data.Total);
         Assert.Equal(1, unidad.Confirmaciones);
+    }
+
+    [Fact]
+    public async Task Crear_orden_con_medio_de_pago_habilitado_persiste_el_medio_elegido()
+    {
+        var (servicio, _, outbox, _) = Construir();
+
+        var dto = await servicio.CrearOrdenAsync(
+            CrearOrdenRequest(Canal.WEB, MedioPago.TRANSFERENCIA), CancellationToken.None);
+
+        Assert.Equal(MedioPago.TRANSFERENCIA, dto.MedioPago);
+        var data = Assert.IsType<OrdenCreadaData>(Assert.Single(outbox.Eventos).Data);
+        Assert.Equal(dto.Id, data.OrdenId);
+    }
+
+    [Fact]
+    public async Task Crear_orden_con_medio_de_pago_no_habilitado_para_el_canal_lanza_y_no_escribe()
+    {
+        var (servicio, _, outbox, unidad) = Construir();
+
+        var excepcion = await Assert.ThrowsAsync<ExcepcionMedioPagoNoHabilitado>(() =>
+            servicio.CrearOrdenAsync(
+                CrearOrdenRequest(Canal.CALL_CENTER, MedioPago.BILLETERA_DIGITAL), CancellationToken.None));
+
+        Assert.Equal(Canal.CALL_CENTER, excepcion.Canal);
+        Assert.Equal(MedioPago.BILLETERA_DIGITAL, excepcion.MedioPago);
+        Assert.Empty(outbox.Eventos);
+        Assert.Equal(0, unidad.Confirmaciones);
+    }
+
+    [Fact]
+    public async Task El_evento_CobroSolicitado_lleva_el_medio_de_pago_real_de_la_orden()
+    {
+        var (servicio, ordenes, outbox, _) = Construir();
+        var orden = CrearOrdenEn(EstadoOrden.RESERVA_SOLICITADA, EstadoOrden.INVENTARIO_RESERVADO);
+        ordenes.Precargar(orden);
+
+        await servicio.AplicarTransicionAsync(
+            orden.Id, EstadoOrden.COBRO_SOLICITADO, PasoSaga.COBRO, null, false, CancellationToken.None);
+
+        var cobro = Assert.Single(outbox.PorTipo(CobroSolicitado.EventType));
+        var data = Assert.IsType<CobroSolicitadoData>(cobro.Data);
+        Assert.Equal(orden.MedioPago, data.MedioPago);
     }
 
     [Fact]

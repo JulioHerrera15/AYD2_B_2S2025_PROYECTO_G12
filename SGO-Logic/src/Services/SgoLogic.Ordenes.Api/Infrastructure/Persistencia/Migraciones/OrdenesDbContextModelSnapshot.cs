@@ -23,6 +23,8 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.HasSequence("orden_correlativo", "ordenes");
+
             modelBuilder.Entity("SgoLogic.BuildingBlocks.Outbox.OutboxMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -183,6 +185,12 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)")
                         .HasColumnName("impuestos");
+
+                    b.Property<string>("MedioPago")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("medio_pago");
 
                     b.Property<string>("MetodoEntrega")
                         .IsRequired()

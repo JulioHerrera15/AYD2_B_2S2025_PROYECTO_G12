@@ -13,6 +13,7 @@ public sealed class MaquinaEstadosOrdenTests
         Canal.WEB,
         MetodoEntrega.DOMICILIO,
         Moneda.GTQ,
+        MedioPago.TARJETA,
         new[] { new LineaOrden("SKU-LB-00871", "Refrigeradora 12 pies", 1, 1250.00m) },
         150.00m);
 
@@ -137,7 +138,30 @@ public sealed class MaquinaEstadosOrdenTests
             Canal.TIENDA,
             MetodoEntrega.RECOGIDA_TIENDA,
             Moneda.GTQ,
+            MedioPago.TARJETA,
             new[] { new LineaOrden("SKU-LB-00871", "Refrigeradora 12 pies", 1, 1250.00m) },
             150.00m));
+    }
+
+    [Theory]
+    [InlineData("REQ-ID-001")]
+    [InlineData("3f5b2c9e-8a41-4d7e-9c02-1b6e5a7d4f30")]
+    [InlineData("ORD-2026-12345")]
+    [InlineData("ORD-26-000123")]
+    [InlineData("ord-2026-000123")]
+    public void Un_id_que_no_cumple_el_patron_ORD_anio_correlativo_es_rechazado(string idInvalido)
+    {
+        var excepcion = Assert.Throws<ArgumentException>(() => new Orden(
+            idInvalido,
+            "000123",
+            "CLI-000045",
+            Canal.WEB,
+            MetodoEntrega.DOMICILIO,
+            Moneda.GTQ,
+            MedioPago.TARJETA,
+            new[] { new LineaOrden("SKU-LB-00871", "Refrigeradora 12 pies", 1, 1250.00m) },
+            150.00m));
+
+        Assert.Equal("id", excepcion.ParamName);
     }
 }

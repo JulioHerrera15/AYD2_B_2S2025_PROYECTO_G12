@@ -27,6 +27,11 @@ public sealed class OrdenesDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(EsquemaPorDefecto);
+
+        // Secuencia que numera las ordenes: alimenta el id
+        // ORD-<anio>-<correlativo de 6 digitos> y el numero de orden visible.
+        modelBuilder.HasSequence<long>("orden_correlativo", EsquemaPorDefecto);
+
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OrdenesDbContext).Assembly);
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
 

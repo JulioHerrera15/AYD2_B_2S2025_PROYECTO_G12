@@ -24,41 +24,56 @@ public sealed class ServicioConfirmacionOrden
     private readonly IRepositorioOrdenes _ordenes;
     private readonly IOutboxWriter _outbox;
     private readonly IUnidadDeTrabajo _unidadDeTrabajo;
+    private readonly IGeneradorCorrelativoOrden _generadorCorrelativo;
+    private readonly PoliticaMediosPago _politicaMediosPago;
 
     public ServicioConfirmacionOrden(
         IRepositorioOrdenes ordenes,
         IOutboxWriter outbox,
-        IUnidadDeTrabajo unidadDeTrabajo)
+        IUnidadDeTrabajo unidadDeTrabajo,
+        IGeneradorCorrelativoOrden generadorCorrelativo,
+        PoliticaMediosPago politicaMediosPago)
     {
         _ordenes = ordenes;
         _outbox = outbox;
         _unidadDeTrabajo = unidadDeTrabajo;
+        _generadorCorrelativo = generadorCorrelativo;
+        _politicaMediosPago = politicaMediosPago;
     }
 
     /// <summary>
     /// Crea una orden en el estado inicial CREADA, la persiste y emite OrdenCreada
-    /// (routing key ordenes.orden.creada, siempre con sequence 1). Si no se envia un
-    /// id, se deriva del numero de orden.
+    /// (routing key ordenes.orden.creada, siempre con sequence 1). El identificador
+    /// y el numero de orden los genera el servidor a partir de la secuencia
+    /// <c>ordenes.orden_correlativo</c>: id ORD-&lt;anio UTC&gt;-&lt;correlativo de
+    /// 6 digitos&gt;. Rechaza con <see cref="ExcepcionMedioPagoNoHabilitado" /> un
+    /// medio de pago que no este habilitado para el canal.
     /// </summary>
     public async Task<OrdenDto> CrearOrdenAsync(CrearOrdenRequest solicitud, CancellationToken cancelacion)
     {
         ArgumentNullException.ThrowIfNull(solicitud);
 
+        if (!_politicaMediosPago.EstaHabilitado(solicitud.Canal, solicitud.MedioPago))
+        {
+            throw new ExcepcionMedioPagoNoHabilitado(solicitud.Canal, solicitud.MedioPago);
+        }
+
         var lineas = (solicitud.Lineas ?? Array.Empty<CrearLineaOrdenRequest>())
             .Select(linea => new LineaOrden(linea.Sku, linea.Descripcion, linea.Cantidad, linea.PrecioUnitario))
             .ToList();
 
-        var id = string.IsNullOrWhiteSpace(solicitud.Id)
-            ? $"ORD-{DateTime.UtcNow:yyyy}-{solicitud.NumeroOrden}"
-            : solicitud.Id!;
+        var correlativo = await _generadorCorrelativo.SiguienteAsync(cancelacion);
+        var numeroOrden = correlativo.ToString("D6");
+        var id = $"ORD-{DateTime.UtcNow:yyyy}-{numeroOrden}";
 
         var orden = new Orden(
             id,
-            solicitud.NumeroOrden,
+            numeroOrden,
             solicitud.ClienteId,
             solicitud.Canal,
             solicitud.MetodoEntrega,
             solicitud.Moneda,
+            solicitud.MedioPago,
             lineas,
             solicitud.Impuestos,
             solicitud.UbicacionSolicitadaId);

@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using SgoLogic.BuildingBlocks.Extensions;
 using SgoLogic.BuildingBlocks.Messaging;
 using SgoLogic.BuildingBlocks.Outbox;
+using SgoLogic.Contracts.Enumeraciones;
 using SgoLogic.Ordenes.Api.Application.Ordenes;
 using SgoLogic.Ordenes.Api.Domain;
 using SgoLogic.Ordenes.Api.Infrastructure.Persistencia;
@@ -19,8 +20,13 @@ builder.Services.AddDbContext<OrdenesDbContext>(opciones =>
 builder.Services.AddSgoMessaging();
 builder.Services.AddOutbox<OrdenesDbContext>(builder.Configuration);
 
+builder.Services.Configure<MediosPagoPorCanalOptions>(
+    builder.Configuration.GetSection(MediosPagoPorCanalOptions.Seccion));
+builder.Services.AddSingleton<PoliticaMediosPago>();
+
 builder.Services.AddScoped<IRepositorioOrdenes, RepositorioOrdenes>();
 builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
+builder.Services.AddScoped<IGeneradorCorrelativoOrden, GeneradorCorrelativoOrden>();
 builder.Services.AddScoped<ServicioConfirmacionOrden>();
 
 var app = builder.Build();
@@ -45,6 +51,14 @@ ordenes.MapPost("/", async (
         var creada = await servicio.CrearOrdenAsync(solicitud, cancelacion);
         return Results.Created($"/api/ordenes/{creada.Id}", creada);
     }
+    catch (ExcepcionMedioPagoNoHabilitado ex)
+    {
+        return Results.Problem(
+            title: "Medio de pago no habilitado",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status400BadRequest,
+            extensions: new Dictionary<string, object?> { ["codigo"] = "medio_pago_no_habilitado" });
+    }
     catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
     {
         return Results.Problem(
@@ -53,6 +67,11 @@ ordenes.MapPost("/", async (
             statusCode: StatusCodes.Status400BadRequest);
     }
 });
+
+ordenes.MapGet("/medios-pago", (
+    Canal canal,
+    PoliticaMediosPago politica) =>
+    Results.Ok(politica.MediosHabilitados(canal)));
 
 ordenes.MapPost("/{id}/confirmar", async (
     string id,
