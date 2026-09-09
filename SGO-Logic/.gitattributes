@@ -1,0 +1,7 @@
+# Normalizacion de fin de linea. En Windows con core.autocrlf=true, los scripts
+# .sh se checaban con CRLF y el contenedor de Postgres fallaba al ejecutar
+# scripts/postgres/crear-bases-adicionales.sh ("/bin/bash^M: bad interpreter").
+* text=auto eol=lf
+
+*.sh text eol=lf
+*.ps1 text eol=crlf

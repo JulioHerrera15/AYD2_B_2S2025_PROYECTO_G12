@@ -1,7 +1,7 @@
-using System.Text.Json;
-using SgoLogic.BuildingBlocks.Correlation;
-using SgoLogic.BuildingBlocks.Serialization;
+using SgoLogic.BuildingBlocks.Messaging;
+using SgoLogic.BuildingBlocks.Outbox;
 using SgoLogic.Contracts.Enumeraciones;
+using SgoLogic.Contracts.Eventos.Ordenes;
 using SgoLogic.Ordenes.Api.Application.Ordenes.Eventos;
 using SgoLogic.Ordenes.Api.Domain;
 
@@ -11,8 +11,10 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes;
 /// Casos de uso de creacion y avance de ordenes. La confirmacion es el primer paso
 /// de la saga que sale del estado inicial CREADA: segun MaquinaEstadosOrden, la
 /// unica transicion de avance desde CREADA es hacia RESERVA_SOLICITADA (paso
-/// RESERVA). Todo avance registra la transicion y deja el evento en el outbox en
-/// una sola transaccion de base de datos.
+/// RESERVA). Todo cambio de negocio encola sus eventos en el outbox transversal
+/// (IOutboxWriter) y se persiste con un unico SaveChangesAsync
+/// (<see cref="IUnidadDeTrabajo" />): entidad + transicion + filas de outbox en la
+/// misma transaccion, como exige PLANTILLA-SERVICIO seccion 6.
 /// </summary>
 public sealed class ServicioConfirmacionOrden
 {
@@ -20,21 +22,22 @@ public sealed class ServicioConfirmacionOrden
     private const PasoSaga PasoDeConfirmacion = PasoSaga.RESERVA;
 
     private readonly IRepositorioOrdenes _ordenes;
-    private readonly IRepositorioMensajesSalientes _mensajes;
+    private readonly IOutboxWriter _outbox;
     private readonly IUnidadDeTrabajo _unidadDeTrabajo;
 
     public ServicioConfirmacionOrden(
         IRepositorioOrdenes ordenes,
-        IRepositorioMensajesSalientes mensajes,
+        IOutboxWriter outbox,
         IUnidadDeTrabajo unidadDeTrabajo)
     {
         _ordenes = ordenes;
-        _mensajes = mensajes;
+        _outbox = outbox;
         _unidadDeTrabajo = unidadDeTrabajo;
     }
 
     /// <summary>
-    /// Crea una orden en el estado inicial CREADA y la persiste. Si no se envia un
+    /// Crea una orden en el estado inicial CREADA, la persiste y emite OrdenCreada
+    /// (routing key ordenes.orden.creada, siempre con sequence 1). Si no se envia un
     /// id, se deriva del numero de orden.
     /// </summary>
     public async Task<OrdenDto> CrearOrdenAsync(CrearOrdenRequest solicitud, CancellationToken cancelacion)
@@ -61,6 +64,33 @@ public sealed class ServicioConfirmacionOrden
             solicitud.UbicacionSolicitadaId);
 
         await _ordenes.AgregarAsync(orden, cancelacion);
+
+        _outbox.Encolar(
+            OrdenCreada.EventType,
+            OrdenCreada.AggregateType,
+            orden.Id,
+            orden.Secuencia,
+            TopologiaMensajeria.ExchangeEventos,
+            OrdenCreada.RoutingKey,
+            new OrdenCreadaData(
+                OrdenId: orden.Id,
+                NumeroOrden: orden.NumeroOrden,
+                ClienteId: orden.ClienteId,
+                Estado: orden.Estado,
+                Canal: orden.Canal,
+                MetodoEntrega: orden.MetodoEntrega,
+                UbicacionSolicitadaId: orden.UbicacionSolicitadaId,
+                Moneda: orden.Moneda,
+                Subtotal: orden.Subtotal,
+                Impuestos: orden.Impuestos,
+                Total: orden.Total,
+                Lineas: orden.Lineas
+                    .Select(linea => new OrdenCreadaLineaData(
+                        linea.Sku, linea.Descripcion, linea.Cantidad, linea.PrecioUnitario, linea.Subtotal))
+                    .ToList(),
+                DireccionEntrega: null,
+                CreadaEn: orden.CreadaEn));
+
         await _unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
 
         return OrdenDto.Desde(orden);
@@ -92,7 +122,8 @@ public sealed class ServicioConfirmacionOrden
     /// <summary>
     /// Aplica una transicion arbitraria del ciclo de vida de la orden. Mismo
     /// contrato que la confirmacion: valida contra la maquina de estados, es
-    /// idempotente y escribe orden + transicion + evento en una sola transaccion.
+    /// idempotente y escribe orden + transicion + eventos del outbox en una sola
+    /// transaccion.
     /// </summary>
     public async Task<ResultadoTransicionOrdenDto> AplicarTransicionAsync(
         string ordenId,
@@ -111,6 +142,53 @@ public sealed class ServicioConfirmacionOrden
             cancelacion);
 
         return new ResultadoTransicionOrdenDto(OrdenDto.Desde(orden), sinCambios);
+    }
+
+    /// <summary>
+    /// Cambia el metodo de entrega de una orden no terminal (EV-31) y emite
+    /// MetodoEntregaModificado. No es una transicion de estado: la orden sigue
+    /// donde estaba. Si el metodo pedido ya es el actual, no escribe nada.
+    /// </summary>
+    public async Task<ResultadoTransicionOrdenDto> CambiarMetodoEntregaAsync(
+        string ordenId,
+        CambiarMetodoEntregaRequest solicitud,
+        CancellationToken cancelacion)
+    {
+        ArgumentNullException.ThrowIfNull(solicitud);
+
+        var orden = await _ordenes.ObtenerPorIdAsync(ordenId, cancelacion)
+            ?? throw new ExcepcionOrdenNoEncontrada(ordenId);
+
+        if (orden.MetodoEntrega == solicitud.MetodoEntregaNuevo)
+        {
+            return new ResultadoTransicionOrdenDto(OrdenDto.Desde(orden), SinCambios: true);
+        }
+
+        var metodoAnterior = orden.MetodoEntrega;
+
+        // Puede lanzar ArgumentException (recogida sin ubicacion) o
+        // InvalidOperationException (orden terminal); en ese caso no se escribe nada.
+        orden.CambiarMetodoEntrega(solicitud.MetodoEntregaNuevo, solicitud.UbicacionRecogidaId);
+
+        _outbox.Encolar(
+            MetodoEntregaModificado.EventType,
+            MetodoEntregaModificado.AggregateType,
+            orden.Id,
+            orden.Secuencia,
+            TopologiaMensajeria.ExchangeEventos,
+            MetodoEntregaModificado.RoutingKey,
+            new MetodoEntregaModificadoData(
+                OrdenId: orden.Id,
+                MetodoEntregaAnterior: metodoAnterior,
+                MetodoEntregaNuevo: solicitud.MetodoEntregaNuevo,
+                UbicacionRecogidaId: orden.UbicacionSolicitadaId,
+                DireccionEntrega: solicitud.DireccionEntrega,
+                SolicitadoPor: solicitud.SolicitadoPor,
+                ModificadoEn: DateTime.UtcNow));
+
+        await _unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
+
+        return new ResultadoTransicionOrdenDto(OrdenDto.Desde(orden), SinCambios: false);
     }
 
     private async Task<(Orden Orden, bool SinCambios)> AplicarTransicionInternaAsync(
@@ -132,27 +210,30 @@ public sealed class ServicioConfirmacionOrden
         // Puede lanzar ExcepcionTransicionInvalida; en ese caso no se escribe nada.
         var transicion = orden.TransicionarA(estadoDestino, motivo, pasoSaga, esCompensacion);
 
-        var evento = OrdenEstadoCambiadoEvento.Crear(
-            transactionId: EventContext.TransactionId ?? Guid.NewGuid().ToString(),
-            aggregateId: orden.Id,
-            sequence: transicion.Secuencia,
-            data: new OrdenEstadoCambiadoData(
+        // Evento 2: toda transicion posterior a la creacion lo emite, sin excepcion.
+        _outbox.Encolar(
+            OrdenEstadoCambiado.EventType,
+            OrdenEstadoCambiado.AggregateType,
+            orden.Id,
+            transicion.Secuencia,
+            TopologiaMensajeria.ExchangeEventos,
+            OrdenEstadoCambiado.RoutingKey,
+            new OrdenEstadoCambiadoData(
                 OrdenId: orden.Id,
                 NumeroOrden: orden.NumeroOrden,
+                ClienteId: orden.ClienteId,
                 EstadoAnterior: transicion.EstadoAnterior,
                 EstadoNuevo: transicion.EstadoNuevo,
-                Secuencia: transicion.Secuencia,
-                PasoSaga: transicion.PasoSaga,
                 Motivo: transicion.Motivo,
-                OcurridoEn: transicion.CambiadoEn),
-            causationId: EventContext.CausationId);
+                PasoSaga: transicion.PasoSaga,
+                EsCompensacion: transicion.EsCompensacion,
+                CambiadoEn: transicion.CambiadoEn));
 
-        var payload = JsonSerializer.Serialize(evento, SgoJsonSerializerOptions.Default);
-        var mensaje = new MensajeSaliente(evento.EventType, orden.Id, transicion.Secuencia, payload);
+        // Evento de saga que corresponda al estado destino (mas liberacion de
+        // reserva si la transicion es una compensacion).
+        MapaEventosSagaOrden.Encolar(orden, transicion, _outbox);
 
-        await _mensajes.AgregarAsync(mensaje, cancelacion);
-
-        // Un unico SaveChanges: estado de la orden + transicion + mensaje saliente
+        // Un unico SaveChanges: estado de la orden + transicion + filas de outbox
         // se persisten en la misma transaccion.
         await _unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
 

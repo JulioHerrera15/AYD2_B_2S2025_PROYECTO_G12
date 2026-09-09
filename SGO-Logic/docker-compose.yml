@@ -120,6 +120,32 @@ services:
       timeout: 5s
       retries: 5
 
+  ordenes-api:
+    build:
+      context: .
+      dockerfile: src/Services/SgoLogic.Ordenes.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Postgres: Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__RabbitMq: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      Outbox__Source: ordenes
+      Outbox__PollingIntervalMs: ${OUTBOX_POLLING_MS}
+      Outbox__MaxReintentos: ${OUTBOX_MAX_REINTENTOS}
+      Outbox__BatchSize: ${OUTBOX_BATCH_SIZE}
+    ports:
+      - "8083:8080"
+    depends_on:
+      db-operacional:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   sgo_db_operacional_data:
   sgo_db_finanzas_data:

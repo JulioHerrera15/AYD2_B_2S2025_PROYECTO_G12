@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using SgoLogic.BuildingBlocks.Extensions;
+using SgoLogic.BuildingBlocks.Messaging;
+using SgoLogic.BuildingBlocks.Outbox;
 using SgoLogic.Ordenes.Api.Application.Ordenes;
 using SgoLogic.Ordenes.Api.Domain;
 using SgoLogic.Ordenes.Api.Infrastructure.Persistencia;
@@ -14,13 +16,12 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<OrdenesDbContext>(opciones =>
     opciones.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
 
+builder.Services.AddSgoMessaging();
+builder.Services.AddOutbox<OrdenesDbContext>(builder.Configuration);
+
 builder.Services.AddScoped<IRepositorioOrdenes, RepositorioOrdenes>();
-builder.Services.AddScoped<IRepositorioMensajesSalientes, RepositorioMensajesSalientes>();
 builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
 builder.Services.AddScoped<ServicioConfirmacionOrden>();
-
-builder.Services.AddHealthChecks()
-    .AddCheck<OrdenesDbHealthCheck>("ordenes-db", tags: new[] { "ready" });
 
 var app = builder.Build();
 
@@ -95,6 +96,25 @@ ordenes.MapPost("/{id}/transiciones", async (
     }
 });
 
+ordenes.MapPost("/{id}/metodo-entrega", async (
+    string id,
+    CambiarMetodoEntregaRequest solicitud,
+    ServicioConfirmacionOrden servicio,
+    CancellationToken cancelacion) =>
+{
+    try
+    {
+        var resultado = await servicio.CambiarMetodoEntregaAsync(id, solicitud, cancelacion);
+        return Results.Ok(resultado);
+    }
+    catch (Exception ex) when (
+        ex is ExcepcionOrdenNoEncontrada or ExcepcionConflictoConcurrencia
+        or ArgumentException or InvalidOperationException)
+    {
+        return MapearError(ex);
+    }
+});
+
 ordenes.MapGet("/{id}", async (
     string id,
     IRepositorioOrdenes repositorio,
@@ -135,6 +155,18 @@ static IResult MapearError(Exception ex) => ex switch
         detail: ex.Message,
         statusCode: StatusCodes.Status409Conflict,
         extensions: new Dictionary<string, object?> { ["codigo"] = "conflicto_concurrencia" }),
+
+    ArgumentException => Results.Problem(
+        title: "Solicitud invalida",
+        detail: ex.Message,
+        statusCode: StatusCodes.Status400BadRequest,
+        extensions: new Dictionary<string, object?> { ["codigo"] = "metodo_entrega_invalido" }),
+
+    InvalidOperationException => Results.Problem(
+        title: "Cambio de metodo de entrega no permitido",
+        detail: ex.Message,
+        statusCode: StatusCodes.Status409Conflict,
+        extensions: new Dictionary<string, object?> { ["codigo"] = "metodo_entrega_invalido" }),
 
     _ => Results.Problem(
         title: "Error interno",

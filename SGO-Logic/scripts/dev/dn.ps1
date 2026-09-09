@@ -1,7 +1,7 @@
 ﻿param([Parameter(ValueFromRemainingArguments = $true)][string[]]$Comando)
 
 $raiz = (Resolve-Path "$PSScriptRoot\..\..").Path
-$cadena = "Host=postgres;Port=5432;Database=sgo_ordenes;Username=ordenes_app;Password=ordenes_dev"
+$cadena = "Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=ordenes_app;Password=ordenes_dev"
 
 docker run --rm `
   -v "${raiz}:/src" `

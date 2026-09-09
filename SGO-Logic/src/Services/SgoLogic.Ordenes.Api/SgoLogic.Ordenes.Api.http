@@ -1,6 +1,85 @@
 @SgoLogic.Ordenes.Api_HostAddress = http://localhost:5255
+@ordenId = ORD-2026-000123
 
-GET {{SgoLogic.Ordenes.Api_HostAddress}}/weatherforecast/
+### Crear una orden (estado inicial CREADA, emite OrdenCreada)
+POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/
+Content-Type: application/json
+
+{
+  "id": "{{ordenId}}",
+  "numeroOrden": "000123",
+  "clienteId": "CLI-000045",
+  "canal": "WEB",
+  "metodoEntrega": "DOMICILIO",
+  "moneda": "GTQ",
+  "impuestos": 150.00,
+  "ubicacionSolicitadaId": null,
+  "lineas": [
+    {
+      "sku": "SKU-LB-00871",
+      "descripcion": "Refrigeradora 12 pies",
+      "cantidad": 1,
+      "precioUnitario": 1250.00
+    }
+  ]
+}
+
+### Consultar la orden
+GET {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}
 Accept: application/json
 
-###
+### Confirmar la orden (CREADA -> RESERVA_SOLICITADA, emite ReservaInventarioSolicitada)
+POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/confirmar
+Content-Type: application/json
+
+{
+  "motivo": "Cliente confirmo la compra"
+}
+
+### Avanzar la saga: RESERVA_SOLICITADA -> INVENTARIO_RESERVADO
+POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/transiciones
+Content-Type: application/json
+
+{
+  "estadoDestino": "INVENTARIO_RESERVADO",
+  "pasoSaga": "RESERVA"
+}
+
+### Avanzar la saga: INVENTARIO_RESERVADO -> COBRO_SOLICITADO (emite CobroSolicitado)
+POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/transiciones
+Content-Type: application/json
+
+{
+  "estadoDestino": "COBRO_SOLICITADO",
+  "pasoSaga": "COBRO"
+}
+
+### Compensacion: COBRO_SOLICITADO -> PAGO_PENDIENTE (emite LiberacionReservaSolicitada)
+POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/transiciones
+Content-Type: application/json
+
+{
+  "estadoDestino": "PAGO_PENDIENTE",
+  "pasoSaga": "COBRO",
+  "motivo": "PayKlik no respondio dentro del timeout configurado",
+  "esCompensacion": true
+}
+
+### Cambiar el metodo de entrega (emite MetodoEntregaModificado)
+POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/metodo-entrega
+Content-Type: application/json
+
+{
+  "metodoEntregaNuevo": "RECOGIDA_TIENDA",
+  "solicitadoPor": "CLIENTE",
+  "ubicacionRecogidaId": "TDA-014"
+}
+
+### Cancelar la orden (emite OrdenCancelada)
+POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/transiciones
+Content-Type: application/json
+
+{
+  "estadoDestino": "CANCELADA",
+  "motivo": "Cancelada por el cliente"
+}
