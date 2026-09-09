@@ -1,4 +1,5 @@
-﻿using SgoLogic.Contracts.Enumeraciones;
+﻿using System.Text.RegularExpressions;
+using SgoLogic.Contracts.Enumeraciones;
 
 namespace SgoLogic.Ordenes.Api.Domain;
 
@@ -7,8 +8,16 @@ namespace SgoLogic.Ordenes.Api.Domain;
 /// entrega puede cambiar despues de confirmada. La unica forma de mover el estado
 /// es TransicionarA, que valida contra MaquinaEstadosOrden.
 /// </summary>
-public sealed class Orden
+public sealed partial class Orden
 {
+    /// <summary>
+    /// Formato obligatorio del identificador de orden segun ordenes-eventos-v1:
+    /// ORD-&lt;anio de 4 digitos&gt;-&lt;correlativo de 6 digitos&gt;. El id lo
+    /// genera siempre el servidor; esta es la red de seguridad del dominio.
+    /// </summary>
+    [GeneratedRegex(@"^ORD-\d{4}-\d{6}$")]
+    private static partial Regex PatronId();
+
     private readonly List<LineaOrden> _lineas = new();
     private readonly List<TransicionOrden> _transiciones = new();
 
@@ -26,6 +35,7 @@ public sealed class Orden
         Canal canal,
         MetodoEntrega metodoEntrega,
         Moneda moneda,
+        MedioPago medioPago,
         IEnumerable<LineaOrden> lineas,
         decimal impuestos,
         string? ubicacionSolicitadaId = null,
@@ -34,6 +44,13 @@ public sealed class Orden
         if (string.IsNullOrWhiteSpace(id))
         {
             throw new ArgumentException("El identificador de la orden es obligatorio.", nameof(id));
+        }
+
+        if (!PatronId().IsMatch(id))
+        {
+            throw new ArgumentException(
+                "El identificador de la orden debe cumplir el patron ORD-<anio>-<correlativo de 6 digitos>.",
+                nameof(id));
         }
 
         if (string.IsNullOrWhiteSpace(numeroOrden))
@@ -70,6 +87,7 @@ public sealed class Orden
         Canal = canal;
         MetodoEntrega = metodoEntrega;
         Moneda = moneda;
+        MedioPago = medioPago;
         UbicacionSolicitadaId = ubicacionSolicitadaId;
         Impuestos = impuestos;
         Estado = EstadoOrden.CREADA;
@@ -92,6 +110,12 @@ public sealed class Orden
     public string? UbicacionSolicitadaId { get; private set; }
 
     public Moneda Moneda { get; private set; }
+
+    /// <summary>
+    /// Medio de pago elegido al crear la orden (HU-018). Lo valida el servicio
+    /// contra los medios habilitados para el canal antes de construir el agregado.
+    /// </summary>
+    public MedioPago MedioPago { get; private set; }
 
     public decimal Impuestos { get; private set; }
 

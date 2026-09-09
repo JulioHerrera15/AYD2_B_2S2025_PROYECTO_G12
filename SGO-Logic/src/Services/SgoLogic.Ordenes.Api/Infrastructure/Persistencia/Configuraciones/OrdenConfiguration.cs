@@ -53,6 +53,12 @@ public sealed class OrdenConfiguration : IEntityTypeConfiguration<Orden>
             .HasMaxLength(10)
             .IsRequired();
 
+        builder.Property(orden => orden.MedioPago)
+            .HasColumnName("medio_pago")
+            .HasConversion<string>()
+            .HasMaxLength(30)
+            .IsRequired();
+
         builder.Property(orden => orden.Impuestos)
             .HasColumnName("impuestos")
             .HasPrecision(18, 2)

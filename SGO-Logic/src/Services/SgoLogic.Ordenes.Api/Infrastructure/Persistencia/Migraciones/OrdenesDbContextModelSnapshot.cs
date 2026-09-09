@@ -23,6 +23,94 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.HasSequence("orden_correlativo", "ordenes");
+
+            modelBuilder.Entity("SgoLogic.BuildingBlocks.Outbox.OutboxMessage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AggregateId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("aggregate_id");
+
+                    b.Property<string>("AggregateType")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("aggregate_type");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("estado");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("event_id");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("event_type");
+
+                    b.Property<string>("Exchange")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("exchange");
+
+                    b.Property<DateTime>("FechaCreacion")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_creacion");
+
+                    b.Property<DateTime?>("FechaPublicacion")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_publicacion");
+
+                    b.Property<int>("IntentosFallidos")
+                        .HasColumnType("integer")
+                        .HasColumnName("intentos_fallidos");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("payload");
+
+                    b.Property<DateTime?>("ProximoIntentoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("proximo_intento_en");
+
+                    b.Property<string>("RoutingKey")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)")
+                        .HasColumnName("routing_key");
+
+                    b.Property<string>("TransactionId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("transaction_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId")
+                        .IsUnique();
+
+                    b.HasIndex("Estado", "ProximoIntentoEn");
+
+                    b.ToTable("outbox_messages", "public");
+                });
+
             modelBuilder.Entity("SgoLogic.Ordenes.Api.Domain.LineaOrden", b =>
                 {
                     b.Property<Guid>("Id")
@@ -64,63 +152,6 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
                     b.ToTable("linea_orden", "ordenes");
                 });
 
-            modelBuilder.Entity("SgoLogic.Ordenes.Api.Domain.MensajeSaliente", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<string>("AgregadoId")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("agregado_id");
-
-                    b.Property<DateTime>("CreadoEn")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("creado_en");
-
-                    b.Property<string>("Estado")
-                        .IsRequired()
-                        .HasMaxLength(20)
-                        .HasColumnType("character varying(20)")
-                        .HasColumnName("estado");
-
-                    b.Property<int>("Intentos")
-                        .HasColumnType("integer")
-                        .HasColumnName("intentos");
-
-                    b.Property<string>("Payload")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("payload");
-
-                    b.Property<DateTime?>("PublicadoEn")
-                        .HasColumnType("timestamp with time zone")
-                        .HasColumnName("publicado_en");
-
-                    b.Property<int>("Secuencia")
-                        .HasColumnType("integer")
-                        .HasColumnName("secuencia");
-
-                    b.Property<string>("TipoEvento")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)")
-                        .HasColumnName("tipo_evento");
-
-                    b.Property<string>("UltimoError")
-                        .HasColumnType("text")
-                        .HasColumnName("ultimo_error");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Estado", "CreadoEn")
-                        .HasDatabaseName("ix_mensaje_saliente_estado_creado_en");
-
-                    b.ToTable("mensaje_saliente", "ordenes");
-                });
-
             modelBuilder.Entity("SgoLogic.Ordenes.Api.Domain.Orden", b =>
                 {
                     b.Property<string>("Id")
@@ -154,6 +185,12 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)")
                         .HasColumnName("impuestos");
+
+                    b.Property<string>("MedioPago")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("medio_pago");
 
                     b.Property<string>("MetodoEntrega")
                         .IsRequired()

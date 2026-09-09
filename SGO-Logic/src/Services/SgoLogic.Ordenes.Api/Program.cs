@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using SgoLogic.BuildingBlocks.Extensions;
+using SgoLogic.BuildingBlocks.Messaging;
+using SgoLogic.BuildingBlocks.Outbox;
+using SgoLogic.Contracts.Enumeraciones;
 using SgoLogic.Ordenes.Api.Application.Ordenes;
 using SgoLogic.Ordenes.Api.Domain;
 using SgoLogic.Ordenes.Api.Infrastructure.Persistencia;
@@ -14,13 +17,17 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<OrdenesDbContext>(opciones =>
     opciones.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
 
-builder.Services.AddScoped<IRepositorioOrdenes, RepositorioOrdenes>();
-builder.Services.AddScoped<IRepositorioMensajesSalientes, RepositorioMensajesSalientes>();
-builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
-builder.Services.AddScoped<ServicioConfirmacionOrden>();
+builder.Services.AddSgoMessaging();
+builder.Services.AddOutbox<OrdenesDbContext>(builder.Configuration);
 
-builder.Services.AddHealthChecks()
-    .AddCheck<OrdenesDbHealthCheck>("ordenes-db", tags: new[] { "ready" });
+builder.Services.Configure<MediosPagoPorCanalOptions>(
+    builder.Configuration.GetSection(MediosPagoPorCanalOptions.Seccion));
+builder.Services.AddSingleton<PoliticaMediosPago>();
+
+builder.Services.AddScoped<IRepositorioOrdenes, RepositorioOrdenes>();
+builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
+builder.Services.AddScoped<IGeneradorCorrelativoOrden, GeneradorCorrelativoOrden>();
+builder.Services.AddScoped<ServicioConfirmacionOrden>();
 
 var app = builder.Build();
 
@@ -44,6 +51,14 @@ ordenes.MapPost("/", async (
         var creada = await servicio.CrearOrdenAsync(solicitud, cancelacion);
         return Results.Created($"/api/ordenes/{creada.Id}", creada);
     }
+    catch (ExcepcionMedioPagoNoHabilitado ex)
+    {
+        return Results.Problem(
+            title: "Medio de pago no habilitado",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status400BadRequest,
+            extensions: new Dictionary<string, object?> { ["codigo"] = "medio_pago_no_habilitado" });
+    }
     catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
     {
         return Results.Problem(
@@ -52,6 +67,11 @@ ordenes.MapPost("/", async (
             statusCode: StatusCodes.Status400BadRequest);
     }
 });
+
+ordenes.MapGet("/medios-pago", (
+    Canal canal,
+    PoliticaMediosPago politica) =>
+    Results.Ok(politica.MediosHabilitados(canal)));
 
 ordenes.MapPost("/{id}/confirmar", async (
     string id,
@@ -90,6 +110,25 @@ ordenes.MapPost("/{id}/transiciones", async (
     }
     catch (Exception ex) when (
         ex is ExcepcionOrdenNoEncontrada or ExcepcionTransicionInvalida or ExcepcionConflictoConcurrencia)
+    {
+        return MapearError(ex);
+    }
+});
+
+ordenes.MapPost("/{id}/metodo-entrega", async (
+    string id,
+    CambiarMetodoEntregaRequest solicitud,
+    ServicioConfirmacionOrden servicio,
+    CancellationToken cancelacion) =>
+{
+    try
+    {
+        var resultado = await servicio.CambiarMetodoEntregaAsync(id, solicitud, cancelacion);
+        return Results.Ok(resultado);
+    }
+    catch (Exception ex) when (
+        ex is ExcepcionOrdenNoEncontrada or ExcepcionConflictoConcurrencia
+        or ArgumentException or InvalidOperationException)
     {
         return MapearError(ex);
     }
@@ -135,6 +174,18 @@ static IResult MapearError(Exception ex) => ex switch
         detail: ex.Message,
         statusCode: StatusCodes.Status409Conflict,
         extensions: new Dictionary<string, object?> { ["codigo"] = "conflicto_concurrencia" }),
+
+    ArgumentException => Results.Problem(
+        title: "Solicitud invalida",
+        detail: ex.Message,
+        statusCode: StatusCodes.Status400BadRequest,
+        extensions: new Dictionary<string, object?> { ["codigo"] = "metodo_entrega_invalido" }),
+
+    InvalidOperationException => Results.Problem(
+        title: "Cambio de metodo de entrega no permitido",
+        detail: ex.Message,
+        statusCode: StatusCodes.Status409Conflict,
+        extensions: new Dictionary<string, object?> { ["codigo"] = "metodo_entrega_invalido" }),
 
     _ => Results.Problem(
         title: "Error interno",

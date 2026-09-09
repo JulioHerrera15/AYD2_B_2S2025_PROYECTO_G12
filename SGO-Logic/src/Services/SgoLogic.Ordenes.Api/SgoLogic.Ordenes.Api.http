@@ -1,6 +1,108 @@
 @SgoLogic.Ordenes.Api_HostAddress = http://localhost:5255
 
-GET {{SgoLogic.Ordenes.Api_HostAddress}}/weatherforecast/
+### Medios de pago habilitados para un canal (lo consume el checkout)
+GET {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/medios-pago?canal=WEB
 Accept: application/json
 
+### Crear una orden (estado inicial CREADA, emite OrdenCreada).
+# El servidor genera id (ORD-<anio>-<correlativo 6 digitos>) y numeroOrden.
+# @name crearOrden
+POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/
+Content-Type: application/json
+
+{
+  "clienteId": "CLI-000045",
+  "canal": "WEB",
+  "metodoEntrega": "DOMICILIO",
+  "moneda": "GTQ",
+  "medioPago": "TARJETA",
+  "impuestos": 150.00,
+  "ubicacionSolicitadaId": null,
+  "lineas": [
+    {
+      "sku": "SKU-LB-00871",
+      "descripcion": "Refrigeradora 12 pies",
+      "cantidad": 1,
+      "precioUnitario": 1250.00
+    }
+  ]
+}
+
 ###
+@ordenId = {{crearOrden.response.body.id}}
+
+### Crear una orden con medio de pago no habilitado para el canal (400 medio_pago_no_habilitado)
+POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/
+Content-Type: application/json
+
+{
+  "clienteId": "CLI-000045",
+  "canal": "CALL_CENTER",
+  "metodoEntrega": "DOMICILIO",
+  "moneda": "GTQ",
+  "medioPago": "BILLETERA_DIGITAL",
+  "impuestos": 150.00,
+  "lineas": [
+    { "sku": "SKU-LB-00871", "descripcion": "Refrigeradora 12 pies", "cantidad": 1, "precioUnitario": 1250.00 }
+  ]
+}
+
+### Consultar la orden
+GET {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}
+Accept: application/json
+
+### Confirmar la orden (CREADA -> RESERVA_SOLICITADA, emite ReservaInventarioSolicitada)
+POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/confirmar
+Content-Type: application/json
+
+{
+  "motivo": "Cliente confirmo la compra"
+}
+
+### Avanzar la saga: RESERVA_SOLICITADA -> INVENTARIO_RESERVADO
+POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/transiciones
+Content-Type: application/json
+
+{
+  "estadoDestino": "INVENTARIO_RESERVADO",
+  "pasoSaga": "RESERVA"
+}
+
+### Avanzar la saga: INVENTARIO_RESERVADO -> COBRO_SOLICITADO (emite CobroSolicitado con el medioPago real)
+POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/transiciones
+Content-Type: application/json
+
+{
+  "estadoDestino": "COBRO_SOLICITADO",
+  "pasoSaga": "COBRO"
+}
+
+### Compensacion: COBRO_SOLICITADO -> PAGO_PENDIENTE (emite LiberacionReservaSolicitada)
+POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/transiciones
+Content-Type: application/json
+
+{
+  "estadoDestino": "PAGO_PENDIENTE",
+  "pasoSaga": "COBRO",
+  "motivo": "PayKlik no respondio dentro del timeout configurado",
+  "esCompensacion": true
+}
+
+### Cambiar el metodo de entrega (emite MetodoEntregaModificado)
+POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/metodo-entrega
+Content-Type: application/json
+
+{
+  "metodoEntregaNuevo": "RECOGIDA_TIENDA",
+  "solicitadoPor": "CLIENTE",
+  "ubicacionRecogidaId": "TDA-014"
+}
+
+### Cancelar la orden (emite OrdenCancelada)
+POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/transiciones
+Content-Type: application/json
+
+{
+  "estadoDestino": "CANCELADA",
+  "motivo": "Cancelada por el cliente"
+}

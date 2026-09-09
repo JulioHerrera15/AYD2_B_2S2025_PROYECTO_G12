@@ -1,6 +1,0 @@
-@SGO_Logic_HostAddress = http://localhost:5158
-
-GET {{SGO_Logic_HostAddress}}/weatherforecast/
-Accept: application/json
-
-###
