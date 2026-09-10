@@ -142,17 +142,27 @@ public sealed class OutboxPublisher<TDbContext> : BackgroundService
 
             if (mensaje.Estado == EstadoOutbox.Fallido)
             {
-                EnviarADeadLetter(canal, mensaje);
+                EnviarADeadLetter(mensaje);
             }
         }
     }
 
-    private void EnviarADeadLetter(IModel canal, OutboxMessage mensaje)
+    private void EnviarADeadLetter(OutboxMessage mensaje)
     {
         try
         {
+            // Canal nuevo a proposito: el canal del intento que acaba de fallar
+            // puede haber quedado invalido (por ejemplo, el broker lo cierra si el
+            // fallo fue publicar contra un exchange inexistente). Reusarlo aca
+            // hacia que el envio a dead letter fallara en silencio, dejando la fila
+            // en Fallido sin que el mensaje llegara nunca a sgo.eventos.dlx. La
+            // conexion compartida sigue viva aunque ese canal puntual se haya
+            // cerrado, asi que abrir uno nuevo sobre ella es seguro.
+            using var canalDlx = _conexion.ObtenerConexion().CreateModel();
+            canalDlx.ConfirmSelect();
+
             var cuerpo = System.Text.Encoding.UTF8.GetBytes(mensaje.Payload);
-            PublicadorRabbitMq.PublicarEnCanalConfirmado(canal, TopologiaMensajeria.ExchangeDeadLetter, string.Empty, cuerpo);
+            PublicadorRabbitMq.PublicarEnCanalConfirmado(canalDlx, TopologiaMensajeria.ExchangeDeadLetter, string.Empty, cuerpo);
 
             _logger.LogError(
                 "Mensaje de outbox {EventId} agoto sus reintentos y se envio a {DeadLetter}.",
