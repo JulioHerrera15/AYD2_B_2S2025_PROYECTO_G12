@@ -11,7 +11,10 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes.Eventos;
 /// exactamente los estados que el contrato asocia a un evento; el resto de estados
 /// de <see cref="EstadoOrden" /> solo produce OrdenEstadoCambiado y no aparece
 /// aca. La compensacion (transicion marcada como tal) dispara ademas
-/// LiberacionReservaSolicitada, sea cual sea el estado destino.
+/// LiberacionReservaSolicitada, sea cual sea el estado destino. El motivo de esa
+/// liberacion lo puede fijar quien dispara la compensacion (por ejemplo, el
+/// consumidor de Pagos distingue rechazo de sin-respuesta); si no lo fija, se
+/// deriva del estado destino como antes.
 ///
 /// Ordenes todavia no consume las respuestas de Inventario, Pagos y Facturacion,
 /// asi que no conoce reservaId, pagoId, documentoFiscalId, tiendaDestinoId ni los
@@ -46,7 +49,11 @@ public static class MapaEventosSagaOrden
     /// transicion recien aplicada. No llama a SaveChangesAsync: eso lo hace el
     /// servicio en la misma transaccion que el cambio de negocio.
     /// </summary>
-    public static void Encolar(Orden orden, TransicionOrden transicion, IOutboxWriter outbox)
+    public static void Encolar(
+        Orden orden,
+        TransicionOrden transicion,
+        IOutboxWriter outbox,
+        MotivoLiberacionReserva? motivoLiberacion = null)
     {
         if (PorEstadoDestino.TryGetValue(transicion.EstadoNuevo, out var emisor))
         {
@@ -55,7 +62,7 @@ public static class MapaEventosSagaOrden
 
         if (transicion.EsCompensacion)
         {
-            EmitirLiberacionReservaSolicitada(orden, transicion, outbox);
+            EmitirLiberacionReservaSolicitada(orden, transicion, outbox, motivoLiberacion);
         }
     }
 
@@ -189,7 +196,11 @@ public static class MapaEventosSagaOrden
                 CanceladaEn: transicion.CambiadoEn));
     }
 
-    private static void EmitirLiberacionReservaSolicitada(Orden orden, TransicionOrden transicion, IOutboxWriter outbox) =>
+    private static void EmitirLiberacionReservaSolicitada(
+        Orden orden,
+        TransicionOrden transicion,
+        IOutboxWriter outbox,
+        MotivoLiberacionReserva? motivoExplicito) =>
         Encolar(
             outbox,
             orden,
@@ -198,14 +209,20 @@ public static class MapaEventosSagaOrden
             new LiberacionReservaSolicitadaData(
                 OrdenId: orden.Id,
                 ReservaId: ReservaIdPendiente(orden),
-                Motivo: transicion.EstadoNuevo switch
-                {
-                    EstadoOrden.PAGO_PENDIENTE => MotivoLiberacionReserva.COBRO_SIN_RESPUESTA,
-                    EstadoOrden.CANCELADA or EstadoOrden.CANCELADA_RESERVA_VENCIDA =>
-                        MotivoLiberacionReserva.CANCELACION_CLIENTE,
-                    _ => MotivoLiberacionReserva.TIMEOUT_SAGA
-                },
+                // El evento de origen manda: un rechazo de tarjeta si tuvo
+                // respuesta del proveedor (COBRO_RECHAZADO). Sin motivo explicito
+                // se cae al derivado del estado destino, que preserva el
+                // comportamiento historico del resto de compensaciones.
+                Motivo: motivoExplicito ?? MotivoSegunEstadoDestino(transicion.EstadoNuevo),
                 SolicitadaEn: transicion.CambiadoEn));
+
+    private static MotivoLiberacionReserva MotivoSegunEstadoDestino(EstadoOrden estadoNuevo) => estadoNuevo switch
+    {
+        EstadoOrden.PAGO_PENDIENTE => MotivoLiberacionReserva.COBRO_SIN_RESPUESTA,
+        EstadoOrden.CANCELADA or EstadoOrden.CANCELADA_RESERVA_VENCIDA =>
+            MotivoLiberacionReserva.CANCELACION_CLIENTE,
+        _ => MotivoLiberacionReserva.TIMEOUT_SAGA
+    };
 
     private static void Encolar<TData>(
         IOutboxWriter outbox,

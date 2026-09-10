@@ -146,7 +146,8 @@ public sealed class ServicioConfirmacionOrden
         PasoSaga? pasoSaga,
         string? motivo,
         bool esCompensacion,
-        CancellationToken cancelacion)
+        CancellationToken cancelacion,
+        MotivoLiberacionReserva? motivoLiberacion = null)
     {
         var (orden, sinCambios) = await AplicarTransicionInternaAsync(
             ordenId,
@@ -154,7 +155,8 @@ public sealed class ServicioConfirmacionOrden
             pasoSaga,
             motivo,
             esCompensacion,
-            cancelacion);
+            cancelacion,
+            motivoLiberacion);
 
         return new ResultadoTransicionOrdenDto(OrdenDto.Desde(orden), sinCambios);
     }
@@ -212,7 +214,8 @@ public sealed class ServicioConfirmacionOrden
         PasoSaga? pasoSaga,
         string? motivo,
         bool esCompensacion,
-        CancellationToken cancelacion)
+        CancellationToken cancelacion,
+        MotivoLiberacionReserva? motivoLiberacion = null)
     {
         var orden = await _ordenes.ObtenerPorIdAsync(ordenId, cancelacion)
             ?? throw new ExcepcionOrdenNoEncontrada(ordenId);
@@ -245,8 +248,10 @@ public sealed class ServicioConfirmacionOrden
                 CambiadoEn: transicion.CambiadoEn));
 
         // Evento de saga que corresponda al estado destino (mas liberacion de
-        // reserva si la transicion es una compensacion).
-        MapaEventosSagaOrden.Encolar(orden, transicion, _outbox);
+        // reserva si la transicion es una compensacion). motivoLiberacion, cuando
+        // llega, fija el MotivoLiberacionReserva; si es null se deriva del estado
+        // destino como antes.
+        MapaEventosSagaOrden.Encolar(orden, transicion, _outbox, motivoLiberacion);
 
         // Un unico SaveChanges: estado de la orden + transicion + filas de outbox
         // se persisten en la misma transaccion.

@@ -124,7 +124,7 @@ public sealed class ManejadorEventosPagosTests
     }
 
     [Fact]
-    public async Task PagoRechazado_deja_la_orden_en_PAGO_PENDIENTE_y_emite_la_liberacion_de_reserva()
+    public async Task PagoRechazado_emite_la_liberacion_de_reserva_con_COBRO_RECHAZADO()
     {
         var (manejador, ordenes, outbox, unidad, _) = Construir();
         var orden = OrdenEnCobroSolicitado();
@@ -142,11 +142,13 @@ public sealed class ManejadorEventosPagosTests
         Assert.Equal(LiberacionReservaSolicitada.RoutingKey, liberacion.RoutingKey);
         var data = Assert.IsType<LiberacionReservaSolicitadaData>(liberacion.Data);
         Assert.Equal(orden.Id, data.OrdenId);
+        // Un rechazo de tarjeta si tuvo respuesta del proveedor.
+        Assert.Equal(MotivoLiberacionReserva.COBRO_RECHAZADO, data.Motivo);
         Assert.Equal(1, unidad.Confirmaciones);
     }
 
     [Fact]
-    public async Task PagoPendiente_se_comporta_igual_que_PagoRechazado()
+    public async Task PagoPendiente_emite_la_liberacion_de_reserva_con_COBRO_SIN_RESPUESTA()
     {
         var (manejador, ordenes, outbox, unidad, _) = Construir();
         var orden = OrdenEnCobroSolicitado();
@@ -163,6 +165,8 @@ public sealed class ManejadorEventosPagosTests
         var liberacion = Assert.Single(outbox.PorTipo(LiberacionReservaSolicitada.EventType));
         var data = Assert.IsType<LiberacionReservaSolicitadaData>(liberacion.Data);
         Assert.Equal(orden.Id, data.OrdenId);
+        // Timeout, 5xx o red: el cobro quedo sin respuesta del proveedor.
+        Assert.Equal(MotivoLiberacionReserva.COBRO_SIN_RESPUESTA, data.Motivo);
         Assert.Equal(1, unidad.Confirmaciones);
     }
 

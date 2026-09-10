@@ -16,7 +16,11 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes;
 ///   <item><c>PagoAplicado</c> -&gt; <see cref="EstadoOrden.PAGO_APLICADO" />.</item>
 ///   <item><c>PagoRechazado</c> y <c>PagoPendiente</c> -&gt; <see cref="EstadoOrden.PAGO_PENDIENTE" />,
 ///   marcada como compensacion: <see cref="ServicioConfirmacionOrden" /> encola
-///   ademas <c>LiberacionReservaSolicitada</c> por outbox.</item>
+///   ademas <c>LiberacionReservaSolicitada</c> por outbox. El motivo se deriva del
+///   evento de origen, no del estado destino: <c>PagoRechazado</c> -&gt;
+///   <see cref="MotivoLiberacionReserva.COBRO_RECHAZADO" /> (el proveedor si
+///   respondio), <c>PagoPendiente</c> -&gt;
+///   <see cref="MotivoLiberacionReserva.COBRO_SIN_RESPUESTA" />.</item>
 /// </list>
 /// Toda transicion persiste su <c>TransicionOrden</c> y publica
 /// <c>OrdenEstadoCambiado</c> por outbox, igual que el resto del contexto. La
@@ -56,7 +60,7 @@ public sealed class ManejadorEventosPagos
             return ResultadoEventoPago.Duplicado;
         }
 
-        if (!TryMapearDestino(evento.TipoEvento, out var estadoDestino, out var esCompensacion))
+        if (!TryMapearDestino(evento.TipoEvento, out var estadoDestino, out var esCompensacion, out var motivoLiberacion))
         {
             _logger.LogWarning(
                 "Evento de Pagos desconocido {TipoEvento} ({MessageId}) en la orden {OrdenId}; se hace ack sin aplicar.",
@@ -80,7 +84,8 @@ public sealed class ManejadorEventosPagos
                 PasoDeCobro,
                 evento.Motivo,
                 esCompensacion,
-                cancelacion);
+                cancelacion,
+                motivoLiberacion);
         }
         catch (ExcepcionTransicionInvalida ex)
         {
@@ -107,24 +112,38 @@ public sealed class ManejadorEventosPagos
         return ResultadoEventoPago.Aplicado;
     }
 
-    private static bool TryMapearDestino(string tipoEvento, out EstadoOrden estadoDestino, out bool esCompensacion)
+    private static bool TryMapearDestino(
+        string tipoEvento,
+        out EstadoOrden estadoDestino,
+        out bool esCompensacion,
+        out MotivoLiberacionReserva? motivoLiberacion)
     {
         switch (tipoEvento)
         {
             case PagoAplicado.EventType:
                 estadoDestino = EstadoOrden.PAGO_APLICADO;
                 esCompensacion = false;
+                motivoLiberacion = null;
                 return true;
 
             case PagoRechazado.EventType:
-            case PagoPendiente.EventType:
+                // El proveedor respondio con un rechazo explicito.
                 estadoDestino = EstadoOrden.PAGO_PENDIENTE;
                 esCompensacion = true;
+                motivoLiberacion = MotivoLiberacionReserva.COBRO_RECHAZADO;
+                return true;
+
+            case PagoPendiente.EventType:
+                // Timeout, 5xx o error de red: el cobro quedo sin respuesta.
+                estadoDestino = EstadoOrden.PAGO_PENDIENTE;
+                esCompensacion = true;
+                motivoLiberacion = MotivoLiberacionReserva.COBRO_SIN_RESPUESTA;
                 return true;
 
             default:
                 estadoDestino = default;
                 esCompensacion = false;
+                motivoLiberacion = null;
                 return false;
         }
     }
