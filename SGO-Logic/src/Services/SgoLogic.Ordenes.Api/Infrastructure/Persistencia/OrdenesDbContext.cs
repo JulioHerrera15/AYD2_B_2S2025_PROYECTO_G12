@@ -7,8 +7,10 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia;
 /// <summary>
 /// DbContext propio del contexto Ordenes. Contra su propia base (sgo_ordenes) y su
 /// propio esquema (ordenes); ningun otro servicio escribe estas tablas. Incluye la
-/// tabla del outbox transversal de BuildingBlocks (nunca centralizada): este
-/// servicio produce eventos, no los consume, asi que no trae mensajes_procesados.
+/// tabla del outbox transversal de BuildingBlocks (nunca centralizada). Desde que
+/// Ordenes consume los resultados de Pagos, trae ademas su propia tabla de
+/// deduplicacion <c>ordenes.mensaje_procesado</c> (distinta de
+/// <c>mensajes_procesados</c> de BuildingBlocks: esta lleva el tipo de evento).
 /// </summary>
 public sealed class OrdenesDbContext : DbContext
 {
@@ -23,6 +25,8 @@ public sealed class OrdenesDbContext : DbContext
     public DbSet<TransicionOrden> Transiciones => Set<TransicionOrden>();
 
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
+
+    public DbSet<MensajeProcesado> MensajesProcesados => Set<MensajeProcesado>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
