@@ -4,6 +4,7 @@ using SgoLogic.BuildingBlocks.Messaging;
 using SgoLogic.BuildingBlocks.Outbox;
 using SgoLogic.Contracts.Enumeraciones;
 using SgoLogic.Ordenes.Api.Application.Ordenes;
+using SgoLogic.Ordenes.Api.Consumers;
 using SgoLogic.Ordenes.Api.Domain;
 using SgoLogic.Ordenes.Api.Infrastructure.Persistencia;
 
@@ -28,6 +29,11 @@ builder.Services.AddScoped<IRepositorioOrdenes, RepositorioOrdenes>();
 builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
 builder.Services.AddScoped<IGeneradorCorrelativoOrden, GeneradorCorrelativoOrden>();
 builder.Services.AddScoped<ServicioConfirmacionOrden>();
+
+// Consumo de los resultados de Pagos: avance de la saga y compensacion (HU-003).
+builder.Services.AddScoped<IRegistroMensajesProcesados, RegistroMensajesProcesados>();
+builder.Services.AddScoped<ManejadorEventosPagos>();
+builder.Services.AddHostedService<PagosEventosConsumidor>();
 
 var app = builder.Build();
 

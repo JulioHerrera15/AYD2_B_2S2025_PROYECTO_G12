@@ -152,6 +152,37 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
                     b.ToTable("linea_orden", "ordenes");
                 });
 
+            modelBuilder.Entity("SgoLogic.Ordenes.Api.Domain.MensajeProcesado", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha");
+
+                    b.Property<string>("MessageId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("message_id");
+
+                    b.Property<string>("TipoEvento")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("tipo_evento");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("MessageId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_mensaje_procesado_message_id");
+
+                    b.ToTable("mensaje_procesado", "ordenes");
+                });
+
             modelBuilder.Entity("SgoLogic.Ordenes.Api.Domain.Orden", b =>
                 {
                     b.Property<string>("Id")
