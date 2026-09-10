@@ -4,7 +4,8 @@ namespace SgoLogic.Pagos.Tests.Application.Dobles;
 
 /// <summary>
 /// Doble en memoria de <see cref="IClientePayKlik" />. No toca el mock HTTP real:
-/// devuelve un resultado fijo o lanza una falla, y registra cada peticion recibida.
+/// devuelve un resultado fijo o lanza una falla, y registra cada peticion recibida
+/// junto con la clave de idempotencia con la que se invoco.
 /// </summary>
 public sealed class ClientePayKlikFalso : IClientePayKlik
 {
@@ -16,6 +17,14 @@ public sealed class ClientePayKlikFalso : IClientePayKlik
     }
 
     public List<PeticionCargoPayKlik> Peticiones { get; } = new();
+
+    public List<string> ClavesIdempotencia { get; } = new();
+
+    /// <summary>
+    /// Cuando es <c>false</c>, <see cref="CargarAsync" /> no registra la peticion:
+    /// modela el circuito abierto, donde nunca se invoca al proveedor.
+    /// </summary>
+    public bool RegistraPeticiones { get; init; } = true;
 
     /// <summary>Hook que se ejecuta dentro de CargarAsync, justo antes de responder.</summary>
     public Action? AntesDeResponder { get; set; }
@@ -38,9 +47,43 @@ public sealed class ClientePayKlikFalso : IClientePayKlik
         new(_ => Task.FromException<ResultadoPayKlik>(
             new PayKlikNoDisponibleException("PayKlik respondio 503.")));
 
-    public async Task<ResultadoPayKlik> CargarAsync(PeticionCargoPayKlik peticion, CancellationToken cancelacion)
+    /// <summary>Falla con 5xx las primeras <paramref name="fallas5xx" /> llamadas y aprueba a partir de ahi.</summary>
+    public static ClientePayKlikFalso FallaLuegoAprueba(int fallas5xx, string autorizacionId = "PK-TEST-OK")
     {
-        Peticiones.Add(peticion);
+        var restantes = fallas5xx;
+        return new(_ =>
+        {
+            if (restantes-- > 0)
+            {
+                return Task.FromException<ResultadoPayKlik>(
+                    new PayKlikNoDisponibleException("PayKlik respondio 503."));
+            }
+
+            return Task.FromResult(new ResultadoPayKlik(
+                autorizacionId, EstadoRespuestaPayKlik.APROBADO, "00", "Cargo aprobado",
+                "4242", "VISA", DateTime.UtcNow));
+        });
+    }
+
+    /// <summary>Simula el disyuntor abierto: lanza sin registrar la peticion.</summary>
+    public static ClientePayKlikFalso CircuitoAbierto() =>
+        new(_ => Task.FromException<ResultadoPayKlik>(
+            new CircuitoAbiertoException("El disyuntor de PayKlik esta abierto (simulado).")))
+        {
+            RegistraPeticiones = false
+        };
+
+    public async Task<ResultadoPayKlik> CargarAsync(
+        PeticionCargoPayKlik peticion,
+        string claveIdempotencia,
+        CancellationToken cancelacion)
+    {
+        if (RegistraPeticiones)
+        {
+            Peticiones.Add(peticion);
+            ClavesIdempotencia.Add(claveIdempotencia);
+        }
+
         AntesDeResponder?.Invoke();
         return await _comportamiento(peticion);
     }

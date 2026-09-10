@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using Microsoft.AspNetCore.Mvc;
 using SgoLogic.Mocks.PayKlik;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -16,10 +17,25 @@ var app = builder.Build();
 app.MapGet("/health/live", () => Results.Ok(new { estado = "vivo" }));
 
 // Cobro. Nunca recibe ni devuelve numero de tarjeta ni CVV.
-app.MapPost("/v1/cargos", async (PeticionCargo peticion, EstadoMock estado) =>
+app.MapPost("/v1/cargos", async (
+    PeticionCargo peticion,
+    EstadoMock estado,
+    [FromHeader(Name = "Idempotency-Key")] string? claveIdempotencia) =>
 {
     var configuracion = estado.Configuracion;
     var recibidoEn = DateTime.UtcNow;
+
+    // Idempotencia: ante una clave ya vista se devuelve la misma respuesta sin
+    // volver a procesar el cargo.
+    if (!string.IsNullOrWhiteSpace(claveIdempotencia) &&
+        estado.Idempotencia.TryObtener(claveIdempotencia, out var previa))
+    {
+        estado.Registrar(new CargoRegistrado(
+            peticion.Referencia, peticion.Monto, peticion.Moneda, peticion.MedioPago,
+            Resultado: "IDEMPOTENTE", AutorizacionId: previa.AutorizacionId, RecibidoEn: recibidoEn));
+
+        return Results.Ok(previa);
+    }
 
     var modoEfectivo = configuracion.Modo;
     if (modoEfectivo == ModoMock.INTERMITENTE)
@@ -29,7 +45,8 @@ app.MapPost("/v1/cargos", async (PeticionCargo peticion, EstadoMock estado) =>
             : ModoMock.NORMAL;
     }
 
-    if (modoEfectivo == ModoMock.LENTO)
+    // latenciaMs igual a 0 se aplica como cero: no hay espera.
+    if (modoEfectivo == ModoMock.LENTO && configuracion.LatenciaMs > 0)
     {
         await Task.Delay(configuracion.LatenciaMs);
     }
@@ -62,6 +79,12 @@ app.MapPost("/v1/cargos", async (PeticionCargo peticion, EstadoMock estado) =>
         peticion.Referencia, peticion.Monto, peticion.Moneda, peticion.MedioPago,
         Resultado: respuesta.Estado, AutorizacionId: respuesta.AutorizacionId, RecibidoEn: recibidoEn));
 
+    // Solo se guarda para idempotencia una respuesta efectivamente procesada (200).
+    if (!string.IsNullOrWhiteSpace(claveIdempotencia))
+    {
+        estado.Idempotencia.ObtenerOAgregar(claveIdempotencia, () => respuesta);
+    }
+
     return Results.Ok(respuesta);
 });
 
@@ -76,7 +99,10 @@ app.MapPut("/admin/modo", (CambioModo cambio, EstadoMock estado) =>
     }
 
     var actual = estado.Configuracion;
-    var latenciaMs = cambio.LatenciaMs is > 0 ? cambio.LatenciaMs.Value : actual.LatenciaMs;
+
+    // null = no enviado, se conserva; cualquier valor presente (incluido 0) se
+    // aplica. Un negativo se descarta.
+    var latenciaMs = cambio.LatenciaMs is int ms && ms >= 0 ? ms : actual.LatenciaMs;
     var probabilidadFallo = cambio.ProbabilidadFallo is >= 0 and <= 1
         ? cambio.ProbabilidadFallo.Value
         : actual.ProbabilidadFallo;
@@ -85,6 +111,16 @@ app.MapPut("/admin/modo", (CambioModo cambio, EstadoMock estado) =>
 });
 
 app.MapGet("/admin/modo", (EstadoMock estado) => Results.Ok(estado.Configuracion));
+
+app.MapGet("/admin/estado", (EstadoMock estado) =>
+{
+    var configuracion = estado.Configuracion;
+    return Results.Ok(new EstadoAdminDto(
+        configuracion.Modo,
+        configuracion.LatenciaMs,
+        configuracion.ProbabilidadFallo,
+        estado.Idempotencia.Cantidad));
+});
 
 app.MapGet("/admin/cargos", (EstadoMock estado) => Results.Ok(estado.Cargos));
 

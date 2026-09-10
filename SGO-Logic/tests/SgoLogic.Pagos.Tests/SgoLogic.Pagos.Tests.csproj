@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\SgoLogic.Pagos.Api\SgoLogic.Pagos.Api.csproj" />
+    <ProjectReference Include="..\..\src\Services\SgoLogic.Mocks.PayKlik\SgoLogic.Mocks.PayKlik.csproj" />
   </ItemGroup>
 
 </Project>

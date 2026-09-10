@@ -33,7 +33,12 @@ public sealed record RespuestaCargo(
     string? Marca,
     DateTime ProcesadoEn);
 
-/// <summary>Cambio de modo del mock via PUT /admin/modo.</summary>
+/// <summary>
+/// Cambio de modo del mock via PUT /admin/modo. <c>LatenciaMs</c> y
+/// <c>ProbabilidadFallo</c> son opcionales: <c>null</c> significa "no enviado, se
+/// conserva el valor actual"; cualquier valor presente (incluido <c>0</c>) se
+/// aplica tal cual.
+/// </summary>
 public sealed record CambioModo(
     string Modo,
     int? LatenciaMs,
@@ -44,6 +49,13 @@ public sealed record ConfiguracionMock(
     ModoMock Modo,
     int LatenciaMs,
     double ProbabilidadFallo);
+
+/// <summary>Estado administrativo del mock (GET /admin/estado).</summary>
+public sealed record EstadoAdminDto(
+    ModoMock Modo,
+    int LatenciaMs,
+    double ProbabilidadFallo,
+    int ClavesIdempotencia);
 
 /// <summary>Un cargo recibido en esta ejecucion, para inspeccion en la demo.</summary>
 public sealed record CargoRegistrado(

@@ -25,12 +25,19 @@ builder.Services.AddOutbox<PagosDbContext>(builder.Configuration);
 builder.Services.Configure<PayKlikOptions>(builder.Configuration.GetSection(PayKlikOptions.Seccion));
 builder.Services.Configure<ReintentoOptions>(builder.Configuration.GetSection(ReintentoOptions.Seccion));
 
-builder.Services.AddHttpClient<IClientePayKlik, ClientePayKlikHttp>((proveedor, http) =>
+// El HttpClient tipado invoca a PayKlik "a pelo"; el circuit breaker (ADR-009) lo
+// envuelve con ClientePayKlikConDisyuntor, que es a quien resuelve IClientePayKlik.
+builder.Services.AddHttpClient<ClientePayKlikHttp>((proveedor, http) =>
 {
     var opciones = proveedor.GetRequiredService<IOptions<PayKlikOptions>>().Value;
     http.BaseAddress = new Uri(opciones.BaseUrl);
     http.Timeout = TimeSpan.FromMilliseconds(opciones.TimeoutMs);
 });
+
+builder.Services.AddSingleton<DisyuntorPayKlik>();
+builder.Services.AddScoped<IClientePayKlik>(proveedor => new ClientePayKlikConDisyuntor(
+    proveedor.GetRequiredService<ClientePayKlikHttp>(),
+    proveedor.GetRequiredService<DisyuntorPayKlik>()));
 
 builder.Services.AddScoped<ServicioCobro>();
 builder.Services.AddHostedService<CobroSolicitadoConsumidor>();

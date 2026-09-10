@@ -10,6 +10,10 @@ namespace SgoLogic.Pagos.Api.Infrastructure.PayKlik;
 /// Program.cs). Un timeout del cliente lanza <see cref="OperationCanceledException" />;
 /// una respuesta 5xx o un cuerpo invalido, <see cref="PayKlikNoDisponibleException" />.
 /// El servicio de cobro traduce cualquiera de esas a pago PENDIENTE.
+///
+/// Envia el header <c>Idempotency-Key</c> con el identificador del PAGO (no del
+/// intento) para que los reintentos no generen doble cargo. No lleva circuit
+/// breaker: de eso se encarga <see cref="ClientePayKlikConDisyuntor" />.
 /// </summary>
 public sealed class ClientePayKlikHttp : IClientePayKlik
 {
@@ -20,10 +24,22 @@ public sealed class ClientePayKlikHttp : IClientePayKlik
         _http = http;
     }
 
-    public async Task<ResultadoPayKlik> CargarAsync(PeticionCargoPayKlik peticion, CancellationToken cancelacion)
+    public async Task<ResultadoPayKlik> CargarAsync(
+        PeticionCargoPayKlik peticion,
+        string claveIdempotencia,
+        CancellationToken cancelacion)
     {
-        using var respuesta = await _http.PostAsJsonAsync(
-            "/v1/cargos", peticion, SgoJsonSerializerOptions.Default, cancelacion);
+        using var solicitud = new HttpRequestMessage(HttpMethod.Post, "/v1/cargos")
+        {
+            Content = JsonContent.Create(peticion, mediaType: null, SgoJsonSerializerOptions.Default)
+        };
+
+        if (!string.IsNullOrWhiteSpace(claveIdempotencia))
+        {
+            solicitud.Headers.Add("Idempotency-Key", claveIdempotencia);
+        }
+
+        using var respuesta = await _http.SendAsync(solicitud, cancelacion);
 
         if ((int)respuesta.StatusCode >= 500)
         {
