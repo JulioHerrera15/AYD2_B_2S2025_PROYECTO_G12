@@ -37,10 +37,16 @@ public sealed class ServicioCobroTests
                 .UseInMemoryDatabase(_baseDatos)
                 .Options);
 
-        public ServicioCobro Servicio(PagosDbContext contexto, IClientePayKlik payklik) => new(
+        public ServicioCobro Servicio(
+            PagosDbContext contexto,
+            IClientePayKlik payklik,
+            PayKlikOptions? payklikOpciones = null) => new(
             contexto,
             payklik,
             Outbox,
+            // Por defecto sin reintentos: cada prueba existente valida un unico
+            // camino de llamada. Las pruebas de reintento pasan sus propias opciones.
+            Options.Create(payklikOpciones ?? new PayKlikOptions { MaxReintentos = 0, BackoffBaseMs = 0 }),
             Options.Create(new ReintentoOptions { ExpiracionMinutos = 60 }),
             NullLogger<ServicioCobro>.Instance);
     }
@@ -196,6 +202,104 @@ public sealed class ServicioCobroTests
 
         var aplicado = Assert.Single(escenario.Outbox.PorTipo(PagoAplicado.EventType));
         Assert.Equal(2, Assert.IsType<PagoAplicadoData>(aplicado.Data).IntentoNumero);
+    }
+
+    [Fact]
+    public async Task Con_el_circuito_abierto_no_se_invoca_al_proveedor_pero_se_registra_el_intento_CIRCUITO_ABIERTO()
+    {
+        var escenario = new Escenario();
+        var payklik = ClientePayKlikFalso.CircuitoAbierto();
+
+        await using (var contexto = escenario.NuevoContexto())
+        {
+            await escenario.Servicio(contexto, payklik, new PayKlikOptions { MaxReintentos = 1, BackoffBaseMs = 0 })
+                .ProcesarCobroAsync(Solicitud(), CancellationToken.None);
+            await contexto.SaveChangesAsync();
+        }
+
+        // No se invoco al proveedor.
+        Assert.Empty(payklik.Peticiones);
+
+        await using var verificacion = escenario.NuevoContexto();
+        var pago = await verificacion.Pagos.Include(p => p.Intentos).SingleAsync();
+
+        // Igual se registro el intento, en FALLIDO y con motivo CIRCUITO_ABIERTO.
+        Assert.Equal(EstadoPago.PENDIENTE, pago.Estado);
+        var intento = Assert.Single(pago.Intentos);
+        Assert.Equal(EstadoIntentoPago.FALLIDO, intento.Estado);
+        Assert.Equal("CIRCUITO_ABIERTO", intento.CodigoRespuesta);
+        Assert.True(intento.LatenciaMs < 100, "la latencia con el circuito abierto debe ser cercana a cero");
+
+        // El pago queda PENDIENTE con enlace de reintento y se publica PagoPendiente.
+        var enlace = await verificacion.EnlacesReintento.SingleAsync();
+        Assert.Equal(OrdenId, enlace.OrdenId);
+        var evento = Assert.Single(escenario.Outbox.PorTipo(PagoPendiente.EventType));
+        var data = Assert.IsType<PagoPendienteData>(evento.Data);
+        Assert.Equal("CIRCUITO_ABIERTO", data.CodigoRespuesta);
+    }
+
+    [Fact]
+    public async Task Un_rechazo_de_negocio_no_dispara_reintento()
+    {
+        var escenario = new Escenario();
+        var payklik = ClientePayKlikFalso.Rechaza();
+
+        await using var contexto = escenario.NuevoContexto();
+        await escenario.Servicio(contexto, payklik, new PayKlikOptions { MaxReintentos = 1, BackoffBaseMs = 0 })
+            .ProcesarCobroAsync(Solicitud(), CancellationToken.None);
+        await contexto.SaveChangesAsync();
+
+        // Una sola llamada al proveedor pese a MaxReintentos = 1.
+        Assert.Single(payklik.Peticiones);
+        var pago = await contexto.Pagos.Include(p => p.Intentos).SingleAsync();
+        Assert.Equal(EstadoPago.RECHAZADO, pago.Estado);
+        Assert.Single(pago.Intentos);
+    }
+
+    [Fact]
+    public async Task Un_5xx_dispara_un_reintento_y_el_segundo_intento_exitoso_deja_el_pago_APLICADO()
+    {
+        var escenario = new Escenario();
+        var payklik = ClientePayKlikFalso.FallaLuegoAprueba(fallas5xx: 1);
+
+        await using (var contexto = escenario.NuevoContexto())
+        {
+            await escenario.Servicio(contexto, payklik, new PayKlikOptions { MaxReintentos = 1, BackoffBaseMs = 0 })
+                .ProcesarCobroAsync(Solicitud(), CancellationToken.None);
+            await contexto.SaveChangesAsync();
+        }
+
+        Assert.Equal(2, payklik.Peticiones.Count);
+
+        await using var verificacion = escenario.NuevoContexto();
+        var pago = await verificacion.Pagos.Include(p => p.Intentos).SingleAsync();
+
+        // Dos filas de intento, numeradas 1 y 2 dentro del mismo pago.
+        Assert.Equal(new[] { 1, 2 }, pago.Intentos.OrderBy(i => i.IntentoNumero).Select(i => i.IntentoNumero));
+        Assert.Equal(EstadoIntentoPago.FALLIDO, pago.Intentos.Single(i => i.IntentoNumero == 1).Estado);
+        Assert.Equal(EstadoIntentoPago.EXITOSO, pago.Intentos.Single(i => i.IntentoNumero == 2).Estado);
+        Assert.Equal(EstadoPago.APLICADO, pago.Estado);
+
+        // Solo se publica el evento del desenlace final, no un PagoPendiente intermedio.
+        Assert.Empty(escenario.Outbox.PorTipo(PagoPendiente.EventType));
+        Assert.Single(escenario.Outbox.PorTipo(PagoAplicado.EventType));
+    }
+
+    [Fact]
+    public async Task Los_reintentos_usan_la_misma_Idempotency_Key_el_identificador_del_pago()
+    {
+        var escenario = new Escenario();
+        var payklik = ClientePayKlikFalso.FallaLuegoAprueba(fallas5xx: 1);
+
+        await using var contexto = escenario.NuevoContexto();
+        await escenario.Servicio(contexto, payklik, new PayKlikOptions { MaxReintentos = 1, BackoffBaseMs = 0 })
+            .ProcesarCobroAsync(Solicitud(), CancellationToken.None);
+        await contexto.SaveChangesAsync();
+
+        var pago = await contexto.Pagos.SingleAsync();
+        Assert.Equal(2, payklik.ClavesIdempotencia.Count);
+        Assert.Equal(pago.Id.ToString(), payklik.ClavesIdempotencia[0]);
+        Assert.All(payklik.ClavesIdempotencia, clave => Assert.Equal(pago.Id.ToString(), clave));
     }
 
     [Fact]

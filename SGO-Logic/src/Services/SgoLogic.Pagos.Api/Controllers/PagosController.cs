@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SgoLogic.Pagos.Api.Application.Pagos;
+using SgoLogic.Pagos.Api.Infrastructure.PayKlik;
 using SgoLogic.Pagos.Api.Infrastructure.Persistencia;
 
 namespace SgoLogic.Pagos.Api.Controllers;
@@ -11,12 +12,22 @@ public sealed class PagosController : ControllerBase
 {
     private readonly PagosDbContext _contexto;
     private readonly ServicioCobro _servicioCobro;
+    private readonly DisyuntorPayKlik _disyuntor;
 
-    public PagosController(PagosDbContext contexto, ServicioCobro servicioCobro)
+    public PagosController(PagosDbContext contexto, ServicioCobro servicioCobro, DisyuntorPayKlik disyuntor)
     {
         _contexto = contexto;
         _servicioCobro = servicioCobro;
+        _disyuntor = disyuntor;
     }
+
+    /// <summary>
+    /// Estado del disyuntor hacia PayKlik para la demo: estado del circuito
+    /// (CERRADO, ABIERTO o SEMIABIERTO), fallos recientes en la ventana y la hora
+    /// de la ultima apertura.
+    /// </summary>
+    [HttpGet("salud-proveedor")]
+    public ActionResult<SaludProveedorDto> SaludProveedor() => Ok(_disyuntor.Salud());
 
     /// <summary>Devuelve el pago de una orden con todos sus intentos.</summary>
     [HttpGet("ordenes/{ordenId}")]

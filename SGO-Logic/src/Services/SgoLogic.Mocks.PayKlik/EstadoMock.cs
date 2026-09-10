@@ -11,6 +11,9 @@ public sealed class EstadoMock
     private readonly List<CargoRegistrado> _cargos = new();
     private ConfiguracionMock _configuracion = new(ModoMock.NORMAL, LatenciaMs: 2000, ProbabilidadFallo: 0.5);
 
+    /// <summary>Almacen de idempotencia: clave del header Idempotency-Key -> respuesta ya calculada.</summary>
+    public AlmacenIdempotencia Idempotencia { get; } = new();
+
     public ConfiguracionMock Configuracion
     {
         get
