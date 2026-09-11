@@ -122,6 +122,31 @@ services:
       timeout: 5s
       retries: 5
 
+  auth-api:
+    build:
+      context: .
+      dockerfile: src/Services/SgoLogic.Auth.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Postgres: Host=db-operacional;Port=5432;Database=sgo_auth;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__Redis: redis:6379,password=${REDIS_PASSWORD}
+      Auth__JwtSecret: ${JWT_SECRET}
+      Auth__JwtExpiracionMinutos: ${AUTH_JWT_EXPIRACION_MINUTOS}
+      Auth__CarritoTtlSegundos: ${AUTH_CARRITO_TTL_SEGUNDOS}
+    ports:
+      - "8088:8080"
+    depends_on:
+      db-operacional:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   ordenes-api:
     build:
       context: .
@@ -236,8 +261,118 @@ services:
       timeout: 5s
       retries: 5
 
+  mock-mensajeria:
+    build:
+      context: .
+      dockerfile: src/Services/SgoLogic.MockMensajeria/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      ASPNETCORE_URLS: http://+:8080
+      MockMensajeria__ForzarFalla: ${MOCK_MENSAJERIA_FORZAR_FALLA}
+    ports:
+      - "8089:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  notificaciones-api:
+    build:
+      context: .
+      dockerfile: src/Services/SgoLogic.Notificaciones.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Postgres: Host=db-operacional;Port=5432;Database=sgo_notificaciones;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__RabbitMq: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      Mensajeria__MockBaseUrl: http://mock-mensajeria:8080
+    ports:
+      - "8090:8080"
+    depends_on:
+      db-operacional:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mock-mensajeria:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  consulta-estado-api:
+    build:
+      context: .
+      dockerfile: src/Services/SgoLogic.ConsultaEstado.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Postgres: Host=db-operacional;Port=5432;Database=sgo_consulta_estado;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__Redis: redis:6379,password=${REDIS_PASSWORD}
+      ConnectionStrings__RabbitMq: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+    ports:
+      - "8091:8080"
+    depends_on:
+      db-operacional:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: src/Services/SgoLogic.ApiGateway/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      ASPNETCORE_URLS: http://+:8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      auth-api:
+        condition: service_healthy
+      consulta-estado-api:
+        condition: service_healthy
+      notificaciones-api:
+        condition: service_healthy
+      mock-mensajeria:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  web:
+    build:
+      context: .
+      dockerfile: src/Services/SgoLogic.Web/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      ASPNETCORE_URLS: http://+:8080
+      ApiGateway__BaseUrl: http://api-gateway:8080
+    ports:
+      - "8092:8080"
+    depends_on:
+      api-gateway:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   sgo_db_operacional_data:
   sgo_db_finanzas_data:
   sgo_db_auditoria_data:
   sgo_rabbitmq_data:
+

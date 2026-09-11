@@ -1,0 +1,235 @@
+@model SgoLogic.Web.Services.CarritoModel?
+
+@{
+    ViewData["Title"] = "Carrito de Compras";
+    var userEmail = Context.Request.Cookies["sgo_user_email"];
+}
+
+<!-- Header Title -->
+<div class="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+    <div>
+        <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight mb-1">
+            Carrito de Compras
+        </h1>
+        <p class="text-sm text-text-muted">
+            Gestión de artículos en tiempo real con persistencia en Redis y sincronización automática tras autenticación.
+        </p>
+    </div>
+    @if (Model != null && !string.IsNullOrWhiteSpace(Model.CarritoId))
+    {
+        <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-low text-on-surface-variant text-xs font-mono border border-border-subtle/60 self-start sm:self-auto">
+            <span class="w-2 h-2 rounded-full bg-secondary"></span>
+            ID: @Model.CarritoId
+        </div>
+    }
+</div>
+
+@if (string.IsNullOrWhiteSpace(userEmail))
+{
+    <div class="mb-8 bg-secondary-fixed/50 border border-secondary-container/40 text-on-secondary-fixed rounded-2xl p-4 flex items-center gap-3 ambient-shadow">
+        <span class="material-symbols-outlined text-secondary text-[22px]" style="font-variation-settings: 'FILL' 1;">info</span>
+        <div class="text-sm">
+            <strong>Modo Invitado:</strong> Estás navegando con un carrito temporal. Al <a href="/Auth/Login" class="font-bold underline hover:opacity-80">iniciar sesión</a>, tus artículos se migrarán automáticamente a tu cuenta.
+        </div>
+    </div>
+}
+
+<!-- Cart Table Card -->
+<div class="bg-surface-white rounded-2xl ambient-shadow border border-border-subtle/50 overflow-hidden mb-12">
+    <div class="px-6 py-4 border-b border-border-subtle/60 flex items-center justify-between">
+        <div class="flex items-center gap-2 font-semibold text-primary text-base">
+            <span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">shopping_bag</span>
+            <span>Artículos Seleccionados</span>
+        </div>
+        @if (Model?.Items != null && Model.Items.Any())
+        {
+            <span class="text-xs text-text-muted font-medium">
+                @Model.Items.Count @(Model.Items.Count == 1 ? "ítem" : "ítems")
+            </span>
+        }
+    </div>
+
+    @if (Model == null || Model.Items == null || !Model.Items.Any())
+    {
+        <div class="py-16 px-6 text-center">
+            <div class="w-16 h-16 rounded-full bg-surface-container-low text-text-muted flex items-center justify-center mx-auto mb-4">
+                <span class="material-symbols-outlined text-[32px]">remove_shopping_cart</span>
+            </div>
+            <h3 class="text-base font-semibold text-primary mb-1">Tu carrito está vacío</h3>
+            <p class="text-sm text-text-muted max-w-sm mx-auto mb-6">
+                Selecciona productos del catálogo rápido para agregarlos al carrito unificado en Redis.
+            </p>
+        </div>
+    }
+    else
+    {
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-border-subtle bg-surface-bright/50">
+                        <th class="py-3.5 px-6 text-xs text-text-muted uppercase tracking-wider font-semibold">SKU</th>
+                        <th class="py-3.5 px-6 text-xs text-text-muted uppercase tracking-wider font-semibold">Descripción</th>
+                        <th class="py-3.5 px-6 text-xs text-text-muted uppercase tracking-wider font-semibold text-center">Cantidad</th>
+                        <th class="py-3.5 px-6 text-xs text-text-muted uppercase tracking-wider font-semibold text-right">Precio Unitario</th>
+                        <th class="py-3.5 px-6 text-xs text-text-muted uppercase tracking-wider font-semibold text-right">Subtotal</th>
+                        <th class="py-3.5 px-6 text-xs text-text-muted uppercase tracking-wider font-semibold text-right">Acción</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-border-subtle/50">
+                    @foreach (var item in Model.Items)
+                    {
+                        <tr class="hover:bg-surface-bright/30 transition-colors">
+                            <td class="py-4 px-6">
+                                <span class="bg-surface-container-low text-primary px-2.5 py-1 rounded font-mono text-xs font-semibold">
+                                    @item.Sku
+                                </span>
+                            </td>
+                            <td class="py-4 px-6 text-sm font-medium text-primary">
+                                @item.Descripcion
+                            </td>
+                            <td class="py-4 px-6 text-sm text-center font-semibold text-primary">
+                                @item.Cantidad
+                            </td>
+                            <td class="py-4 px-6 text-sm text-right text-text-muted font-medium">
+                                Q. @item.PrecioUnitario.ToString("N2")
+                            </td>
+                            <td class="py-4 px-6 text-sm text-right font-bold text-primary">
+                                Q. @item.Subtotal.ToString("N2")
+                            </td>
+                            <td class="py-4 px-6 text-right">
+                                <form method="post" action="/Carrito/Eliminar" class="inline">
+                                    <input type="hidden" name="sku" value="@item.Sku" />
+                                    <button type="submit" class="inline-flex items-center gap-1 text-error hover:bg-error-container/60 px-3 py-1 rounded-full text-xs font-medium transition-colors">
+                                        <span class="material-symbols-outlined text-[14px]">delete</span>
+                                        Eliminar
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr class="border-t-2 border-border-subtle bg-surface-bright/40">
+                        <td colspan="4" class="py-5 px-6 text-right font-semibold text-sm text-primary">
+                            Total General (Redis Cached):
+                        </td>
+                        <td colspan="2" class="py-5 px-6 text-left">
+                            <span class="text-2xl font-bold text-primary tracking-tight">
+                                Q. @Model.Total.ToString("N2")
+                            </span>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    }
+</div>
+
+<!-- Demo Catalog Section -->
+<div class="mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <div>
+            <h2 class="text-xl font-bold text-primary tracking-tight">
+                Catálogo de Demostración
+            </h2>
+            <p class="text-xs text-text-muted">
+                Agrega productos con un solo clic para probar la persistencia cross-servicio.
+            </p>
+        </div>
+        <span class="material-symbols-outlined text-text-muted">storefront</span>
+    </div>
+
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+        <!-- Item 1 -->
+        <div class="bg-surface-white rounded-2xl p-5 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/30 transition-all">
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded font-semibold">LAP-001</span>
+                    <span class="material-symbols-outlined text-[18px] text-text-muted">laptop_mac</span>
+                </div>
+                <h4 class="font-bold text-primary text-base mb-1">Laptop Dell XPS 15</h4>
+                <p class="text-xs text-text-muted mb-4">Core i7, 16GB RAM, 512GB SSD</p>
+                <div class="text-lg font-bold text-primary mb-4">Q. 12,500.00</div>
+            </div>
+            <form method="post" action="/Carrito/Agregar">
+                <input type="hidden" name="sku" value="LAP-001" />
+                <input type="hidden" name="descripcion" value="Laptop Dell XPS 15 Core i7 16GB" />
+                <input type="hidden" name="cantidad" value="1" />
+                <input type="hidden" name="precioUnitario" value="12500.00" />
+                <button type="submit" class="w-full bg-primary text-on-primary rounded-full py-2.5 px-4 text-xs font-semibold hover:opacity-90 transition-opacity active:scale-95 shadow-sm flex items-center justify-center gap-1.5">
+                    <span class="material-symbols-outlined text-[16px]">add_shopping_cart</span>
+                    Agregar al Carrito
+                </button>
+            </form>
+        </div>
+
+        <!-- Item 2 -->
+        <div class="bg-surface-white rounded-2xl p-5 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/30 transition-all">
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded font-semibold">MOU-002</span>
+                    <span class="material-symbols-outlined text-[18px] text-text-muted">mouse</span>
+                </div>
+                <h4 class="font-bold text-primary text-base mb-1">Mouse Logitech Master</h4>
+                <p class="text-xs text-text-muted mb-4">Inalámbrico MX Master 3S Ergonómico</p>
+                <div class="text-lg font-bold text-primary mb-4">Q. 450.00</div>
+            </div>
+            <form method="post" action="/Carrito/Agregar">
+                <input type="hidden" name="sku" value="MOU-002" />
+                <input type="hidden" name="descripcion" value="Mouse Inalámbrico Logitech MX Master 3S" />
+                <input type="hidden" name="cantidad" value="1" />
+                <input type="hidden" name="precioUnitario" value="450.00" />
+                <button type="submit" class="w-full bg-primary text-on-primary rounded-full py-2.5 px-4 text-xs font-semibold hover:opacity-90 transition-opacity active:scale-95 shadow-sm flex items-center justify-center gap-1.5">
+                    <span class="material-symbols-outlined text-[16px]">add_shopping_cart</span>
+                    Agregar al Carrito
+                </button>
+            </form>
+        </div>
+
+        <!-- Item 3 -->
+        <div class="bg-surface-white rounded-2xl p-5 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/30 transition-all">
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded font-semibold">TEC-003</span>
+                    <span class="material-symbols-outlined text-[18px] text-text-muted">keyboard</span>
+                </div>
+                <h4 class="font-bold text-primary text-base mb-1">Teclado Mecánico RGB</h4>
+                <p class="text-xs text-text-muted mb-4">Switches Brown táctiles retroiluminados</p>
+                <div class="text-lg font-bold text-primary mb-4">Q. 750.00</div>
+            </div>
+            <form method="post" action="/Carrito/Agregar">
+                <input type="hidden" name="sku" value="TEC-003" />
+                <input type="hidden" name="descripcion" value="Teclado Mecánico Switch Brown RGB" />
+                <input type="hidden" name="cantidad" value="1" />
+                <input type="hidden" name="precioUnitario" value="750.00" />
+                <button type="submit" class="w-full bg-primary text-on-primary rounded-full py-2.5 px-4 text-xs font-semibold hover:opacity-90 transition-opacity active:scale-95 shadow-sm flex items-center justify-center gap-1.5">
+                    <span class="material-symbols-outlined text-[16px]">add_shopping_cart</span>
+                    Agregar al Carrito
+                </button>
+            </form>
+        </div>
+
+        <!-- Item 4 -->
+        <div class="bg-surface-white rounded-2xl p-5 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/30 transition-all">
+            <div>
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded font-semibold">MON-004</span>
+                    <span class="material-symbols-outlined text-[18px] text-text-muted">tv</span>
+                </div>
+                <h4 class="font-bold text-primary text-base mb-1">Monitor UltraSharp 27"</h4>
+                <p class="text-xs text-text-muted mb-4">Resolución 4K IPS HDR Color Pro</p>
+                <div class="text-lg font-bold text-primary mb-4">Q. 3,800.00</div>
+            </div>
+            <form method="post" action="/Carrito/Agregar">
+                <input type="hidden" name="sku" value="MON-004" />
+                <input type="hidden" name="descripcion" value="Monitor UltraSharp 27 pulgadas 4K IPS" />
+                <input type="hidden" name="cantidad" value="1" />
+                <input type="hidden" name="precioUnitario" value="3800.00" />
+                <button type="submit" class="w-full bg-primary text-on-primary rounded-full py-2.5 px-4 text-xs font-semibold hover:opacity-90 transition-opacity active:scale-95 shadow-sm flex items-center justify-center gap-1.5">
+                    <span class="material-symbols-outlined text-[16px]">add_shopping_cart</span>
+                    Agregar al Carrito
+                </button>
+            </form>
+        </div>
+    </div>
+</div>

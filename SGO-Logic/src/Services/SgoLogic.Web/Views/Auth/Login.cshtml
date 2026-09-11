@@ -1,0 +1,64 @@
+@{
+    ViewData["Title"] = "Iniciar Sesión";
+}
+
+<div class="max-w-md mx-auto py-6">
+    <div class="bg-surface-white rounded-3xl ambient-shadow border border-border-subtle/50 p-8">
+        <div class="text-center mb-8">
+            <div class="w-12 h-12 rounded-2xl bg-primary text-on-primary flex items-center justify-center font-bold text-base mx-auto mb-3 shadow-sm">
+                ML
+            </div>
+            <h1 class="text-2xl font-bold text-primary tracking-tight">Iniciar Sesión</h1>
+            <p class="text-xs text-text-muted mt-1">Accede a tu cuenta MegaStore para sincronizar tu carrito</p>
+        </div>
+
+        @if (ViewBag.Error != null)
+        {
+            <div class="mb-6 bg-error-container text-on-error-container border border-error/20 rounded-xl p-3.5 flex items-center gap-2.5 text-xs font-medium">
+                <span class="material-symbols-outlined text-error text-[18px]">error</span>
+                <span>@ViewBag.Error</span>
+            </div>
+        }
+
+        <form method="post" action="/Auth/Login" class="space-y-4">
+            <input type="hidden" name="returnUrl" value="@ViewBag.ReturnUrl" />
+            <div>
+                <label for="email" class="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-1.5">
+                    Correo Electrónico
+                </label>
+                <input type="email" 
+                       id="email" 
+                       name="email" 
+                       class="w-full bg-surface-container-low border border-border-subtle/70 rounded-xl px-4 py-3 text-sm font-medium text-primary focus:bg-surface-white focus:ring-2 focus:ring-secondary focus:border-transparent transition-all placeholder:text-text-muted" 
+                       required 
+                       placeholder="usuario@megastore.com" />
+            </div>
+
+            <div>
+                <label for="contrasena" class="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-1.5">
+                    Contraseña
+                </label>
+                <input type="password" 
+                       id="contrasena" 
+                       name="contrasena" 
+                       class="w-full bg-surface-container-low border border-border-subtle/70 rounded-xl px-4 py-3 text-sm font-medium text-primary focus:bg-surface-white focus:ring-2 focus:ring-secondary focus:border-transparent transition-all placeholder:text-text-muted" 
+                       required 
+                       placeholder="••••••••" />
+            </div>
+
+            <div class="pt-2">
+                <button type="submit" 
+                        class="w-full bg-primary text-on-primary rounded-full py-3 text-xs font-semibold hover:opacity-90 transition-opacity active:scale-95 shadow-sm">
+                    Ingresar
+                </button>
+            </div>
+        </form>
+
+        <div class="mt-8 pt-6 border-t border-border-subtle/60 text-center text-xs text-text-muted">
+            ¿No tienes cuenta? 
+            <a href="/Auth/Registro" class="font-bold text-primary hover:text-secondary underline transition-colors">
+                Regístrate aquí
+            </a>
+        </div>
+    </div>
+</div>
