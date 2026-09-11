@@ -34,4 +34,13 @@ public sealed class RepositorioOrdenes : IRepositorioOrdenes
     {
         await _contexto.Ordenes.AddAsync(orden, cancelacion);
     }
+
+    public Task<IReadOnlyList<Orden>> ObtenerConAlertaFiscalAsync(CancellationToken cancelacion) =>
+        _contexto.Ordenes
+            .Include(orden => orden.Lineas)
+            .Include(orden => orden.Transiciones)
+            .Where(orden => orden.AlertaFiscal)
+            .OrderByDescending(orden => orden.AlertaFiscalEn)
+            .ToListAsync(cancelacion)
+            .ContinueWith(t => (IReadOnlyList<Orden>)t.Result, cancelacion);
 }

@@ -224,4 +224,22 @@ public sealed class DocumentoFiscal
         CertificadoEn = momento;
         ActualizadoEn = momento;
     }
+
+    /// <summary>
+    /// Resetea un documento que estaba en ALERTA (agoto reintentos) a PENDIENTE
+    /// para que el worker de polling lo tome de nuevo. Lo llama
+    /// <see cref="Application.Facturacion.ServicioFacturacion.CrearDocumentoAsync" />
+    /// cuando recibe un segundo CertificacionFiscalSolicitada (reintento manual
+    /// desde Ordenes). No toca serie ni correlativo.
+    /// </summary>
+    public void ReiniciarDesdeAlerta(DateTime ahora)
+    {
+        var momento = ahora.ToUniversalTime();
+        Estado = EstadoDocumentoFiscal.PENDIENTE;
+        Intentos = 0;
+        ProximoIntentoEn = momento;
+        UltimoCodigo = null;
+        UltimoMotivo = null;
+        ActualizadoEn = momento;
+    }
 }

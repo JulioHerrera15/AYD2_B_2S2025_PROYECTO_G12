@@ -281,5 +281,53 @@ public sealed class ServicioFacturacionTests
         Assert.Equal(1, sat.CertificacionesReales);
     }
 
+    [Fact]
+    public async Task Reintento_manual_resetea_documento_de_ALERTA_a_PENDIENTE()
+    {
+        var escenario = new Escenario();
+        var opciones = new SatOptions { Serie = "A", MaxIntentos = 2, BackoffBaseMs = 0 };
+        Guid documentoId;
+
+        await using (var contexto = escenario.NuevoContexto())
+        {
+            var documento = await escenario.Servicio(contexto, ClienteSatFalso.NoDisponible(), opciones)
+                .CrearDocumentoAsync(Solicitud(), "txn-1", T0, CancellationToken.None);
+            await contexto.SaveChangesAsync();
+            documentoId = documento.Id;
+        }
+
+        for (var intento = 1; intento <= 2; intento++)
+        {
+            await using var contexto = escenario.NuevoContexto();
+            await escenario.Servicio(contexto, ClienteSatFalso.NoDisponible(), opciones)
+                .ProcesarEnvioAsync(documentoId, intento, T0.AddMinutes(intento), CancellationToken.None);
+            await contexto.SaveChangesAsync();
+        }
+
+        await using (var contexto = escenario.NuevoContexto())
+        {
+            var doc = await contexto.DocumentosFiscales.SingleAsync();
+            Assert.Equal(EstadoDocumentoFiscal.ALERTA, doc.Estado);
+            Assert.Null(doc.ProximoIntentoEn);
+        }
+
+        var ahora = T0.AddMinutes(10);
+        await using (var contexto = escenario.NuevoContexto())
+        {
+            await escenario.Servicio(contexto, ClienteSatFalso.NoDisponible(), opciones)
+                .CrearDocumentoAsync(Solicitud(), "txn-2", ahora, CancellationToken.None);
+            await contexto.SaveChangesAsync();
+        }
+
+        await using var verificacion = escenario.NuevoContexto();
+        var reiniciado = await verificacion.DocumentosFiscales.SingleAsync();
+
+        Assert.Equal(EstadoDocumentoFiscal.PENDIENTE, reiniciado.Estado);
+        Assert.Equal(0, reiniciado.Intentos);
+        Assert.NotNull(reiniciado.ProximoIntentoEn);
+        Assert.Null(reiniciado.UltimoCodigo);
+        Assert.Null(reiniciado.UltimoMotivo);
+    }
+
     private const string TopologiaExchangeEventos = "sgo.eventos";
 }

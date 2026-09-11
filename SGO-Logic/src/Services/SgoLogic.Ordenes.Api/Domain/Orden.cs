@@ -171,6 +171,20 @@ public sealed partial class Orden
     /// <summary>Momento en que la SAT certifico el documento (campo certificadaEn del evento).</summary>
     public DateTime? DocumentoFiscalCertificadoEn { get; private set; }
 
+    /// <summary>
+    /// Bandera que indica que la certificacion fiscal ante la SAT agoto sus
+    /// reintentos y la orden queda varada en CONFIRMADA_PENDIENTE_FISCAL.
+    /// Se levanta al consumir CertificacionSatFallida y se limpia al reintentar
+    /// manualmente (ADR-011).
+    /// </summary>
+    public bool AlertaFiscal { get; private set; }
+
+    /// <summary>Motivo por el que se levanto la alerta fiscal (ultimo codigo/motivo de la SAT).</summary>
+    public string? AlertaFiscalMotivo { get; private set; }
+
+    /// <summary>Momento en que se levanto la alerta fiscal.</summary>
+    public DateTime? AlertaFiscalEn { get; private set; }
+
     public IReadOnlyList<LineaOrden> Lineas => _lineas.AsReadOnly();
 
     public IReadOnlyList<TransicionOrden> Transiciones => _transiciones.AsReadOnly();
@@ -282,5 +296,26 @@ public sealed partial class Orden
         DocumentoFiscalNumeroAutorizacion = numeroAutorizacion;
         DocumentoFiscalFolio = folio;
         DocumentoFiscalCertificadoEn = certificadaEn;
+    }
+
+    /// <summary>
+    /// Levanta la bandera de alerta fiscal cuando la SAT agoto sus reintentos.
+    /// No cambia de estado: la orden se queda en CONFIRMADA_PENDIENTE_FISCAL.
+    /// </summary>
+    public void LevantarAlertaFiscal(string motivo, DateTime en)
+    {
+        AlertaFiscal = true;
+        AlertaFiscalMotivo = motivo;
+        AlertaFiscalEn = en;
+    }
+
+    /// <summary>
+    /// Limpia la bandera de alerta fiscal despues de un reintento manual exitoso.
+    /// </summary>
+    public void LimpiarAlertaFiscal()
+    {
+        AlertaFiscal = false;
+        AlertaFiscalMotivo = null;
+        AlertaFiscalEn = null;
     }
 }

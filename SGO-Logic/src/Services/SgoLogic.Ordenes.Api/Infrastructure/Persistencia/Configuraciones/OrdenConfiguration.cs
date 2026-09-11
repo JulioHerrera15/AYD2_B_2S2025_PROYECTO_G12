@@ -140,6 +140,19 @@ public sealed class OrdenConfiguration : IEntityTypeConfiguration<Orden>
             .HasColumnType("timestamp with time zone")
             .HasConversion<ConvertidorFechaUtc>();
 
+        builder.Property(orden => orden.AlertaFiscal)
+            .HasColumnName("alerta_fiscal")
+            .IsRequired();
+
+        builder.Property(orden => orden.AlertaFiscalMotivo)
+            .HasColumnName("alerta_fiscal_motivo")
+            .HasMaxLength(500);
+
+        builder.Property(orden => orden.AlertaFiscalEn)
+            .HasColumnName("alerta_fiscal_en")
+            .HasColumnType("timestamp with time zone")
+            .HasConversion<ConvertidorFechaUtc>();
+
         builder.Ignore(orden => orden.Subtotal);
         builder.Ignore(orden => orden.Total);
         builder.Ignore(orden => orden.EsTerminal);

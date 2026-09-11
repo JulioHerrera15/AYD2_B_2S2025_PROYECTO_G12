@@ -16,4 +16,7 @@ public interface IRepositorioOrdenes
 
     /// <summary>Registra una orden nueva en la unidad de trabajo.</summary>
     Task AgregarAsync(Orden orden, CancellationToken cancelacion);
+
+    /// <summary>Trae todas las ordenes con alerta fiscal levantada para el panel de incidencias.</summary>
+    Task<IReadOnlyList<Orden>> ObtenerConAlertaFiscalAsync(CancellationToken cancelacion);
 }

@@ -68,9 +68,19 @@ public sealed class ServicioFacturacion
 
         if (existente is not null)
         {
-            _logger.LogInformation(
-                "La orden {OrdenId} ya tiene el documento fiscal {DocumentoId}; no se crea otro.",
-                datos.OrdenId, existente.Id);
+            if (existente.Estado == EstadoDocumentoFiscal.ALERTA)
+            {
+                existente.ReiniciarDesdeAlerta(ahora);
+                _logger.LogInformation(
+                    "Documento fiscal {DocumentoId} para la orden {OrdenId} estaba en ALERTA; se reinicia a PENDIENTE para reintento.",
+                    existente.Id, datos.OrdenId);
+            }
+            else
+            {
+                _logger.LogInformation(
+                    "La orden {OrdenId} ya tiene el documento fiscal {DocumentoId}; no se crea otro.",
+                    datos.OrdenId, existente.Id);
+            }
             return existente;
         }
 

@@ -30,7 +30,7 @@ public sealed class ServicioConfirmacionOrdenTests
 
     private static CrearOrdenRequest CrearOrdenRequest(
         Canal canal = Canal.WEB,
-        MedioPago medioPago = MedioPago.TARJETA) => new(
+        string medioPago = "TARJETA") => new(
         ClienteId: "CLI-000045",
         Canal: canal,
         MetodoEntrega: MetodoEntrega.DOMICILIO,
@@ -108,7 +108,7 @@ public sealed class ServicioConfirmacionOrdenTests
         var (servicio, _, outbox, _) = Construir();
 
         var dto = await servicio.CrearOrdenAsync(
-            CrearOrdenRequest(Canal.WEB, MedioPago.TRANSFERENCIA), CancellationToken.None);
+            CrearOrdenRequest(Canal.WEB, "TRANSFERENCIA"), CancellationToken.None);
 
         Assert.Equal(MedioPago.TRANSFERENCIA, dto.MedioPago);
         var data = Assert.IsType<OrdenCreadaData>(Assert.Single(outbox.Eventos).Data);
@@ -122,7 +122,7 @@ public sealed class ServicioConfirmacionOrdenTests
 
         var excepcion = await Assert.ThrowsAsync<ExcepcionMedioPagoNoHabilitado>(() =>
             servicio.CrearOrdenAsync(
-                CrearOrdenRequest(Canal.CALL_CENTER, MedioPago.BILLETERA_DIGITAL), CancellationToken.None));
+                CrearOrdenRequest(Canal.CALL_CENTER, "BILLETERA_DIGITAL"), CancellationToken.None));
 
         Assert.Equal(Canal.CALL_CENTER, excepcion.Canal);
         Assert.Equal(MedioPago.BILLETERA_DIGITAL, excepcion.MedioPago);
