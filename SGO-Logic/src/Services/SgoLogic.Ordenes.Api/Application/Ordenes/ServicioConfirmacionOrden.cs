@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using SgoLogic.BuildingBlocks.Messaging;
 using SgoLogic.BuildingBlocks.Outbox;
 using SgoLogic.Contracts.Enumeraciones;
@@ -20,6 +21,12 @@ public sealed class ServicioConfirmacionOrden
 {
     private const EstadoOrden EstadoDeConfirmacion = EstadoOrden.RESERVA_SOLICITADA;
     private const PasoSaga PasoDeConfirmacion = PasoSaga.RESERVA;
+
+    /// <summary>CUI del receptor cuando el request de creacion no envia uno (HU-005).</summary>
+    private const string ReceptorCuiPorDefecto = "CF";
+
+    /// <summary>Acepta exactamente "CF" o una cadena de solo digitos.</summary>
+    private static readonly Regex PatronReceptorCui = new(@"^(CF|\d+)$", RegexOptions.Compiled);
 
     private readonly IRepositorioOrdenes _ordenes;
     private readonly IOutboxWriter _outbox;
@@ -62,6 +69,8 @@ public sealed class ServicioConfirmacionOrden
             .Select(linea => new LineaOrden(linea.Sku, linea.Descripcion, linea.Cantidad, linea.PrecioUnitario))
             .ToList();
 
+        var receptorCui = ResolverReceptorCui(solicitud.ReceptorCui);
+
         var correlativo = await _generadorCorrelativo.SiguienteAsync(cancelacion);
         var numeroOrden = correlativo.ToString("D6");
         var id = $"ORD-{DateTime.UtcNow:yyyy}-{numeroOrden}";
@@ -76,7 +85,8 @@ public sealed class ServicioConfirmacionOrden
             solicitud.MedioPago,
             lineas,
             solicitud.Impuestos,
-            solicitud.UbicacionSolicitadaId);
+            solicitud.UbicacionSolicitadaId,
+            receptorCui: receptorCui);
 
         await _ordenes.AgregarAsync(orden, cancelacion);
 
@@ -140,6 +150,13 @@ public sealed class ServicioConfirmacionOrden
     /// idempotente y escribe orden + transicion + eventos del outbox en una sola
     /// transaccion.
     /// </summary>
+    /// <param name="antesDeTransicionar">
+    /// Mutacion adicional del agregado (por ejemplo, persistir datos que trajo el
+    /// evento de entrada) aplicada despues de confirmar que la transicion es real
+    /// y antes de <see cref="Orden.TransicionarA" />, para que quede en la misma
+    /// transaccion de base de datos. No se invoca si la orden ya esta en el
+    /// estado destino (camino idempotente) ni si la transicion resulta invalida.
+    /// </param>
     public async Task<ResultadoTransicionOrdenDto> AplicarTransicionAsync(
         string ordenId,
         EstadoOrden estadoDestino,
@@ -147,7 +164,8 @@ public sealed class ServicioConfirmacionOrden
         string? motivo,
         bool esCompensacion,
         CancellationToken cancelacion,
-        MotivoLiberacionReserva? motivoLiberacion = null)
+        MotivoLiberacionReserva? motivoLiberacion = null,
+        Action<Orden>? antesDeTransicionar = null)
     {
         var (orden, sinCambios) = await AplicarTransicionInternaAsync(
             ordenId,
@@ -156,7 +174,8 @@ public sealed class ServicioConfirmacionOrden
             motivo,
             esCompensacion,
             cancelacion,
-            motivoLiberacion);
+            motivoLiberacion,
+            antesDeTransicionar);
 
         return new ResultadoTransicionOrdenDto(OrdenDto.Desde(orden), sinCambios);
     }
@@ -215,7 +234,8 @@ public sealed class ServicioConfirmacionOrden
         string? motivo,
         bool esCompensacion,
         CancellationToken cancelacion,
-        MotivoLiberacionReserva? motivoLiberacion = null)
+        MotivoLiberacionReserva? motivoLiberacion = null,
+        Action<Orden>? antesDeTransicionar = null)
     {
         var orden = await _ordenes.ObtenerPorIdAsync(ordenId, cancelacion)
             ?? throw new ExcepcionOrdenNoEncontrada(ordenId);
@@ -224,6 +244,8 @@ public sealed class ServicioConfirmacionOrden
         {
             return (orden, true);
         }
+
+        antesDeTransicionar?.Invoke(orden);
 
         // Puede lanzar ExcepcionTransicionInvalida; en ese caso no se escribe nada.
         var transicion = orden.TransicionarA(estadoDestino, motivo, pasoSaga, esCompensacion);
@@ -258,5 +280,26 @@ public sealed class ServicioConfirmacionOrden
         await _unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
 
         return (orden, false);
+    }
+
+    /// <summary>
+    /// "CF" cuando el request no trae CUI. Si trae uno, exige que sea "CF" o solo
+    /// digitos; cualquier otra cosa es 400 (ArgumentException, HU-005).
+    /// </summary>
+    private static string ResolverReceptorCui(string? receptorCui)
+    {
+        if (string.IsNullOrWhiteSpace(receptorCui))
+        {
+            return ReceptorCuiPorDefecto;
+        }
+
+        if (!PatronReceptorCui.IsMatch(receptorCui))
+        {
+            throw new ArgumentException(
+                "El CUI del receptor debe ser \"CF\" o solo digitos.",
+                nameof(receptorCui));
+        }
+
+        return receptorCui;
     }
 }

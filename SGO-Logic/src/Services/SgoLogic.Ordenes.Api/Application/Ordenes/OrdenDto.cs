@@ -22,6 +22,8 @@ public sealed record OrdenDto(
     decimal Total,
     string? UbicacionSolicitadaId,
     DateTime CreadaEn,
+    string? PagoId,
+    DatosFiscalesDto? DatosFiscales,
     IReadOnlyList<LineaOrdenDto> Lineas,
     IReadOnlyList<TransicionOrdenDto> Transiciones)
 {
@@ -40,6 +42,17 @@ public sealed record OrdenDto(
         orden.Total,
         orden.UbicacionSolicitadaId,
         orden.CreadaEn,
+        orden.PagoId,
+        orden.DocumentoFiscalId is not null
+            ? new DatosFiscalesDto(
+                orden.DocumentoFiscalId,
+                TipoDocumentoFiscal.FACTURA,
+                orden.DocumentoFiscalSerie ?? string.Empty,
+                orden.DocumentoFiscalNumero ?? string.Empty,
+                orden.DocumentoFiscalNumeroAutorizacion ?? string.Empty,
+                orden.DocumentoFiscalFolio,
+                orden.DocumentoFiscalCertificadoEn)
+            : null,
         orden.Lineas.Select(LineaOrdenDto.Desde).ToList(),
         orden.Transiciones
             .OrderBy(transicion => transicion.Secuencia)
@@ -84,3 +97,13 @@ public sealed record TransicionOrdenDto(
         transicion.EsCompensacion,
         transicion.CambiadoEn);
 }
+
+/// <summary>Datos fiscales de la orden una vez certificada por la SAT (evento 12).</summary>
+public sealed record DatosFiscalesDto(
+    string DocumentoFiscalId,
+    TipoDocumentoFiscal TipoDocumento,
+    string Serie,
+    string NumeroDocumento,
+    string NumeroAutorizacion,
+    string? Folio,
+    DateTime? CertificadaEn);

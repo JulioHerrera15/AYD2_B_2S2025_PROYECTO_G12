@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
@@ -13,10 +14,12 @@ public sealed class SuscriptorRabbitMq : ISuscriptorMensajes
     private const ushort PrefetchCount = 10;
 
     private readonly IConexionRabbitMq _conexion;
+    private readonly ILogger<SuscriptorRabbitMq> _logger;
 
-    public SuscriptorRabbitMq(IConexionRabbitMq conexion)
+    public SuscriptorRabbitMq(IConexionRabbitMq conexion, ILogger<SuscriptorRabbitMq> logger)
     {
         _conexion = conexion;
+        _logger = logger;
     }
 
     public IDisposable Suscribir(string cola, Func<ReadOnlyMemory<byte>, Task<bool>> manejador)
@@ -33,8 +36,15 @@ public sealed class SuscriptorRabbitMq : ISuscriptorMensajes
             {
                 exito = await manejador(evento.Body);
             }
-            catch
+            catch (Exception ex)
             {
+                // manejador() es en la practica ProcesarAsync de EventConsumerBase,
+                // que ya loguea sus propios fallos: si algo revienta hasta aca (por
+                // ejemplo, un tipo no registrado en el DbContext) es un fallo fuera
+                // de ese try/catch. Sin este log quedaba invisible: el mensaje
+                // nackeaba en bucle silencioso hasta el dead-letter, sin una sola
+                // linea en los logs que explicara por que.
+                _logger.LogError(ex, "Fallo no controlado procesando un mensaje de la cola {Cola}; se nackea con requeue.", cola);
                 exito = false;
             }
 

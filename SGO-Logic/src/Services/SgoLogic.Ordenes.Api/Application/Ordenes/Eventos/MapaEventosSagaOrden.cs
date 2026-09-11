@@ -16,12 +16,15 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes.Eventos;
 /// consumidor de Pagos distingue rechazo de sin-respuesta); si no lo fija, se
 /// deriva del estado destino como antes.
 ///
-/// Ordenes todavia no consume las respuestas de Inventario, Pagos y Facturacion,
-/// asi que no conoce reservaId, pagoId, documentoFiscalId, tiendaDestinoId ni los
-/// datos fiscales del receptor. Esos campos, obligatorios en el contrato, se
-/// rellenan aca con un valor derivado del id de la orden o con el valor de ejemplo
-/// del contrato; quedan marcados con <c>PENDIENTE</c> para cablearlos cuando
-/// existan los consumidores.
+/// Ordenes todavia no consume las respuestas de Inventario, asi que no conoce
+/// reservaId ni tiendaDestinoId: esos campos, obligatorios en el contrato, se
+/// rellenan aca con un valor derivado del id de la orden o con <c>null</c>, y
+/// quedan marcados con <c>PENDIENTE</c> para cablearlos cuando exista el
+/// consumidor de Inventario. pagoId y el CUI del receptor ya no son placeholder:
+/// <see cref="ResolverPagoId" /> usa <see cref="Orden.PagoId" /> (persistido por
+/// <see cref="Application.Ordenes.ManejadorEventosPagos" /> al consumir
+/// PagoAplicado) y <see cref="Orden.ReceptorCui" /> viene de la orden desde su
+/// creacion.
 /// </summary>
 public static class MapaEventosSagaOrden
 {
@@ -35,6 +38,7 @@ public static class MapaEventosSagaOrden
             [EstadoOrden.RESERVA_SOLICITADA] = EmitirReservaInventarioSolicitada,
             [EstadoOrden.COBRO_SOLICITADO] = EmitirCobroSolicitado,
             [EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL] = EmitirConfirmacionYCertificacion,
+            [EstadoOrden.CONFIRMADA] = EmitirOrdenCertificadaFiscalmente,
             [EstadoOrden.DESPACHO_SOLICITADO] = EmitirDespachoSolicitado,
             [EstadoOrden.CANCELADA] = EmitirOrdenCancelada,
             [EstadoOrden.CANCELADA_RESERVA_VENCIDA] = EmitirOrdenCancelada
@@ -118,7 +122,7 @@ public static class MapaEventosSagaOrden
                 Subtotal: orden.Subtotal,
                 Impuestos: orden.Impuestos,
                 Total: orden.Total,
-                PagoId: PagoIdPendiente(orden),
+                PagoId: ResolverPagoId(orden),
                 DocumentoFiscalId: null,
                 Lineas: orden.Lineas
                     .Select(linea => new OrdenConfirmadaLineaData(
@@ -135,7 +139,10 @@ public static class MapaEventosSagaOrden
                 OrdenId: orden.Id,
                 TipoDocumento: TipoDocumentoFiscal.FACTURA,
                 DocumentoOrigenId: null,
-                Receptor: new ReceptorFiscalData("CF", orden.ClienteId, "PENDIENTE", Pais.GT),
+                // El CUI viene de la orden (item 8): "CF" si el cliente no dio uno
+                // al crearla, o el que haya enviado. La direccion sigue PENDIENTE:
+                // Ordenes no tiene un campo de direccion fiscal del receptor hoy.
+                Receptor: new ReceptorFiscalData(orden.ReceptorCui, orden.ClienteId, "PENDIENTE", Pais.GT),
                 Moneda: orden.Moneda,
                 Subtotal: orden.Subtotal,
                 Impuestos: orden.Impuestos,
@@ -146,6 +153,32 @@ public static class MapaEventosSagaOrden
                     .ToList(),
                 SolicitadaEn: transicion.CambiadoEn));
     }
+
+    /// <summary>
+    /// Evento 12. Se emite al pasar a CONFIRMADA: la SAT certifico el documento
+    /// (<see cref="ManejadorDocumentoFiscalCertificado" /> ya llamo a
+    /// <see cref="Orden.AsignarCertificacionFiscal" /> antes de esta transicion,
+    /// asi que los datos fiscales ya estan en la orden). Portador unico del folio
+    /// fiscal; prohibido como fuente de estado (seccion 6 del contrato).
+    /// </summary>
+    private static void EmitirOrdenCertificadaFiscalmente(Orden orden, TransicionOrden transicion, IOutboxWriter outbox) =>
+        Encolar(
+            outbox,
+            orden,
+            OrdenCertificadaFiscalmente.EventType,
+            OrdenCertificadaFiscalmente.RoutingKey,
+            new OrdenCertificadaFiscalmenteData(
+                OrdenId: orden.Id,
+                NumeroOrden: orden.NumeroOrden,
+                TiendaDestinoId: null,
+                DocumentoFiscalId: orden.DocumentoFiscalId ?? string.Empty,
+                TipoDocumento: TipoDocumentoFiscal.FACTURA,
+                Serie: orden.DocumentoFiscalSerie ?? string.Empty,
+                NumeroDocumento: orden.DocumentoFiscalNumero ?? string.Empty,
+                NumeroAutorizacion: orden.DocumentoFiscalNumeroAutorizacion ?? string.Empty,
+                Moneda: orden.Moneda,
+                Total: orden.Total,
+                CertificadaEn: orden.DocumentoFiscalCertificadoEn ?? transicion.CambiadoEn));
 
     private static void EmitirDespachoSolicitado(Orden orden, TransicionOrden transicion, IOutboxWriter outbox) =>
         Encolar(
@@ -189,7 +222,7 @@ public static class MapaEventosSagaOrden
                     : MotivoCancelacion.CLIENTE,
                 Detalle: transicion.Motivo,
                 RequiereReembolso: requiereReembolso,
-                PagoId: requiereReembolso ? PagoIdPendiente(orden) : null,
+                PagoId: requiereReembolso ? ResolverPagoId(orden) : null,
                 DocumentoFiscalId: null,
                 Moneda: requiereReembolso ? orden.Moneda : null,
                 MontoReembolso: requiereReembolso ? orden.Total : null,
@@ -240,8 +273,11 @@ public static class MapaEventosSagaOrden
             routingKey,
             data);
 
-    // Identificadores que hoy devuelven otros contextos y Ordenes aun no consume.
+    // reservaId todavia depende de Inventario, que Ordenes aun no consume.
     private static string ReservaIdPendiente(Orden orden) => $"RSV-PENDIENTE-{orden.Id}";
 
-    private static string PagoIdPendiente(Orden orden) => $"PAG-PENDIENTE-{orden.Id}";
+    // pagoId ya no es siempre placeholder: ManejadorEventosPagos lo persiste en
+    // Orden.PagoId al consumir PagoAplicado (item 7). Antes de eso (por ejemplo,
+    // si algo cancelara la orden sin haber pasado por ahi) se cae al placeholder.
+    private static string ResolverPagoId(Orden orden) => orden.PagoId ?? $"PAG-PENDIENTE-{orden.Id}";
 }

@@ -143,7 +143,7 @@ public sealed class PagosEventosConsumidor : BackgroundService
 
         return sobre.EventType switch
         {
-            PagoAplicado.EventType => Crear(sobre, Leer<PagoAplicadoData>(sobre.Data).OrdenId, motivo: null),
+            PagoAplicado.EventType => CrearAplicado(sobre, Leer<PagoAplicadoData>(sobre.Data)),
 
             PagoRechazado.EventType => CrearRechazado(sobre, Leer<PagoRechazadoData>(sobre.Data)),
 
@@ -155,19 +155,24 @@ public sealed class PagosEventosConsumidor : BackgroundService
         };
     }
 
+    private static EventoPagoRecibido CrearAplicado(IntegrationEvent<JsonElement> sobre, PagoAplicadoData datos) =>
+        Crear(sobre, datos.OrdenId, motivo: null, autorizacionId: datos.AutorizacionId);
+
     private static EventoPagoRecibido CrearRechazado(IntegrationEvent<JsonElement> sobre, PagoRechazadoData datos) =>
         Crear(sobre, datos.OrdenId, $"Cobro rechazado por el proveedor (codigo {datos.CodigoRespuesta})");
 
     private static EventoPagoRecibido CrearPendiente(IntegrationEvent<JsonElement> sobre, PagoPendienteData datos) =>
         Crear(sobre, datos.OrdenId, datos.MotivoFalla);
 
-    private static EventoPagoRecibido Crear(IntegrationEvent<JsonElement> sobre, string ordenId, string? motivo) =>
+    private static EventoPagoRecibido Crear(
+        IntegrationEvent<JsonElement> sobre, string ordenId, string? motivo, string? autorizacionId = null) =>
         new(
             MessageId: sobre.EventId,
             TransactionId: sobre.TransactionId,
             TipoEvento: sobre.EventType,
             OrdenId: ordenId,
-            Motivo: motivo);
+            Motivo: motivo,
+            AutorizacionId: autorizacionId);
 
     private static TData Leer<TData>(JsonElement data)
         where TData : notnull =>

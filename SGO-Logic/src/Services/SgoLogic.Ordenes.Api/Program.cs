@@ -35,6 +35,10 @@ builder.Services.AddScoped<IRegistroMensajesProcesados, RegistroMensajesProcesad
 builder.Services.AddScoped<ManejadorEventosPagos>();
 builder.Services.AddHostedService<PagosEventosConsumidor>();
 
+// Consumo del resultado de certificacion fiscal: cierre CONFIRMADA_PENDIENTE_FISCAL → CONFIRMADA (HU-005).
+builder.Services.AddScoped<ManejadorDocumentoFiscalCertificado>();
+builder.Services.AddHostedService<DocumentoFiscalCertificadoConsumidor>();
+
 var app = builder.Build();
 
 app.UseSgoDefaults();
