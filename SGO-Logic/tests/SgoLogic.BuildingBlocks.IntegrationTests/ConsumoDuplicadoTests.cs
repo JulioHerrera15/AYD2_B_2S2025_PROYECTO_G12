@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using SgoLogic.BuildingBlocks.Idempotencia;
 using SgoLogic.BuildingBlocks.Messaging;
 using SgoLogic.BuildingBlocks.Serialization;
@@ -26,7 +27,7 @@ public sealed class ConsumoDuplicadoTests
         await using var proveedor = IntegracionServicios.ConstruirProveedor(_fixture.Postgres.GetConnectionString(), configuracion);
 
         var conexion = new ConexionRabbitMq(configuracion);
-        var suscriptor = new SuscriptorRabbitMq(conexion);
+        var suscriptor = new SuscriptorRabbitMq(conexion, NullLogger<SuscriptorRabbitMq>.Instance);
         var contador = new ContadorLlamadas();
         var cola = $"test.duplicado.{Guid.NewGuid():N}";
         var routingKey = $"test.duplicado.{Guid.NewGuid():N}";

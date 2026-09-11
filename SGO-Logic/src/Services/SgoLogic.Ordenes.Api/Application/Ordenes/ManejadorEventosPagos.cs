@@ -75,6 +75,17 @@ public sealed class ManejadorEventosPagos
         // las filas de outbox.
         _registro.Registrar(evento.MessageId, evento.TipoEvento);
 
+        // Solo PagoAplicado trae un identificador real de pago (autorizacionId);
+        // se persiste en la orden en el mismo momento en que se aplica la
+        // transicion, para que reemplace el placeholder PAG-PENDIENTE-<id> que
+        // usan OrdenConfirmada y OrdenCancelada (item 7). Si por algun motivo el
+        // evento no lo trae, no se llama a RegistrarPago: Orden.PagoId se queda en
+        // null y MapaEventosSagaOrden sigue cayendo al placeholder.
+        Action<Orden>? antesDeTransicionar =
+            estadoDestino == EstadoOrden.PAGO_APLICADO && !string.IsNullOrWhiteSpace(evento.AutorizacionId)
+                ? orden => orden.RegistrarPago(evento.AutorizacionId!)
+                : null;
+
         ResultadoTransicionOrdenDto resultado;
         try
         {
@@ -85,7 +96,8 @@ public sealed class ManejadorEventosPagos
                 evento.Motivo,
                 esCompensacion,
                 cancelacion,
-                motivoLiberacion);
+                motivoLiberacion,
+                antesDeTransicionar);
         }
         catch (ExcepcionTransicionInvalida ex)
         {

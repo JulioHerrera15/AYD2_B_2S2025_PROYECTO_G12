@@ -11,6 +11,11 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes;
 /// el formato ORD-&lt;anio&gt;-&lt;correlativo de 6 digitos&gt; que exige
 /// ordenes-eventos-v1.
 /// </summary>
+/// <param name="ReceptorCui">
+/// CUI del receptor para la factura (HU-005). Opcional: si no se envia, o llega
+/// vacio, el servicio lo resuelve a "CF". Cuando se envia, debe ser "CF" o una
+/// cadena de solo digitos; cualquier otra cosa es 400.
+/// </param>
 public sealed record CrearOrdenRequest(
     string ClienteId,
     Canal Canal,
@@ -19,7 +24,8 @@ public sealed record CrearOrdenRequest(
     MedioPago MedioPago,
     decimal Impuestos,
     IReadOnlyList<CrearLineaOrdenRequest> Lineas,
-    string? UbicacionSolicitadaId = null);
+    string? UbicacionSolicitadaId = null,
+    string? ReceptorCui = null);
 
 public sealed record CrearLineaOrdenRequest(
     string Sku,

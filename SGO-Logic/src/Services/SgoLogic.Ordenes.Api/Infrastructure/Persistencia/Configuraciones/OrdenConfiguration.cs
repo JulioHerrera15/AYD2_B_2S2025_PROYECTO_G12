@@ -105,6 +105,41 @@ public sealed class OrdenConfiguration : IEntityTypeConfiguration<Orden>
             .FindNavigation(nameof(Orden.Transiciones))!
             .SetPropertyAccessMode(PropertyAccessMode.Field);
 
+        builder.Property(orden => orden.ReceptorCui)
+            .HasColumnName("receptor_cui")
+            .HasMaxLength(64)
+            .IsRequired()
+            .HasDefaultValue("CF");
+
+        builder.Property(orden => orden.PagoId)
+            .HasColumnName("pago_id")
+            .HasMaxLength(128);
+
+        builder.Property(orden => orden.DocumentoFiscalId)
+            .HasColumnName("documento_fiscal_id")
+            .HasMaxLength(128);
+
+        builder.Property(orden => orden.DocumentoFiscalSerie)
+            .HasColumnName("documento_fiscal_serie")
+            .HasMaxLength(20);
+
+        builder.Property(orden => orden.DocumentoFiscalNumero)
+            .HasColumnName("documento_fiscal_numero")
+            .HasMaxLength(20);
+
+        builder.Property(orden => orden.DocumentoFiscalNumeroAutorizacion)
+            .HasColumnName("documento_fiscal_numero_autorizacion")
+            .HasMaxLength(128);
+
+        builder.Property(orden => orden.DocumentoFiscalFolio)
+            .HasColumnName("documento_fiscal_folio")
+            .HasMaxLength(128);
+
+        builder.Property(orden => orden.DocumentoFiscalCertificadoEn)
+            .HasColumnName("documento_fiscal_certificado_en")
+            .HasColumnType("timestamp with time zone")
+            .HasConversion<ConvertidorFechaUtc>();
+
         builder.Ignore(orden => orden.Subtotal);
         builder.Ignore(orden => orden.Total);
         builder.Ignore(orden => orden.EsTerminal);

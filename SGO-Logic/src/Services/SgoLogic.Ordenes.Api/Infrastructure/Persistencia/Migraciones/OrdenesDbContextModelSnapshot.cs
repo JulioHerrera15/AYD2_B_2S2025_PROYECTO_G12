@@ -25,6 +25,37 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
 
             modelBuilder.HasSequence("orden_correlativo", "ordenes");
 
+            modelBuilder.Entity("SgoLogic.BuildingBlocks.Idempotencia.MensajeProcesado", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("event_id");
+
+                    b.Property<DateTime>("FechaProceso")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha_proceso");
+
+                    b.Property<string>("NombreServicio")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("nombre_servicio");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId", "NombreServicio")
+                        .IsUnique();
+
+                    b.ToTable("mensajes_procesados", "ordenes");
+                });
+
             modelBuilder.Entity("SgoLogic.BuildingBlocks.Outbox.OutboxMessage", b =>
                 {
                     b.Property<Guid>("Id")
@@ -206,6 +237,35 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("creada_en");
 
+                    b.Property<DateTime?>("DocumentoFiscalCertificadoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("documento_fiscal_certificado_en");
+
+                    b.Property<string>("DocumentoFiscalFolio")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("documento_fiscal_folio");
+
+                    b.Property<string>("DocumentoFiscalId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("documento_fiscal_id");
+
+                    b.Property<string>("DocumentoFiscalNumero")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("documento_fiscal_numero");
+
+                    b.Property<string>("DocumentoFiscalNumeroAutorizacion")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("documento_fiscal_numero_autorizacion");
+
+                    b.Property<string>("DocumentoFiscalSerie")
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("documento_fiscal_serie");
+
                     b.Property<string>("Estado")
                         .IsRequired()
                         .HasMaxLength(40)
@@ -240,6 +300,19 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)")
                         .HasColumnName("numero_orden");
+
+                    b.Property<string>("PagoId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("pago_id");
+
+                    b.Property<string>("ReceptorCui")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasDefaultValue("CF")
+                        .HasColumnName("receptor_cui");
 
                     b.Property<int>("Secuencia")
                         .IsConcurrencyToken()
