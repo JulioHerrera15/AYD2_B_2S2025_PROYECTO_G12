@@ -17,11 +17,13 @@ public static class HealthCheckExtensions
 
     public static IServiceCollection AddSgoHealthChecks(this IServiceCollection services, IConfiguration configuration)
     {
-        var cadenaConexion = configuration.GetConnectionString("Postgres")
-            ?? throw new InvalidOperationException("Falta la cadena de conexion 'Postgres' en la configuracion.");
+        var cadenaConexion = configuration.GetConnectionString("Postgres");
 
-        services.AddHealthChecks()
-            .AddCheck(EtiquetaReady, new PostgresHealthCheck(cadenaConexion), tags: new[] { EtiquetaReady });
+        var builder = services.AddHealthChecks();
+        if (!string.IsNullOrWhiteSpace(cadenaConexion))
+        {
+            builder.AddCheck(EtiquetaReady, new PostgresHealthCheck(cadenaConexion), tags: new[] { EtiquetaReady });
+        }
 
         return services;
     }
