@@ -221,6 +221,19 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
                         .HasColumnType("character varying(64)")
                         .HasColumnName("id");
 
+                    b.Property<bool>("AlertaFiscal")
+                        .HasColumnType("boolean")
+                        .HasColumnName("alerta_fiscal");
+
+                    b.Property<DateTime?>("AlertaFiscalEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("alerta_fiscal_en");
+
+                    b.Property<string>("AlertaFiscalMotivo")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("alerta_fiscal_motivo");
+
                     b.Property<string>("Canal")
                         .IsRequired()
                         .HasMaxLength(20)

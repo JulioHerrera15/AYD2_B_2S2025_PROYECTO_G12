@@ -60,9 +60,14 @@ public sealed class ServicioConfirmacionOrden
     {
         ArgumentNullException.ThrowIfNull(solicitud);
 
-        if (!_politicaMediosPago.EstaHabilitado(solicitud.Canal, solicitud.MedioPago))
+        if (!Enum.TryParse<MedioPago>(solicitud.MedioPago, ignoreCase: true, out var medioPago))
         {
-            throw new ExcepcionMedioPagoNoHabilitado(solicitud.Canal, solicitud.MedioPago);
+            throw new ArgumentException($"El medio de pago '{solicitud.MedioPago}' no es valido. Valores permitidos: {string.Join(", ", Enum.GetNames<MedioPago>())}.", nameof(solicitud.MedioPago));
+        }
+
+        if (!_politicaMediosPago.EstaHabilitado(solicitud.Canal, medioPago))
+        {
+            throw new ExcepcionMedioPagoNoHabilitado(solicitud.Canal, medioPago);
         }
 
         var lineas = (solicitud.Lineas ?? Array.Empty<CrearLineaOrdenRequest>())
@@ -82,7 +87,7 @@ public sealed class ServicioConfirmacionOrden
             solicitud.Canal,
             solicitud.MetodoEntrega,
             solicitud.Moneda,
-            solicitud.MedioPago,
+            medioPago,
             lineas,
             solicitud.Impuestos,
             solicitud.UbicacionSolicitadaId,
@@ -301,5 +306,64 @@ public sealed class ServicioConfirmacionOrden
         }
 
         return receptorCui;
+    }
+
+    /// <summary>
+    /// Reintento manual de certificacion fiscal. Limpia la bandera de alerta,
+    /// re-emite <see cref="CertificacionFiscalSolicitada" /> por outbox (reutilizando
+    /// la construccion del evento que ya existe en
+    /// <see cref="Eventos.MapaEventosSagaOrden" />) y persiste todo en una sola
+    /// transaccion. Solo procede si la orden esta en CONFIRMADA_PENDIENTE_FISCAL y
+    /// tiene la bandera de alerta levantada; en cualquier otro caso lanza
+    /// <see cref="InvalidOperationException" /> para que el endpoint devuelva 409.
+    /// </summary>
+    public async Task<ResultadoTransicionOrdenDto> ReintentarCertificacionAsync(
+        string ordenId,
+        CancellationToken cancelacion)
+    {
+        var orden = await _ordenes.ObtenerPorIdAsync(ordenId, cancelacion)
+            ?? throw new ExcepcionOrdenNoEncontrada(ordenId);
+
+        if (orden.Estado != EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL)
+        {
+            throw new InvalidOperationException(
+                $"La orden {ordenId} esta en estado {orden.Estado} y no puede reintentar certificacion fiscal. " +
+                $"Debe estar en CONFIRMADA_PENDIENTE_FISCAL.");
+        }
+
+        if (!orden.AlertaFiscal)
+        {
+            throw new InvalidOperationException(
+                $"La orden {ordenId} no tiene alerta fiscal levantada. " +
+                $"Solo se puede reintentar cuando la certificacion SAT fallo y se levanto la alerta.");
+        }
+
+        orden.LimpiarAlertaFiscal();
+
+        _outbox.Encolar(
+            CertificacionFiscalSolicitada.EventType,
+            CertificacionFiscalSolicitada.AggregateType,
+            orden.Id,
+            orden.Secuencia,
+            TopologiaMensajeria.ExchangeEventos,
+            CertificacionFiscalSolicitada.RoutingKey,
+            new CertificacionFiscalSolicitadaData(
+                OrdenId: orden.Id,
+                TipoDocumento: TipoDocumentoFiscal.FACTURA,
+                DocumentoOrigenId: null,
+                Receptor: new ReceptorFiscalData(orden.ReceptorCui, orden.ClienteId, "PENDIENTE", Pais.GT),
+                Moneda: orden.Moneda,
+                Subtotal: orden.Subtotal,
+                Impuestos: orden.Impuestos,
+                Total: orden.Total,
+                Lineas: orden.Lineas
+                    .Select(linea => new CertificacionFiscalLineaData(
+                        linea.Sku, linea.Descripcion, linea.Cantidad, linea.PrecioUnitario, 0m))
+                    .ToList(),
+                SolicitadaEn: DateTime.UtcNow));
+
+        await _unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
+
+        return new ResultadoTransicionOrdenDto(OrdenDto.Desde(orden), SinCambios: false);
     }
 }

@@ -24,6 +24,7 @@ public sealed record OrdenDto(
     DateTime CreadaEn,
     string? PagoId,
     DatosFiscalesDto? DatosFiscales,
+    AlertaFiscalDto? AlertaFiscal,
     IReadOnlyList<LineaOrdenDto> Lineas,
     IReadOnlyList<TransicionOrdenDto> Transiciones)
 {
@@ -52,6 +53,11 @@ public sealed record OrdenDto(
                 orden.DocumentoFiscalNumeroAutorizacion ?? string.Empty,
                 orden.DocumentoFiscalFolio,
                 orden.DocumentoFiscalCertificadoEn)
+            : null,
+        orden.AlertaFiscal
+            ? new AlertaFiscalDto(
+                orden.AlertaFiscalEn!.Value,
+                orden.AlertaFiscalMotivo ?? string.Empty)
             : null,
         orden.Lineas.Select(LineaOrdenDto.Desde).ToList(),
         orden.Transiciones
@@ -107,3 +113,8 @@ public sealed record DatosFiscalesDto(
     string NumeroAutorizacion,
     string? Folio,
     DateTime? CertificadaEn);
+
+/// <summary>Alerta fiscal de la orden cuando la SAT agoto los reintentos de certificacion (evento 2).</summary>
+public sealed record AlertaFiscalDto(
+    DateTime AlertaFiscalEn,
+    string Motivo);

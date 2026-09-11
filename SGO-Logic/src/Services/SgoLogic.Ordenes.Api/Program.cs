@@ -37,6 +37,7 @@ builder.Services.AddHostedService<PagosEventosConsumidor>();
 
 // Consumo del resultado de certificacion fiscal: cierre CONFIRMADA_PENDIENTE_FISCAL → CONFIRMADA (HU-005).
 builder.Services.AddScoped<ManejadorDocumentoFiscalCertificado>();
+builder.Services.AddScoped<ManejadorCertificacionSatFallida>();
 builder.Services.AddHostedService<DocumentoFiscalCertificadoConsumidor>();
 
 var app = builder.Build();
@@ -158,6 +159,36 @@ ordenes.MapGet("/{id}", async (
         : Results.Ok(OrdenDto.Desde(orden));
 });
 
+ordenes.MapPost("/{id}/reintentar-certificacion", async (
+    string id,
+    ServicioConfirmacionOrden servicio,
+    CancellationToken cancelacion) =>
+{
+    try
+    {
+        var resultado = await servicio.ReintentarCertificacionAsync(id, cancelacion);
+        return Results.Ok(resultado);
+    }
+    catch (Exception ex) when (
+        ex is ExcepcionOrdenNoEncontrada or InvalidOperationException)
+    {
+        return MapearError(ex);
+    }
+});
+
+ordenes.MapGet("/alertas-fiscales", async (
+    IRepositorioOrdenes repositorio,
+    CancellationToken cancelacion) =>
+{
+    var ordenesConAlerta = await repositorio.ObtenerConAlertaFiscalAsync(cancelacion);
+    var resultado = ordenesConAlerta.Select(o => new AlertaFiscalDto(
+        o.Id,
+        o.AlertaFiscalEn!.Value,
+        o.AlertaFiscalMotivo ?? string.Empty,
+        o.Total)).ToList();
+    return Results.Ok(resultado);
+});
+
 using (var scope = app.Services.CreateScope())
 {
     var contexto = scope.ServiceProvider.GetRequiredService<OrdenesDbContext>();
@@ -192,13 +223,19 @@ static IResult MapearError(Exception ex) => ex switch
         extensions: new Dictionary<string, object?> { ["codigo"] = "metodo_entrega_invalido" }),
 
     InvalidOperationException => Results.Problem(
-        title: "Cambio de metodo de entrega no permitido",
+        title: "Operacion no permitida",
         detail: ex.Message,
         statusCode: StatusCodes.Status409Conflict,
-        extensions: new Dictionary<string, object?> { ["codigo"] = "metodo_entrega_invalido" }),
+        extensions: new Dictionary<string, object?> { ["codigo"] = "conflicto" }),
 
     _ => Results.Problem(
         title: "Error interno",
         detail: ex.Message,
         statusCode: StatusCodes.Status500InternalServerError)
 };
+
+public sealed record AlertaFiscalDto(
+    string OrdenId,
+    DateTime AlertaFiscalEn,
+    string Motivo,
+    decimal Monto);

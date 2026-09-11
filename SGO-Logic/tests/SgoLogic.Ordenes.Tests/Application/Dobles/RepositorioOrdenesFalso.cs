@@ -32,4 +32,13 @@ public sealed class RepositorioOrdenesFalso : IRepositorioOrdenes
         Precargar(orden);
         return Task.CompletedTask;
     }
+
+    public Task<IReadOnlyList<Orden>> ObtenerConAlertaFiscalAsync(CancellationToken cancelacion)
+    {
+        var resultado = _porId.Values
+            .Where(o => o.AlertaFiscal)
+            .OrderByDescending(o => o.AlertaFiscalEn)
+            .ToList();
+        return Task.FromResult<IReadOnlyList<Orden>>(resultado);
+    }
 }
