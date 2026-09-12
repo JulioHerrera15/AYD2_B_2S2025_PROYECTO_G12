@@ -18,8 +18,9 @@ public sealed class DocumentoFiscalConfiguration : IEntityTypeConfiguration<Docu
             .HasMaxLength(64)
             .IsRequired();
 
+        // No es unico: una orden tiene su FACTURA y, si hay devoluciones, una
+        // NOTA_CREDITO por cada una (todas comparten OrdenId).
         builder.HasIndex(documento => documento.OrdenId)
-            .IsUnique()
             .HasDatabaseName("ix_documento_fiscal_orden_id");
 
         builder.Property(documento => documento.TransactionId)

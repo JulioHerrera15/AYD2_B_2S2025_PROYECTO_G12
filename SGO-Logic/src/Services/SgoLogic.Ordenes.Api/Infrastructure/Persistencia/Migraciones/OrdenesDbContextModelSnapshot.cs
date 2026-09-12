@@ -23,6 +23,8 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.HasSequence("devolucion_correlativo", "ordenes");
+
             modelBuilder.HasSequence("orden_correlativo", "ordenes");
 
             modelBuilder.Entity("SgoLogic.BuildingBlocks.Idempotencia.MensajeProcesado", b =>
@@ -140,6 +142,134 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
                     b.HasIndex("Estado", "ProximoIntentoEn");
 
                     b.ToTable("outbox_messages", "public");
+                });
+
+            modelBuilder.Entity("SgoLogic.Ordenes.Api.Domain.Devolucion", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ClienteId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("cliente_id");
+
+                    b.Property<string>("DocumentoFiscalOriginalId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("documento_fiscal_original_id");
+
+                    b.Property<bool>("EsParcial")
+                        .HasColumnType("boolean")
+                        .HasColumnName("es_parcial");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("estado");
+
+                    b.Property<string>("Moneda")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("moneda");
+
+                    b.Property<decimal>("MontoReembolso")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("monto_reembolso");
+
+                    b.Property<string>("OrdenOriginalId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("orden_original_id");
+
+                    b.Property<string>("PagoOriginalId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("pago_original_id");
+
+                    b.Property<DateTime>("RegistradaEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("registrada_en");
+
+                    b.Property<string>("RegistradaPor")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("registrada_por");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("tipo");
+
+                    b.Property<string>("UbicacionReingresoId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("ubicacion_reingreso_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrdenOriginalId")
+                        .HasDatabaseName("ix_devolucion_orden_original_id");
+
+                    b.ToTable("devolucion", "ordenes");
+                });
+
+            modelBuilder.Entity("SgoLogic.Ordenes.Api.Domain.DevolucionLinea", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Cantidad")
+                        .HasColumnType("integer")
+                        .HasColumnName("cantidad");
+
+                    b.Property<string>("DevolucionId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("devolucion_id");
+
+                    b.Property<string>("Motivo")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("motivo");
+
+                    b.Property<decimal>("PrecioUnitario")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("precio_unitario");
+
+                    b.Property<string>("Sku")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("sku");
+
+                    b.Property<string>("SkuReemplazo")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("sku_reemplazo");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DevolucionId")
+                        .HasDatabaseName("ix_linea_devolucion_devolucion_id");
+
+                    b.ToTable("linea_devolucion", "ordenes");
                 });
 
             modelBuilder.Entity("SgoLogic.Ordenes.Api.Domain.LineaOrden", b =>
@@ -401,6 +531,16 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
                     b.ToTable("transicion_orden", "ordenes");
                 });
 
+            modelBuilder.Entity("SgoLogic.Ordenes.Api.Domain.DevolucionLinea", b =>
+                {
+                    b.HasOne("SgoLogic.Ordenes.Api.Domain.Devolucion", null)
+                        .WithMany("Lineas")
+                        .HasForeignKey("DevolucionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_linea_devolucion_devolucion");
+                });
+
             modelBuilder.Entity("SgoLogic.Ordenes.Api.Domain.LineaOrden", b =>
                 {
                     b.HasOne("SgoLogic.Ordenes.Api.Domain.Orden", null)
@@ -419,6 +559,11 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_transicion_orden_orden");
+                });
+
+            modelBuilder.Entity("SgoLogic.Ordenes.Api.Domain.Devolucion", b =>
+                {
+                    b.Navigation("Lineas");
                 });
 
             modelBuilder.Entity("SgoLogic.Ordenes.Api.Domain.Orden", b =>

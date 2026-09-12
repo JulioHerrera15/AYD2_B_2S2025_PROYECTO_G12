@@ -10,6 +10,10 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes;
 /// con deduplicacion por messageId y compensacion ante falla de cobro. Cierra la
 /// casilla de compensacion de HU-003.
 ///
+/// Tambien maneja los resultados de reembolso (ReembolsoAplicado, ReembolsoFallido)
+/// que transicionan la orden de DEVOLUCION_EN_PROCESO a DEVUELTA o la dejan
+/// en DEVOLUCION_EN_PROCESO respectivamente.
+///
 /// Mapeo de eventos a estado destino de <see cref="MaquinaEstadosOrden" /> desde
 /// <see cref="EstadoOrden.COBRO_SOLICITADO" />:
 /// <list type="bullet">
@@ -32,17 +36,20 @@ public sealed class ManejadorEventosPagos
 
     private readonly IRegistroMensajesProcesados _registro;
     private readonly ServicioConfirmacionOrden _servicio;
+    private readonly IRepositorioOrdenes _ordenes;
     private readonly IUnidadDeTrabajo _unidadDeTrabajo;
     private readonly ILogger<ManejadorEventosPagos> _logger;
 
     public ManejadorEventosPagos(
         IRegistroMensajesProcesados registro,
         ServicioConfirmacionOrden servicio,
+        IRepositorioOrdenes ordenes,
         IUnidadDeTrabajo unidadDeTrabajo,
         ILogger<ManejadorEventosPagos> logger)
     {
         _registro = registro;
         _servicio = servicio;
+        _ordenes = ordenes;
         _unidadDeTrabajo = unidadDeTrabajo;
         _logger = logger;
     }
@@ -58,6 +65,11 @@ public sealed class ManejadorEventosPagos
                 evento.MessageId,
                 evento.TipoEvento);
             return ResultadoEventoPago.Duplicado;
+        }
+
+        if (EsEventoReembolso(evento.TipoEvento))
+        {
+            return await ManejarReembolsoAsync(evento, cancelacion);
         }
 
         if (!TryMapearDestino(evento.TipoEvento, out var estadoDestino, out var esCompensacion, out var motivoLiberacion))
@@ -123,6 +135,67 @@ public sealed class ManejadorEventosPagos
 
         return ResultadoEventoPago.Aplicado;
     }
+
+    private async Task<ResultadoEventoPago> ManejarReembolsoAsync(
+        EventoPagoRecibido evento,
+        CancellationToken cancelacion)
+    {
+        _registro.Registrar(evento.MessageId, evento.TipoEvento);
+
+        var devolucion = await _ordenes.ObtenerDevolucionPorIdAsync(evento.DevolucionId!, cancelacion);
+        if (devolucion is null)
+        {
+            _logger.LogWarning(
+                "Devolucion {DevolucionId} no encontrada al procesar {TipoEvento} ({MessageId}); se hace ack.",
+                evento.DevolucionId,
+                evento.TipoEvento,
+                evento.MessageId);
+            return ResultadoEventoPago.Ignorado;
+        }
+
+        if (evento.TipoEvento == ReembolsoAplicado.EventType)
+        {
+            devolucion.MarcarReembolsoAplicado();
+
+            ResultadoTransicionOrdenDto resultado;
+            try
+            {
+                resultado = await _servicio.AplicarTransicionAsync(
+                    devolucion.OrdenOriginalId,
+                    EstadoOrden.DEVUELTA,
+                    null,
+                    $"Reembolso {evento.DevolucionId} aplicado",
+                    esCompensacion: false,
+                    cancelacion);
+            }
+            catch (ExcepcionTransicionInvalida ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "Transicion invalida al aplicar ReembolsoAplicado sobre la orden {OrdenId} ({MessageId}); se hace ack sin reencolar.",
+                    devolucion.OrdenOriginalId,
+                    evento.MessageId);
+                return ResultadoEventoPago.Ignorado;
+            }
+
+            if (resultado.SinCambios)
+            {
+                await _unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
+            }
+        }
+        else
+        {
+            // ReembolsoFallido: se marca la devolucion pero la orden se queda
+            // en DEVOLUCION_EN_PROCESO para permitir un reintento posterior.
+            devolucion.MarcarReembolsoFallido();
+            await _unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
+        }
+
+        return ResultadoEventoPago.Aplicado;
+    }
+
+    private static bool EsEventoReembolso(string tipoEvento) =>
+        tipoEvento is ReembolsoAplicado.EventType or ReembolsoFallido.EventType;
 
     private static bool TryMapearDestino(
         string tipoEvento,

@@ -36,6 +36,8 @@ public sealed class OrdenesDbContext : DbContext
 
     public DbSet<TransicionOrden> Transiciones => Set<TransicionOrden>();
 
+    public DbSet<Devolucion> Devoluciones => Set<Devolucion>();
+
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     public DbSet<MensajeProcesado> MensajesProcesados => Set<MensajeProcesado>();
@@ -47,6 +49,10 @@ public sealed class OrdenesDbContext : DbContext
         // Secuencia que numera las ordenes: alimenta el id
         // ORD-<anio>-<correlativo de 6 digitos> y el numero de orden visible.
         modelBuilder.HasSequence<long>("orden_correlativo", EsquemaPorDefecto);
+
+        // Secuencia que numera las devoluciones: alimenta el id
+        // DEV-<anio>-<correlativo de 6 digitos>.
+        modelBuilder.HasSequence<long>("devolucion_correlativo", EsquemaPorDefecto);
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(OrdenesDbContext).Assembly);
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());

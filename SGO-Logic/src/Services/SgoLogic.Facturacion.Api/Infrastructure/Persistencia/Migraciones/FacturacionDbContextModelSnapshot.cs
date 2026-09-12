@@ -290,7 +290,6 @@ namespace SgoLogic.Facturacion.Api.Infrastructure.Persistencia.Migraciones
                     b.HasKey("Id");
 
                     b.HasIndex("OrdenId")
-                        .IsUnique()
                         .HasDatabaseName("ix_documento_fiscal_orden_id");
 
                     b.HasIndex("Estado", "ProximoIntentoEn")

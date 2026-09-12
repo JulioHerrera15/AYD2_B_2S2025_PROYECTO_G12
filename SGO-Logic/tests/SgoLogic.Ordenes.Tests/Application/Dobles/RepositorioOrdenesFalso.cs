@@ -11,6 +11,7 @@ public sealed class RepositorioOrdenesFalso : IRepositorioOrdenes
 {
     private readonly Dictionary<string, Orden> _porId = new();
     private readonly Dictionary<string, Orden> _porNumero = new();
+    private readonly Dictionary<string, List<Devolucion>> _devolucionesPorOrden = new();
 
     public int LlamadasAgregar { get; private set; }
 
@@ -40,5 +41,33 @@ public sealed class RepositorioOrdenesFalso : IRepositorioOrdenes
             .OrderByDescending(o => o.AlertaFiscalEn)
             .ToList();
         return Task.FromResult<IReadOnlyList<Orden>>(resultado);
+    }
+
+    public Task<IReadOnlyList<Devolucion>> ObtenerDevolucionesPorOrdenAsync(string ordenId, CancellationToken cancelacion)
+    {
+        var resultado = _devolucionesPorOrden.TryGetValue(ordenId, out var lista)
+            ? lista.ToList()
+            : new List<Devolucion>();
+        return Task.FromResult<IReadOnlyList<Devolucion>>(resultado);
+    }
+
+    public Task<Devolucion?> ObtenerDevolucionPorIdAsync(string devolucionId, CancellationToken cancelacion)
+    {
+        var resultado = _devolucionesPorOrden.Values
+            .SelectMany(lista => lista)
+            .FirstOrDefault(d => d.Id == devolucionId);
+        return Task.FromResult(resultado);
+    }
+
+    public Task AgregarDevolucionAsync(Devolucion devolucion, CancellationToken cancelacion)
+    {
+        if (!_devolucionesPorOrden.TryGetValue(devolucion.OrdenOriginalId, out var lista))
+        {
+            lista = new List<Devolucion>();
+            _devolucionesPorOrden[devolucion.OrdenOriginalId] = lista;
+        }
+
+        lista.Add(devolucion);
+        return Task.CompletedTask;
     }
 }

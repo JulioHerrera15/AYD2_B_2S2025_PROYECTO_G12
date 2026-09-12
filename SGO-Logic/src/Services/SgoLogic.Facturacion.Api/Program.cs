@@ -3,6 +3,7 @@ using Microsoft.Extensions.Options;
 using SgoLogic.BuildingBlocks.Extensions;
 using SgoLogic.BuildingBlocks.Messaging;
 using SgoLogic.BuildingBlocks.Outbox;
+using SgoLogic.Contracts.Enumeraciones;
 using SgoLogic.Facturacion.Api.Application.Facturacion;
 using SgoLogic.Facturacion.Api.Consumers;
 using SgoLogic.Facturacion.Api.Infrastructure.Persistencia;
@@ -35,7 +36,7 @@ builder.Services.AddSingleton<GeneradorXmlFiscal>();
 builder.Services.AddScoped<IGeneradorCorrelativoFiscal, GeneradorCorrelativoFiscal>();
 builder.Services.AddScoped<ServicioFacturacion>();
 
-builder.Services.AddHostedService<CertificacionFiscalSolicitadaConsumidor>();
+builder.Services.AddHostedService<FacturacionEventosConsumidor>();
 builder.Services.AddHostedService<EnvioSatConsumidor>();
 builder.Services.AddHostedService<WorkerReintentosSat>();
 
@@ -56,10 +57,12 @@ facturacion.MapGet("/documentos/{ordenId}", async (
     FacturacionDbContext contexto,
     CancellationToken cancelacion) =>
 {
+    // Una orden puede tener ademas una NOTA_CREDITO por devolucion (comparten
+    // orden_id, ya no es unico): este endpoint sigue devolviendo la FACTURA.
     var documento = await contexto.DocumentosFiscales
         .AsNoTracking()
         .Include(d => d.Lineas)
-        .FirstOrDefaultAsync(d => d.OrdenId == ordenId, cancelacion);
+        .FirstOrDefaultAsync(d => d.OrdenId == ordenId && d.TipoDocumento == TipoDocumentoFiscal.FACTURA, cancelacion);
 
     return documento is null
         ? Results.Problem(

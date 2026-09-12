@@ -19,4 +19,13 @@ public interface IRepositorioOrdenes
 
     /// <summary>Trae todas las ordenes con alerta fiscal levantada para el panel de incidencias.</summary>
     Task<IReadOnlyList<Orden>> ObtenerConAlertaFiscalAsync(CancellationToken cancelacion);
+
+    /// <summary>Trae todas las devoluciones de una orden, con sus lineas.</summary>
+    Task<IReadOnlyList<Devolucion>> ObtenerDevolucionesPorOrdenAsync(string ordenId, CancellationToken cancelacion);
+
+    /// <summary>Trae una devolucion por su identificador, con sus lineas.</summary>
+    Task<Devolucion?> ObtenerDevolucionPorIdAsync(string devolucionId, CancellationToken cancelacion);
+
+    /// <summary>Registra una devolucion en la unidad de trabajo.</summary>
+    Task AgregarDevolucionAsync(Devolucion devolucion, CancellationToken cancelacion);
 }
