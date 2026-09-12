@@ -246,6 +246,7 @@ services:
       Outbox__MaxReintentos: ${OUTBOX_MAX_REINTENTOS}
       Outbox__BatchSize: ${OUTBOX_BATCH_SIZE}
       Sat__BaseUrl: http://sat-mock:8080
+      Sat__PollingIntervalMs: "500"
     ports:
       - "8087:8080"
     depends_on:

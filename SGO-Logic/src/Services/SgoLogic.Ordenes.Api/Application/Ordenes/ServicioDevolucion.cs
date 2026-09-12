@@ -106,12 +106,23 @@ public sealed class ServicioDevolucion
             montoReembolso += lineaDevolucion.Subtotal;
         }
 
-        bool esParcial = lineasDevolucion.Count != orden.Lineas.Count ||
-            lineasDevolucion.Any(ld =>
-            {
-                var lo = orden.Lineas.First(l => l.Sku == ld.Sku);
-                return ld.Cantidad < lo.Cantidad;
-            });
+        // Total vs. parcial se decide en forma acumulada: si, sumando esta
+        // devolucion a las validas anteriores de la misma orden, toda linea queda
+        // completamente devuelta, la devolucion cierra el ciclo (no es parcial).
+        // Comparar solo contra las lineas de esta solicitud (sin acumular) haria
+        // que una segunda devolucion sobre las unidades restantes siguiera
+        // marcandose parcial y la orden nunca llegaria a DEVUELTA.
+        bool esParcial = orden.Lineas.Any(lo =>
+        {
+            int yaDevueltoOtras = devolucionesValidas
+                .SelectMany(d => d.Lineas)
+                .Where(l => l.Sku == lo.Sku)
+                .Sum(l => l.Cantidad);
+            int devueltoEnEsta = lineasDevolucion
+                .Where(l => l.Sku == lo.Sku)
+                .Sum(l => l.Cantidad);
+            return yaDevueltoOtras + devueltoEnEsta < lo.Cantidad;
+        });
 
         var correlativo = await _generadorCorrelativo.SiguienteAsync(cancelacion);
         var id = $"DEV-{DateTime.UtcNow:yyyy}-{correlativo.ToString("D6")}";
