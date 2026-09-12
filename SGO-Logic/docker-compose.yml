@@ -371,6 +371,31 @@ services:
       timeout: 5s
       retries: 5
 
+  auditoria-worker:
+    build:
+      context: .
+      dockerfile: src/Services/SgoLogic.Auditoria.Worker/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Postgres: Host=db-auditoria;Port=5432;Database=sgo_auditoria;Username=${PG_AUDIT_USER};Password=${PG_AUDIT_PASS}
+      ConnectionStrings__PostgresMigracion: Host=db-auditoria;Port=5432;Database=sgo_auditoria;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__RabbitMq: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      Auditoria__AppUsuario: ${PG_AUDIT_USER}
+      Auditoria__AppPassword: ${PG_AUDIT_PASS}
+    ports:
+      - "8093:8080"
+    depends_on:
+      db-auditoria:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
 volumes:
   sgo_db_operacional_data:
   sgo_db_finanzas_data:
