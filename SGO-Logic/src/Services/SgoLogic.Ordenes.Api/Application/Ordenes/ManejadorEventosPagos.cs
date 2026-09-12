@@ -11,8 +11,10 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes;
 /// casilla de compensacion de HU-003.
 ///
 /// Tambien maneja los resultados de reembolso (ReembolsoAplicado, ReembolsoFallido)
-/// que transicionan la orden de DEVOLUCION_EN_PROCESO a DEVUELTA o la dejan
-/// en DEVOLUCION_EN_PROCESO respectivamente.
+/// que transicionan la orden de DEVOLUCION_EN_PROCESO a DEVUELTA (devolucion total)
+/// o de vuelta a ENTREGADA (devolucion parcial, para permitir devoluciones
+/// posteriores sobre las unidades restantes), o la dejan en DEVOLUCION_EN_PROCESO
+/// ante ReembolsoFallido.
 ///
 /// Mapeo de eventos a estado destino de <see cref="MaquinaEstadosOrden" /> desde
 /// <see cref="EstadoOrden.COBRO_SOLICITADO" />:
@@ -157,12 +159,18 @@ public sealed class ManejadorEventosPagos
         {
             devolucion.MarcarReembolsoAplicado();
 
+            // Una devolucion parcial deja unidades pendientes de devolver: la orden
+            // vuelve a ENTREGADA (transicion valida desde DEVOLUCION_EN_PROCESO) en
+            // vez de cerrarse en DEVUELTA, que es terminal y bloquearia devoluciones
+            // futuras sobre las unidades restantes.
+            var estadoDestino = devolucion.EsParcial ? EstadoOrden.ENTREGADA : EstadoOrden.DEVUELTA;
+
             ResultadoTransicionOrdenDto resultado;
             try
             {
                 resultado = await _servicio.AplicarTransicionAsync(
                     devolucion.OrdenOriginalId,
-                    EstadoOrden.DEVUELTA,
+                    estadoDestino,
                     null,
                     $"Reembolso {evento.DevolucionId} aplicado",
                     esCompensacion: false,

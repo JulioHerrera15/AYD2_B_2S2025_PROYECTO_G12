@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using SgoLogic.BuildingBlocks.Correlation;
 using SgoLogic.BuildingBlocks.Messaging;
+using SgoLogic.BuildingBlocks.Metricas;
 using SgoLogic.BuildingBlocks.Serialization;
 using SgoLogic.Contracts;
 using SgoLogic.Contracts.Eventos.Pagos;
@@ -110,8 +111,15 @@ public sealed class PagosEventosConsumidor : BackgroundService
 
         try
         {
-            await manejador.ManejarAsync(evento, cancelacion);
-            // Aplicado, Duplicado e Ignorado son todos ack.
+            var resultado = await manejador.ManejarAsync(evento, cancelacion);
+            // Aplicado, Duplicado e Ignorado son todos ack; la metrica de consumo
+            // exitoso solo cuenta Aplicado (no duplicados ni mensajes descartados
+            // sin procesar), igual que FacturacionEventosConsumidor.
+            if (resultado == ResultadoEventoPago.Aplicado)
+            {
+                MetricasSgo.MensajesConsumidosTotal.Inc();
+            }
+
             return true;
         }
         catch (OperationCanceledException) when (cancelacion.IsCancellationRequested)

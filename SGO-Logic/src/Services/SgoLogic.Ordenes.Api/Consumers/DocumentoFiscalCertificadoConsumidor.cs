@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using SgoLogic.BuildingBlocks.Correlation;
 using SgoLogic.BuildingBlocks.Idempotencia;
 using SgoLogic.BuildingBlocks.Messaging;
+using SgoLogic.BuildingBlocks.Metricas;
 using SgoLogic.BuildingBlocks.Serialization;
 using SgoLogic.Contracts;
 using SgoLogic.Contracts.Eventos.Facturacion;
@@ -144,6 +145,7 @@ public sealed class DocumentoFiscalCertificadoConsumidor : Microsoft.Extensions.
                 new MensajeProcesado(sobre.EventId, NombreServicio, DateTime.UtcNow));
             await contexto.SaveChangesAsync(cancelacion);
 
+            MetricasSgo.MensajesConsumidosTotal.Inc();
             return true;
         }
         catch (OperationCanceledException) when (cancelacion.IsCancellationRequested)
