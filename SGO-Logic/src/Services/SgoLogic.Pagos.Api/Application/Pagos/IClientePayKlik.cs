@@ -25,6 +25,19 @@ public interface IClientePayKlik
         PeticionCargoPayKlik peticion,
         string claveIdempotencia,
         CancellationToken cancelacion);
+
+    /// <summary>
+    /// Solicita un reembolso. <paramref name="claveIdempotencia" /> viaja hacia
+    /// PayKlik en el header <c>Idempotency-Key</c> y es el identificador del
+    /// reembolso, para que los reintentos no generen doble reembolso.
+    ///
+    /// Misma semantica de excepciones que <see cref="CargarAsync" />: el servicio
+    /// de reembolso traduce las fallas tecnicas a reembolso fallido via outbox.
+    /// </summary>
+    Task<ResultadoPayKlik> ReembolsoAsync(
+        PeticionReembolsoPayKlik peticion,
+        string claveIdempotencia,
+        CancellationToken cancelacion);
 }
 
 /// <summary>Peticion de cargo hacia PayKlik. Solo token opaco, nunca PAN ni CVV.</summary>
@@ -34,6 +47,13 @@ public sealed record PeticionCargoPayKlik(
     Moneda Moneda,
     MedioPago MedioPago,
     string? TokenMedioPago);
+
+/// <summary>Peticion de reembolso hacia PayKlik. Recibe la referencia de la autorizacion original y el monto a reembolsar.</summary>
+public sealed record PeticionReembolsoPayKlik(
+    string Referencia,
+    string Monto,
+    Moneda Moneda,
+    string AutorizacionOriginal);
 
 public enum EstadoRespuestaPayKlik
 {

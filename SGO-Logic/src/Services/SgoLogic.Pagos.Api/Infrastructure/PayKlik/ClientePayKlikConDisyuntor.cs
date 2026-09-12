@@ -26,4 +26,12 @@ public sealed class ClientePayKlikConDisyuntor : IClientePayKlik
         _disyuntor.EjecutarAsync(
             token => _interno.CargarAsync(peticion, claveIdempotencia, token),
             cancelacion);
+
+    public Task<ResultadoPayKlik> ReembolsoAsync(
+        PeticionReembolsoPayKlik peticion,
+        string claveIdempotencia,
+        CancellationToken cancelacion) =>
+        _disyuntor.EjecutarAsync(
+            token => _interno.ReembolsoAsync(peticion, claveIdempotencia, token),
+            cancelacion);
 }

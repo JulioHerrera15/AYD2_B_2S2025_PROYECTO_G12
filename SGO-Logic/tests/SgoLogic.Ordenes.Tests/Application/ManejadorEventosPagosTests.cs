@@ -76,6 +76,7 @@ public sealed class ManejadorEventosPagosTests
         var manejador = new ManejadorEventosPagos(
             registro,
             servicio,
+            ordenes,
             unidad,
             NullLogger<ManejadorEventosPagos>.Instance);
         return (manejador, ordenes, outbox, unidad, registro);

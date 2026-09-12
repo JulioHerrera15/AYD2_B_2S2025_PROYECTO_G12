@@ -13,10 +13,11 @@ namespace SgoLogic.Ordenes.Api.Consumers;
 
 /// <summary>
 /// Consume la cola <c>ordenes.pagos</c> (bindings a <c>pagos.pago.aplicado</c>,
-/// <c>pagos.pago.pendiente</c> y <c>pagos.pago.rechazado</c>) y avanza la saga de la
-/// orden con <see cref="ManejadorEventosPagos" />.
+/// <c>pagos.pago.pendiente</c>, <c>pagos.pago.rechazado</c>,
+/// <c>pagos.reembolso.aplicado</c> y <c>pagos.reembolso.fallido</c>) y avanza la
+/// saga de la orden con <see cref="ManejadorEventosPagos" />.
 ///
-/// No usa <c>EventConsumerBase</c> porque esta cola recibe tres <c>data</c>
+/// No usa <c>EventConsumerBase</c> porque esta cola recibe multiples <c>data</c>
 /// distintos sobre un solo binding-set y la clase base esta tipada a un unico
 /// <c>TData</c>. Aun asi replica su contrato: declara una cola quorum con dead
 /// letter, deduplica por <c>eventId</c> antes de aplicar, y puebla
@@ -30,10 +31,6 @@ namespace SgoLogic.Ordenes.Api.Consumers;
 ///   requeue, para que <c>x-delivery-limit</c> y el dead-letter de HU-008 actuen.</item>
 ///   <item>Un mensaje malo nunca tumba el proceso.</item>
 /// </list>
-///
-/// Pendiente explicito: <c>ordenes-eventos-v1</c> seccion 4 liga esta cola tambien a
-/// <c>ordenes.devolucion.registrada</c>. Ese evento es de HU-014 y todavia no
-/// existe; el binding se agregara cuando exista.
 /// </summary>
 public sealed class PagosEventosConsumidor : BackgroundService
 {
@@ -44,7 +41,9 @@ public sealed class PagosEventosConsumidor : BackgroundService
     {
         new BindingCola(TopologiaMensajeria.ExchangeEventos, PagoAplicado.RoutingKey),
         new BindingCola(TopologiaMensajeria.ExchangeEventos, PagoPendiente.RoutingKey),
-        new BindingCola(TopologiaMensajeria.ExchangeEventos, PagoRechazado.RoutingKey)
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, PagoRechazado.RoutingKey),
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, ReembolsoAplicado.RoutingKey),
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, ReembolsoFallido.RoutingKey)
     };
 
     private readonly IServiceScopeFactory _scopeFactory;
@@ -149,6 +148,10 @@ public sealed class PagosEventosConsumidor : BackgroundService
 
             PagoPendiente.EventType => CrearPendiente(sobre, Leer<PagoPendienteData>(sobre.Data)),
 
+            ReembolsoAplicado.EventType => CrearReembolsoAplicado(sobre, Leer<ReembolsoAplicadoData>(sobre.Data)),
+
+            ReembolsoFallido.EventType => CrearReembolsoFallido(sobre, Leer<ReembolsoFallidoData>(sobre.Data)),
+
             // Tipo no esperado en esta cola: se arma igual para que el manejador lo
             // registre como desconocido y se haga ack.
             _ => Crear(sobre, sobre.AggregateId, motivo: null)
@@ -164,15 +167,22 @@ public sealed class PagosEventosConsumidor : BackgroundService
     private static EventoPagoRecibido CrearPendiente(IntegrationEvent<JsonElement> sobre, PagoPendienteData datos) =>
         Crear(sobre, datos.OrdenId, datos.MotivoFalla);
 
+    private static EventoPagoRecibido CrearReembolsoAplicado(IntegrationEvent<JsonElement> sobre, ReembolsoAplicadoData datos) =>
+        Crear(sobre, datos.OrdenOriginalId, motivo: null, autorizacionId: datos.AutorizacionId, devolucionId: datos.DevolucionId);
+
+    private static EventoPagoRecibido CrearReembolsoFallido(IntegrationEvent<JsonElement> sobre, ReembolsoFallidoData datos) =>
+        Crear(sobre, datos.OrdenOriginalId, datos.MotivoFalla, devolucionId: datos.DevolucionId);
+
     private static EventoPagoRecibido Crear(
-        IntegrationEvent<JsonElement> sobre, string ordenId, string? motivo, string? autorizacionId = null) =>
+        IntegrationEvent<JsonElement> sobre, string ordenId, string? motivo, string? autorizacionId = null, string? devolucionId = null) =>
         new(
             MessageId: sobre.EventId,
             TransactionId: sobre.TransactionId,
             TipoEvento: sobre.EventType,
             OrdenId: ordenId,
             Motivo: motivo,
-            AutorizacionId: autorizacionId);
+            AutorizacionId: autorizacionId,
+            DevolucionId: devolucionId);
 
     private static TData Leer<TData>(JsonElement data)
         where TData : notnull =>

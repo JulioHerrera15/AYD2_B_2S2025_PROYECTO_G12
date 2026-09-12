@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using SgoLogic.BuildingBlocks.Messaging;
 using SgoLogic.BuildingBlocks.Outbox;
 using SgoLogic.Contracts.Eventos.Facturacion;
+using SgoLogic.Contracts.Enumeraciones;
 using SgoLogic.Contracts.Eventos.Ordenes;
 using SgoLogic.Facturacion.Api.Domain;
 using SgoLogic.Facturacion.Api.Infrastructure.Persistencia;
@@ -137,6 +138,135 @@ public sealed class ServicioFacturacion
         _logger.LogInformation(
             "Documento fiscal {DocumentoId} creado para la orden {OrdenId}, serie {Serie} numero {Numero}.",
             documento.Id, documento.OrdenId, documento.Serie, documento.NumeroDocumento);
+
+        return documento;
+    }
+
+    /// <summary>
+    /// Crea una NOTA_CREDITO a partir de un evento DevolucionRegistrada. Idempotente
+    /// por devolucion: si ya existe un documento NOTA_CREDITO cuyo TransactionId
+    /// coincide con el de la devolucion, lo devuelve sin crear otro.
+    ///
+    /// Reutiliza los datos del documento fiscal original (receptor, moneda, precios
+    /// de linea) para construir la nota de credito con los montos reembolsados.
+    /// </summary>
+    public async Task<DocumentoFiscal> CrearNotaCreditoAsync(
+        DevolucionRegistradaData datos,
+        string transactionId,
+        DateTime ahora,
+        CancellationToken cancelacion)
+    {
+        var existente = await _contexto.DocumentosFiscales
+            .Include(d => d.Lineas)
+            .FirstOrDefaultAsync(d => d.TransactionId == transactionId && d.TipoDocumento == TipoDocumentoFiscal.NOTA_CREDITO, cancelacion);
+
+        if (existente is not null)
+        {
+            _logger.LogInformation(
+                "Ya existe la NOTA_CREDITO {DocumentoId} para la devolucion {DevolucionId}; no se crea otra.",
+                existente.Id, datos.DevolucionId);
+            return existente;
+        }
+
+        DocumentoFiscal documentoOriginal;
+
+        if (!string.IsNullOrWhiteSpace(datos.DocumentoFiscalOriginalId))
+        {
+            documentoOriginal = await _contexto.DocumentosFiscales
+                .Include(d => d.Lineas)
+                .FirstOrDefaultAsync(d => d.Id.ToString() == datos.DocumentoFiscalOriginalId, cancelacion)
+                ?? throw new InvalidOperationException(
+                    $"No se encontro el documento fiscal original {datos.DocumentoFiscalOriginalId} para la devolucion {datos.DevolucionId}.");
+        }
+        else
+        {
+            documentoOriginal = await _contexto.DocumentosFiscales
+                .Include(d => d.Lineas)
+                .FirstOrDefaultAsync(d => d.OrdenId == datos.OrdenOriginalId && d.TipoDocumento == TipoDocumentoFiscal.FACTURA, cancelacion)
+                ?? throw new InvalidOperationException(
+                    $"No se encontro un documento FACTURA para la orden {datos.OrdenOriginalId} y la devolucion {datos.DevolucionId}.");
+        }
+
+        var montoReembolso = decimal.Parse(datos.MontoReembolso, System.Globalization.CultureInfo.InvariantCulture);
+
+        var lineas = new List<DocumentoFiscalLinea>();
+        var lineasXml = new List<DatosXmlLinea>();
+
+        for (int i = 0; i < datos.Lineas.Count; i++)
+        {
+            var lineaDevolucion = datos.Lineas[i];
+            var lineaOriginal = documentoOriginal.Lineas
+                .FirstOrDefault(l => l.Sku == lineaDevolucion.Sku);
+
+            var precioUnitario = lineaOriginal?.PrecioUnitario ?? 0m;
+            var impuesto = lineaOriginal?.Impuesto ?? 0m;
+            var descripcion = lineaOriginal?.Descripcion ?? lineaDevolucion.Sku;
+
+            var numeroLinea = i + 1;
+
+            lineas.Add(new DocumentoFiscalLinea(
+                numeroLinea,
+                lineaDevolucion.Sku,
+                descripcion,
+                lineaDevolucion.Cantidad,
+                precioUnitario,
+                impuesto));
+
+            lineasXml.Add(new DatosXmlLinea(
+                numeroLinea,
+                lineaDevolucion.Sku,
+                descripcion,
+                lineaDevolucion.Cantidad,
+                precioUnitario,
+                impuesto));
+        }
+
+        var subtotalLineas = lineas.Sum(l => l.PrecioUnitario * l.Cantidad);
+        var impuestosLineas = lineas.Sum(l => l.Impuesto);
+
+        var correlativo = await _correlativo.SiguienteAsync(cancelacion);
+        var numeroDocumento = correlativo.ToString("D8", System.Globalization.CultureInfo.InvariantCulture);
+
+        var xml = _generadorXml.Generar(new DatosXmlFiscal(
+            datos.OrdenOriginalId,
+            TipoDocumentoFiscal.NOTA_CREDITO,
+            _opciones.Serie,
+            numeroDocumento,
+            documentoOriginal.CuiReceptor,
+            documentoOriginal.NombreReceptor,
+            documentoOriginal.DireccionReceptor,
+            documentoOriginal.PaisReceptor,
+            documentoOriginal.Moneda,
+            subtotalLineas,
+            impuestosLineas,
+            montoReembolso,
+            ahora,
+            lineasXml));
+
+        var documento = new DocumentoFiscal(
+            datos.OrdenOriginalId,
+            transactionId,
+            TipoDocumentoFiscal.NOTA_CREDITO,
+            documentoOriginal.Id.ToString(),
+            documentoOriginal.CuiReceptor,
+            documentoOriginal.NombreReceptor,
+            documentoOriginal.DireccionReceptor,
+            documentoOriginal.PaisReceptor,
+            documentoOriginal.Moneda,
+            subtotalLineas,
+            impuestosLineas,
+            montoReembolso,
+            _opciones.Serie,
+            correlativo,
+            xml,
+            lineas,
+            ahora);
+
+        _contexto.DocumentosFiscales.Add(documento);
+
+        _logger.LogInformation(
+            "NOTA_CREDITO {DocumentoId} creada para devolucion {DevolucionId}, orden {OrdenOriginalId}, serie {Serie} numero {Numero}.",
+            documento.Id, datos.DevolucionId, datos.OrdenOriginalId, documento.Serie, documento.NumeroDocumento);
 
         return documento;
     }

@@ -66,3 +66,28 @@ public sealed record CargoRegistrado(
     string Resultado,
     string? AutorizacionId,
     DateTime RecibidoEn);
+
+/// <summary>Peticion de reembolso. Recibe la referencia original, el monto a reembolsar y la autorizacion original.</summary>
+public sealed record PeticionReembolso(
+    string Referencia,
+    string Monto,
+    string Moneda,
+    string AutorizacionOriginal);
+
+/// <summary>Respuesta de un reembolso procesado.</summary>
+public sealed record RespuestaReembolso(
+    string? AutorizacionId,
+    string Estado,
+    string CodigoRespuesta,
+    string Mensaje,
+    DateTime ProcesadoEn);
+
+/// <summary>Un reembolso recibido en esta ejecucion, para inspeccion en la demo.</summary>
+public sealed record ReembolsoRegistrado(
+    string Referencia,
+    string Monto,
+    string Moneda,
+    string AutorizacionOriginal,
+    string Resultado,
+    string? AutorizacionId,
+    DateTime RecibidoEn);

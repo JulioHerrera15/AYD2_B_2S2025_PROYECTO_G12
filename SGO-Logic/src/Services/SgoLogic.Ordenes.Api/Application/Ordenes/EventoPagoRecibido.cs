@@ -23,7 +23,8 @@ public sealed record EventoPagoRecibido(
     string TipoEvento,
     string OrdenId,
     string? Motivo,
-    string? AutorizacionId = null);
+    string? AutorizacionId = null,
+    string? DevolucionId = null);
 
 /// <summary>Desenlace de aplicar un evento de Pagos a la saga de la orden.</summary>
 public enum ResultadoEventoPago

@@ -28,7 +28,9 @@ builder.Services.AddSingleton<PoliticaMediosPago>();
 builder.Services.AddScoped<IRepositorioOrdenes, RepositorioOrdenes>();
 builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
 builder.Services.AddScoped<IGeneradorCorrelativoOrden, GeneradorCorrelativoOrden>();
+builder.Services.AddScoped<IGeneradorCorrelativoDevolucion, GeneradorCorrelativoDevolucion>();
 builder.Services.AddScoped<ServicioConfirmacionOrden>();
+builder.Services.AddScoped<ServicioDevolucion>();
 
 // Consumo de los resultados de Pagos: avance de la saga y compensacion (HU-003).
 builder.Services.AddScoped<IRegistroMensajesProcesados, RegistroMensajesProcesados>();
@@ -187,6 +189,71 @@ ordenes.MapGet("/alertas-fiscales", async (
         o.AlertaFiscalMotivo ?? string.Empty,
         o.Total)).ToList();
     return Results.Ok(resultado);
+});
+
+ordenes.MapPost("/{id}/devoluciones", async (
+    string id,
+    SolicitudDevolucion solicitud,
+    ServicioDevolucion servicio,
+    CancellationToken cancelacion) =>
+{
+    try
+    {
+        var solicitudConId = solicitud with { OrdenId = id };
+        var devolucion = await servicio.RegistrarDevolucionAsync(solicitudConId, cancelacion);
+        return Results.Created($"/api/ordenes/{id}/devoluciones/{devolucion.Id}", devolucion);
+    }
+    catch (Exception ex) when (
+        ex is ExcepcionOrdenNoEncontrada or ExcepcionTransicionInvalida or ExcepcionConflictoConcurrencia)
+    {
+        return MapearError(ex);
+    }
+    catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
+    {
+        return Results.Problem(
+            title: "Solicitud invalida",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status400BadRequest);
+    }
+    catch (InvalidOperationException ex)
+    {
+        // Errores de validación de negocio (ej. orden no en ENTREGADA) -> 400
+        return Results.Problem(
+            title: "Operacion no permitida",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status400BadRequest,
+            extensions: new Dictionary<string, object?> { ["codigo"] = "estado_orden_invalido" });
+    }
+    catch (DbUpdateException)
+    {
+        return Results.Problem(
+            title: "Error de base de datos",
+            detail: "No se pudo persistir la devolucion. Verifique que la migracion se haya aplicado.",
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+});
+
+ordenes.MapGet("/{id}/devoluciones", async (
+    string id,
+    ServicioDevolucion servicio,
+    CancellationToken cancelacion) =>
+{
+    try
+    {
+        var devoluciones = await servicio.ObtenerDevolucionesAsync(id, cancelacion);
+        return Results.Ok(devoluciones);
+    }
+    catch (Exception ex) when (ex is ExcepcionOrdenNoEncontrada)
+    {
+        return MapearError(ex);
+    }
+    catch (DbUpdateException)
+    {
+        return Results.Problem(
+            title: "Error de base de datos",
+            detail: "No se pudo consultar las devoluciones. Verifique que la migracion se haya aplicado.",
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
 });
 
 using (var scope = app.Services.CreateScope())
