@@ -1,6 +1,6 @@
-
+﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# 
+#
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "BuildingBlocks", "BuildingBlocks", "{73638F12-8AB5-4DCF-9349-69947E9591A6}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgoLogic.Contracts", "src\BuildingBlocks\SgoLogic.Contracts\SgoLogic.Contracts.csproj", "{C3676945-26F4-47AE-885F-216D39618EAC}"
@@ -47,7 +47,10 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgoLogic.ApiGateway", "src\
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgoLogic.Web", "src\Services\SgoLogic.Web\SgoLogic.Web.csproj", "{F6A7B8C9-D0E1-2345-F012-345678901235}"
 EndProject
-
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgoLogic.Auditoria.Tests", "tests\SgoLogic.Auditoria.Tests\SgoLogic.Auditoria.Tests.csproj", "{7C3575CC-1C42-43F6-A04A-DFF4AB1308D7}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgoLogic.Auditoria.Worker", "src\Services\SgoLogic.Auditoria.Worker\SgoLogic.Auditoria.Worker.csproj", "{FD00608F-6E5C-4A62-BBCF-16AE09353E75}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -134,6 +137,14 @@ Global
 		{F6A7B8C9-D0E1-2345-F012-345678901235}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{F6A7B8C9-D0E1-2345-F012-345678901235}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{F6A7B8C9-D0E1-2345-F012-345678901235}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7C3575CC-1C42-43F6-A04A-DFF4AB1308D7}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7C3575CC-1C42-43F6-A04A-DFF4AB1308D7}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7C3575CC-1C42-43F6-A04A-DFF4AB1308D7}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7C3575CC-1C42-43F6-A04A-DFF4AB1308D7}.Release|Any CPU.Build.0 = Release|Any CPU
+		{FD00608F-6E5C-4A62-BBCF-16AE09353E75}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FD00608F-6E5C-4A62-BBCF-16AE09353E75}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FD00608F-6E5C-4A62-BBCF-16AE09353E75}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FD00608F-6E5C-4A62-BBCF-16AE09353E75}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{C3676945-26F4-47AE-885F-216D39618EAC} = {73638F12-8AB5-4DCF-9349-69947E9591A6}
@@ -156,5 +167,7 @@ Global
 		{D4E5F6A7-B8C9-0123-DEF0-123456789013} = {7F8A4397-8E40-4D70-AD4C-3127D296084C}
 		{E5F6A7B8-C9D0-1234-EF01-234567890124} = {7F8A4397-8E40-4D70-AD4C-3127D296084C}
 		{F6A7B8C9-D0E1-2345-F012-345678901235} = {7F8A4397-8E40-4D70-AD4C-3127D296084C}
+		{7C3575CC-1C42-43F6-A04A-DFF4AB1308D7} = {50912FCC-C9E4-4A2C-BA43-67D2C566F82A}
+		{FD00608F-6E5C-4A62-BBCF-16AE09353E75} = {7F8A4397-8E40-4D70-AD4C-3127D296084C}
 	EndGlobalSection
 EndGlobal
