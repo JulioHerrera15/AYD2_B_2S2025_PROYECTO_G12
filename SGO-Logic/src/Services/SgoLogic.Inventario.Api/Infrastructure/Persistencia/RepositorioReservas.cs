@@ -43,6 +43,26 @@ public sealed class RepositorioReservas : IRepositorioReservas
             .ToListAsync(cancelacion);
     }
 
+    public async Task<IReadOnlyList<Reserva>> ListarPorUbicacionAsync(
+        string ubicacionId,
+        EstadoReserva? estado,
+        CancellationToken cancelacion)
+    {
+        var consulta = _contexto.Reservas
+            .AsNoTracking()
+            .Include(reserva => reserva.Lineas)
+            .Where(reserva => reserva.UbicacionId == ubicacionId);
+
+        if (estado is not null)
+        {
+            consulta = consulta.Where(reserva => reserva.Estado == estado);
+        }
+
+        return await consulta
+            .OrderByDescending(reserva => reserva.CreadaEn)
+            .ToListAsync(cancelacion);
+    }
+
     public async Task AgregarAsync(Reserva reserva, CancellationToken cancelacion) =>
         await _contexto.Reservas.AddAsync(reserva, cancelacion);
 }

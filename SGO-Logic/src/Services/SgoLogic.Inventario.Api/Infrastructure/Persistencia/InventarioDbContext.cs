@@ -24,6 +24,9 @@ public sealed class InventarioDbContext : DbContext
 
     public DbSet<Reserva> Reservas => Set<Reserva>();
 
+    /// <summary>Ledger append-only de entradas y salidas fisicas (HU-016).</summary>
+    public DbSet<MovimientoExistencia> Movimientos => Set<MovimientoExistencia>();
+
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     public DbSet<MensajeProcesado> MensajesProcesados => Set<MensajeProcesado>();

@@ -218,6 +218,56 @@ namespace SgoLogic.Inventario.Api.Infrastructure.Persistencia.Migraciones
                     b.ToTable("linea_reserva", "inventario");
                 });
 
+            modelBuilder.Entity("SgoLogic.Inventario.Api.Domain.MovimientoExistencia", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Cantidad")
+                        .HasColumnType("integer")
+                        .HasColumnName("cantidad");
+
+                    b.Property<int>("CantidadFisicaResultante")
+                        .HasColumnType("integer")
+                        .HasColumnName("cantidad_fisica_resultante");
+
+                    b.Property<string>("Motivo")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("motivo");
+
+                    b.Property<DateTime>("RegistradoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("registrado_en");
+
+                    b.Property<string>("Sku")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("sku");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("tipo");
+
+                    b.Property<string>("UbicacionId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("ubicacion_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Sku", "UbicacionId", "RegistradoEn")
+                        .HasDatabaseName("ix_movimiento_sku_ubicacion_registrado_en");
+
+                    b.ToTable("movimiento_existencia", "inventario");
+                });
+
             modelBuilder.Entity("SgoLogic.Inventario.Api.Domain.Reserva", b =>
                 {
                     b.Property<string>("Id")

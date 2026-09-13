@@ -22,6 +22,17 @@ public interface IRepositorioReservas
         int limite,
         CancellationToken cancelacion);
 
+    /// <summary>
+    /// Trae, con sus lineas, las reservas de una ubicacion, de la mas reciente a la
+    /// mas antigua. <paramref name="estado" /> filtra por estado; en null trae todas.
+    /// Alimenta la vista unificada de HU-016, que muestra que hay comprometido en
+    /// cada tienda o centro de distribucion.
+    /// </summary>
+    Task<IReadOnlyList<Reserva>> ListarPorUbicacionAsync(
+        string ubicacionId,
+        EstadoReserva? estado,
+        CancellationToken cancelacion);
+
     /// <summary>Registra una reserva nueva en la unidad de trabajo.</summary>
     Task AgregarAsync(Reserva reserva, CancellationToken cancelacion);
 }

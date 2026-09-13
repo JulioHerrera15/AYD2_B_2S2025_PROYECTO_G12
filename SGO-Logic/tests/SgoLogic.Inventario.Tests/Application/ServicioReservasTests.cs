@@ -202,4 +202,40 @@ public sealed class ServicioReservasTests
         await Assert.ThrowsAsync<ExcepcionReservaNoEncontrada>(
             () => servicio.ObtenerPorOrdenAsync("ORD-2026-000000", CancellationToken.None));
     }
+
+    // HU-016: que tiene comprometido una ubicacion, para la vista unificada.
+
+    [Fact]
+    public async Task Listar_las_reservas_de_una_ubicacion_puede_filtrar_por_estado()
+    {
+        var (servicio, _, reservas, _) = Construir();
+
+        var activa = ReservaEn("RSV-2026-000001", "ORD-2026-000001", "TDA-07");
+        var expirada = ReservaEn("RSV-2026-000002", "ORD-2026-000002", "TDA-07");
+        expirada.MarcarExpirada();
+
+        reservas.Precargar(activa);
+        reservas.Precargar(expirada);
+        reservas.Precargar(ReservaEn("RSV-2026-000003", "ORD-2026-000003", "CD-01"));
+
+        var todas = await servicio.ListarPorUbicacionAsync("TDA-07", null, CancellationToken.None);
+        Assert.Equal(2, todas.Count);
+
+        var activas = await servicio.ListarPorUbicacionAsync(
+            "TDA-07",
+            EstadoReserva.ACTIVA,
+            CancellationToken.None);
+
+        Assert.Equal("RSV-2026-000001", Assert.Single(activas).Id);
+    }
+
+    private static Reserva ReservaEn(string id, string ordenId, string ubicacionId) =>
+        Reserva.Crear(
+            id,
+            ordenId,
+            ubicacionId,
+            TipoUbicacion.TIENDA,
+            900,
+            new[] { (Sku, 1) },
+            DateTime.UtcNow);
 }
