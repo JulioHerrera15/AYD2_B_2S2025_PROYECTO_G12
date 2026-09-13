@@ -28,6 +28,21 @@ public sealed class RepositorioReservas : IRepositorioReservas
             .Include(reserva => reserva.Lineas)
             .FirstOrDefaultAsync(reserva => reserva.Id == reservaId, cancelacion);
 
+    public async Task<IReadOnlyList<Reserva>> ListarActivasVencidasAsync(
+        DateTime ahora,
+        int limite,
+        CancellationToken cancelacion)
+    {
+        var corte = ahora.ToUniversalTime();
+
+        return await _contexto.Reservas
+            .Include(reserva => reserva.Lineas)
+            .Where(reserva => reserva.Estado == EstadoReserva.ACTIVA && reserva.ExpiraEn <= corte)
+            .OrderBy(reserva => reserva.ExpiraEn)
+            .Take(limite)
+            .ToListAsync(cancelacion);
+    }
+
     public async Task AgregarAsync(Reserva reserva, CancellationToken cancelacion) =>
         await _contexto.Reservas.AddAsync(reserva, cancelacion);
 }

@@ -5,7 +5,7 @@
 **Contexto emisor:** Inventario
 **Autor:** 202300335 — Jose Pirir
 **Estado:** propuesto para congelamiento
-**Fecha:** 2026-09-09
+**Fecha:** 2026-09-09 (evento 3 agregado el 2026-09-12, HU-002)
 **Depende de:** `sgo-eventos-envelope-v1.md`, `ordenes-eventos-v1.md`
 
 ---
@@ -34,14 +34,16 @@ Trazabilidad al DDA: ADR-003, ADR-005, ADR-006, EV-22, EV-23, EV-05.
 
 ## 1. Alcance de la v1
 
-Cubre solo el desenlace de una solicitud de reserva (HU-001). Quedan **fuera**,
-para versiones aditivas posteriores:
+Cubre el desenlace de una solicitud de reserva (HU-001) y la liberación automática
+por vencimiento del TTL (HU-002, EV-23). Quedan **fuera**, para versiones aditivas
+posteriores:
 
-- `inventario.reserva.expirada` — liberación por TTL (HU-002, EV-23).
 - `inventario.reserva.liberada` — respuesta a `ordenes.reserva.liberacion-solicitada` (compensación de la saga, HU-003).
 - `inventario.existencia.ajustada` — reingreso por devolución (HU-014).
 
 Agregarlos no renegocia este contrato (envelope, sección 8: cambio aditivo).
+El evento 3 (`ReservaInventarioExpirada`) se agregó de esa misma forma: es aditivo y
+no cambia nada de lo ya congelado para los eventos 1 y 2.
 
 ---
 
@@ -64,20 +66,22 @@ Motivo del evento `ReservaInventarioRechazada`. Lista cerrada.
 
 ### 2.2 `EstadoReserva`
 
-Interno de Inventario, **no viaja en eventos** en la v1. Se documenta para
-entender el flujo: `ACTIVA`, `EXPIRADA`, `LIBERADA`. Una `Reserva` se crea
-`ACTIVA` con `expiraEn = creadaEn + ttlSegundos`.
+Interno de Inventario, **no viaja en eventos**. Se documenta para entender el
+flujo: `ACTIVA`, `EXPIRADA`, `LIBERADA`. Una `Reserva` se crea `ACTIVA` con
+`expiraEn = creadaEn + ttlSegundos` y pasa a `EXPIRADA` cuando el barrido de HU-002
+la alcanza. Los consumidores se enteran por el evento 3, no por este enum.
 
 ---
 
 ## 3. Catálogo de eventos
 
-Dos eventos. Ninguno más se publica bajo `inventario.*` en la v1.
+Tres eventos. Ninguno más se publica bajo `inventario.*` en la v1.
 
 | # | `eventType` | Routing key | `aggregateType` | Se emite cuando |
 |---|---|---|---|---|
 | 1 | `InventarioReservado` | `inventario.reserva.confirmada` | `Reserva` | La reserva se creó con éxito y su TTL está vigente. |
 | 2 | `ReservaInventarioRechazada` | `inventario.reserva.rechazada` | `Reserva` | No hay stock suficiente en ninguna ubicación elegible. No se crea reserva. |
+| 3 | `ReservaInventarioExpirada` | `inventario.reserva.expirada` | `Reserva` | El TTL de una reserva `ACTIVA` venció y sus unidades volvieron al disponible (HU-002, EV-23). |
 
 **El conflicto de bloqueo optimista no produce evento.** Si al escribir la reserva
 la columna `version` de una existencia cambió (otra reserva concurrente ganó), la
@@ -108,9 +112,14 @@ sobre `mensajes_procesados` (envelope, sección 2.2).
 
 | Cola | Dueño | Binding |
 |---|---|---|
-| `ordenes.inventario` | Angel | `inventario.reserva.confirmada`, `inventario.reserva.rechazada` |
+| `ordenes.inventario` | Angel | `inventario.reserva.confirmada`, `inventario.reserva.rechazada`, `inventario.reserva.expirada` |
 | `auditoria.eventos` | Julio | `#` |
-| `consulta-estado.eventos` | Jonathan | `inventario.reserva.confirmada`, `inventario.reserva.rechazada` |
+| `consulta-estado.eventos` | Jonathan | `inventario.reserva.confirmada`, `inventario.reserva.rechazada`, `inventario.reserva.expirada` |
+
+> **Binding nuevo con HU-002.** `inventario.reserva.expirada` requiere que Órdenes y
+> Consulta de Estado agreguen ese binding a sus colas existentes. Mientras no lo
+> hagan, el evento se publica igual (Auditoría lo recibe por `#`) y nada del flujo
+> actual se rompe: es un binding aditivo, no un cambio en los eventos 1 y 2.
 
 ---
 
@@ -120,10 +129,10 @@ sobre `mensajes_procesados` (envelope, sección 2.2).
 |---|---|
 | `source` | `"inventario"` |
 | `aggregateType` | `"Reserva"` en ambos eventos |
-| `aggregateId` | `reservaId` con formato `RSV-<año>-<correlativo de 6 dígitos>` en el evento 1; `ordenId` en el evento 2 (no hay agregado Reserva creado) |
-| `sequence` | Asignado por Inventario, monotónico por `aggregateId`, empieza en 1 |
-| `transactionId` | Heredado del evento `ordenes.reserva.solicitada` que originó la reserva. Propagación automática (envelope, sección 4). |
-| `causationId` | `eventId` del `ordenes.reserva.solicitada` recibido |
+| `aggregateId` | `reservaId` con formato `RSV-<año>-<correlativo de 6 dígitos>` en los eventos 1 y 3; `ordenId` en el evento 2 (no hay agregado Reserva creado) |
+| `sequence` | Asignado por Inventario, monotónico por `aggregateId`, empieza en 1. El evento 3 emite con `2` sobre el mismo `reservaId` del evento 1. |
+| `transactionId` | Heredado del evento `ordenes.reserva.solicitada` que originó la reserva. Propagación automática (envelope, sección 4). En el evento 3 no hay mensaje entrante: el barrido es un proceso propio de Inventario, así que el `transactionId` se genera nuevo. |
+| `causationId` | `eventId` del `ordenes.reserva.solicitada` recibido. Vacío en el evento 3, por lo mismo. |
 
 ---
 
@@ -142,6 +151,19 @@ sobre `mensajes_procesados` (envelope, sección 2.2).
 4. **Una sola ubicación por reserva.** La v1 elige una única ubicación que cubra
    todas las líneas. El origen óptimo multi-ubicación es HU-011 (Despacho), no
    Inventario.
+5. **La expiración la decide PostgreSQL, no Redis.** El barrido de HU-002
+   (`ExpiracionReservasWorker`, cada `Inventario:ExpiracionPollingMs`) consulta las
+   reservas `ACTIVA` con `expiraEn <= now()` sobre el índice
+   `ix_reserva_estado_expira_en`. Se descartó depender de las notificaciones de
+   expiración de claves de Redis (`notify-keyspace-events`) como mecanismo
+   autoritativo: son fire-and-forget, y si el servicio está caído en el instante en
+   que la clave expira, la liberación se pierde para siempre. Cierra el supuesto 1
+   de la sección 10.
+6. **Una transacción por reserva expirada.** El barrido confirma reserva por reserva,
+   no por lote. Si una falla (choque de bloqueo optimista contra una reserva
+   concurrente sobre la misma existencia), se descartan sus cambios, se sigue con las
+   demás del lote y esa reserva se vuelve a tomar en el siguiente ciclo porque sigue
+   `ACTIVA` y vencida. Ninguna unidad se libera a medias.
 
 ---
 
@@ -207,15 +229,50 @@ Routing key `inventario.reserva.rechazada`. No se crea reserva; `aggregateId` es
 }
 ```
 
+### 7.3 `ReservaInventarioExpirada`
+
+Routing key `inventario.reserva.expirada`. `aggregateId` es el `reservaId`, con
+`sequence` 2 (la creación consumió la 1).
+
+| Campo de `data` | Tipo | Obligatorio | Notas |
+|---|---|---|---|
+| `reservaId` | string | sí | Igual que `aggregateId`. La misma reserva del evento 1. |
+| `ordenId` | string | sí | Orden que Órdenes debe cancelar. |
+| `ubicacionId` | string | sí | Ubicación a la que volvieron las unidades. |
+| `lineas` | array | sí | Las mismas líneas de la reserva: lo que se devolvió al disponible. |
+| `lineas[].sku` | string | sí | |
+| `lineas[].cantidad` | integer | sí | Mayor que cero. |
+| `expiraEn` | string | sí | ISO 8601 UTC. El vencimiento que se cumplió. |
+| `expiradaEn` | string | sí | ISO 8601 UTC. Momento en que el barrido la liberó. Posterior a `expiraEn` por el intervalo de polling. |
+
+```json
+{
+  "reservaId": "RSV-2026-000042",
+  "ordenId": "ORD-2026-000123",
+  "ubicacionId": "CD-01",
+  "lineas": [
+    { "sku": "SKU-LB-00871", "cantidad": 1 }
+  ],
+  "expiraEn": "2026-09-09T14:45:06.000Z",
+  "expiradaEn": "2026-09-09T14:45:09.000Z"
+}
+```
+
 ---
 
 ## 8. Matriz de consumo
 
-| Consumidor | `InventarioReservado` | `ReservaInventarioRechazada` |
-|---|---|---|
-| Órdenes | Avanza la saga a `INVENTARIO_RESERVADO`. Guarda `reservaId` para el despacho y la compensación. | Transición a `RECHAZADA`, no cobra. |
-| Auditoría | Inserta sin sobrescribir. | Inserta sin sobrescribir. |
-| Consulta de Estado | Enriquece la vista 360 con la ubicación y el TTL. No materializa estado de Orden. | Marca la orden como rechazada por stock en la vista. |
+| Consumidor | `InventarioReservado` | `ReservaInventarioRechazada` | `ReservaInventarioExpirada` |
+|---|---|---|---|
+| Órdenes | Avanza la saga a `INVENTARIO_RESERVADO`. Guarda `reservaId` para el despacho y la compensación. | Transición a `RECHAZADA`, no cobra. | Transición a `CANCELADA_RESERVA_VENCIDA` con `MotivoCancelacion.RESERVA_VENCIDA`. Ambos valores ya existen en los enums de Órdenes. |
+| Auditoría | Inserta sin sobrescribir. | Inserta sin sobrescribir. | Inserta sin sobrescribir (llega por `#`, no requiere binding nuevo). |
+| Consulta de Estado | Enriquece la vista 360 con la ubicación y el TTL. No materializa estado de Orden. | Marca la orden como rechazada por stock en la vista. | Marca la reserva como vencida y devuelve el disponible en la vista. |
+
+**Pendiente del lado de Órdenes (Angel):** un consumidor
+`ReservaExpiradaConsumidor : EventConsumerBase<OrdenesDbContext, ReservaInventarioExpiradaData>`
+ligado a `inventario.reserva.expirada`, con el mismo patrón de `PagosEventosConsumidor`.
+Inventario ya publica el evento; hasta que ese consumidor exista, la reserva se libera
+igual y el inventario queda correcto, pero la orden no se cancela sola.
 
 ---
 
@@ -232,10 +289,9 @@ Routing key `inventario.reserva.rechazada`. No se crea reserva; `aggregateId` es
 
 ## 10. Supuestos abiertos
 
-1. **Redis y el TTL.** ADR-005 prevé gestionar la expiración "junto a Redis". La v1
-   persiste `expiraEn` en PostgreSQL y deja el barrido de expirados para HU-002; el
-   uso de `notify-keyspace-events` de Redis (ya configurado en `docker-compose`) se
-   decide en esa historia.
+1. ~~**Redis y el TTL.**~~ **Cerrado en HU-002.** El barrido autoritativo corre
+   contra PostgreSQL (regla 5 de la sección 6). Redis queda disponible como mejora
+   opcional de latencia de detección, nunca como la única fuente de la liberación.
 2. **Reasignación de ubicación.** Si el método de entrega cambia después de
    reservada (EV-31), la reserva de la v1 no se mueve de ubicación. Lo resuelve
    Despacho en HU-011.

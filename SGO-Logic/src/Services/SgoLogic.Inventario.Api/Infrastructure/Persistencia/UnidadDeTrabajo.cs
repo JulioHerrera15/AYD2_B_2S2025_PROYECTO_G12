@@ -32,4 +32,11 @@ public sealed class UnidadDeTrabajo : IUnidadDeTrabajo
                 ex);
         }
     }
+
+    /// <summary>
+    /// Suelta todo lo que EF Core trae rastreado. Tras un SaveChanges fallido las
+    /// entidades siguen marcadas como modificadas, y sin este descarte el siguiente
+    /// SaveChanges del mismo alcance reintentaria tambien lo que ya fallo.
+    /// </summary>
+    public void DescartarCambios() => _contexto.ChangeTracker.Clear();
 }

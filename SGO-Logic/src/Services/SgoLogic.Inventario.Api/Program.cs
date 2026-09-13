@@ -6,6 +6,7 @@ using SgoLogic.Inventario.Api.Application.Inventario;
 using SgoLogic.Inventario.Api.Consumers;
 using SgoLogic.Inventario.Api.Domain;
 using SgoLogic.Inventario.Api.Infrastructure.Persistencia;
+using SgoLogic.Inventario.Api.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -28,8 +29,12 @@ builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
 builder.Services.AddScoped<IGeneradorCorrelativoReserva, GeneradorCorrelativoReserva>();
 builder.Services.AddScoped<ServicioReservas>();
 builder.Services.AddScoped<ServicioExistencias>();
+builder.Services.AddScoped<ServicioExpiracionReservas>();
 
 builder.Services.AddHostedService<ReservaSolicitadaConsumidor>();
+
+// HU-002: barrido periodico que libera las reservas con TTL vencido.
+builder.Services.AddHostedService<ExpiracionReservasWorker>();
 
 var app = builder.Build();
 
