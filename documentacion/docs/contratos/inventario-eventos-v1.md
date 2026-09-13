@@ -272,7 +272,27 @@ Routing key `inventario.reserva.expirada`. `aggregateId` es el `reservaId`, con
 `ReservaExpiradaConsumidor : EventConsumerBase<OrdenesDbContext, ReservaInventarioExpiradaData>`
 ligado a `inventario.reserva.expirada`, con el mismo patrón de `PagosEventosConsumidor`.
 Inventario ya publica el evento; hasta que ese consumidor exista, la reserva se libera
-igual y el inventario queda correcto, pero la orden no se cancela sola.
+igual y el inventario queda correcto, pero **la orden no se cancela sola**: el tercer
+criterio de aceptación de HU-002 queda cubierto por Inventario en su mitad y pendiente
+en la de Órdenes.
+
+Lo que del lado de Órdenes **ya está listo** y no hay que construir:
+
+- `EstadoOrden.CANCELADA_RESERVA_VENCIDA` y `MotivoCancelacion.RESERVA_VENCIDA` existen.
+- `MaquinaEstadosOrden` acepta la transición desde `INVENTARIO_RESERVADO` y desde
+  `PAGO_PENDIENTE`.
+- `MapaEventosSagaOrden` ya emite `OrdenCancelada` con el motivo correcto al llegar a
+  ese estado.
+
+> **Hueco a decidir antes de escribir el consumidor.** La transición a
+> `CANCELADA_RESERVA_VENCIDA` **no** es legal desde `COBRO_SOLICITADO`, que es
+> justamente el estado donde es más probable que venza el TTL (la orden está esperando
+> a PayKlik mientras el reloj de la reserva corre). Con la máquina actual, un
+> `inventario.reserva.expirada` que llegue en ese estado será rechazado por la
+> transición. Hay que decidir si se agrega `COBRO_SOLICITADO -> CANCELADA_RESERVA_VENCIDA`,
+> o si el cobro en vuelo debe ganarle al vencimiento (y entonces el consumidor ignora
+> el evento en ese estado y compensa por otra vía). Es decisión de Órdenes, no de
+> Inventario: el evento se publica igual en ambos casos.
 
 ---
 
