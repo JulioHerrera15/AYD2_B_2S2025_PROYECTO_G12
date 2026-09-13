@@ -268,13 +268,22 @@ Routing key `inventario.reserva.expirada`. `aggregateId` es el `reservaId`, con
 | Auditoría | Inserta sin sobrescribir. | Inserta sin sobrescribir. | Inserta sin sobrescribir (llega por `#`, no requiere binding nuevo). |
 | Consulta de Estado | Enriquece la vista 360 con la ubicación y el TTL. No materializa estado de Orden. | Marca la orden como rechazada por stock en la vista. | Marca la reserva como vencida y devuelve el disponible en la vista. |
 
-**Pendiente del lado de Órdenes (Angel):** un consumidor
-`ReservaExpiradaConsumidor : EventConsumerBase<OrdenesDbContext, ReservaInventarioExpiradaData>`
-ligado a `inventario.reserva.expirada`, con el mismo patrón de `PagosEventosConsumidor`.
-Inventario ya publica el evento; hasta que ese consumidor exista, la reserva se libera
-igual y el inventario queda correcto, pero **la orden no se cancela sola**: el tercer
-criterio de aceptación de HU-002 queda cubierto por Inventario en su mitad y pendiente
-en la de Órdenes.
+**Pendiente del lado de Órdenes (Angel).** Inventario ya publica el evento; hasta que
+Órdenes lo consuma, la reserva se libera igual y el inventario queda correcto, pero
+**la orden no se cancela sola**: el tercer criterio de aceptación de HU-002 queda
+cubierto por Inventario en su mitad y pendiente en la de Órdenes.
+
+La cola `ordenes.inventario` de la sección 4.2 **todavía no existe en código**: hoy
+Órdenes solo declara `ordenes.pagos` y `ordenes.facturacion`. Así que no es agregar un
+binding a una cola existente, sino crear el consumidor completo.
+
+Conviene declararla con los **tres** bindings de una vez
+(`inventario.reserva.confirmada`, `.rechazada` y `.expirada`), siguiendo el patrón de
+`PagosEventosConsumidor`: un `BackgroundService` que despacha por `eventType` dentro de
+una sola cola. No hace falta una clase consumidora por evento — `PagosEventosConsumidor`
+ya atiende cinco eventos de Pagos así. Consumir también `.confirmada` en el mismo paso
+resuelve además el `reservaId` real, que hoy es el placeholder `"DES-PENDIENTE-{ordenId}"`
+en `MapaEventosSagaOrden` y que HU-011 (Despacho) va a necesitar poblado.
 
 Lo que del lado de Órdenes **ya está listo** y no hay que construir:
 
