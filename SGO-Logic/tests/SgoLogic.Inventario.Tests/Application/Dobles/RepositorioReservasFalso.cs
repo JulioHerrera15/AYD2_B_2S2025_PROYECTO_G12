@@ -20,6 +20,17 @@ public sealed class RepositorioReservasFalso : IRepositorioReservas
     public Task<Reserva?> ObtenerPorIdAsync(string reservaId, CancellationToken cancelacion) =>
         Task.FromResult(_reservas.FirstOrDefault(reserva => reserva.Id == reservaId));
 
+    public Task<IReadOnlyList<Reserva>> ListarActivasVencidasAsync(
+        DateTime ahora,
+        int limite,
+        CancellationToken cancelacion) =>
+        Task.FromResult<IReadOnlyList<Reserva>>(
+            _reservas
+                .Where(reserva => reserva.EstaActiva && reserva.ExpiraEn <= ahora.ToUniversalTime())
+                .OrderBy(reserva => reserva.ExpiraEn)
+                .Take(limite)
+                .ToList());
+
     public Task AgregarAsync(Reserva reserva, CancellationToken cancelacion)
     {
         LlamadasAgregar++;
