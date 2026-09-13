@@ -1,0 +1,119 @@
+@{
+    ViewData["Title"] = "Crear Cuenta";
+}
+
+<div class="max-w-md mx-auto py-6">
+    <div class="bg-surface-white rounded-3xl ambient-shadow border border-border-subtle/50 p-8">
+        <div class="text-center mb-8">
+            <div class="w-12 h-12 rounded-2xl bg-primary text-on-primary flex items-center justify-center font-bold text-base mx-auto mb-3 shadow-sm">
+                ML
+            </div>
+            <h1 class="text-2xl font-bold text-primary tracking-tight">Crear Cuenta</h1>
+            <p class="text-xs text-text-muted mt-1">Únete a la plataforma omnicanal MegaStore</p>
+        </div>
+
+        @if (ViewBag.Error != null)
+        {
+            <div class="mb-6 bg-error-container text-on-error-container border border-error/20 rounded-xl p-3.5 flex items-center gap-2.5 text-xs font-medium">
+                <span class="material-symbols-outlined text-error text-[18px]">error</span>
+                <span>@ViewBag.Error</span>
+            </div>
+        }
+
+        <form method="post" action="/Auth/Registro" class="space-y-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label for="nombre" class="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-1.5">
+                        Nombre
+                    </label>
+                    <input type="text" 
+                           id="nombre" 
+                           name="nombre" 
+                           value="@ViewBag.Nombre"
+                           class="w-full bg-surface-container-low border border-border-subtle/70 rounded-xl px-4 py-3 text-sm font-medium text-primary focus:bg-surface-white focus:ring-2 focus:ring-secondary focus:border-transparent transition-all placeholder:text-text-muted" 
+                           required 
+                           placeholder="Juan" />
+                </div>
+                <div>
+                    <label for="apellido" class="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-1.5">
+                        Apellido
+                    </label>
+                    <input type="text" 
+                           id="apellido" 
+                           name="apellido" 
+                           value="@ViewBag.Apellido"
+                           class="w-full bg-surface-container-low border border-border-subtle/70 rounded-xl px-4 py-3 text-sm font-medium text-primary focus:bg-surface-white focus:ring-2 focus:ring-secondary focus:border-transparent transition-all placeholder:text-text-muted" 
+                           required 
+                           placeholder="Pérez" />
+                </div>
+            </div>
+
+            <div>
+                <label for="telefono" class="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-1.5">
+                    Teléfono
+                </label>
+                <input type="tel" 
+                       id="telefono" 
+                       name="telefono" 
+                       value="@ViewBag.Telefono"
+                       class="w-full bg-surface-container-low border border-border-subtle/70 rounded-xl px-4 py-3 text-sm font-medium text-primary focus:bg-surface-white focus:ring-2 focus:ring-secondary focus:border-transparent transition-all placeholder:text-text-muted" 
+                       placeholder="+502 5555-1234" />
+            </div>
+
+            <div>
+                <label for="email" class="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-1.5">
+                    Correo Electrónico
+                </label>
+                <input type="email" 
+                       id="email" 
+                       name="email" 
+                       value="@ViewBag.Email"
+                       class="w-full bg-surface-container-low border border-border-subtle/70 rounded-xl px-4 py-3 text-sm font-medium text-primary focus:bg-surface-white focus:ring-2 focus:ring-secondary focus:border-transparent transition-all placeholder:text-text-muted" 
+                       required 
+                       placeholder="juan@megastore.com" />
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                    <label for="contrasena" class="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-1.5">
+                        Contraseña
+                    </label>
+                    <input type="password" 
+                           id="contrasena" 
+                           name="contrasena" 
+                           class="w-full bg-surface-container-low border border-border-subtle/70 rounded-xl px-4 py-3 text-sm font-medium text-primary focus:bg-surface-white focus:ring-2 focus:ring-secondary focus:border-transparent transition-all placeholder:text-text-muted" 
+                           required 
+                           minlength="8" 
+                           placeholder="Mín. 8 caracteres" />
+                </div>
+                <div>
+                    <label for="confirmarContrasena" class="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-1.5">
+                        Confirmar
+                    </label>
+                    <input type="password" 
+                           id="confirmarContrasena" 
+                           name="confirmarContrasena" 
+                           class="w-full bg-surface-container-low border border-border-subtle/70 rounded-xl px-4 py-3 text-sm font-medium text-primary focus:bg-surface-white focus:ring-2 focus:ring-secondary focus:border-transparent transition-all placeholder:text-text-muted" 
+                           required 
+                           minlength="8" 
+                           placeholder="Repite contraseña" />
+                </div>
+            </div>
+            <p class="text-[11px] text-text-muted">Política: Mínimo 8 caracteres, alfanumérico seguro.</p>
+
+            <div class="pt-2">
+                <button type="submit" 
+                        class="w-full bg-primary text-on-primary rounded-full py-3 text-xs font-semibold hover:opacity-90 transition-opacity active:scale-95 shadow-sm">
+                    Registrarse
+                </button>
+            </div>
+        </form>
+
+        <div class="mt-8 pt-6 border-t border-border-subtle/60 text-center text-xs text-text-muted">
+            ¿Ya tienes una cuenta? 
+            <a href="/Auth/Login" class="font-bold text-primary hover:text-secondary underline transition-colors">
+                Inicia sesión
+            </a>
+        </div>
+    </div>
+</div>

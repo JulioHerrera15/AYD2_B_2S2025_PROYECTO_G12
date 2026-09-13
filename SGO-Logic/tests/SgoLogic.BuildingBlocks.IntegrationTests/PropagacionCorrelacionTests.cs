@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using SgoLogic.BuildingBlocks.Correlation;
 using SgoLogic.BuildingBlocks.Messaging;
@@ -76,7 +77,7 @@ public sealed class PropagacionCorrelacionTests
         // --- "sample-worker": consume el evento raiz y publica el derivado ---
         await using var proveedorB = IntegracionServicios.ConstruirProveedor(_fixture.Postgres.GetConnectionString(), configuracion);
         var conexionB = new ConexionRabbitMq(configuracion);
-        var suscriptorB = new SuscriptorRabbitMq(conexionB);
+        var suscriptorB = new SuscriptorRabbitMq(conexionB, NullLogger<SuscriptorRabbitMq>.Instance);
         var publicadorB = new OutboxPublisher<TestDbContext>(
             proveedorB.GetRequiredService<IServiceScopeFactory>(), conexionB,
             Options.Create(opciones), IntegracionServicios.CrearLogger<OutboxPublisher<TestDbContext>>());
@@ -97,7 +98,7 @@ public sealed class PropagacionCorrelacionTests
         }
 
         IntegrationEvent<DatoPrueba>? recibidoDerivado = null;
-        var suscriptorEspia = new SuscriptorRabbitMq(conexionEspia);
+        var suscriptorEspia = new SuscriptorRabbitMq(conexionEspia, NullLogger<SuscriptorRabbitMq>.Instance);
         using var suscripcionEspia = suscriptorEspia.Suscribir(colaEspia, cuerpo =>
         {
             recibidoDerivado = JsonSerializer.Deserialize<IntegrationEvent<DatoPrueba>>(cuerpo.Span, SgoJsonSerializerOptions.Default);

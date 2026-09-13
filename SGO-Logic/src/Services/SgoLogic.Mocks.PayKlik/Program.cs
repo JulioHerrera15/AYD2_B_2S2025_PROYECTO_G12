@@ -124,6 +124,77 @@ app.MapGet("/admin/estado", (EstadoMock estado) =>
 
 app.MapGet("/admin/cargos", (EstadoMock estado) => Results.Ok(estado.Cargos));
 
+// Reembolso. Misma estructura que cargos: modos, idempotencia y registro.
+app.MapPost("/v1/reembolsos", async (
+    PeticionReembolso peticion,
+    EstadoMock estado,
+    [FromHeader(Name = "Idempotency-Key")] string? claveIdempotencia) =>
+{
+    var configuracion = estado.Configuracion;
+    var recibidoEn = DateTime.UtcNow;
+
+    // Idempotencia: ante una clave ya vista se devuelve la misma respuesta sin
+    // volver a procesar el reembolso.
+    if (!string.IsNullOrWhiteSpace(claveIdempotencia) &&
+        estado.IdempotenciaReembolso.TryObtener(claveIdempotencia, out var previa))
+    {
+        estado.RegistrarReembolso(new ReembolsoRegistrado(
+            peticion.Referencia, peticion.Monto, peticion.Moneda, peticion.AutorizacionOriginal,
+            Resultado: "IDEMPOTENTE", AutorizacionId: previa.AutorizacionId, RecibidoEn: recibidoEn));
+
+        return Results.Ok(previa);
+    }
+
+    var modoEfectivo = configuracion.Modo;
+    if (modoEfectivo == ModoMock.INTERMITENTE)
+    {
+        modoEfectivo = Random.Shared.NextDouble() < configuracion.ProbabilidadFallo
+            ? ModoMock.CAIDO
+            : ModoMock.NORMAL;
+    }
+
+    // latenciaMs igual a 0 se aplica como cero: no hay espera.
+    if (modoEfectivo == ModoMock.LENTO && configuracion.LatenciaMs > 0)
+    {
+        await Task.Delay(configuracion.LatenciaMs);
+    }
+
+    if (modoEfectivo == ModoMock.CAIDO)
+    {
+        estado.RegistrarReembolso(new ReembolsoRegistrado(
+            peticion.Referencia, peticion.Monto, peticion.Moneda, peticion.AutorizacionOriginal,
+            Resultado: "NO_PROCESADO", AutorizacionId: null, RecibidoEn: recibidoEn));
+
+        return Results.Problem(
+            title: "PayKlik no disponible",
+            detail: "El proveedor no proceso el reembolso (modo CAIDO).",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    var aprobado = modoEfectivo != ModoMock.RECHAZO;
+
+    var respuesta = new RespuestaReembolso(
+        AutorizacionId: aprobado ? GenerarAutorizacionId() : null,
+        Estado: aprobado ? "APROBADO" : "RECHAZADO",
+        CodigoRespuesta: aprobado ? "00" : "51",
+        Mensaje: aprobado ? "Reembolso aprobado" : "Fondos insuficientes",
+        ProcesadoEn: recibidoEn);
+
+    estado.RegistrarReembolso(new ReembolsoRegistrado(
+        peticion.Referencia, peticion.Monto, peticion.Moneda, peticion.AutorizacionOriginal,
+        Resultado: respuesta.Estado, AutorizacionId: respuesta.AutorizacionId, RecibidoEn: recibidoEn));
+
+    // Solo se guarda para idempotencia una respuesta efectivamente procesada (200).
+    if (!string.IsNullOrWhiteSpace(claveIdempotencia))
+    {
+        estado.IdempotenciaReembolso.ObtenerOAgregar(claveIdempotencia, () => respuesta);
+    }
+
+    return Results.Ok(respuesta);
+});
+
+app.MapGet("/admin/reembolsos", (EstadoMock estado) => Results.Ok(estado.Reembolsos));
+
 app.Run();
 
 static string GenerarAutorizacionId() =>

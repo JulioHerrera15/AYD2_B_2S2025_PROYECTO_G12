@@ -32,4 +32,8 @@ public static class MetricasSgo
     public static readonly Counter MensajesDuplicadosTotal = Prometheus.Metrics.CreateCounter(
         "mensajes_duplicados_total",
         "Mensajes descartados por EventConsumerBase por tener un eventId ya procesado.");
+
+    public static readonly Counter AlertasFiscalesLevantadas = Prometheus.Metrics.CreateCounter(
+        "alertas_fiscales_levantadas_total",
+        "Alertas fiscales levantadas en ordenes cuando la SAT agoto los reintentos de certificacion.");
 }

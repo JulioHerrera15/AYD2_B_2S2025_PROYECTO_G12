@@ -26,6 +26,7 @@ public sealed partial class Orden
         Id = string.Empty;
         NumeroOrden = string.Empty;
         ClienteId = string.Empty;
+        ReceptorCui = string.Empty;
     }
 
     public Orden(
@@ -39,7 +40,8 @@ public sealed partial class Orden
         IEnumerable<LineaOrden> lineas,
         decimal impuestos,
         string? ubicacionSolicitadaId = null,
-        DateTime? creadaEn = null)
+        DateTime? creadaEn = null,
+        string receptorCui = "CF")
     {
         if (string.IsNullOrWhiteSpace(id))
         {
@@ -81,6 +83,11 @@ public sealed partial class Orden
                 nameof(ubicacionSolicitadaId));
         }
 
+        if (string.IsNullOrWhiteSpace(receptorCui))
+        {
+            throw new ArgumentException("El CUI del receptor es obligatorio.", nameof(receptorCui));
+        }
+
         Id = id;
         NumeroOrden = numeroOrden;
         ClienteId = clienteId;
@@ -93,6 +100,7 @@ public sealed partial class Orden
         Estado = EstadoOrden.CREADA;
         Secuencia = 1;
         CreadaEn = creadaEn ?? DateTime.UtcNow;
+        ReceptorCui = receptorCui;
 
         _lineas.AddRange(lineasMaterializadas);
     }
@@ -129,6 +137,53 @@ public sealed partial class Orden
     public int Secuencia { get; private set; }
 
     public DateTime CreadaEn { get; private set; }
+
+    /// <summary>
+    /// CUI del receptor para la factura (HU-005). "CF" cuando el cliente no
+    /// entrega uno al crear la orden. Se usa al construir
+    /// CertificacionFiscalSolicitada; no cambia despues de creada la orden.
+    /// </summary>
+    public string ReceptorCui { get; private set; }
+
+    /// <summary>
+    /// Identificador real del pago aplicado (el autorizacionId que devuelve el
+    /// proveedor, tomado de PagoAplicado). Reemplaza el placeholder
+    /// PAG-PENDIENTE-&lt;id&gt; una vez que Ordenes consume ese evento. Null hasta
+    /// entonces.
+    /// </summary>
+    public string? PagoId { get; private set; }
+
+    /// <summary>Identificador interno del documento fiscal (DocumentoFiscalCertificado.documentoFiscalId).</summary>
+    public string? DocumentoFiscalId { get; private set; }
+
+    /// <summary>Serie autorizada del documento fiscal certificado.</summary>
+    public string? DocumentoFiscalSerie { get; private set; }
+
+    /// <summary>Numero correlativo del documento fiscal certificado.</summary>
+    public string? DocumentoFiscalNumero { get; private set; }
+
+    /// <summary>Numero de autorizacion que devolvio la SAT.</summary>
+    public string? DocumentoFiscalNumeroAutorizacion { get; private set; }
+
+    /// <summary>Folio que devolvio la SAT. Puede llegar vacio segun el mock.</summary>
+    public string? DocumentoFiscalFolio { get; private set; }
+
+    /// <summary>Momento en que la SAT certifico el documento (campo certificadaEn del evento).</summary>
+    public DateTime? DocumentoFiscalCertificadoEn { get; private set; }
+
+    /// <summary>
+    /// Bandera que indica que la certificacion fiscal ante la SAT agoto sus
+    /// reintentos y la orden queda varada en CONFIRMADA_PENDIENTE_FISCAL.
+    /// Se levanta al consumir CertificacionSatFallida y se limpia al reintentar
+    /// manualmente (ADR-011).
+    /// </summary>
+    public bool AlertaFiscal { get; private set; }
+
+    /// <summary>Motivo por el que se levanto la alerta fiscal (ultimo codigo/motivo de la SAT).</summary>
+    public string? AlertaFiscalMotivo { get; private set; }
+
+    /// <summary>Momento en que se levanto la alerta fiscal.</summary>
+    public DateTime? AlertaFiscalEn { get; private set; }
 
     public IReadOnlyList<LineaOrden> Lineas => _lineas.AsReadOnly();
 
@@ -197,5 +252,70 @@ public sealed partial class Orden
         MetodoEntrega = metodoNuevo;
         UbicacionSolicitadaId = metodoNuevo == MetodoEntrega.RECOGIDA_TIENDA ? ubicacionRecogidaId : null;
         Secuencia += 1;
+    }
+
+    /// <summary>
+    /// Registra el identificador real del pago aplicado (HU-004/HU-005). Lo llama
+    /// el manejador de eventos de Pagos al recibir PagoAplicado, antes de
+    /// transicionar a PAGO_APLICADO. Reemplaza el placeholder
+    /// PAG-PENDIENTE-&lt;id&gt; que hoy usa OrdenConfirmada/OrdenCancelada.
+    /// </summary>
+    public void RegistrarPago(string pagoId)
+    {
+        if (string.IsNullOrWhiteSpace(pagoId))
+        {
+            throw new ArgumentException("El identificador del pago es obligatorio.", nameof(pagoId));
+        }
+
+        PagoId = pagoId;
+    }
+
+    /// <summary>
+    /// Persiste el resultado de la certificacion fiscal (DocumentoFiscalCertificado)
+    /// sobre la orden. Solo valido mientras la orden esta CONFIRMADA_PENDIENTE_FISCAL:
+    /// lo llama <see cref="ManejadorDocumentoFiscalCertificado" />, en el mismo
+    /// momento en que aplica la transicion a CONFIRMADA, nunca despues.
+    /// </summary>
+    public void AsignarCertificacionFiscal(
+        string documentoFiscalId,
+        string serie,
+        string numeroDocumento,
+        string numeroAutorizacion,
+        string? folio,
+        DateTime certificadaEn)
+    {
+        if (Estado != EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL)
+        {
+            throw new InvalidOperationException(
+                $"No se puede asignar la certificacion fiscal con la orden en estado {Estado}.");
+        }
+
+        DocumentoFiscalId = documentoFiscalId;
+        DocumentoFiscalSerie = serie;
+        DocumentoFiscalNumero = numeroDocumento;
+        DocumentoFiscalNumeroAutorizacion = numeroAutorizacion;
+        DocumentoFiscalFolio = folio;
+        DocumentoFiscalCertificadoEn = certificadaEn;
+    }
+
+    /// <summary>
+    /// Levanta la bandera de alerta fiscal cuando la SAT agoto sus reintentos.
+    /// No cambia de estado: la orden se queda en CONFIRMADA_PENDIENTE_FISCAL.
+    /// </summary>
+    public void LevantarAlertaFiscal(string motivo, DateTime en)
+    {
+        AlertaFiscal = true;
+        AlertaFiscalMotivo = motivo;
+        AlertaFiscalEn = en;
+    }
+
+    /// <summary>
+    /// Limpia la bandera de alerta fiscal despues de un reintento manual exitoso.
+    /// </summary>
+    public void LimpiarAlertaFiscal()
+    {
+        AlertaFiscal = false;
+        AlertaFiscalMotivo = null;
+        AlertaFiscalEn = null;
     }
 }

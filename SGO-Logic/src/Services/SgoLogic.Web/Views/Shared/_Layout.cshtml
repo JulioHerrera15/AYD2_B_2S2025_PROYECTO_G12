@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - MegaStore Logística</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Material Symbols Outlined -->
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <!-- Tailwind Config injected from mockups design system -->
+    <script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "outline": "#77767b",
+                        "error-container": "#ffdad6",
+                        "on-secondary-fixed": "#001b3e",
+                        "surface-container-low": "#f3f3f5",
+                        "on-tertiary-container": "#8c8382",
+                        "surface-variant": "#e2e2e4",
+                        "surface-container-lowest": "#ffffff",
+                        "on-primary": "#ffffff",
+                        "border-subtle": "#D2D2D7",
+                        "surface-white": "#FFFFFF",
+                        "outline-variant": "#c7c6ca",
+                        "tertiary": "#040302",
+                        "on-secondary-container": "#002d61",
+                        "on-tertiary-fixed": "#1f1a19",
+                        "surface-dim": "#d9dadc",
+                        "background": "#f9f9fb",
+                        "secondary-fixed-dim": "#aac7ff",
+                        "on-tertiary-fixed-variant": "#4c4544",
+                        "surface": "#f9f9fb",
+                        "surface-container": "#eeeef0",
+                        "tertiary-fixed-dim": "#cec4c2",
+                        "tertiary-container": "#211c1b",
+                        "on-primary-fixed-variant": "#474649",
+                        "primary-fixed": "#e4e2e4",
+                        "inverse-primary": "#c8c6c8",
+                        "primary-container": "#1d1d1f",
+                        "on-tertiary": "#ffffff",
+                        "surface-bright": "#f9f9fb",
+                        "on-primary-container": "#868587",
+                        "surface-tint": "#5f5e60",
+                        "error": "#ba1a1a",
+                        "primary": "#030304",
+                        "inverse-on-surface": "#f0f0f2",
+                        "on-error": "#ffffff",
+                        "secondary-fixed": "#d7e3ff",
+                        "surface-container-high": "#e8e8ea",
+                        "secondary-container": "#5095fe",
+                        "on-surface-variant": "#46464a",
+                        "on-secondary": "#ffffff",
+                        "surface-container-highest": "#e2e2e4",
+                        "primary-fixed-dim": "#c8c6c8",
+                        "on-error-container": "#93000a",
+                        "on-primary-fixed": "#1b1b1d",
+                        "tertiary-fixed": "#ebe0de",
+                        "on-surface": "#1a1c1d",
+                        "secondary": "#005cba",
+                        "text-muted": "#6E6E73",
+                        "on-secondary-fixed-variant": "#00458e",
+                        "inverse-surface": "#2f3132",
+                        "on-background": "#1a1c1d"
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    spacing: {
+                        "container-max": "1200px",
+                        "unit": "8px",
+                        "gutter": "24px",
+                        "margin-desktop": "40px",
+                        "margin-mobile": "20px"
+                    },
+                    fontFamily: {
+                        sans: ["Inter", "sans-serif"],
+                        "headline-sm": ["Inter"],
+                        "label-sm": ["Inter"],
+                        "body-lg": ["Inter"],
+                        "display-lg-mobile": ["Inter"],
+                        "body-md": ["Inter"],
+                        "display-lg": ["Inter"],
+                        "label-md": ["Inter"],
+                        "headline-md": ["Inter"]
+                    },
+                    fontSize: {
+                        "headline-sm": ["24px", { lineHeight: "1.3", fontWeight: "600" }],
+                        "label-sm": ["12px", { lineHeight: "1.4", fontWeight: "600" }],
+                        "body-lg": ["19px", { lineHeight: "1.5", fontWeight: "400" }],
+                        "display-lg-mobile": ["40px", { lineHeight: "1.1", letterSpacing: "-0.01em", fontWeight: "700" }],
+                        "body-md": ["17px", { lineHeight: "1.5", fontWeight: "400" }],
+                        "display-lg": ["56px", { lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700" }],
+                        "label-md": ["14px", { lineHeight: "1.4", letterSpacing: "0.01em", fontWeight: "500" }],
+                        "headline-md": ["32px", { lineHeight: "1.2", letterSpacing: "-0.01em", fontWeight: "600" }]
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f9f9fb;
+            color: #030304;
+        }
+
+        .ambient-shadow {
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.04);
+        }
+
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(210, 210, 215, 0.5);
+        }
+
+        .search-ring:focus-within {
+            box-shadow: 0 0 0 2px #005cba;
+            background-color: #ffffff;
+        }
+
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            vertical-align: middle;
+        }
+
+        .material-symbols-outlined.fill {
+            font-variation-settings: 'FILL' 1;
+        }
+    </style>
+</head>
+<body class="bg-background text-primary antialiased min-h-full flex flex-col font-sans">
+    <!-- TopNavBar (Glassmorphism / Apple-Inspired Minimalist) -->
+    <header class="fixed top-0 left-0 right-0 z-50 bg-surface-white/80 backdrop-blur-xl border-b border-border-subtle shadow-sm">
+        <div class="max-w-container-max mx-auto px-4 md:px-margin-desktop h-16 flex items-center justify-between gap-4">
+            <!-- Brand Logo -->
+            <a href="/" class="flex items-center gap-3 group">
+                <div class="w-9 h-9 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold text-sm shadow-sm group-hover:scale-105 transition-transform duration-200">
+                    ML
+                </div>
+                <div class="flex flex-col">
+                    <span class="font-bold text-base md:text-lg tracking-tight text-primary leading-tight">MegaStore</span>
+                    <span class="text-[11px] font-semibold tracking-wider uppercase text-text-muted">Control Logístico</span>
+                </div>
+            </a>
+
+            <!-- Navigation Links -->
+            <nav class="hidden md:flex items-center gap-1.5">
+                <a href="/" class="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[19px]">dashboard</span>
+                    <span>Dashboard</span>
+                </a>
+                <a href="/Carrito" class="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[19px]">shopping_cart</span>
+                    <span>Carrito</span>
+                </a>
+                <a href="/Estado" class="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[19px]">inventory_2</span>
+                    <span>Consultar Orden</span>
+                </a>
+                <a href="/Incidencias/Crear" class="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[19px]">report_problem</span>
+                    <span>Incidencias</span>
+                </a>
+            </nav>
+
+            <!-- User Session / Auth Controls -->
+            <div class="flex items-center gap-3">
+                @{
+                    var userName = Context.Request.Cookies["sgo_user_name"];
+                    var userEmail = Context.Request.Cookies["sgo_user_email"];
+                }
+
+                @if (!string.IsNullOrWhiteSpace(userEmail))
+                {
+                    <div class="flex items-center gap-2.5 bg-surface-container-low border border-border-subtle/50 px-3 py-1.5 rounded-full">
+                        <div class="w-7 h-7 rounded-full bg-secondary text-white font-bold text-xs flex items-center justify-center shadow-sm">
+                            @((userName ?? userEmail).Substring(0, 1).ToUpper())
+                        </div>
+                        <span class="text-xs font-semibold text-primary max-w-[120px] truncate hidden sm:inline">
+                            @(userName ?? userEmail)
+                        </span>
+                    </div>
+                    <a href="/Auth/Logout" class="text-xs font-medium text-text-muted hover:text-error transition-colors px-2 py-1">
+                        Salir
+                    </a>
+                }
+                else
+                {
+                    <a href="/Auth/Login" class="text-sm font-medium text-primary hover:text-secondary transition-colors px-3 py-1.5">
+                        Iniciar Sesión
+                    </a>
+                    <a href="/Auth/Registro" class="bg-primary text-on-primary rounded-full px-4 py-1.5 text-xs font-semibold hover:opacity-90 transition-all shadow-sm active:scale-95 duration-150">
+                        Crear Cuenta
+                    </a>
+                }
+            </div>
+        </div>
+
+        <!-- Mobile Navigation Sub-bar -->
+        <div class="md:hidden flex items-center justify-around border-t border-border-subtle/60 py-2 px-2 bg-surface-white">
+            <a href="/" class="flex flex-col items-center text-[11px] font-medium text-on-surface-variant hover:text-primary">
+                <span class="material-symbols-outlined text-[20px]">dashboard</span>
+                <span>Inicio</span>
+            </a>
+            <a href="/Carrito" class="flex flex-col items-center text-[11px] font-medium text-on-surface-variant hover:text-primary">
+                <span class="material-symbols-outlined text-[20px]">shopping_cart</span>
+                <span>Carrito</span>
+            </a>
+            <a href="/Estado" class="flex flex-col items-center text-[11px] font-medium text-on-surface-variant hover:text-primary">
+                <span class="material-symbols-outlined text-[20px]">inventory_2</span>
+                <span>Órdenes</span>
+            </a>
+            <a href="/Incidencias/Crear" class="flex flex-col items-center text-[11px] font-medium text-on-surface-variant hover:text-primary">
+                <span class="material-symbols-outlined text-[20px]">report_problem</span>
+                <span>Incidencias</span>
+            </a>
+        </div>
+    </header>
+
+    <!-- Main Content Canvas -->
+    <main class="flex-1 w-full max-w-container-max mx-auto px-4 md:px-margin-desktop pt-24 md:pt-28 pb-16">
+        @if (TempData["Exito"] != null)
+        {
+            <div class="mb-6 bg-secondary-fixed text-on-secondary-fixed border border-secondary-container/40 rounded-xl p-4 flex items-center gap-3 ambient-shadow">
+                <span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+                <div class="font-medium text-sm">@TempData["Exito"]</div>
+            </div>
+        }
+        @if (TempData["Error"] != null)
+        {
+            <div class="mb-6 bg-error-container text-on-error-container border border-error/20 rounded-xl p-4 flex items-center gap-3 ambient-shadow">
+                <span class="material-symbols-outlined text-error" style="font-variation-settings: 'FILL' 1;">error</span>
+                <div class="font-medium text-sm">@TempData["Error"]</div>
+            </div>
+        }
+
+        @RenderBody()
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-surface-white border-t border-border-subtle py-8 text-center text-xs text-text-muted mt-auto">
+        <div class="max-w-container-max mx-auto px-4">
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div class="flex items-center gap-2">
+                    <div class="w-5 h-5 rounded bg-primary text-on-primary flex items-center justify-center text-[10px] font-bold">
+                        ML
+                    </div>
+                    <span class="font-semibold text-primary">MegaStore SGO-Logic</span>
+                    <span>&copy; 2026 — USAC AYD2 Sección B</span>
+                </div>
+                <div class="text-text-muted">
+                    Arquitectura de Microservicios: .NET 8 &bull; Redis &bull; RabbitMQ &bull; PostgreSQL
+                </div>
+            </div>
+        </div>
+    </footer>
+</body>
+</html>

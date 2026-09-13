@@ -53,4 +53,34 @@ public sealed class ClientePayKlikHttp : IClientePayKlik
 
         return resultado ?? throw new PayKlikNoDisponibleException("PayKlik devolvio un cuerpo vacio.");
     }
+
+    public async Task<ResultadoPayKlik> ReembolsoAsync(
+        PeticionReembolsoPayKlik peticion,
+        string claveIdempotencia,
+        CancellationToken cancelacion)
+    {
+        using var solicitud = new HttpRequestMessage(HttpMethod.Post, "/v1/reembolsos")
+        {
+            Content = JsonContent.Create(peticion, mediaType: null, SgoJsonSerializerOptions.Default)
+        };
+
+        if (!string.IsNullOrWhiteSpace(claveIdempotencia))
+        {
+            solicitud.Headers.Add("Idempotency-Key", claveIdempotencia);
+        }
+
+        using var respuesta = await _http.SendAsync(solicitud, cancelacion);
+
+        if ((int)respuesta.StatusCode >= 500)
+        {
+            throw new PayKlikNoDisponibleException($"PayKlik respondio {(int)respuesta.StatusCode} en reembolso.");
+        }
+
+        respuesta.EnsureSuccessStatusCode();
+
+        var resultado = await respuesta.Content.ReadFromJsonAsync<ResultadoPayKlik>(
+            SgoJsonSerializerOptions.Default, cancelacion);
+
+        return resultado ?? throw new PayKlikNoDisponibleException("PayKlik devolvio un cuerpo vacio en reembolso.");
+    }
 }

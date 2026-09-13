@@ -6,3 +6,15 @@ ProyectoFase1.txt
 .venv
 __pycache__/
 memory/
+instrucciones.txt
+mockups
+HU-PROPIAS.txt
+HU-PROPIAS.TXT
+
+# Suites de pruebas locales (no subir al repositorio remoto)
+SGO-Logic/tests/SgoLogic.Auth.Tests/
+SGO-Logic/tests/SgoLogic.ConsultaEstado.Tests/
+SGO-Logic/tests/SgoLogic.Integration.Tests/
+SGO-Logic/tests/SgoLogic.Notificaciones.Tests/
+SGO-Logic/tests/test_suite_exhaustiva.py
+SGO-Logic/run-tests.sh

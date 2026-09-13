@@ -87,4 +87,21 @@ public sealed class ClientePayKlikFalso : IClientePayKlik
         AntesDeResponder?.Invoke();
         return await _comportamiento(peticion);
     }
+
+    public Func<PeticionReembolsoPayKlik, Task<ResultadoPayKlik>>? ComportamientoReembolso { get; set; }
+
+    public async Task<ResultadoPayKlik> ReembolsoAsync(
+        PeticionReembolsoPayKlik peticion,
+        string claveIdempotencia,
+        CancellationToken cancelacion)
+    {
+        if (ComportamientoReembolso is not null)
+        {
+            return await ComportamientoReembolso(peticion);
+        }
+
+        return new ResultadoPayKlik(
+            "PK-REEMBOLSO-000001", EstadoRespuestaPayKlik.APROBADO, "00", "Reembolso aprobado",
+            null, null, DateTime.UtcNow);
+    }
 }

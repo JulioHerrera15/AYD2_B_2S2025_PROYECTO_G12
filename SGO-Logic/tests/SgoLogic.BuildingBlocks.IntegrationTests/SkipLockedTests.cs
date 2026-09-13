@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using SgoLogic.BuildingBlocks.Messaging;
 using SgoLogic.BuildingBlocks.Outbox;
@@ -55,7 +56,7 @@ public sealed class SkipLockedTests
         }
 
         var entregas = new ConcurrentBag<string>();
-        var suscriptorEspia = new SuscriptorRabbitMq(conexionEspia);
+        var suscriptorEspia = new SuscriptorRabbitMq(conexionEspia, NullLogger<SuscriptorRabbitMq>.Instance);
         using var suscripcionEspia = suscriptorEspia.Suscribir(cola, cuerpo =>
         {
             entregas.Add(System.Text.Encoding.UTF8.GetString(cuerpo.Span));

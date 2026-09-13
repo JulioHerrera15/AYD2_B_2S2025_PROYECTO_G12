@@ -40,7 +40,8 @@ builder.Services.AddScoped<IClientePayKlik>(proveedor => new ClientePayKlikConDi
     proveedor.GetRequiredService<DisyuntorPayKlik>()));
 
 builder.Services.AddScoped<ServicioCobro>();
-builder.Services.AddHostedService<CobroSolicitadoConsumidor>();
+builder.Services.AddScoped<ServicioReembolso>();
+builder.Services.AddHostedService<PagosEventosConsumidor>();
 
 var app = builder.Build();
 

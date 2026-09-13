@@ -1,0 +1,108 @@
+@{
+    ViewData["Title"] = "Centro de Control";
+}
+
+<!-- Hero Section -->
+<div class="mb-12">
+    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold mb-4 ambient-shadow">
+        <span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">bolt</span>
+        SGO-Logic MegaStore Omnicanal
+    </div>
+    <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold text-primary tracking-tight mb-4">
+        Centro de Control Logístico y Comercio
+    </h1>
+    <p class="text-base sm:text-lg text-text-muted max-w-2xl leading-relaxed mb-8">
+        Plataforma distribuida para la sincronización en caliente de carritos, trazabilidad autoritativa de estados por eventos en RabbitMQ y gestión de incidencias.
+    </p>
+
+    <div class="flex flex-wrap items-center gap-3">
+        <a href="/Carrito" class="inline-flex items-center gap-2 bg-primary text-on-primary px-6 py-2.5 rounded-full font-medium text-sm hover:opacity-90 transition-opacity shadow-sm active:scale-95 duration-150">
+            <span class="material-symbols-outlined text-[18px]">shopping_cart</span>
+            Ver Carrito de Compras
+        </a>
+        <a href="/Estado" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
+            <span class="material-symbols-outlined text-[18px]">inventory_2</span>
+            Consultar Órdenes
+        </a>
+        <a href="/Incidencias/Crear" class="inline-flex items-center gap-2 bg-surface-white text-text-muted hover:text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-container-low transition-colors border border-border-subtle">
+            <span class="material-symbols-outlined text-[18px]">report_problem</span>
+            Reportar Incidencia
+        </a>
+    </div>
+</div>
+
+<!-- Bento Grid: Core Capabilities -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+    <!-- Card 1: Auth & Identity -->
+    <div class="bg-surface-white rounded-2xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-colors">
+        <div>
+            <div class="w-12 h-12 rounded-xl bg-surface-container-low text-primary flex items-center justify-center mb-5">
+                <span class="material-symbols-outlined text-[26px]">badge</span>
+            </div>
+            <h3 class="text-xl font-bold text-primary mb-2">Identidad & Acceso</h3>
+            <p class="text-sm text-text-muted leading-relaxed mb-6">
+                Registro con hash criptográfico BCrypt, verificación obligatoria por código de 6 dígitos y emisión de tokens JWT seguros.
+            </p>
+        </div>
+        <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
+            <a href="/Auth/Login" class="text-sm font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
+                Iniciar sesión <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </a>
+            <span class="text-xs font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Auth.Api</span>
+        </div>
+    </div>
+
+    <!-- Card 2: Unified Cart -->
+    <div class="bg-surface-white rounded-2xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-colors">
+        <div>
+            <div class="w-12 h-12 rounded-xl bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center mb-5">
+                <span class="material-symbols-outlined text-[26px]">shopping_bag</span>
+            </div>
+            <h3 class="text-xl font-bold text-primary mb-2">Carrito Unificado</h3>
+            <p class="text-sm text-text-muted leading-relaxed mb-6">
+                Almacenamiento ultrarrápido en Redis. Los productos seleccionados en modo invitado se vinculan automáticamente a la cuenta al autenticarse.
+            </p>
+        </div>
+        <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
+            <a href="/Carrito" class="text-sm font-semibold text-secondary hover:underline inline-flex items-center gap-1 transition-colors">
+                Ir al carrito <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </a>
+            <span class="text-xs font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Redis :6379</span>
+        </div>
+    </div>
+
+    <!-- Card 3: 360 Tracking & Incidents -->
+    <div class="bg-surface-white rounded-2xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-colors">
+        <div>
+            <div class="w-12 h-12 rounded-xl bg-surface-container-low text-primary flex items-center justify-center mb-5">
+                <span class="material-symbols-outlined text-[26px]">hub</span>
+            </div>
+            <h3 class="text-xl font-bold text-primary mb-2">Trazabilidad & Visión 360</h3>
+            <p class="text-sm text-text-muted leading-relaxed mb-6">
+                Proyecciones CQRS alimentadas por eventos asíncronos en RabbitMQ, regla autoritativa del estado, descarte fuera de secuencia e incidencias HU-021.
+            </p>
+        </div>
+        <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
+            <a href="/Estado" class="text-sm font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
+                Buscar orden <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </a>
+            <span class="text-xs font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">PostgreSQL + Cache</span>
+        </div>
+    </div>
+</div>
+
+<!-- Architecture Status Banner -->
+<div class="bg-surface-container-low rounded-2xl p-6 border border-border-subtle/60 flex flex-col md:flex-row items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+        <div class="w-3 h-3 rounded-full bg-green-500 animate-pulse"></div>
+        <div>
+            <div class="text-sm font-semibold text-primary">Microservicios y Broker Operativos</div>
+            <div class="text-xs text-text-muted">ApiGateway enrutando en http://localhost:8080 con health checks activos</div>
+        </div>
+    </div>
+    <div class="flex items-center gap-2">
+        <a href="/Estado?ordenId=ORD-2026-001" class="text-xs font-semibold text-primary bg-surface-white hover:bg-surface-bright px-3 py-1.5 rounded-full border border-border-subtle shadow-sm transition-colors">
+            Probar Orden Demo: ORD-2026-001
+        </a>
+    </div>
+</div>

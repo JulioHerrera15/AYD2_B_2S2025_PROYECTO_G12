@@ -1,16 +1,28 @@
-# Contrato de eventos del contexto Órdenes — v1.1
+# Contrato de eventos del contexto Órdenes — v1.2
 
 **Proyecto:** SGO-Logic — Fase 2
 **Curso:** Análisis y Diseño de Sistemas 2, Sección B
 **Contexto emisor:** Órdenes
 **Autor:** 202300410 — Angel David Martínez García
 **Estado:** listo para congelamiento
-**Fecha:** 2026-09-07
+**Fecha:** 2026-09-12
 **Depende de:** `sgo-eventos-envelope-v1.md`
 
 ---
 
-## 0. Cambios respecto a v1
+## 0. Cambios respecto a v1.1
+
+Los eventos 11 (`DevolucionRegistrada`) y 12 (`OrdenCertificadaFiscalmente`) pasan de definidos-pero-no-emitidos a **implementados**: ambos se publican desde el código de Órdenes contra la topología descrita aquí. Esto trae tres cambios de bindings:
+
+| # | Cambio | Detalle |
+|---|---|---|
+| 1 | Cola nueva `ordenes.facturacion` | Órdenes ahora consume `facturacion.documento-fiscal.certificado` y `facturacion.documento-fiscal.certificacion-fallida` (eventos 1 y 2 de `facturacion-eventos-v1`) para cerrar el tramo `CONFIRMADA_PENDIENTE_FISCAL` → `CONFIRMADA` y para levantar la bandera de alerta fiscal (ADR-011, ADR-015). Ver sección 4. |
+| 2 | `pagos.ordenes` liga `ordenes.devolucion.registrada` | El binding que la v1.1 dejaba fijado ahora está declarado en código: `PagosEventosConsumidor` procesa la devolución y genera el reembolso contra PayKlik. |
+| 3 | `facturacion.ordenes` liga `ordenes.devolucion.registrada` | Igual que el punto anterior, del lado de Facturación: genera la nota de crédito. |
+
+Sigue vigente todo lo resuelto en v1.1 (objeciones 1 a 10, tabla de la sección "Cambios respecto a v1" de esa versión, no repetida aquí).
+
+## 0.1 Cambios respecto a v1
 
 Esta versión incorpora las objeciones de Julio Herrera (Auditoría, base técnica), Jonathan Jerónimo (Consulta de Estado, Notificaciones) y Francisco Castillo (Integración POS, Integración ERP).
 
@@ -37,7 +49,7 @@ Este documento define únicamente el contenido de `data` de los eventos que **pu
 
 Órdenes es el único emisor de eventos con routing key `ordenes.*`. Ningún otro contexto publica bajo ese prefijo.
 
-Trazabilidad al DDA: ADR-001, ADR-002, ADR-003, ADR-004, ADR-008, ADR-010, ADR-011, ADR-012.
+Trazabilidad al DDA: ADR-001, ADR-002, ADR-003, ADR-004, ADR-008, ADR-010, ADR-011, ADR-012, ADR-015.
 
 ---
 
@@ -106,6 +118,8 @@ Doce eventos. Ninguno más se publica bajo `ordenes.*` en la versión 1.
 
 Auditoría consume los doce por su binding `#` y no se lista fila por fila.
 
+**Estado de implementación.** Los doce eventos están implementados y en producción. Los eventos 11 y 12 eran, en v1.1, contrato sin código: el primero esperaba a que Pagos y Facturación tuvieran manejadores de devolución, y el segundo esperaba al consumo de la certificación SAT. Ambos se implementaron en el mismo bloque de trabajo (registro de devoluciones, nota de crédito fiscal y reembolso contra PayKlik) y ya publican contra la topología descrita en este documento.
+
 ---
 
 ## 4. Bindings
@@ -122,6 +136,16 @@ Cada consumidor declara su propia cola durable. El nombre de la cola y sus argum
 | `facturacion.ordenes` | Angel | `ordenes.fiscal.certificacion-solicitada`, `ordenes.devolucion.registrada` |
 | `pos.ordenes` | Francisco | `ordenes.orden.confirmada`, `ordenes.orden.cancelada` |
 | `erp.ordenes` | Francisco | `ordenes.orden.confirmada`, `ordenes.orden.cancelada`, `ordenes.orden.certificada-fiscalmente`, `ordenes.devolucion.registrada` |
+
+**`pagos.ordenes` y `facturacion.ordenes` ya escuchan `ordenes.devolucion.registrada`, en código, no solo en el papel.** `PagosEventosConsumidor` (Pagos) y `FacturacionEventosConsumidor` (Facturación) declaran ambos bindings sobre su cola y despachan el evento 11 al manejador correspondiente (reembolso contra PayKlik en Pagos, nota de crédito en Facturación). Ninguno usa `EventConsumerBase` para esto: esa clase base está tipada a un único `TData` por cola, y estas dos colas reciben dos tipos de `data` distintos sobre bindings distintos.
+
+**Cola nueva `ordenes.facturacion`, dueño Órdenes.** No es un binding a `ordenes.*`: es la cola propia de Órdenes para **consumir** los eventos que publica Facturación (`facturacion-eventos-v1`), simétrica a como `facturacion.ordenes` consume los de Órdenes. Se documenta aquí porque cierra el tramo `CONFIRMADA_PENDIENTE_FISCAL` → `CONFIRMADA` de este mismo contrato (evento 12) y porque el consumidor tampoco usa `EventConsumerBase`, por la misma razón de las dos colas anteriores.
+
+| Cola | Dueño | Bindings | Exchange de origen |
+|---|---|---|---|
+| `ordenes.facturacion` | Angel (Órdenes) | `facturacion.documento-fiscal.certificado`, `facturacion.documento-fiscal.certificacion-fallida` | `sgo.eventos` (propiedad de Facturación, ver `facturacion-eventos-v1.md`) |
+
+El primer binding (`DocumentoFiscalCertificado`) cierra la transición y emite el evento 12 de este documento. El segundo (`CertificacionSatFallida`) levanta la bandera de alerta fiscal sobre la orden sin cambiarle el estado (ADR-011, ADR-015); no produce ningún evento nuevo de Órdenes, solo un cambio interno visible por consulta.
 
 **Por qué `notificaciones.ordenes` solo recibe el evento 2.** Es la respuesta a la objeción 8. Si la cola nunca recibe los eventos 8 y 9, es imposible que Notificaciones emita dos avisos del mismo hecho, aunque alguien se equivoque programando. La restricción vive en la topología, no en la disciplina de quien la implementa.
 
@@ -712,7 +736,7 @@ Una vez congelado, cualquier cambio se avisa al grupo antes de hacerlo, sin exce
 
 | Revisor | Contexto | Estado | Fecha |
 |---|---|---|---|
-| Angel Martínez (202300410) | Órdenes, Pagos, Facturación | autor | 2026-09-07 |
+| Angel Martínez (202300410) | Órdenes, Pagos, Facturación | autor | 2026-09-12 |
 | Julio Herrera | Auditoría, base técnica | objeciones 1 a 6 incorporadas, pendiente de firma | |
 | Jonathan Jerónimo (202300353) | Consulta de Estado, Notificaciones | objeciones 1 a 8 incorporadas, pendiente de firma | |
 | Francisco Castillo | Integración POS, Integración ERP | objeciones 9 y 10 incorporadas, pendiente de firma | |
@@ -728,3 +752,4 @@ Ninguno bloquea el congelamiento. Los supuestos 1 y 2 de la v1 quedaron cerrados
 2. **TTL de reserva.** Se emite como parámetro en el evento 3; el valor definitivo lo fija Inventario (HU-001).
 3. **Precios del Catálogo Comercial.** Viajan congelados al momento de la compra. El Catálogo es dependencia externa fuera del alcance (CUN-08) y no es fuente de verdad después de creada la orden.
 4. **Ventana de exclusión del lote ERP.** El binding a `OrdenCancelada` permite excluir la venta antes de consolidar, pero una cancelación que llegue **después** de enviado el lote sigue siendo trabajo de la conciliación (HU-022). Ese caso no se puede prevenir por topología.
+5. **`reservaId` sigue siendo un valor de relleno; `pagoId` y el CUI del receptor ya no lo son.** Órdenes todavía no consume las respuestas de Inventario, así que `reservaId` (eventos 4 y 7) y `tiendaDestinoId` se siguen rellenando con un valor derivado del identificador de la orden (`RSV-PENDIENTE-<id>`) o con `null`, marcados `PENDIENTE` en el código hasta que exista el consumidor de Inventario. `pagoId` (eventos 8 y 9) dejó de ser placeholder: se toma de `Orden.PagoId`, que `ManejadorEventosPagos` persiste al consumir `PagoAplicado`. El CUI del receptor (evento 6) también dejó de ser placeholder: viene de `Orden.ReceptorCui`, capturado desde la creación de la orden (`"CF"` por defecto si el cliente no da uno).

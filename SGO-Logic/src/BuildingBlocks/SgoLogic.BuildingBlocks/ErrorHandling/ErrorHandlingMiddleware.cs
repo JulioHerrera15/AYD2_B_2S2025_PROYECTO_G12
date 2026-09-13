@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -27,6 +28,25 @@ public sealed class ErrorHandlingMiddleware
         try
         {
             await _siguiente(contexto);
+        }
+        catch (JsonException ex)
+        {
+            _logger.LogWarning(ex, "JSON invalido en la solicitud {Ruta}", contexto.Request.Path);
+
+            var problema = new ProblemDetails
+            {
+                Status = StatusCodes.Status400BadRequest,
+                Title = "Solicitud invalida",
+                Detail = $"El cuerpo de la solicitud contiene valores no validos: {ex.Message}",
+                Instance = contexto.Request.Path
+            };
+            problema.Extensions["transactionId"] = EventContext.TransactionId;
+            problema.Extensions["codigo"] = "solicitud_invalida";
+
+            contexto.Response.ContentType = "application/problem+json";
+            contexto.Response.StatusCode = problema.Status!.Value;
+
+            await contexto.Response.WriteAsJsonAsync(problema, SgoJsonSerializerOptions.Default);
         }
         catch (Exception ex)
         {

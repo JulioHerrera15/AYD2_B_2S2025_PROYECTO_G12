@@ -4,6 +4,7 @@ using SgoLogic.BuildingBlocks.Messaging;
 using SgoLogic.BuildingBlocks.Outbox;
 using SgoLogic.Contracts.Enumeraciones;
 using SgoLogic.Ordenes.Api.Application.Ordenes;
+using SgoLogic.Ordenes.Api.Consumers;
 using SgoLogic.Ordenes.Api.Domain;
 using SgoLogic.Ordenes.Api.Infrastructure.Persistencia;
 
@@ -27,7 +28,19 @@ builder.Services.AddSingleton<PoliticaMediosPago>();
 builder.Services.AddScoped<IRepositorioOrdenes, RepositorioOrdenes>();
 builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
 builder.Services.AddScoped<IGeneradorCorrelativoOrden, GeneradorCorrelativoOrden>();
+builder.Services.AddScoped<IGeneradorCorrelativoDevolucion, GeneradorCorrelativoDevolucion>();
 builder.Services.AddScoped<ServicioConfirmacionOrden>();
+builder.Services.AddScoped<ServicioDevolucion>();
+
+// Consumo de los resultados de Pagos: avance de la saga y compensacion (HU-003).
+builder.Services.AddScoped<IRegistroMensajesProcesados, RegistroMensajesProcesados>();
+builder.Services.AddScoped<ManejadorEventosPagos>();
+builder.Services.AddHostedService<PagosEventosConsumidor>();
+
+// Consumo del resultado de certificacion fiscal: cierre CONFIRMADA_PENDIENTE_FISCAL → CONFIRMADA (HU-005).
+builder.Services.AddScoped<ManejadorDocumentoFiscalCertificado>();
+builder.Services.AddScoped<ManejadorCertificacionSatFallida>();
+builder.Services.AddHostedService<DocumentoFiscalCertificadoConsumidor>();
 
 var app = builder.Build();
 
@@ -148,6 +161,101 @@ ordenes.MapGet("/{id}", async (
         : Results.Ok(OrdenDto.Desde(orden));
 });
 
+ordenes.MapPost("/{id}/reintentar-certificacion", async (
+    string id,
+    ServicioConfirmacionOrden servicio,
+    CancellationToken cancelacion) =>
+{
+    try
+    {
+        var resultado = await servicio.ReintentarCertificacionAsync(id, cancelacion);
+        return Results.Ok(resultado);
+    }
+    catch (Exception ex) when (
+        ex is ExcepcionOrdenNoEncontrada or InvalidOperationException)
+    {
+        return MapearError(ex);
+    }
+});
+
+ordenes.MapGet("/alertas-fiscales", async (
+    IRepositorioOrdenes repositorio,
+    CancellationToken cancelacion) =>
+{
+    var ordenesConAlerta = await repositorio.ObtenerConAlertaFiscalAsync(cancelacion);
+    var resultado = ordenesConAlerta.Select(o => new AlertaFiscalDto(
+        o.Id,
+        o.AlertaFiscalEn!.Value,
+        o.AlertaFiscalMotivo ?? string.Empty,
+        o.Total)).ToList();
+    return Results.Ok(resultado);
+});
+
+ordenes.MapPost("/{id}/devoluciones", async (
+    string id,
+    SolicitudDevolucion solicitud,
+    ServicioDevolucion servicio,
+    CancellationToken cancelacion) =>
+{
+    try
+    {
+        var solicitudConId = solicitud with { OrdenId = id };
+        var devolucion = await servicio.RegistrarDevolucionAsync(solicitudConId, cancelacion);
+        return Results.Created($"/api/ordenes/{id}/devoluciones/{devolucion.Id}", devolucion);
+    }
+    catch (Exception ex) when (
+        ex is ExcepcionOrdenNoEncontrada or ExcepcionTransicionInvalida or ExcepcionConflictoConcurrencia)
+    {
+        return MapearError(ex);
+    }
+    catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
+    {
+        return Results.Problem(
+            title: "Solicitud invalida",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status400BadRequest);
+    }
+    catch (InvalidOperationException ex)
+    {
+        // Errores de validación de negocio (ej. orden no en ENTREGADA) -> 400
+        return Results.Problem(
+            title: "Operacion no permitida",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status400BadRequest,
+            extensions: new Dictionary<string, object?> { ["codigo"] = "estado_orden_invalido" });
+    }
+    catch (DbUpdateException)
+    {
+        return Results.Problem(
+            title: "Error de base de datos",
+            detail: "No se pudo persistir la devolucion. Verifique que la migracion se haya aplicado.",
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+});
+
+ordenes.MapGet("/{id}/devoluciones", async (
+    string id,
+    ServicioDevolucion servicio,
+    CancellationToken cancelacion) =>
+{
+    try
+    {
+        var devoluciones = await servicio.ObtenerDevolucionesAsync(id, cancelacion);
+        return Results.Ok(devoluciones);
+    }
+    catch (Exception ex) when (ex is ExcepcionOrdenNoEncontrada)
+    {
+        return MapearError(ex);
+    }
+    catch (DbUpdateException)
+    {
+        return Results.Problem(
+            title: "Error de base de datos",
+            detail: "No se pudo consultar las devoluciones. Verifique que la migracion se haya aplicado.",
+            statusCode: StatusCodes.Status500InternalServerError);
+    }
+});
+
 using (var scope = app.Services.CreateScope())
 {
     var contexto = scope.ServiceProvider.GetRequiredService<OrdenesDbContext>();
@@ -182,13 +290,19 @@ static IResult MapearError(Exception ex) => ex switch
         extensions: new Dictionary<string, object?> { ["codigo"] = "metodo_entrega_invalido" }),
 
     InvalidOperationException => Results.Problem(
-        title: "Cambio de metodo de entrega no permitido",
+        title: "Operacion no permitida",
         detail: ex.Message,
         statusCode: StatusCodes.Status409Conflict,
-        extensions: new Dictionary<string, object?> { ["codigo"] = "metodo_entrega_invalido" }),
+        extensions: new Dictionary<string, object?> { ["codigo"] = "conflicto" }),
 
     _ => Results.Problem(
         title: "Error interno",
         detail: ex.Message,
         statusCode: StatusCodes.Status500InternalServerError)
 };
+
+public sealed record AlertaFiscalDto(
+    string OrdenId,
+    DateTime AlertaFiscalEn,
+    string Motivo,
+    decimal Monto);
