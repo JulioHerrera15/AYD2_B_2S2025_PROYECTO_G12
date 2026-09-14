@@ -1,0 +1,16 @@
+# Override de Docker Compose para demostracion de autoescalado horizontal
+# de Consulta de Estado (HU-024 / EAC-02).
+# Remueve el mapeo fijo de puerto de host para permitir multiples instancias
+# concurrentes balanceadas automaticamente por el ApiGateway (YARP) via Docker DNS.
+
+services:
+  consulta-estado-api:
+    ports: !reset []
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
