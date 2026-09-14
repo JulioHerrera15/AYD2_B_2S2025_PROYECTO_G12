@@ -35,30 +35,25 @@
 // tocar el script via la variable de entorno ORDENES_POR_MINUTO.
 //
 // ---------------------------------------------------------------------------
-// Flujo forzado por orden virtual (punto 3 del encargo)
+// Flujo por orden virtual (punto 3 del encargo)
 // ---------------------------------------------------------------------------
-// Inventario no existe como servicio en este MVP (ver
-// MapaEventosSagaOrden: INVENTARIO_RESERVADO no dispara ningun evento de
-// saga porque Ordenes todavia no lo consume). El endpoint generico
-// POST /api/ordenes/{id}/transiciones esta pensado exactamente para saltar
-// esa ausencia durante la demo (ver TransicionarOrdenRequest), asi que forzar
-// las dos transiciones siguientes es la via legitima, no un atajo informal:
+// La saga ya integra Inventario (consumidor de eventos en Ordenes):
 //
 //   1) POST /api/ordenes                    -> CREADA
 //   2) POST /api/ordenes/{id}/confirmar     -> RESERVA_SOLICITADA
-//   3) POST /api/ordenes/{id}/transiciones  -> INVENTARIO_RESERVADO (forzada)
-//   4) POST /api/ordenes/{id}/transiciones  -> COBRO_SOLICITADO (forzada)
+//   3) Saga avanza sola:
+//      - Ordenes emite ReservaInventarioSolicitada (outbox)
+//      - Inventario reserva y emite InventarioReservado
+//      - Ordenes consume InventarioReservado -> INVENTARIO_RESERVADO
+//      - Ordenes emite CobroSolicitado (outbox)
+//      - Pagos procesa el cobro contra PayKlik (ServicioCobro)
 //
-// El paso 4 es el que importa para EAC-01: al llegar a COBRO_SOLICITADO,
-// MapaEventosSagaOrden.EmitirCobroSolicitado encola CobroSolicitado en el
-// outbox de Ordenes; el consumidor de Pagos lo procesa de forma asincrona y
-// ahi arranca el cobro real contra PayKlik (ServicioCobro). El VU de k6 NO
-// espera ese resultado: la llamada HTTP del paso 4 responde en cuanto Ordenes
-// persiste el cambio de estado, antes de que Pagos siquiera reciba el evento.
-// Por eso la duracion de cada iteracion no cambia cuando PayKlik cae: el
-// desacople via outbox es justamente lo que EAC-01 exige validar. La
-// verificacion de que el cobro se resolvio (o quedo auditado como fallido) se
-// hace aparte, contra las bases, con el segundo script.
+// La prueba EAC-01 no necesita forzar reserva ni cobro: la saga los maneja.
+// Solo se fuerza DESPACHO_SOLICITADO porque el servicio de Logistica aun no
+// existe. El VU de k6 no espera el resultado del cobro: la secuencia
+// asincrona via outbox es lo que EAC-01 exige validar. La verificacion de
+// que el cobro se resolvio (o quedo auditado como fallido) se hace aparte,
+// contra las bases, con el segundo script.
 //
 // ---------------------------------------------------------------------------
 // Tres fases (punto 4 del encargo)
@@ -81,6 +76,7 @@ import { check } from 'k6';
 import { Counter } from 'k6/metrics';
 
 const ORDENES_URL = (__ENV.ORDENES_URL || 'http://ordenes-api:8080').replace(/\/+$/, '');
+const INVENTARIO_URL = (__ENV.INVENTARIO_URL || 'http://inventario-api:8080').replace(/\/+$/, '');
 const PAYKLIK_ADMIN_URL = (__ENV.PAYKLIK_ADMIN_URL || 'http://payklik-mock:8080').replace(/\/+$/, '');
 
 const ORDENES_POR_MINUTO = Number(__ENV.ORDENES_POR_MINUTO || 80);
@@ -98,6 +94,11 @@ const INICIO_MS = Date.now();
 // pueda filtrarlas sin tocar datos de otras pruebas o de la demo manual.
 const RUN_ID = __ENV.RUN_ID || `${INICIO_MS}`;
 export const PREFIJO_CLIENTE = `CARGA-EAC01-${RUN_ID}`;
+
+const DURACION_TOTAL_SEG = CALENTAMIENTO_SEG + CAIDA_SEG + RECUPERACION_SEG;
+const ORDENES_TOTALES = ORDENES_POR_MINUTO * Math.ceil(DURACION_TOTAL_SEG / 60);
+const INVENTARIO_POR_ORDEN = Number(__ENV.INVENTARIO_POR_ORDEN || 5);
+const STOCK_TOTAL = ORDENES_TOTALES * INVENTARIO_POR_ORDEN;
 
 const TASA_POR_SEGUNDO = Math.max(1, Math.round(ORDENES_POR_MINUTO / 60));
 const RAMPA_INICIAL_SEG = Math.min(30, CALENTAMIENTO_SEG);
@@ -158,11 +159,27 @@ export const options = {
   },
 };
 
+function sembrarExistencias() {
+  const body = JSON.stringify({
+    sku: 'SKU-CARGA-EAC01',
+    ubicacionId: 'CD-01',
+    tipoUbicacion: 'CENTRO_DISTRIBUCION',
+    cantidadFisica: STOCK_TOTAL,
+  });
+  const res = http.put(`${INVENTARIO_URL}/api/inventario/existencias`, body, JSON_HEADERS);
+  if (res.status !== 200) {
+    console.error(`[eac01-hu023] FALLO siembra de existencias: status=${res.status} body=${res.body}`);
+    throw new Error(`Siembra de inventario fallo con status ${res.status}`);
+  }
+  console.log(`[eac01-hu023] existencias sembradas: SKU-CARGA-EAC01 x${STOCK_TOTAL} en CD-01`);
+}
+
 export function setup() {
+  sembrarExistencias();
   console.log(
     `[eac01-hu023] arrancando: ${TASA_POR_SEGUNDO} ordenes/seg (~${ORDENES_POR_MINUTO}/min), ` +
     `calentamiento=${CALENTAMIENTO_SEG}s caida=${CAIDA_SEG}s recuperacion=${RECUPERACION_SEG}s, ` +
-    `prefijo=${PREFIJO_CLIENTE}`
+    `stock=${STOCK_TOTAL} unidades, prefijo=${PREFIJO_CLIENTE}`
   );
   return { inicio: Date.now() };
 }
@@ -224,34 +241,22 @@ export function flujoOrden() {
     return;
   }
 
-  // Forzada: Inventario no existe (ver comentario de cabecera). Sin esta
-  // transicion la orden nunca podria llegar a COBRO_SOLICITADO.
-  const resInventario = http.post(
-    `${ORDENES_URL}/api/ordenes/${ordenId}/transiciones`,
-    JSON.stringify({
-      estadoDestino: 'INVENTARIO_RESERVADO',
-      pasoSaga: 'RESERVA',
-      motivo: 'inventario no existe como servicio: transicion forzada para la prueba EAC-01/HU-023',
-    }),
-    { ...JSON_HEADERS, tags: { paso: 'inventario_reservado' } }
-  );
-  if (!check(resInventario, { 'inventario reservado forzado (200)': (r) => r.status === 200 })) {
-    fallosSincronos.add(1);
-    return;
-  }
+  // La saga avanza sola desde aqui: RESERVA_SOLICITADA -> INVENTARIO_RESERVADO
+  // -> COBRO_SOLICITADO -> PAGO_APLICADO -> CONFIRMADA_PENDIENTE_FISCAL ->
+  // CONFIRMADA. No se fuerza ninguna de estas transiciones.
 
-  // Forzada: dispara CobroSolicitado por outbox; aqui arranca el cobro real
-  // contra PayKlik, de forma asincrona (ver comentario de cabecera).
-  const resCobro = http.post(
+  // Forzada: DESPACHO_SOLICITADO. Temporal hasta que exista el servicio de
+  // Logistica; sin esto la orden queda en CONFIRMADA y no avanza mas.
+  const resDespacho = http.post(
     `${ORDENES_URL}/api/ordenes/${ordenId}/transiciones`,
     JSON.stringify({
-      estadoDestino: 'COBRO_SOLICITADO',
-      pasoSaga: 'COBRO',
-      motivo: 'arranca el cobro real contra PayKlik - prueba EAC-01/HU-023',
+      estadoDestino: 'DESPACHO_SOLICITADO',
+      pasoSaga: 'DESPACHO',
+      motivo: 'logistica no existe como servicio: transicion forzada temporal',
     }),
-    { ...JSON_HEADERS, tags: { paso: 'cobro_solicitado' } }
+    { ...JSON_HEADERS, tags: { paso: 'despacho_solicitado' } }
   );
-  if (check(resCobro, { 'cobro solicitado forzado (200)': (r) => r.status === 200 })) {
+  if (check(resDespacho, { 'despacho solicitado forzado (200)': (r) => r.status === 200 })) {
     ordenesConCobroSolicitado.add(1);
   } else {
     fallosSincronos.add(1);
