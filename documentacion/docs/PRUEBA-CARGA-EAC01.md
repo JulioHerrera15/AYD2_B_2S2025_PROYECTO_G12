@@ -28,11 +28,15 @@ si tu proyecto de compose tiene otro nombre, ajusta el `--network`.
 
 El script de carga (`eac01-hu023-carga.js`) crea ordenes de forma continua
 durante toda la corrida y, por cada una, la lleva hasta el punto donde
-arranca el cobro real contra PayKlik: crear → confirmar → forzar
-`INVENTARIO_RESERVADO` → forzar `COBRO_SOLICITADO`. Las dos transiciones se
-fuerzan por el endpoint generico de transiciones porque el servicio de
-Inventario todavia no existe en este MVP; es la unica via disponible para
-llegar a `COBRO_SOLICITADO`, y queda anotado en el propio script.
+arranca el cobro real contra PayKlik: crear -> confirmar. La saga avanza
+sola el resto del camino: RESERVA_SOLICITADA -> INVENTARIO_RESERVADO ->
+COBRO_SOLICITADO -> PAGO_APLICADO -> CONFIRMADA_PENDIENTE_FISCAL ->
+CONFIRMADA. Solo se fuerza DESPACHO_SOLICITADO porque el servicio de
+Logistica aun no existe.
+
+El script siembra existencias contra inventario-api (puerto 8094) al
+inicio de la corrida, con suficiente stock para todo el volumen de la
+prueba. Cada orden consume una unidad del SKU-CARGA-EAC01 en CD-01.
 
 La corrida tiene tres fases, con el mock de PayKlik cambiando de modo contra
 su endpoint de administracion mientras la carga sigue constante:
@@ -51,9 +55,9 @@ declarado da ~85/minuto, redondeado hacia abajo a 80. Es una estimacion de
 ingenieria, documentada como tal, no un dato oficial del cliente — se ajusta
 sin tocar el script con la variable `ORDENES_POR_MINUTO`.
 
-El script de carga no espera el resultado del cobro: la llamada que fuerza
-`COBRO_SOLICITADO` responde en cuanto Ordenes guarda el cambio de estado, no
-cuando PayKlik contesta. Esa es justamente la garantia que EAC-01 exige
+El script de carga no espera el resultado del cobro: la saga procesa el
+cobro de forma asincrona via outbox (CobroSolicitado encola en Pagos,
+que llama a PayKlik). Esa es justamente la garantia que EAC-01 exige
 (el fallo del proveedor no bloquea el flujo), y es lo que permite que la
 carga generadora corra a ritmo constante sin importar si PayKlik esta caido.
 
