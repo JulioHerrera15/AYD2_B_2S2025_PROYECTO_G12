@@ -18,3 +18,5 @@ SGO-Logic/tests/SgoLogic.Integration.Tests/
 SGO-Logic/tests/SgoLogic.Notificaciones.Tests/
 SGO-Logic/tests/test_suite_exhaustiva.py
 SGO-Logic/run-tests.sh
+SGO-Logic/scripts/pruebas-carga/*.json
+SGO-Logic/scripts/pruebas-carga/*.txt
