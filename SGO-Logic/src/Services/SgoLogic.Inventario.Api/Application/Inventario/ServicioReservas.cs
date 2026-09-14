@@ -133,6 +133,21 @@ public sealed class ServicioReservas
         return ReservaDto.Desde(reserva);
     }
 
+    /// <summary>
+    /// Reservas de una ubicacion para la vista unificada de HU-016. Con
+    /// <paramref name="estado" /> en null trae todo el historial de la ubicacion; el
+    /// caso de uso habitual del operador es filtrar por ACTIVA, que es lo que hoy
+    /// tiene comprometido esa tienda o centro de distribucion.
+    /// </summary>
+    public async Task<IReadOnlyList<ReservaDto>> ListarPorUbicacionAsync(
+        string ubicacionId,
+        EstadoReserva? estado,
+        CancellationToken cancelacion)
+    {
+        var reservas = await _reservas.ListarPorUbicacionAsync(ubicacionId, estado, cancelacion);
+        return reservas.Select(ReservaDto.Desde).ToList();
+    }
+
     private ResultadoReservaDto Rechazar(string ordenId, SeleccionUbicacion seleccion)
     {
         var motivo = seleccion.Motivo ?? MotivoRechazoReserva.STOCK_INSUFICIENTE;

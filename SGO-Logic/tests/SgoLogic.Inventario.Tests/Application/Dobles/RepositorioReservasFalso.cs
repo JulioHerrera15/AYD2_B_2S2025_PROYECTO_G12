@@ -31,6 +31,17 @@ public sealed class RepositorioReservasFalso : IRepositorioReservas
                 .Take(limite)
                 .ToList());
 
+    public Task<IReadOnlyList<Reserva>> ListarPorUbicacionAsync(
+        string ubicacionId,
+        EstadoReserva? estado,
+        CancellationToken cancelacion) =>
+        Task.FromResult<IReadOnlyList<Reserva>>(
+            _reservas
+                .Where(reserva => reserva.UbicacionId == ubicacionId)
+                .Where(reserva => estado is null || reserva.Estado == estado)
+                .OrderByDescending(reserva => reserva.CreadaEn)
+                .ToList());
+
     public Task AgregarAsync(Reserva reserva, CancellationToken cancelacion)
     {
         LlamadasAgregar++;

@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using SgoLogic.BuildingBlocks.Extensions;
+using SgoLogic.Contracts.Enumeraciones;
 using SgoLogic.BuildingBlocks.Messaging;
 using SgoLogic.BuildingBlocks.Outbox;
 using SgoLogic.Inventario.Api.Application.Inventario;
@@ -25,6 +26,7 @@ builder.Services.Configure<InventarioOptions>(builder.Configuration.GetSection(I
 
 builder.Services.AddScoped<IRepositorioExistencias, RepositorioExistencias>();
 builder.Services.AddScoped<IRepositorioReservas, RepositorioReservas>();
+builder.Services.AddScoped<IRepositorioMovimientos, RepositorioMovimientos>();
 builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
 builder.Services.AddScoped<IGeneradorCorrelativoReserva, GeneradorCorrelativoReserva>();
 builder.Services.AddScoped<ServicioReservas>();
@@ -131,6 +133,54 @@ inventario.MapGet("/existencias/{sku}", async (
     ServicioExistencias servicio,
     CancellationToken cancelacion) =>
     Results.Ok(await servicio.ListarPorSkuAsync(sku, cancelacion)));
+
+// HU-016 / HU-017: vista unificada de lectura sobre las 32 tiendas y los 2 centros
+// de distribucion. Todo lo que sigue lee directo de Postgres, sin cache: el
+// disponible que devuelve ya descuenta las reservas vigentes porque reservar y
+// liberar mueven cantidad_reservada en la misma transaccion, asi que no hay
+// ventana en la que estas consultas muestren stock que en realidad esta
+// comprometido.
+
+inventario.MapGet("/existencias", async (
+    string? ubicacionId,
+    TipoUbicacion? tipoUbicacion,
+    int? pagina,
+    int? tamano,
+    ServicioExistencias servicio,
+    CancellationToken cancelacion) =>
+    Results.Ok(await servicio.ListarAsync(
+        ubicacionId,
+        tipoUbicacion,
+        pagina ?? 1,
+        tamano ?? 50,
+        cancelacion)));
+
+inventario.MapGet("/existencias/{sku}/movimientos", async (
+    string sku,
+    string? ubicacionId,
+    DateTime? desde,
+    DateTime? hasta,
+    ServicioExistencias servicio,
+    CancellationToken cancelacion) =>
+    Results.Ok(await servicio.ListarMovimientosAsync(sku, ubicacionId, desde, hasta, cancelacion)));
+
+inventario.MapGet("/ubicaciones", async (
+    ServicioExistencias servicio,
+    CancellationToken cancelacion) =>
+    Results.Ok(await servicio.ListarUbicacionesAsync(cancelacion)));
+
+inventario.MapGet("/ubicaciones/{ubicacionId}/existencias", async (
+    string ubicacionId,
+    ServicioExistencias servicio,
+    CancellationToken cancelacion) =>
+    Results.Ok(await servicio.ListarPorUbicacionAsync(ubicacionId, cancelacion)));
+
+inventario.MapGet("/ubicaciones/{ubicacionId}/reservas", async (
+    string ubicacionId,
+    EstadoReserva? estado,
+    ServicioReservas servicio,
+    CancellationToken cancelacion) =>
+    Results.Ok(await servicio.ListarPorUbicacionAsync(ubicacionId, estado, cancelacion)));
 
 using (var scope = app.Services.CreateScope())
 {
