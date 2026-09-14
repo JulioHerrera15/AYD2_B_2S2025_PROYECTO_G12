@@ -1,0 +1,45 @@
+# Configuracion de scrape de Prometheus para SGO-Logic.
+#
+# Un job por cada servicio que usa AddSgoDefaults()/UseSgoDefaults() (expone
+# /metrics via prometheus-net). Los mocks standalone payklik-mock y sat-mock
+# NO usan BuildingBlocks y no exponen /metrics, por eso no aparecen aqui.
+# mock-mensajeria si usa AddSgoDefaults() y si expone /metrics.
+#
+# Intervalo corto (5s) porque la demo dura minutos, no dias: con un intervalo
+# largo los picos de outbox_pendientes durante la caida de PayKlik/RabbitMQ
+# no se alcanzan a ver.
+
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: sgo-logic
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["sample-api:8080"]
+        labels: { servicio: sample-api }
+      - targets: ["sample-worker:8080"]
+        labels: { servicio: sample-worker }
+      - targets: ["auth-api:8080"]
+        labels: { servicio: auth-api }
+      - targets: ["ordenes-api:8080"]
+        labels: { servicio: ordenes-api }
+      - targets: ["inventario-api:8080"]
+        labels: { servicio: inventario-api }
+      - targets: ["pagos-api:8080"]
+        labels: { servicio: pagos-api }
+      - targets: ["facturacion-api:8080"]
+        labels: { servicio: facturacion-api }
+      - targets: ["notificaciones-api:8080"]
+        labels: { servicio: notificaciones-api }
+      - targets: ["mock-mensajeria:8080"]
+        labels: { servicio: mock-mensajeria }
+      - targets: ["consulta-estado-api:8080"]
+        labels: { servicio: consulta-estado-api }
+      - targets: ["api-gateway:8080"]
+        labels: { servicio: api-gateway }
+      - targets: ["web:8080"]
+        labels: { servicio: web }
+      - targets: ["auditoria-worker:8080"]
+        labels: { servicio: auditoria-worker }

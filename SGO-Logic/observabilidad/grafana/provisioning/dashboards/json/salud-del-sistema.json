@@ -1,0 +1,138 @@
+{
+  "uid": "sgo-salud-del-sistema",
+  "title": "SGO-Logic - Salud del sistema",
+  "tags": ["sgo-logic"],
+  "timezone": "browser",
+  "editable": false,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Estado de los servicios (1 = activo, 0 = caido)",
+      "description": "Resultado del scrape de Prometheus (metrica up) por cada servicio. EAC-01 depende de que RabbitMQ y los servicios de la saga sigan de pie durante una caida del proveedor de pago.",
+      "gridPos": { "h": 6, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "up{job=\"sgo-logic\"}",
+          "legendFormat": "{{servicio}}",
+          "instant": true,
+          "refId": "A"
+        }
+      ],
+      "options": {
+        "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false },
+        "orientation": "horizontal",
+        "textMode": "value_and_name",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "center"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "CAIDO" },
+                "1": { "text": "ACTIVO" }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              { "value": null, "color": "red" },
+              { "value": 1, "color": "green" }
+            ]
+          },
+          "color": { "mode": "thresholds" },
+          "noValue": "SIN DATOS"
+        },
+        "overrides": []
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Latencia HTTP por endpoint (p50, p95, p99)",
+      "description": "Percentiles de duracion de peticion HTTP (http_request_duration_seconds) por servicio y endpoint. Sostiene EAC-02 (consulta de estado < 5 s) y EAC-03 (evidencia de auditoria < 1 s).",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 6 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[1m])) by (le, servicio, endpoint))",
+          "legendFormat": "p50 {{servicio}} {{endpoint}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[1m])) by (le, servicio, endpoint))",
+          "legendFormat": "p95 {{servicio}} {{endpoint}}",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[1m])) by (le, servicio, endpoint))",
+          "legendFormat": "p99 {{servicio}} {{endpoint}}",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5, "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Tasa de peticiones y de errores 5xx por servicio",
+      "description": "Peticiones HTTP totales (http_requests_received_total) contra el subconjunto con codigo 5xx, por servicio.",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 15 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "sum(rate(http_requests_received_total[1m])) by (servicio)",
+          "legendFormat": "peticiones/s {{servicio}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "sum(rate(http_requests_received_total{code=~\"5..\"}[1m])) by (servicio)",
+          "legendFormat": "errores 5xx/s {{servicio}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5, "spanNulls": true }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": "/errores 5xx.*/" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      }
+    }
+  ]
+}
