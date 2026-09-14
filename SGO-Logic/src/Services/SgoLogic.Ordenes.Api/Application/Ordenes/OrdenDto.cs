@@ -22,6 +22,7 @@ public sealed record OrdenDto(
     decimal Total,
     string? UbicacionSolicitadaId,
     DateTime CreadaEn,
+    string? ReservaId,
     string? PagoId,
     DatosFiscalesDto? DatosFiscales,
     AlertaFiscalDto? AlertaFiscal,
@@ -43,6 +44,7 @@ public sealed record OrdenDto(
         orden.Total,
         orden.UbicacionSolicitadaId,
         orden.CreadaEn,
+        orden.ReservaId,
         orden.PagoId,
         orden.DocumentoFiscalId is not null
             ? new DatosFiscalesDto(

@@ -20,6 +20,7 @@ public static class MaquinaEstadosOrden
             [EstadoOrden.RESERVA_SOLICITADA] = Conjunto(
                 EstadoOrden.INVENTARIO_RESERVADO,
                 EstadoOrden.RECHAZADA,
+                EstadoOrden.CANCELADA_RESERVA_VENCIDA,
                 EstadoOrden.CANCELADA),
 
             [EstadoOrden.INVENTARIO_RESERVADO] = Conjunto(

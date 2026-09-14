@@ -37,6 +37,10 @@ builder.Services.AddScoped<IRegistroMensajesProcesados, RegistroMensajesProcesad
 builder.Services.AddScoped<ManejadorEventosPagos>();
 builder.Services.AddHostedService<PagosEventosConsumidor>();
 
+// Consumo de los resultados de Inventario: reserva confirmada, rechazada y expirada.
+builder.Services.AddScoped<ManejadorEventosInventario>();
+builder.Services.AddHostedService<InventarioEventosConsumidor>();
+
 // Consumo del resultado de certificacion fiscal: cierre CONFIRMADA_PENDIENTE_FISCAL → CONFIRMADA (HU-005).
 builder.Services.AddScoped<ManejadorDocumentoFiscalCertificado>();
 builder.Services.AddScoped<ManejadorCertificacionSatFallida>();

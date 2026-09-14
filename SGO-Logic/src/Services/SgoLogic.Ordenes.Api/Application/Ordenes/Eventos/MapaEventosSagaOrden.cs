@@ -16,11 +16,11 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes.Eventos;
 /// consumidor de Pagos distingue rechazo de sin-respuesta); si no lo fija, se
 /// deriva del estado destino como antes.
 ///
-/// Ordenes todavia no consume las respuestas de Inventario, asi que no conoce
-/// reservaId ni tiendaDestinoId: esos campos, obligatorios en el contrato, se
-/// rellenan aca con un valor derivado del id de la orden o con <c>null</c>, y
-/// quedan marcados con <c>PENDIENTE</c> para cablearlos cuando exista el
-/// consumidor de Inventario. pagoId y el CUI del receptor ya no son placeholder:
+/// Ordenes consume las respuestas de Inventario via
+/// <see cref="Consumers.InventarioEventosConsumidor" />, por lo que
+/// <see cref="Orden.ReservaId" /> se conoce al emitir los eventos de saga.
+/// <see cref="ResolverReservaId" /> usa el id real cuando esta disponible; de lo
+/// contrario cae al placeholder. pagoId y el CUI del receptor ya no son placeholder:
 /// <see cref="ResolverPagoId" /> usa <see cref="Orden.PagoId" /> (persistido por
 /// <see cref="Application.Ordenes.ManejadorEventosPagos" /> al consumir
 /// PagoAplicado) y <see cref="Orden.ReceptorCui" /> viene de la orden desde su
@@ -41,7 +41,8 @@ public static class MapaEventosSagaOrden
             [EstadoOrden.CONFIRMADA] = EmitirOrdenCertificadaFiscalmente,
             [EstadoOrden.DESPACHO_SOLICITADO] = EmitirDespachoSolicitado,
             [EstadoOrden.CANCELADA] = EmitirOrdenCancelada,
-            [EstadoOrden.CANCELADA_RESERVA_VENCIDA] = EmitirOrdenCancelada
+            [EstadoOrden.CANCELADA_RESERVA_VENCIDA] = EmitirOrdenCancelada,
+            [EstadoOrden.RECHAZADA] = EmitirOrdenCancelada
         };
 
     /// <summary>Estados destino que el contrato asocia a un evento de saga.</summary>
@@ -188,7 +189,7 @@ public static class MapaEventosSagaOrden
             DespachoSolicitado.RoutingKey,
             new DespachoSolicitadoData(
                 OrdenId: orden.Id,
-                ReservaId: ReservaIdPendiente(orden),
+                ReservaId: ResolverReservaId(orden),
                 MetodoEntrega: orden.MetodoEntrega,
                 UbicacionOrigenSugerida: null,
                 UbicacionRecogidaId: orden.MetodoEntrega == MetodoEntrega.RECOGIDA_TIENDA
@@ -217,9 +218,12 @@ public static class MapaEventosSagaOrden
                 ClienteId: orden.ClienteId,
                 TiendaDestinoId: null,
                 EstabaConfirmada: estabaConfirmada,
-                Motivo: transicion.EstadoNuevo == EstadoOrden.CANCELADA_RESERVA_VENCIDA
-                    ? MotivoCancelacion.RESERVA_VENCIDA
-                    : MotivoCancelacion.CLIENTE,
+                Motivo: transicion.EstadoNuevo switch
+                {
+                    EstadoOrden.CANCELADA_RESERVA_VENCIDA => MotivoCancelacion.RESERVA_VENCIDA,
+                    EstadoOrden.RECHAZADA => MotivoCancelacion.STOCK_INSUFICIENTE,
+                    _ => MotivoCancelacion.CLIENTE
+                },
                 Detalle: transicion.Motivo,
                 RequiereReembolso: requiereReembolso,
                 PagoId: requiereReembolso ? ResolverPagoId(orden) : null,
@@ -241,7 +245,7 @@ public static class MapaEventosSagaOrden
             LiberacionReservaSolicitada.RoutingKey,
             new LiberacionReservaSolicitadaData(
                 OrdenId: orden.Id,
-                ReservaId: ReservaIdPendiente(orden),
+                ReservaId: ResolverReservaId(orden),
                 // El evento de origen manda: un rechazo de tarjeta si tuvo
                 // respuesta del proveedor (COBRO_RECHAZADO). Sin motivo explicito
                 // se cae al derivado del estado destino, que preserva el
@@ -273,8 +277,10 @@ public static class MapaEventosSagaOrden
             routingKey,
             data);
 
-    // reservaId todavia depende de Inventario, que Ordenes aun no consume.
-    private static string ReservaIdPendiente(Orden orden) => $"RSV-PENDIENTE-{orden.Id}";
+    // reservaId se conoce cuando Ordenes consume InventarioReservado. Antes de
+    // eso (por ejemplo, si algo cancelara la orden sin haber pasado por ahi) se
+    // cae al placeholder.
+    private static string ResolverReservaId(Orden orden) => orden.ReservaId ?? $"RSV-PENDIENTE-{orden.Id}";
 
     // pagoId ya no es siempre placeholder: ManejadorEventosPagos lo persiste en
     // Orden.PagoId al consumir PagoAplicado (item 7). Antes de eso (por ejemplo,
