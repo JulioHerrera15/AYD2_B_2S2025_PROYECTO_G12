@@ -1,0 +1,12 @@
+# Datasource de Prometheus aprovisionado por archivo: al levantar el compose
+# Grafana ya queda apuntando a Prometheus, sin configuracion manual.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus-sgo
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
