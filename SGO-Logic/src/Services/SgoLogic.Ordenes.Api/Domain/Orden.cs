@@ -146,6 +146,14 @@ public sealed partial class Orden
     public string ReceptorCui { get; private set; }
 
     /// <summary>
+    /// Identificador real de la reserva de inventario (el reservaId que devuelve
+    /// Inventario, tomado de InventarioReservado). Reemplaza el placeholder
+    /// RSV-PENDIENTE-&lt;id&gt; una vez que Ordenes consume ese evento. Null hasta
+    /// entonces.
+    /// </summary>
+    public string? ReservaId { get; private set; }
+
+    /// <summary>
     /// Identificador real del pago aplicado (el autorizacionId que devuelve el
     /// proveedor, tomado de PagoAplicado). Reemplaza el placeholder
     /// PAG-PENDIENTE-&lt;id&gt; una vez que Ordenes consume ese evento. Null hasta
@@ -252,6 +260,23 @@ public sealed partial class Orden
         MetodoEntrega = metodoNuevo;
         UbicacionSolicitadaId = metodoNuevo == MetodoEntrega.RECOGIDA_TIENDA ? ubicacionRecogidaId : null;
         Secuencia += 1;
+    }
+
+    /// <summary>
+    /// Registra el identificador real de la reserva de inventario. Lo llama
+    /// el manejador de eventos de Inventario al recibir InventarioReservado,
+    /// antes de transicionar a INVENTARIO_RESERVADO. Reemplaza el placeholder
+    /// RSV-PENDIENTE-&lt;id&gt; que usa DespachoSolicitado y
+    /// LiberacionReservaSolicitada.
+    /// </summary>
+    public void RegistrarReserva(string reservaId)
+    {
+        if (string.IsNullOrWhiteSpace(reservaId))
+        {
+            throw new ArgumentException("El identificador de la reserva es obligatorio.", nameof(reservaId));
+        }
+
+        ReservaId = reservaId;
     }
 
     /// <summary>

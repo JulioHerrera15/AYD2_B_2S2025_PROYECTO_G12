@@ -115,6 +115,10 @@ public sealed class OrdenConfiguration : IEntityTypeConfiguration<Orden>
             .HasColumnName("pago_id")
             .HasMaxLength(128);
 
+        builder.Property(orden => orden.ReservaId)
+            .HasColumnName("reserva_id")
+            .HasMaxLength(128);
+
         builder.Property(orden => orden.DocumentoFiscalId)
             .HasColumnName("documento_fiscal_id")
             .HasMaxLength(128);

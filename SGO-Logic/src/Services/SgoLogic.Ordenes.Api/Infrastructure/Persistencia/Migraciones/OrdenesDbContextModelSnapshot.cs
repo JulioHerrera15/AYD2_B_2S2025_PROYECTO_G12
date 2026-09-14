@@ -457,6 +457,11 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
                         .HasDefaultValue("CF")
                         .HasColumnName("receptor_cui");
 
+                    b.Property<string>("ReservaId")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("reserva_id");
+
                     b.Property<int>("Secuencia")
                         .IsConcurrencyToken()
                         .HasColumnType("integer")
