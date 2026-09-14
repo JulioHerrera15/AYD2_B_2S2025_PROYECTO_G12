@@ -2,13 +2,12 @@
 
 Paquete combinado con los dos simuladores que el equipo necesita para desarrollar y
 probar los contextos **Integración ERP** e **Integración POS** sin depender de los
-sistemas reales, que la Junta Directiva no autoriza modificar ni reemplazar
-(EV-14, EV-40, RES-01, RES-03):
+sistemas reales:
 
 | Mock | Puerto | Simula | Ver |
 |---|---|---|---|
-| `mock-erp/` | `4000` | ERP-Core sobre AS/400 (ADR-007, ADR-008) | `mock-erp/README.md` |
-| `mock-pos/` | `4001` | 32 instancias de POS (ADR-012) | `mock-pos/README.md` |
+| `mock-erp/` | `4000` | ERP-Core sobre AS/400 | `mock-erp/README.md` |
+| `mock-pos/` | `4001` | 32 instancias de POS | `mock-pos/README.md` |
 
 ## Levantar ambos con Docker Compose
 
@@ -63,28 +62,25 @@ bash mock-pos/test-cliente.sh
 ## Prueba de integración (ambos mocks a la vez)
 
 `test-integracion.sh` simula, de forma simplificada, lo que hace Órdenes al confirmar
-una venta (CU-02): propaga el evento al POS de la tienda de origen (CU-09/HU-009) y,
-por separado, la incluye en el siguiente lote de consolidación hacia el ERP
-(CU-13/HU-013):
+una venta : propaga el evento al POS de la tienda de origen y,
+por separado, la incluye en el siguiente lote de consolidación hacia el ERP:
 
 ```bash
 bash test-integracion.sh
 ```
 
-Este script no reemplaza la lógica real de Órdenes ni del worker de Integración ERP/POS
-— solo dispara ambos mocks con datos consistentes para verificar rápidamente que los dos
+Este script no reemplaza la lógica real de Órdenes ni del worker de Integración ERP/POS,
+solo dispara ambos mocks con datos consistentes para verificar rápidamente que los dos
 servicios responden como se espera cuando se les habla en el mismo escenario de venta.
 
 ## Notas de mapeo al DDA
 
-- **RES-01 / RES-03**: ninguno de los dos mocks expone una forma de "modificar" al
+- Ninguno de los dos mocks expone una forma de "modificar" al
   sistema legacy más allá de recibir lo que el mundo real recibiría (un lote en el ERP,
   un evento de venta en el POS). Los endpoints `/admin/*` son exclusivos del mock, para
   poder forzar condiciones de prueba (caídas, reinicios); no existen en los sistemas reales.
-- **ADR-007/ADR-008 (ERP)**: control por secuencia + cuadre de totales, sin que el ERP
-  conozca el modelo de dominio nuevo.
-- **ADR-012 (POS)**: idempotencia por evento y aislamiento de fallas por tienda —ninguna
-  de las 32 instancias afecta a las demás si está fuera de línea.
+- Control por secuencia + cuadre de totales, sin que el ERP conozca el modelo de dominio nuevo.
+- Idempotencia por evento y aislamiento de fallas por tienda. Ninguna de las 32 instancias afecta a las demás si está fuera de línea.
 - Ambos mocks son deliberadamente **stateful pero volátiles** (memoria del proceso): al
   reiniciar el contenedor se pierde el estado, lo cual es intencional para pruebas
   repetibles. No usar para nada que necesite persistencia entre corridas.
