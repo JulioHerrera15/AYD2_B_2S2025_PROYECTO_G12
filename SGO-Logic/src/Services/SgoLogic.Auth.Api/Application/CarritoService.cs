@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Microsoft.EntityFrameworkCore;
+using SgoLogic.Auth.Api.Infrastructure;
 using StackExchange.Redis;
 
 namespace SgoLogic.Auth.Api.Application;
@@ -7,6 +9,7 @@ public interface ICarritoService
 {
     Task<CarritoDto> ObtenerAsync(string clienteOSesionId, CancellationToken ct = default);
     Task AgregarItemAsync(string clienteOSesionId, AgregarItemRequest request, CancellationToken ct = default);
+    Task ActualizarCantidadItemAsync(string clienteOSesionId, string sku, int nuevaCantidad, CancellationToken ct = default);
     Task EliminarItemAsync(string clienteOSesionId, string sku, CancellationToken ct = default);
     Task AsociarAsync(string sesionId, string clienteId, CancellationToken ct = default);
 }
@@ -14,22 +17,37 @@ public interface ICarritoService
 public sealed class CarritoService : ICarritoService
 {
     private readonly IDatabase _redis;
+    private readonly AuthDbContext _dbContext;
     private readonly int _ttlSegundos;
 
     // Prefijos de clave Redis
     private const string PrefijoCuenta = "cart:";
     private const string PrefijoInvitado = "guest:";
 
-    public CarritoService(IConnectionMultiplexer redis, IConfiguration config)
+    public CarritoService(IConnectionMultiplexer redis, AuthDbContext dbContext, IConfiguration config)
     {
         _redis = redis.GetDatabase();
+        _dbContext = dbContext;
         _ttlSegundos = config.GetValue<int>("Auth:CarritoTtlSegundos", 86_400);
     }
 
     public async Task<CarritoDto> ObtenerAsync(string clienteOSesionId, CancellationToken ct = default)
     {
-        var clave = ClavePara(clienteOSesionId);
+        var clave = await ResolverClaveAsync(clienteOSesionId, ct);
         var json = await _redis.StringGetAsync(clave);
+
+        // Si no se encontró por cuenta, intentar alternativo (por ejemplo si era invitado)
+        if (json.IsNullOrEmpty && !clienteOSesionId.Contains('@'))
+        {
+            var claveAlterna = clave.StartsWith(PrefijoCuenta)
+                ? PrefijoInvitado + clienteOSesionId
+                : PrefijoCuenta + clienteOSesionId;
+            var jsonAlt = await _redis.StringGetAsync(claveAlterna);
+            if (!jsonAlt.IsNullOrEmpty)
+            {
+                json = jsonAlt;
+            }
+        }
 
         if (json.IsNullOrEmpty)
             return new CarritoDto(clienteOSesionId, [], 0m);
@@ -46,7 +64,7 @@ public sealed class CarritoService : ICarritoService
         if (request.PrecioUnitario < 0)
             throw new ArgumentException("El precio unitario no puede ser negativo.");
 
-        var clave = ClavePara(clienteOSesionId);
+        var clave = await ResolverClaveAsync(clienteOSesionId, ct);
         var json = await _redis.StringGetAsync(clave);
         var items = json.IsNullOrEmpty
             ? new List<ItemCarritoDto>()
@@ -67,9 +85,31 @@ public sealed class CarritoService : ICarritoService
         await _redis.StringSetAsync(clave, JsonSerializer.Serialize(items), TimeSpan.FromSeconds(_ttlSegundos));
     }
 
+    public async Task ActualizarCantidadItemAsync(string clienteOSesionId, string sku, int nuevaCantidad, CancellationToken ct = default)
+    {
+        if (nuevaCantidad <= 0)
+        {
+            await EliminarItemAsync(clienteOSesionId, sku, ct);
+            return;
+        }
+
+        var clave = await ResolverClaveAsync(clienteOSesionId, ct);
+        var json = await _redis.StringGetAsync(clave);
+        if (json.IsNullOrEmpty) return;
+
+        var items = JsonSerializer.Deserialize<List<ItemCarritoDto>>(json.ToString()) ?? new List<ItemCarritoDto>();
+        var existente = items.FirstOrDefault(i => i.Sku == sku);
+        if (existente is not null)
+        {
+            items.Remove(existente);
+            items.Add(existente with { Cantidad = nuevaCantidad });
+            await _redis.StringSetAsync(clave, JsonSerializer.Serialize(items), TimeSpan.FromSeconds(_ttlSegundos));
+        }
+    }
+
     public async Task EliminarItemAsync(string clienteOSesionId, string sku, CancellationToken ct = default)
     {
-        var clave = ClavePara(clienteOSesionId);
+        var clave = await ResolverClaveAsync(clienteOSesionId, ct);
         var json = await _redis.StringGetAsync(clave);
 
         if (json.IsNullOrEmpty) return;
@@ -120,11 +160,22 @@ public sealed class CarritoService : ICarritoService
         await _redis.KeyDeleteAsync(claveInvitado);
     }
 
-    private static string ClavePara(string id)
+    private async Task<string> ResolverClaveAsync(string id, CancellationToken ct)
     {
-        // Si el id ya tiene prefijo "guest:" o "cart:" lo respeta; si no, asume cuenta
-        return id.StartsWith(PrefijoInvitado) || id.StartsWith(PrefijoCuenta)
-            ? id
-            : PrefijoCuenta + id;
+        if (id.StartsWith(PrefijoInvitado) || id.StartsWith(PrefijoCuenta))
+            return id;
+
+        // Si el identificador es un correo electrónico, resolver el usuarioId en PostgreSQL
+        if (id.Contains('@'))
+        {
+            var usuario = await _dbContext.Usuarios.AsNoTracking()
+                .FirstOrDefaultAsync(u => u.Email.ToLower() == id.ToLower(), ct);
+            if (usuario is not null)
+            {
+                return PrefijoCuenta + usuario.Id.ToString();
+            }
+        }
+
+        return PrefijoCuenta + id;
     }
 }

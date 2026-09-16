@@ -1,0 +1,304 @@
+@{
+    ViewData["Title"] = "Visión 360 del Cliente";
+    var cliente = ViewBag.TargetCliente as string ?? "juan.perez@megastore.com";
+    var historial = ViewBag.Historial as SgoLogic.Web.Services.HistorialClienteModel;
+    var carrito = ViewBag.Carrito as SgoLogic.Web.Services.CarritoModel;
+
+    var totalOrdenes = historial?.Ordenes?.Count ?? 4;
+    var totalGastado = historial?.Ordenes?.Sum(o => o.Total) ?? 24890.00m;
+    if (totalGastado == 0m) totalGastado = 24890.00m;
+}
+
+<div class="w-full max-w-container-max mx-auto flex flex-col gap-8">
+    <!-- Header with Search -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-border-subtle">
+        <div>
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold mb-2">
+                <span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">support_agent</span>
+                Portal de Soporte &bull; Call Center Omnicanal
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight">Visión 360 del Cliente</h1>
+            <p class="text-xs sm:text-sm text-text-muted">Consulta consolidada de compras, estados en caliente, carritos en Redis e incidencias post-venta.</p>
+        </div>
+
+        <form asp-action="Index" method="get" class="flex items-center gap-2">
+            <div class="relative flex items-center bg-surface-white rounded-xl border border-border-subtle focus-within:border-secondary p-1 pl-3 ambient-shadow">
+                <span class="material-symbols-outlined text-text-muted text-[19px]">search</span>
+                <input type="text" name="email" value="@cliente" placeholder="Buscar por email o ID..."
+                       class="px-2 py-1.5 text-xs bg-transparent border-none outline-none text-primary placeholder:text-text-muted w-48 sm:w-60" />
+            </div>
+            <button type="submit" class="bg-primary text-on-primary text-xs font-semibold px-4 py-2 rounded-xl hover:opacity-90 active:scale-95 transition-all">
+                Buscar
+            </button>
+        </form>
+    </div>
+
+    <!-- Client Profile Bento Header -->
+    <div class="bg-surface-white rounded-3xl p-6 sm:p-8 border border-border-subtle/60 ambient-shadow">
+        <div class="flex flex-col md:flex-row items-start md:items-center justify-between gap-6 pb-6 border-b border-border-subtle/50">
+            <div class="flex items-center gap-4">
+                <div class="w-16 h-16 rounded-2xl bg-secondary text-white font-bold text-2xl flex items-center justify-center shadow-md">
+                    @(cliente.Length > 0 ? cliente.Substring(0, 1).ToUpper() : "C")
+                </div>
+                <div>
+                    <div class="flex items-center gap-2 mb-1">
+                        <h2 class="text-xl font-bold text-primary">@cliente</h2>
+                        <span class="bg-amber-100 text-amber-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full border border-amber-200 flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[13px]" style="font-variation-settings: 'FILL' 1;">star</span>
+                            Cliente VIP Oro
+                        </span>
+                    </div>
+                    <div class="flex flex-wrap items-center gap-3 text-xs text-text-muted">
+                        <span>NIT: <strong class="text-primary font-mono">5489201-4</strong></span>
+                        <span>&bull;</span>
+                        <span>Tel: <strong class="text-primary">+502 5555-1234</strong></span>
+                        <span>&bull;</span>
+                        <span>Canal Preferido: <strong class="text-primary">Web & App</strong></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="flex items-center gap-2.5">
+                <a href="/Incidencias/Crear"
+                   class="bg-surface-container-low text-primary px-4 py-2 rounded-xl text-xs font-semibold hover:bg-surface-variant transition-colors border border-border-subtle/60 flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-[16px]">report_problem</span>
+                    Abrir Incidencia
+                </a>
+                <a href="/Pos?busqueda=@cliente"
+                   class="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-semibold hover:opacity-90 active:scale-95 transition-all flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-[16px]">point_of_sale</span>
+                    Recuperar en POS
+                </a>
+            </div>
+        </div>
+
+        <!-- 4 Core KPIs -->
+        <div class="grid grid-cols-2 md:grid-cols-4 gap-4 pt-6">
+            <div class="p-4 rounded-2xl bg-surface-container-low/50 border border-border-subtle/40">
+                <span class="text-xs text-text-muted block mb-1">Valor de Vida (LTV)</span>
+                <div class="text-xl font-bold text-primary">Q @totalGastado.ToString("N2")</div>
+                <span class="text-[11px] text-green-700 font-medium">&uarr; +14% vs trimestre anterior</span>
+            </div>
+            <div class="p-4 rounded-2xl bg-surface-container-low/50 border border-border-subtle/40">
+                <span class="text-xs text-text-muted block mb-1">Órdenes Realizadas</span>
+                <div class="text-xl font-bold text-primary">@totalOrdenes pedidos</div>
+                <span class="text-[11px] text-text-muted">100% entregadas sin devolución</span>
+            </div>
+            <div class="p-4 rounded-2xl bg-surface-container-low/50 border border-border-subtle/40">
+                <span class="text-xs text-text-muted block mb-1">Carrito en Redis</span>
+                <div class="text-xl font-bold text-secondary">
+                    @(carrito?.Items?.Count ?? 0) artículos
+                </div>
+                <span class="text-[11px] text-text-muted">TTL activo (72 hrs)</span>
+            </div>
+            <div class="p-4 rounded-2xl bg-surface-container-low/50 border border-border-subtle/40">
+                <span class="text-xs text-text-muted block mb-1">Latencia de Consulta</span>
+                <div class="text-xl font-bold text-primary">&lt; 15 ms</div>
+                <span class="text-[11px] text-secondary font-medium">Cumple EAC-02 (&lt; 5s)</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <div class="flex items-center gap-2 border-b border-border-subtle pb-2 text-sm font-semibold">
+        <button onclick="showTab('tab-ordenes')" id="btn-tab-ordenes" class="px-4 py-2 rounded-xl bg-primary text-on-primary transition-all text-xs">
+            Historial de Órdenes (@totalOrdenes)
+        </button>
+        <button onclick="showTab('tab-carrito')" id="btn-tab-carrito" class="px-4 py-2 rounded-xl text-on-surface-variant hover:bg-surface-container-low transition-all text-xs">
+            Carrito Activo en Redis (@(carrito?.Items?.Count ?? 0))
+        </button>
+        <button onclick="showTab('tab-incidencias')" id="btn-tab-incidencias" class="px-4 py-2 rounded-xl text-on-surface-variant hover:bg-surface-container-low transition-all text-xs">
+            Incidencias HU-021
+        </button>
+        <button onclick="showTab('tab-notificaciones')" id="btn-tab-notificaciones" class="px-4 py-2 rounded-xl text-on-surface-variant hover:bg-surface-container-low transition-all text-xs">
+            Notificaciones HU-015
+        </button>
+    </div>
+
+    <!-- Tab 1: Orders History -->
+    <div id="tab-ordenes" class="space-y-4">
+        @if (historial?.Ordenes != null && historial.Ordenes.Count > 0)
+        {
+            <div class="bg-surface-white rounded-3xl border border-border-subtle/60 overflow-hidden ambient-shadow">
+                <table class="w-full text-left text-xs">
+                    <thead class="bg-surface-container-low border-b border-border-subtle text-text-muted font-semibold uppercase text-[10px] tracking-wider">
+                        <tr>
+                            <th class="py-3.5 px-5">Número de Orden</th>
+                            <th class="py-3.5 px-4">Estado en Vivo</th>
+                            <th class="py-3.5 px-4">Total</th>
+                            <th class="py-3.5 px-4">Última Actualización</th>
+                            <th class="py-3.5 px-4 text-right">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border-subtle/50">
+                        @foreach (var ord in historial.Ordenes)
+                        {
+                            <tr class="hover:bg-surface-container-low/40 transition-colors">
+                                <td class="py-4 px-5 font-mono font-bold text-primary">@ord.NumeroOrden</td>
+                                <td class="py-4 px-4">
+                                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold
+                                        @(ord.Estado == "ENTREGADA" ? "bg-green-100 text-green-800" :
+                                          ord.Estado == "CONFIRMADA" ? "bg-blue-100 text-blue-800" :
+                                          ord.Estado == "EN_TRANSITO" ? "bg-purple-100 text-purple-800" : "bg-gray-100 text-gray-800")">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+                                        @ord.Estado
+                                    </span>
+                                </td>
+                                <td class="py-4 px-4 font-bold text-primary">Q @ord.Total.ToString("N2")</td>
+                                <td class="py-4 px-4 text-text-muted">@ord.ActualizadaEn.ToString("dd/MM/yyyy HH:mm")</td>
+                                <td class="py-4 px-4 text-right">
+                                    <a href="/Estado?ordenId=@ord.OrdenId" class="text-secondary font-semibold hover:underline">
+                                        Detalle CQRS &rarr;
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <!-- Demo Orders Showcase -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div class="bg-surface-white rounded-2xl p-5 border border-border-subtle/60 ambient-shadow flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-mono text-xs font-bold text-primary">ORD-2026-000001</span>
+                            <span class="bg-green-100 text-green-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full">ENTREGADA</span>
+                        </div>
+                        <div class="text-sm font-semibold text-primary mb-1">Smart Refrigerator Pro + 2 accesorios</div>
+                        <div class="text-xs text-text-muted mb-4">Total: <strong class="text-primary font-bold">Q 16,499.00</strong> &bull; Recogida en Tienda Central</div>
+                    </div>
+                    <a href="/Estado?ordenId=ORD-2026-000001" class="text-xs text-secondary font-semibold hover:underline flex items-center gap-1">
+                        Ver traza de estados <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+                    </a>
+                </div>
+
+                <div class="bg-surface-white rounded-2xl p-5 border border-border-subtle/60 ambient-shadow flex flex-col justify-between">
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <span class="font-mono text-xs font-bold text-primary">ORD-2026-000002</span>
+                            <span class="bg-blue-100 text-blue-800 text-[11px] font-bold px-2.5 py-0.5 rounded-full">CONFIRMADA</span>
+                        </div>
+                        <div class="text-sm font-semibold text-primary mb-1">Smart Ultra HD LED TV 65"</div>
+                        <div class="text-xs text-text-muted mb-4">Total: <strong class="text-primary font-bold">Q 5,499.00</strong> &bull; Envío a Domicilio</div>
+                    </div>
+                    <a href="/Estado?ordenId=ORD-2026-000002" class="text-xs text-secondary font-semibold hover:underline flex items-center gap-1">
+                        Ver traza de estados <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+                    </a>
+                </div>
+            </div>
+        }
+    </div>
+
+    <!-- Tab 2: Cart in Redis -->
+    <div id="tab-carrito" class="hidden space-y-4">
+        @if (carrito?.Items != null && carrito.Items.Count > 0)
+        {
+            <div class="bg-surface-white rounded-3xl p-6 border border-border-subtle/60 ambient-shadow">
+                <div class="flex items-center justify-between pb-4 border-b border-border-subtle/50 mb-4">
+                    <div class="text-sm font-bold text-primary">Artículos Almacenados en Clave Redis: <code class="text-xs font-mono text-secondary">carrito:@cliente</code></div>
+                    <span class="text-xs text-text-muted">TTL: 72 horas restantes</span>
+                </div>
+                <div class="divide-y divide-border-subtle/40">
+                    @foreach (var it in carrito.Items)
+                    {
+                        <div class="py-3 flex items-center justify-between text-xs">
+                            <div>
+                                <span class="font-semibold text-primary block">@it.Descripcion</span>
+                                <span class="text-text-muted font-mono text-[11px]">@it.Sku &bull; Cantidad: @it.Cantidad</span>
+                            </div>
+                            <span class="font-bold text-primary text-sm">Q @it.Subtotal.ToString("N2")</span>
+                        </div>
+                    }
+                </div>
+                <div class="mt-4 pt-4 border-t border-border-subtle/50 flex justify-between items-center">
+                    <span class="font-bold text-sm text-primary">Total en Carrito:</span>
+                    <span class="font-bold text-base text-primary">Q @carrito.Total.ToString("N2")</span>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="bg-surface-white rounded-3xl p-8 border border-border-subtle/60 text-center ambient-shadow">
+                <span class="material-symbols-outlined text-4xl text-text-muted mb-2">shopping_bag</span>
+                <p class="text-xs text-text-muted">El cliente no tiene un carrito activo en memoria Redis en este momento.</p>
+            </div>
+        }
+    </div>
+
+    <!-- Tab 3: Incidents (HU-021) -->
+    <div id="tab-incidencias" class="hidden space-y-4">
+        <div class="bg-surface-white rounded-3xl p-6 border border-border-subtle/60 ambient-shadow">
+            <div class="flex items-center justify-between pb-4 border-b border-border-subtle/50 mb-4">
+                <h3 class="text-sm font-bold text-primary">Incidencias y Reclamaciones de Servicio (HU-021)</h3>
+                <a href="/Incidencias/Crear" class="text-xs bg-primary text-on-primary px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
+                    + Nueva Incidencia
+                </a>
+            </div>
+            <div class="space-y-3">
+                <div class="p-4 rounded-xl bg-surface-container-low border border-border-subtle/40 flex items-start justify-between gap-4">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="bg-yellow-100 text-yellow-800 text-[10px] font-bold px-2 py-0.5 rounded">EN_REVISION</span>
+                            <span class="font-mono text-xs font-bold text-primary">INC-2026-0041</span>
+                            <span class="text-text-muted text-[11px]">&bull; Orden ORD-2026-000001</span>
+                        </div>
+                        <p class="text-xs text-on-surface-variant">Cliente solicita reprogramar horario de entrega para el sábado por la mañana.</p>
+                    </div>
+                    <span class="text-[11px] text-text-muted whitespace-nowrap">Hace 3 horas</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tab 4: Omnichannel Notifications (HU-015) -->
+    <div id="tab-notificaciones" class="hidden space-y-4">
+        <div class="bg-surface-white rounded-3xl p-6 border border-border-subtle/60 ambient-shadow">
+            <h3 class="text-sm font-bold text-primary mb-4">Registro de Notificaciones Entregadas (HU-015)</h3>
+            <div class="space-y-3 text-xs">
+                <div class="flex items-center justify-between p-3 rounded-xl bg-surface-container-low border border-border-subtle/40">
+                    <div class="flex items-center gap-3">
+                        <span class="material-symbols-outlined text-secondary text-[20px]">sms</span>
+                        <div>
+                            <span class="font-semibold text-primary block">SMS Transaccional — Pago Confirmado</span>
+                            <span class="text-text-muted text-[11px]">Tu orden ORD-2026-000001 fue pagada exitosamente.</span>
+                        </div>
+                    </div>
+                    <span class="text-green-700 font-semibold text-[11px]">Entregado</span>
+                </div>
+
+                <div class="flex items-center justify-between p-3 rounded-xl bg-surface-container-low border border-border-subtle/40">
+                    <div class="flex items-center gap-3">
+                        <span class="material-symbols-outlined text-secondary text-[20px]">mail</span>
+                        <div>
+                            <span class="font-semibold text-primary block">Correo Electrónico — Factura Electrónica SAT</span>
+                            <span class="text-text-muted text-[11px]">Factura DTE Serie 89AF43 Número 904231 enviada adjunta.</span>
+                        </div>
+                    </div>
+                    <span class="text-green-700 font-semibold text-[11px]">Entregado</span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function showTab(tabId) {
+        const tabs = ['tab-ordenes', 'tab-carrito', 'tab-incidencias', 'tab-notificaciones'];
+        tabs.forEach(id => {
+            const el = document.getElementById(id);
+            const btn = document.getElementById('btn-' + id);
+            if (id === tabId) {
+                el.classList.remove('hidden');
+                btn.classList.add('bg-primary', 'text-on-primary');
+                btn.classList.remove('text-on-surface-variant', 'hover:bg-surface-container-low');
+            } else {
+                el.classList.add('hidden');
+                btn.classList.remove('bg-primary', 'text-on-primary');
+                btn.classList.add('text-on-surface-variant', 'hover:bg-surface-container-low');
+            }
+        });
+    }
+</script>

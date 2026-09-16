@@ -4,14 +4,15 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - MegaStore Logística</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
-    <!-- Google Fonts: Inter -->
+    <!-- Preconnect and Preload Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap">
+    <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <!-- Material Symbols Outlined -->
-    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <!-- Tailwind Config injected from mockups design system -->
     <script id="tailwind-config">
         tailwind.config = {
@@ -84,15 +85,15 @@
                         "margin-mobile": "20px"
                     },
                     fontFamily: {
-                        sans: ["Inter", "sans-serif"],
-                        "headline-sm": ["Inter"],
-                        "label-sm": ["Inter"],
-                        "body-lg": ["Inter"],
-                        "display-lg-mobile": ["Inter"],
-                        "body-md": ["Inter"],
-                        "display-lg": ["Inter"],
-                        "label-md": ["Inter"],
-                        "headline-md": ["Inter"]
+                        sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "SF Pro Text", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],
+                        "headline-sm": ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+                        "label-sm": ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+                        "body-lg": ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+                        "display-lg-mobile": ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+                        "body-md": ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+                        "display-lg": ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+                        "label-md": ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+                        "headline-md": ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"]
                     },
                     fontSize: {
                         "headline-sm": ["24px", { lineHeight: "1.3", fontWeight: "600" }],
@@ -109,10 +110,12 @@
         }
     </script>
     <style>
-        body {
-            font-family: 'Inter', sans-serif;
+        html, body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
             background-color: #f9f9fb;
             color: #030304;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
         }
 
         .ambient-shadow {
@@ -131,6 +134,19 @@
         }
 
         .material-symbols-outlined {
+            font-family: 'Material Symbols Outlined';
+            font-weight: normal;
+            font-style: normal;
+            font-size: 24px;
+            line-height: 1;
+            letter-spacing: normal;
+            text-transform: none;
+            display: inline-block;
+            white-space: nowrap;
+            word-wrap: normal;
+            direction: ltr;
+            -webkit-font-feature-settings: 'liga';
+            -webkit-font-smoothing: antialiased;
             font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
             vertical-align: middle;
         }
@@ -156,21 +172,37 @@
             </a>
 
             <!-- Navigation Links -->
-            <nav class="hidden md:flex items-center gap-1.5">
-                <a href="/" class="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
-                    <span class="material-symbols-outlined text-[19px]">dashboard</span>
+            <nav class="hidden lg:flex items-center gap-1">
+                <a href="/" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[17px]">dashboard</span>
                     <span>Dashboard</span>
                 </a>
-                <a href="/Carrito" class="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
-                    <span class="material-symbols-outlined text-[19px]">shopping_cart</span>
+                <a href="/Carrito" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[17px]">shopping_cart</span>
                     <span>Carrito</span>
                 </a>
-                <a href="/Estado" class="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
-                    <span class="material-symbols-outlined text-[19px]">inventory_2</span>
-                    <span>Consultar Orden</span>
+                <a href="/Checkout" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[17px]">credit_card</span>
+                    <span>Checkout</span>
                 </a>
-                <a href="/Incidencias/Crear" class="flex items-center gap-2 px-3.5 py-2 rounded-lg text-sm font-medium transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
-                    <span class="material-symbols-outlined text-[19px]">report_problem</span>
+                <a href="/Pos" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[17px]">point_of_sale</span>
+                    <span>OmniPOS</span>
+                </a>
+                <a href="/Vision360" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[17px]">support_agent</span>
+                    <span>Visión 360</span>
+                </a>
+                <a href="/Despacho" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[17px]">local_shipping</span>
+                    <span>Despacho</span>
+                </a>
+                <a href="/Estado" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[17px]">track_changes</span>
+                    <span>Órdenes</span>
+                </a>
+                <a href="/Incidencias/Crear" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[17px]">report_problem</span>
                     <span>Incidencias</span>
                 </a>
             </nav>
@@ -209,22 +241,34 @@
         </div>
 
         <!-- Mobile Navigation Sub-bar -->
-        <div class="md:hidden flex items-center justify-around border-t border-border-subtle/60 py-2 px-2 bg-surface-white">
-            <a href="/" class="flex flex-col items-center text-[11px] font-medium text-on-surface-variant hover:text-primary">
-                <span class="material-symbols-outlined text-[20px]">dashboard</span>
+        <div class="lg:hidden flex items-center justify-around border-t border-border-subtle/60 py-2 px-2 bg-surface-white overflow-x-auto text-[11px]">
+            <a href="/" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                <span class="material-symbols-outlined text-[18px]">dashboard</span>
                 <span>Inicio</span>
             </a>
-            <a href="/Carrito" class="flex flex-col items-center text-[11px] font-medium text-on-surface-variant hover:text-primary">
-                <span class="material-symbols-outlined text-[20px]">shopping_cart</span>
+            <a href="/Carrito" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                <span class="material-symbols-outlined text-[18px]">shopping_cart</span>
                 <span>Carrito</span>
             </a>
-            <a href="/Estado" class="flex flex-col items-center text-[11px] font-medium text-on-surface-variant hover:text-primary">
-                <span class="material-symbols-outlined text-[20px]">inventory_2</span>
-                <span>Órdenes</span>
+            <a href="/Checkout" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                <span class="material-symbols-outlined text-[18px]">credit_card</span>
+                <span>Checkout</span>
             </a>
-            <a href="/Incidencias/Crear" class="flex flex-col items-center text-[11px] font-medium text-on-surface-variant hover:text-primary">
-                <span class="material-symbols-outlined text-[20px]">report_problem</span>
-                <span>Incidencias</span>
+            <a href="/Pos" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                <span class="material-symbols-outlined text-[18px]">point_of_sale</span>
+                <span>POS</span>
+            </a>
+            <a href="/Vision360" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                <span class="material-symbols-outlined text-[18px]">support_agent</span>
+                <span>360°</span>
+            </a>
+            <a href="/Despacho" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                <span class="material-symbols-outlined text-[18px]">local_shipping</span>
+                <span>Despacho</span>
+            </a>
+            <a href="/Estado" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                <span class="material-symbols-outlined text-[18px]">track_changes</span>
+                <span>Órdenes</span>
             </a>
         </div>
     </header>

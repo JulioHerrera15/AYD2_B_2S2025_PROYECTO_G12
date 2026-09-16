@@ -54,3 +54,7 @@ public sealed record AgregarItemRequest(
 
 public sealed record AsociarCarritoRequest(
     string SesionId);
+
+public sealed record ActualizarCantidadRequest(
+    int Cantidad);
+
