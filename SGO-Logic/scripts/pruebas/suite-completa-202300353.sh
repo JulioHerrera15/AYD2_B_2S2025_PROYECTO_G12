@@ -377,7 +377,7 @@ else
 fi
 
 log "  5.3 Sin crashes en logs de notificaciones"
-notif_crash=$(docker logs sgo-logic-notificaciones-api-1 2>&1 | grep -ic "unhandled\|crash\|fatal exception" || echo "0")
+notif_crash=$(docker logs sgo-logic-notificaciones-api-1 2>&1 | grep -i "unhandled\|crash\|fatal exception" | wc -l | tr -d ' ')
 if [ "${notif_crash:-0}" -eq 0 ]; then
   PASS=$((PASS+1))
   log "  [PASS] HU-015 Sin crashes/unhandled en logs de notificaciones"
@@ -590,7 +590,7 @@ else
 fi
 
 log "  8.8 Todos los contenedores siguen running"
-unhealthy=$(docker compose ps 2>/dev/null | grep -v "healthy\|running" | grep -c "sgo-logic" || echo "0")
+unhealthy=$(docker compose ps 2>/dev/null | grep -v "healthy\|running" | grep "sgo-logic" | wc -l | tr -d ' ')
 if [ "${unhealthy:-0}" -eq 0 ]; then
   PASS=$((PASS+1)); log "  [PASS] 8.8 Todos los contenedores healthy/running"
 else
@@ -606,7 +606,7 @@ r=$(do_req GET "$WEB/")
 code=$(get_code "$r")
 resultado "Web UI / => 200" "$code" "200"
 
-for page in "/Auth/Registro" "/Auth/Login" "/Estado" "/Carrito" "/Incidencias/Crear"; do
+for page in "/Auth/Registro" "/Auth/Login" "/Estado" "/Carrito" "/Incidencias/Crear" "/Checkout" "/Pos" "/Vision360" "/Despacho"; do
   r=$(do_req GET "$WEB$page")
   code=$(get_code "$r")
   if [ "$code" = "200" ] || [ "$code" = "302" ]; then

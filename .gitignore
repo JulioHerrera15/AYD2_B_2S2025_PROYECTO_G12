@@ -20,3 +20,9 @@ SGO-Logic/tests/test_suite_exhaustiva.py
 SGO-Logic/run-tests.sh
 SGO-Logic/scripts/pruebas-carga/*.json
 SGO-Logic/scripts/pruebas-carga/*.txt
+SGO-Logic/scripts/pruebas/*.txt
+revision.txt
+bloques_dias.txt
+bitacora.txt
+guia_pruebas.md
+guia_pruebas_web.md

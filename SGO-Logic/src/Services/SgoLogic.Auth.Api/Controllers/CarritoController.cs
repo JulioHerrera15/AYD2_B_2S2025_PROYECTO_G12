@@ -51,6 +51,20 @@ public sealed class CarritoController : ControllerBase
         }
     }
 
+    /// <summary>Actualiza la cantidad de un item del carrito por SKU.</summary>
+    [HttpPut("items/{sku}")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> ActualizarCantidad(string sku, [FromBody] ActualizarCantidadRequest request, CancellationToken ct)
+    {
+        if (request.Cantidad < 0)
+            return BadRequest(new ProblemDetails { Title = "Solicitud inválida", Detail = "La cantidad no puede ser negativa." });
+
+        var id = ResolverIdentificador();
+        await _carrito.ActualizarCantidadItemAsync(id, sku, request.Cantidad, ct);
+        return NoContent();
+    }
+
     /// <summary>Elimina un item del carrito por SKU.</summary>
     [HttpDelete("items/{sku}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -89,10 +103,10 @@ public sealed class CarritoController : ControllerBase
         if (!string.IsNullOrEmpty(sub))
             return sub;
 
-        // Invitado → usa header X-Session-Id
+        // Invitado o consulta POS → usa header X-Session-Id
         var sesion = Request.Headers["X-Session-Id"].FirstOrDefault();
         if (!string.IsNullOrEmpty(sesion))
-            return "guest:" + sesion;
+            return sesion.Trim();
 
         // Si no hay ni JWT ni sesion, generar un ID temporal (no persistido)
         return "guest:" + Guid.NewGuid().ToString("N");

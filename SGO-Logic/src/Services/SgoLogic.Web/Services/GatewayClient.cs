@@ -44,9 +44,52 @@ public sealed record OrdenEstadoModel(
     string? DocumentoFiscalId,
     DateTime? CreadaEn,
     DateTime? ActualizadaEn,
-    List<IncidenciaModel>? Incidencias);
+    List<IncidenciaModel>? Incidencias,
+    string? MotivoUltimoCambio = null);
 
 public sealed record CrearIncidenciaModel(string OrdenId, string Descripcion);
+
+// ── Modelos de Órdenes y Checkout ───────────────────────────────────────────
+public sealed record LineaCrearOrdenModel(string Sku, string Descripcion, int Cantidad, decimal PrecioUnitario);
+
+public sealed record CrearOrdenModel(
+    string ClienteId,
+    string Canal,
+    string MetodoEntrega,
+    string Moneda,
+    string MedioPago,
+    decimal Impuestos,
+    List<LineaCrearOrdenModel> Lineas,
+    string? UbicacionSolicitadaId = null,
+    string? ReceptorCui = null);
+
+public sealed record OrdenCreadaModel(
+    string Id,
+    string NumeroOrden,
+    string ClienteId,
+    string Canal,
+    string MetodoEntrega,
+    string Estado,
+    decimal Total,
+    DateTime CreadaEn);
+
+public sealed record ConfirmarOrdenResponse(
+    OrdenCreadaModel Orden,
+    bool YaConfirmada);
+
+public sealed record OrdenHistorialResumenModel(
+    string OrdenId,
+    string NumeroOrden,
+    string Estado,
+    decimal Total,
+    DateTime ActualizadaEn);
+
+public sealed record HistorialClienteModel(
+    string ClienteId,
+    int Pagina,
+    int Tamano,
+    int TotalRegistros,
+    List<OrdenHistorialResumenModel> Ordenes);
 
 public sealed class GatewayClient
 {
@@ -130,10 +173,26 @@ public sealed class GatewayClient
         return await res.Content.ReadFromJsonAsync<CarritoModel>(JsonOptions, ct);
     }
 
+    public async Task<CarritoModel?> ObtenerCarritoPorIdAsync(string sesionOClienteId, CancellationToken ct = default)
+    {
+        using var req = new HttpRequestMessage(HttpMethod.Get, "/api/carrito");
+        req.Headers.Add("X-Session-Id", sesionOClienteId);
+        var res = await _http.SendAsync(req, ct);
+        if (!res.IsSuccessStatusCode) return null;
+        return await res.Content.ReadFromJsonAsync<CarritoModel>(JsonOptions, ct);
+    }
+
     public async Task<bool> AgregarItemCarritoAsync(AgregarItemModel model, CancellationToken ct = default)
     {
         SetAuthHeader();
         var res = await _http.PostAsJsonAsync("/api/carrito/items", model, ct);
+        return res.IsSuccessStatusCode;
+    }
+
+    public async Task<bool> ActualizarCantidadItemCarritoAsync(string sku, int cantidad, CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var res = await _http.PutAsJsonAsync($"/api/carrito/items/{sku}", new { Cantidad = cantidad }, ct);
         return res.IsSuccessStatusCode;
     }
 
@@ -159,6 +218,13 @@ public sealed class GatewayClient
         return await res.Content.ReadFromJsonAsync<OrdenEstadoModel>(JsonOptions, ct);
     }
 
+    public async Task<HistorialClienteModel?> ObtenerHistorialClienteAsync(string clienteId, int pagina = 1, int tamano = 20, CancellationToken ct = default)
+    {
+        var res = await _http.GetAsync($"/api/estado/clientes/{clienteId}/ordenes?pagina={pagina}&tamano={tamano}", ct);
+        if (!res.IsSuccessStatusCode) return null;
+        return await res.Content.ReadFromJsonAsync<HistorialClienteModel>(JsonOptions, ct);
+    }
+
     // ── Incidencias ────────────────────────────────────────────────────────────
     public async Task<(bool Exito, IncidenciaModel? Incidencia, string? Error)> CrearIncidenciaAsync(CrearIncidenciaModel model, CancellationToken ct = default)
     {
@@ -167,6 +233,33 @@ public sealed class GatewayClient
         {
             var data = await res.Content.ReadFromJsonAsync<IncidenciaModel>(JsonOptions, ct);
             return (true, data, null);
+        }
+        var err = await res.Content.ReadAsStringAsync(ct);
+        return (false, null, err);
+    }
+
+    // ── Órdenes y Checkout ─────────────────────────────────────────────────────
+    public async Task<(bool Exito, OrdenCreadaModel? Orden, string? Error)> CrearOrdenAsync(CrearOrdenModel model, CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var res = await _http.PostAsJsonAsync("/api/ordenes", model, JsonOptions, ct);
+        if (res.IsSuccessStatusCode)
+        {
+            var orden = await res.Content.ReadFromJsonAsync<OrdenCreadaModel>(JsonOptions, ct);
+            return (true, orden, null);
+        }
+        var err = await res.Content.ReadAsStringAsync(ct);
+        return (false, null, err);
+    }
+
+    public async Task<(bool Exito, OrdenCreadaModel? Orden, string? Error)> ConfirmarOrdenAsync(string ordenId, string? motivo = null, CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var res = await _http.PostAsJsonAsync($"/api/ordenes/{ordenId}/confirmar", new { Motivo = motivo }, JsonOptions, ct);
+        if (res.IsSuccessStatusCode)
+        {
+            var respuesta = await res.Content.ReadFromJsonAsync<ConfirmarOrdenResponse>(JsonOptions, ct);
+            return (true, respuesta?.Orden, null);
         }
         var err = await res.Content.ReadAsStringAsync(ct);
         return (false, null, err);

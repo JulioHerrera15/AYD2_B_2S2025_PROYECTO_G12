@@ -43,6 +43,44 @@ public class CarritoController : Controller
     }
 
     [HttpPost]
+    public async Task<IActionResult> ActualizarCantidad(string sku, int cantidad)
+    {
+        EnsureGuestSession();
+        if (cantidad <= 0)
+        {
+            await _gateway.EliminarItemCarritoAsync(sku);
+        }
+        else
+        {
+            await _gateway.ActualizarCantidadItemCarritoAsync(sku, cantidad);
+        }
+        return RedirectToAction("Index");
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Incrementar(string sku, int cantidadActual)
+    {
+        EnsureGuestSession();
+        await _gateway.ActualizarCantidadItemCarritoAsync(sku, Math.Max(1, cantidadActual) + 1);
+        return RedirectToAction("Index");
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> Decrementar(string sku, int cantidadActual)
+    {
+        EnsureGuestSession();
+        if (cantidadActual <= 1)
+        {
+            await _gateway.EliminarItemCarritoAsync(sku);
+        }
+        else
+        {
+            await _gateway.ActualizarCantidadItemCarritoAsync(sku, cantidadActual - 1);
+        }
+        return RedirectToAction("Index");
+    }
+
+    [HttpPost]
     public async Task<IActionResult> Eliminar(string sku)
     {
         await _gateway.EliminarItemCarritoAsync(sku);

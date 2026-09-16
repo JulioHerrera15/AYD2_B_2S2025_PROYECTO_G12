@@ -24,6 +24,7 @@ public sealed record OrdenEstadoDto(
     string? TiendaDestinoId,
     string? DocumentoFiscalId,
     string? MotivoUltimoCambio,
+    DateTime? CreadaEn,
     DateTime ActualizadaEn,
     IReadOnlyList<IncidenciaDto> Incidencias);
 

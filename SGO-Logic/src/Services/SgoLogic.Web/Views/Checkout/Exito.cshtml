@@ -1,0 +1,80 @@
+@{
+    ViewData["Title"] = "¡Orden Confirmada!";
+}
+
+<div class="max-w-xl mx-auto text-center py-10">
+    <div class="w-16 h-16 rounded-full bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center mx-auto mb-6 ambient-shadow">
+        <span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+    </div>
+
+    <h1 class="text-3xl font-bold text-primary tracking-tight mb-2">¡Orden Confirmada Exitosamente!</h1>
+    <p class="text-sm text-text-muted mb-6">
+        Hemos iniciado la orquestación de tu pedido a través de la saga transaccional de MegaStore.
+    </p>
+
+    <!-- Order Ticket Card -->
+    <div class="bg-surface-white rounded-2xl p-6 border border-border-subtle/60 ambient-shadow mb-8 text-left">
+        <div class="flex items-center justify-between pb-4 border-b border-border-subtle/40 mb-4">
+            <div>
+                <span class="text-xs text-text-muted block">Identificador de Orden</span>
+                <span class="text-base font-bold font-mono text-primary">@ViewBag.NumeroOrden</span>
+            </div>
+            <span class="bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold px-3 py-1 rounded-full">
+                CONFIRMADA
+            </span>
+        </div>
+
+        <div class="space-y-3 text-xs">
+            <div class="flex justify-between">
+                <span class="text-text-muted">ID Transaccional (UUID)</span>
+                <span class="font-mono text-primary text-[11px]">@ViewBag.OrdenId</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-text-muted">Total Pagado</span>
+                <span class="font-bold text-primary text-sm">Q @(((decimal)ViewBag.Total).ToString("N2"))</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-text-muted">Canal</span>
+                <span class="font-medium text-primary">Web Omnicanal</span>
+            </div>
+        </div>
+
+        <!-- Orchestration Progress Steps -->
+        <div class="mt-6 pt-4 border-t border-border-subtle/40">
+            <span class="text-xs font-semibold text-primary block mb-3">Flujo de la Saga en Segundo Plano:</span>
+            <div class="space-y-2">
+                <div class="flex items-center gap-2.5 text-xs text-text-muted">
+                    <span class="material-symbols-outlined text-green-600 text-[18px]">check</span>
+                    <span>Orden creada y registrada en PostgreSQL</span>
+                </div>
+                <div class="flex items-center gap-2.5 text-xs text-text-muted">
+                    <span class="material-symbols-outlined text-green-600 text-[18px]">check</span>
+                    <span>Reserva de inventario solicitada y verificada</span>
+                </div>
+                <div class="flex items-center gap-2.5 text-xs text-text-muted">
+                    <span class="material-symbols-outlined text-green-600 text-[18px]">check</span>
+                    <span>Cobro procesado a través de PayKlik</span>
+                </div>
+                <div class="flex items-center gap-2.5 text-xs text-text-muted">
+                    <span class="material-symbols-outlined text-secondary text-[18px]">hourglass_top</span>
+                    <span>Certificación fiscal SAT en proceso</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+        <a href="/Estado?ordenId=@ViewBag.OrdenId"
+           class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-6 py-3 rounded-full text-sm font-semibold hover:opacity-90 active:scale-95 transition-all shadow-sm">
+            <span class="material-symbols-outlined text-[18px]">track_changes</span>
+            Ver Estado en Tiempo Real (CQRS)
+        </a>
+
+        <a href="/"
+           class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-surface-container-low text-primary px-5 py-3 rounded-full text-sm font-semibold hover:bg-surface-variant transition-colors border border-border-subtle/50">
+            <span class="material-symbols-outlined text-[18px]">storefront</span>
+            Seguir Comprando
+        </a>
+    </div>
+</div>
