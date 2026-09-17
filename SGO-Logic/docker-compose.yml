@@ -72,6 +72,30 @@ services:
       timeout: 5s
       retries: 10
 
+  mock-pos:
+    build:
+      context: ../Mocks/mock-pos
+    container_name: sgo-mock-pos
+    ports:
+      - "4001:4001"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4001/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mock-erp:
+    build:
+      context: ../Mocks/mock-erp
+    container_name: sgo-mock-erp
+    ports:
+      - "4000:4000"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:4000/ || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
   sample-api:
     build:
       context: .
@@ -192,6 +216,35 @@ services:
       db-operacional:
         condition: service_healthy
       rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  integracion-pos-worker:
+    build:
+      context: .
+      dockerfile: src/Services/SgoLogic.IntegracionPos.Worker/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Postgres: Host=db-operacional;Port=5432;Database=sgo_integracion_pos;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__RabbitMq: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      Pos__BaseUrl: http://mock-pos:4001
+      Outbox__Source: integracion-pos
+      Outbox__PollingIntervalMs: ${OUTBOX_POLLING_MS}
+      Outbox__MaxReintentos: ${OUTBOX_MAX_REINTENTOS}
+      Outbox__BatchSize: ${OUTBOX_BATCH_SIZE}
+    ports:
+      - "8095:8080"
+    depends_on:
+      db-operacional:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mock-pos:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
