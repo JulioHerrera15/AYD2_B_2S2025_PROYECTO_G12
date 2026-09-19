@@ -270,11 +270,16 @@ public sealed class Despacho
             [EstadoDespacho.GUIA_SOLICITADA] = Conjunto(
                 EstadoDespacho.EN_PREPARACION, EstadoDespacho.INCIDENCIA),
 
+            // ENTREGADA es alcanzable directo: un transportista puede reportar solo
+            // el estado final sin haber informado los intermedios, y perder esa
+            // entrega por rigidez seria peor que aceptar el salto.
             [EstadoDespacho.GUIA_ASIGNADA] = Conjunto(
-                EstadoDespacho.EN_PREPARACION, EstadoDespacho.EN_TRANSITO, EstadoDespacho.INCIDENCIA),
+                EstadoDespacho.EN_PREPARACION, EstadoDespacho.EN_TRANSITO,
+                EstadoDespacho.ENTREGADA, EstadoDespacho.INCIDENCIA),
 
             [EstadoDespacho.GUIA_PENDIENTE] = Conjunto(
-                EstadoDespacho.EN_PREPARACION, EstadoDespacho.EN_TRANSITO, EstadoDespacho.INCIDENCIA),
+                EstadoDespacho.EN_PREPARACION, EstadoDespacho.EN_TRANSITO,
+                EstadoDespacho.ENTREGADA, EstadoDespacho.INCIDENCIA),
 
             [EstadoDespacho.EN_PREPARACION] = Conjunto(
                 EstadoDespacho.EN_TRANSITO, EstadoDespacho.LISTA_PARA_RECOGER,
