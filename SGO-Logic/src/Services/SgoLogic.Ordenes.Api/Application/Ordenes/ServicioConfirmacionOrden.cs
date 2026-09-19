@@ -163,6 +163,14 @@ public sealed class ServicioConfirmacionOrden
     /// transaccion de base de datos. No se invoca si la orden ya esta en el
     /// estado destino (camino idempotente) ni si la transicion resulta invalida.
     /// </param>
+    /// <param name="encadenadas">
+    /// Transiciones que la saga aplica a continuacion de la principal, en orden,
+    /// dentro de la misma transaccion (por ejemplo PAGO_APLICADO seguido de
+    /// CONFIRMADA_PENDIENTE_FISCAL). Cada una pasa por el mismo camino que la
+    /// principal, asi que valida contra la maquina de estados y encola los mismos
+    /// eventos que si se hubiera pedido por separado. No se aplican si la
+    /// principal es el camino idempotente; si alguna es invalida no se escribe nada.
+    /// </param>
     public async Task<ResultadoTransicionOrdenDto> AplicarTransicionAsync(
         string ordenId,
         EstadoOrden estadoDestino,
@@ -171,7 +179,8 @@ public sealed class ServicioConfirmacionOrden
         bool esCompensacion,
         CancellationToken cancelacion,
         MotivoLiberacionReserva? motivoLiberacion = null,
-        Action<Orden>? antesDeTransicionar = null)
+        Action<Orden>? antesDeTransicionar = null,
+        IReadOnlyList<TransicionEncadenada>? encadenadas = null)
     {
         var (orden, sinCambios) = await AplicarTransicionInternaAsync(
             ordenId,
@@ -181,7 +190,8 @@ public sealed class ServicioConfirmacionOrden
             esCompensacion,
             cancelacion,
             motivoLiberacion,
-            antesDeTransicionar);
+            antesDeTransicionar,
+            encadenadas);
 
         return new ResultadoTransicionOrdenDto(OrdenDto.Desde(orden), sinCambios);
     }
@@ -244,7 +254,8 @@ public sealed class ServicioConfirmacionOrden
         bool esCompensacion,
         CancellationToken cancelacion,
         MotivoLiberacionReserva? motivoLiberacion = null,
-        Action<Orden>? antesDeTransicionar = null)
+        Action<Orden>? antesDeTransicionar = null,
+        IReadOnlyList<TransicionEncadenada>? encadenadas = null)
     {
         var orden = await _ordenes.ObtenerPorIdAsync(ordenId, cancelacion)
             ?? throw new ExcepcionOrdenNoEncontrada(ordenId);
@@ -257,6 +268,39 @@ public sealed class ServicioConfirmacionOrden
         antesDeTransicionar?.Invoke(orden);
 
         // Puede lanzar ExcepcionTransicionInvalida; en ese caso no se escribe nada.
+        EncolarTransicion(orden, estadoDestino, pasoSaga, motivo, esCompensacion, motivoLiberacion);
+
+        foreach (var siguiente in encadenadas ?? Array.Empty<TransicionEncadenada>())
+        {
+            EncolarTransicion(
+                orden,
+                siguiente.EstadoDestino,
+                siguiente.PasoSaga,
+                siguiente.Motivo,
+                esCompensacion: false,
+                motivoLiberacion: null);
+        }
+
+        // Un unico SaveChanges: estado de la orden + transiciones + filas de outbox
+        // se persisten en la misma transaccion.
+        await _unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
+
+        return (orden, false);
+    }
+
+    /// <summary>
+    /// Aplica una transicion al agregado y encola sus eventos, sin guardar. Es el
+    /// unico camino por el que una transicion llega al outbox: lo usan la
+    /// principal y las encadenadas.
+    /// </summary>
+    private void EncolarTransicion(
+        Orden orden,
+        EstadoOrden estadoDestino,
+        PasoSaga? pasoSaga,
+        string? motivo,
+        bool esCompensacion,
+        MotivoLiberacionReserva? motivoLiberacion)
+    {
         var transicion = orden.TransicionarA(estadoDestino, motivo, pasoSaga, esCompensacion);
 
         // Evento 2: toda transicion posterior a la creacion lo emite, sin excepcion.
@@ -283,12 +327,6 @@ public sealed class ServicioConfirmacionOrden
         // llega, fija el MotivoLiberacionReserva; si es null se deriva del estado
         // destino como antes.
         MapaEventosSagaOrden.Encolar(orden, transicion, _outbox, motivoLiberacion);
-
-        // Un unico SaveChanges: estado de la orden + transicion + filas de outbox
-        // se persisten en la misma transaccion.
-        await _unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
-
-        return (orden, false);
     }
 
     /// <summary>

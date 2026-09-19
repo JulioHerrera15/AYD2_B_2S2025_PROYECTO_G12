@@ -19,7 +19,9 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes;
 /// Mapeo de eventos a estado destino de <see cref="MaquinaEstadosOrden" /> desde
 /// <see cref="EstadoOrden.COBRO_SOLICITADO" />:
 /// <list type="bullet">
-///   <item><c>PagoAplicado</c> -&gt; <see cref="EstadoOrden.PAGO_APLICADO" />.</item>
+///   <item><c>PagoAplicado</c> -&gt; <see cref="EstadoOrden.PAGO_APLICADO" /> y, en la
+///   misma transaccion, <see cref="EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL" />
+///   (paso <see cref="PasoSaga.FISCAL" />).</item>
 ///   <item><c>PagoRechazado</c> y <c>PagoPendiente</c> -&gt; <see cref="EstadoOrden.PAGO_PENDIENTE" />,
 ///   marcada como compensacion: <see cref="ServicioConfirmacionOrden" /> encola
 ///   ademas <c>LiberacionReservaSolicitada</c> por outbox. El motivo se deriva del
@@ -100,6 +102,21 @@ public sealed class ManejadorEventosPagos
                 ? orden => orden.RegistrarPago(evento.AutorizacionId!)
                 : null;
 
+        // Un pago aplicado no se queda esperando a que alguien lo empuje: en la
+        // misma transaccion la orden pasa a CONFIRMADA_PENDIENTE_FISCAL, lo que
+        // encola OrdenConfirmada y la solicitud de certificacion a Facturacion. Una
+        // orden sin pago (PAGO_PENDIENTE) no se factura, asi que solo aplica aqui.
+        IReadOnlyList<TransicionEncadenada>? encadenadas =
+            estadoDestino == EstadoOrden.PAGO_APLICADO
+                ? new[]
+                {
+                    new TransicionEncadenada(
+                        EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL,
+                        PasoSaga.FISCAL,
+                        "Pago aplicado: se solicita la certificacion fiscal")
+                }
+                : null;
+
         ResultadoTransicionOrdenDto resultado;
         try
         {
@@ -111,7 +128,8 @@ public sealed class ManejadorEventosPagos
                 esCompensacion,
                 cancelacion,
                 motivoLiberacion,
-                antesDeTransicionar);
+                antesDeTransicionar,
+                encadenadas);
         }
         catch (ExcepcionTransicionInvalida ex)
         {

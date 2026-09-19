@@ -95,16 +95,19 @@ public sealed class ManejadorEventosPagosTests
 
         Assert.Equal(ResultadoEventoPago.Aplicado, primera);
         Assert.Equal(ResultadoEventoPago.Duplicado, segunda);
-        Assert.Equal(EstadoOrden.PAGO_APLICADO, orden.Estado);
+        Assert.Equal(EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL, orden.Estado);
         Assert.Single(orden.Transiciones.Where(t => t.EstadoNuevo == EstadoOrden.PAGO_APLICADO));
-        Assert.Single(outbox.PorTipo(OrdenEstadoCambiado.EventType));
+        Assert.Single(orden.Transiciones.Where(t => t.EstadoNuevo == EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL));
+        Assert.Equal(2, outbox.PorTipo(OrdenEstadoCambiado.EventType).Count());
+        Assert.Single(outbox.PorTipo(CertificacionFiscalSolicitada.EventType));
+        Assert.Single(outbox.PorTipo(OrdenConfirmada.EventType));
         Assert.Equal(1, unidad.Confirmaciones);
         Assert.Single(registro.Registrados);
         Assert.Equal(PagoAplicado.EventType, registro.Registrados[0].TipoEvento);
     }
 
     [Fact]
-    public async Task PagoAplicado_avanza_la_orden_a_PAGO_APLICADO_y_solo_emite_estado_cambiado()
+    public async Task PagoAplicado_lleva_la_orden_a_CONFIRMADA_PENDIENTE_FISCAL_en_una_sola_transaccion()
     {
         var (manejador, ordenes, outbox, unidad, _) = Construir();
         var orden = OrdenEnCobroSolicitado();
@@ -113,15 +116,93 @@ public sealed class ManejadorEventosPagosTests
         var resultado = await manejador.ManejarAsync(Aplicado(), CancellationToken.None);
 
         Assert.Equal(ResultadoEventoPago.Aplicado, resultado);
-        Assert.Equal(EstadoOrden.PAGO_APLICADO, orden.Estado);
+        Assert.Equal(EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL, orden.Estado);
 
-        var estadoCambiado = Assert.Single(outbox.PorTipo(OrdenEstadoCambiado.EventType));
-        var data = Assert.IsType<OrdenEstadoCambiadoData>(estadoCambiado.Data);
-        Assert.Equal(EstadoOrden.COBRO_SOLICITADO, data.EstadoAnterior);
-        Assert.Equal(EstadoOrden.PAGO_APLICADO, data.EstadoNuevo);
-        Assert.False(data.EsCompensacion);
-        Assert.Equal(PasoSaga.COBRO, data.PasoSaga);
+        var cambios = outbox.PorTipo(OrdenEstadoCambiado.EventType)
+            .Select(e => Assert.IsType<OrdenEstadoCambiadoData>(e.Data))
+            .ToList();
+        Assert.Equal(2, cambios.Count);
+
+        Assert.Equal(EstadoOrden.COBRO_SOLICITADO, cambios[0].EstadoAnterior);
+        Assert.Equal(EstadoOrden.PAGO_APLICADO, cambios[0].EstadoNuevo);
+        Assert.Equal(PasoSaga.COBRO, cambios[0].PasoSaga);
+        Assert.False(cambios[0].EsCompensacion);
+
+        Assert.Equal(EstadoOrden.PAGO_APLICADO, cambios[1].EstadoAnterior);
+        Assert.Equal(EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL, cambios[1].EstadoNuevo);
+        Assert.Equal(PasoSaga.FISCAL, cambios[1].PasoSaga);
+        Assert.False(cambios[1].EsCompensacion);
+
         Assert.Empty(outbox.PorTipo(LiberacionReservaSolicitada.EventType));
+
+        // Las dos transiciones y todas las filas de outbox salen de un solo SaveChanges.
+        Assert.Equal(1, unidad.Confirmaciones);
+    }
+
+    [Fact]
+    public async Task PagoAplicado_emite_a_Facturacion_lo_mismo_que_la_transicion_forzada()
+    {
+        var (manejador, ordenes, outbox, _, _) = Construir();
+        var orden = OrdenEnCobroSolicitado();
+        ordenes.Precargar(orden);
+
+        await manejador.ManejarAsync(Aplicado(), CancellationToken.None);
+
+        var certificacion = Assert.Single(outbox.PorTipo(CertificacionFiscalSolicitada.EventType));
+        Assert.Equal(CertificacionFiscalSolicitada.RoutingKey, certificacion.RoutingKey);
+        Assert.Equal(orden.Id, certificacion.AggregateId);
+        Assert.Equal(orden.Secuencia, certificacion.Sequence);
+        var data = Assert.IsType<CertificacionFiscalSolicitadaData>(certificacion.Data);
+        Assert.Equal(orden.Id, data.OrdenId);
+        Assert.Equal(1400.00m, data.Total);
+
+        var confirmada = Assert.Single(outbox.PorTipo(OrdenConfirmada.EventType));
+        Assert.Equal(OrdenConfirmada.RoutingKey, confirmada.RoutingKey);
+
+        // Referencia: la misma orden llevada a CONFIRMADA_PENDIENTE_FISCAL por el
+        // camino del endpoint de transiciones encola exactamente esos tres eventos.
+        var (_, ordenesForzada, outboxForzada, unidadForzada, _) = Construir();
+        var ordenForzada = OrdenEnCobroSolicitado();
+        ordenForzada.TransicionarA(EstadoOrden.PAGO_APLICADO);
+        ordenesForzada.Precargar(ordenForzada);
+        var servicio = new ServicioConfirmacionOrden(
+            ordenesForzada,
+            outboxForzada,
+            unidadForzada,
+            new GeneradorCorrelativoOrdenFalso(),
+            new PoliticaMediosPago(MediosPago));
+
+        await servicio.AplicarTransicionAsync(
+            ordenForzada.Id,
+            EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL,
+            PasoSaga.FISCAL,
+            motivo: null,
+            esCompensacion: false,
+            CancellationToken.None);
+
+        Assert.Equal(
+            outboxForzada.Eventos.Select(e => (e.EventType, e.RoutingKey)).ToArray(),
+            outbox.Eventos.Skip(1).Select(e => (e.EventType, e.RoutingKey)).ToArray());
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task Un_pago_que_no_se_aplico_no_solicita_certificacion_fiscal(bool rechazado)
+    {
+        var (manejador, ordenes, outbox, unidad, _) = Construir();
+        var orden = OrdenEnCobroSolicitado();
+        ordenes.Precargar(orden);
+
+        var evento = rechazado ? Rechazado() : Pendiente();
+        var resultado = await manejador.ManejarAsync(evento, CancellationToken.None);
+
+        Assert.Equal(ResultadoEventoPago.Aplicado, resultado);
+        Assert.Equal(EstadoOrden.PAGO_PENDIENTE, orden.Estado);
+        Assert.DoesNotContain(orden.Transiciones, t => t.EstadoNuevo == EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL);
+        Assert.Empty(outbox.PorTipo(CertificacionFiscalSolicitada.EventType));
+        Assert.Empty(outbox.PorTipo(OrdenConfirmada.EventType));
+        Assert.Single(outbox.PorTipo(OrdenEstadoCambiado.EventType));
         Assert.Equal(1, unidad.Confirmaciones);
     }
 

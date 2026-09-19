@@ -1,0 +1,59 @@
+﻿
+=== Camino feliz de la saga ===
+  Ordenes:      http://localhost:8083
+  Inventario:   http://localhost:8094
+  Despacho:     http://localhost:8097
+  LogiExpress:  http://localhost:8096
+  Espera max.:  60s por tramo
+
+Paso 0: Siembra de existencias
+  [AUTO]                 Siembra                          SKU=SKU-CAMINO-FELIZ cant=100 en CD-01
+
+Paso 1: Crear y confirmar la orden
+  [AUTO]                 Crear orden                      id=ORD-2026-000001
+  [AUTO]                 Confirmar                        -> RESERVA_SOLICITADA
+
+Paso 2: Esperando que la saga avance sola hasta PAGO_APLICADO...
+  [AUTO]                 Saga automatica                  -> PAGO_APLICADO
+
+Paso 3: Esperando certificacion fiscal (CONFIRMADA)...
+  [AUTO]                 Certificacion fiscal             -> CONFIRMADA
+
+Paso 4: Esperando DESPACHO_SOLICITADO...
+  [AUTO]                 Despacho                         -> DESPACHO_SOLICITADO
+
+Paso 5: Esperando que Despacho resuelva origen y guia...
+  [AUTO]                 Despacho                         estado=GUIA_ASIGNADA guia=LE-2026-A83B0D6D
+
+Paso 6: LogiExpress simulado avanza la entrega...
+  [PROVEEDOR SIMULADO]   Entrega                          -> EN_PREPARACION
+  [PROVEEDOR SIMULADO]   Entrega                          -> EN_TRANSITO
+  [PROVEEDOR SIMULADO]   Entrega                          -> ENTREGADA
+
+=== Tabla de pasos (tiempos desde la creacion de la orden) ===
+  #   ESTADO ALCANZADO               ORIGEN                TIEMPO (ms)   DELTA (ms)
+  -   ------------------------------ -------------------- ------------ ------------
+  1   RESERVA_SOLICITADA             AUTO                          442          442
+  2   INVENTARIO_RESERVADO           AUTO                         2559         2117
+  3   COBRO_SOLICITADO               AUTO                         2559            0
+  4   PAGO_APLICADO                  AUTO                         4334         1775
+  5   CONFIRMADA_PENDIENTE_FISCAL    AUTO                         4335            1
+  6   CONFIRMADA                     AUTO                         8384         4049
+  7   DESPACHO_SOLICITADO            AUTO                         8388            4
+  8   EN_PREPARACION                 PROVEEDOR SIMULADO          10709         2321
+  9   EN_TRANSITO                    PROVEEDOR SIMULADO          12740         2031
+  10  ENTREGADA                      PROVEEDOR SIMULADO          14779         2039
+
+=== GET http://localhost:8097/api/despacho/ORD-2026-000001 ===
+  id:             DES-2026-000001
+  estado:         ENTREGADA
+  metodoEntrega:  DOMICILIO
+  origen:         CD-01 (CENTRO_DISTRIBUCION)
+  direccion:      5a avenida 3-21 zona 2, Camino feliz, Guatemala, Guatemala
+  guiaId:         LE-2026-A83B0D6D
+  transportista:  LogiExpress
+  trackingUrl:    https://rastreo.logiexpress.gt/LE-2026-A83B0D6D
+  entregadoEn:    2026-09-19T23:24:53.188Z
+
+RESULTADO=APROBADO
+  La orden ORD-2026-000001 llego a ENTREGADA en 15136ms sin pasos forzados.

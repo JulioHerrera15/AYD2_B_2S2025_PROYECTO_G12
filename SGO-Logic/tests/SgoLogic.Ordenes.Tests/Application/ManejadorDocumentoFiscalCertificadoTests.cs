@@ -81,7 +81,7 @@ public sealed class ManejadorDocumentoFiscalCertificadoTests
     }
 
     [Fact]
-    public async Task Recibir_certificacion_en_CONFIRMADA_PENDIENTE_FISCAL_aplica_transicion_a_CONFIRMADA()
+    public async Task Recibir_certificacion_en_CONFIRMADA_PENDIENTE_FISCAL_aplica_CONFIRMADA_y_DESPACHO_SOLICITADO()
     {
         var (manejador, ordenes, outbox, unidad) = Construir();
         var orden = OrdenEnConfirmadaPendienteFiscal();
@@ -89,7 +89,10 @@ public sealed class ManejadorDocumentoFiscalCertificadoTests
 
         await manejador.ManejarAsync(CrearDatosCertificados(), CancellationToken.None);
 
-        Assert.Equal(EstadoOrden.CONFIRMADA, orden.Estado);
+        Assert.Equal(EstadoOrden.DESPACHO_SOLICITADO, orden.Estado);
+        Assert.Equal(
+            new[] { EstadoOrden.CONFIRMADA, EstadoOrden.DESPACHO_SOLICITADO },
+            orden.Transiciones.TakeLast(2).Select(t => t.EstadoNuevo).ToArray());
         Assert.Equal("5e4f3a5f-987a-42ca-888e-063c640ef111", orden.DocumentoFiscalId);
         Assert.Equal("A", orden.DocumentoFiscalSerie);
         Assert.Equal("00000001", orden.DocumentoFiscalNumero);
@@ -111,9 +114,13 @@ public sealed class ManejadorDocumentoFiscalCertificadoTests
 
         await manejador.ManejarAsync(CrearDatosCertificados(), CancellationToken.None);
 
-        Assert.Equal(EstadoOrden.CONFIRMADA, orden.Estado);
+        Assert.Equal(EstadoOrden.DESPACHO_SOLICITADO, orden.Estado);
         Assert.Equal(transicionesDespuesDePrimera, orden.Transiciones.Count);
         Assert.Equal(eventosDespuesDePrimera, outbox.Eventos.Count);
+        Assert.Single(orden.Transiciones.Where(t => t.EstadoNuevo == EstadoOrden.CONFIRMADA));
+        Assert.Single(orden.Transiciones.Where(t => t.EstadoNuevo == EstadoOrden.DESPACHO_SOLICITADO));
+        Assert.Single(outbox.PorTipo(OrdenCertificadaFiscalmente.EventType));
+        Assert.Single(outbox.PorTipo(DespachoSolicitado.EventType));
         Assert.Equal(1, unidad.Confirmaciones);
     }
 
@@ -141,7 +148,7 @@ public sealed class ManejadorDocumentoFiscalCertificadoTests
 
         await manejador.ManejarAsync(CrearDatosCertificados(), CancellationToken.None);
 
-        var estadoCambiado = Assert.Single(outbox.PorTipo(OrdenEstadoCambiado.EventType));
+        var estadoCambiado = outbox.PorTipo(OrdenEstadoCambiado.EventType).First();
         var dataEstado = Assert.IsType<OrdenEstadoCambiadoData>(estadoCambiado.Data);
         Assert.Equal(EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL, dataEstado.EstadoAnterior);
         Assert.Equal(EstadoOrden.CONFIRMADA, dataEstado.EstadoNuevo);
@@ -161,6 +168,87 @@ public sealed class ManejadorDocumentoFiscalCertificadoTests
     }
 
     [Fact]
+    public async Task Certificacion_emite_DespachoSolicitado_en_la_misma_transaccion_y_en_el_orden_esperado()
+    {
+        var (manejador, ordenes, outbox, unidad) = Construir();
+        var orden = OrdenEnConfirmadaPendienteFiscal();
+        orden.RegistrarReserva("RSV-2026-000042", "CD-01");
+        ordenes.Precargar(orden);
+
+        await manejador.ManejarAsync(CrearDatosCertificados(), CancellationToken.None);
+
+        Assert.Equal(
+            new[]
+            {
+                OrdenEstadoCambiado.EventType,
+                OrdenCertificadaFiscalmente.EventType,
+                OrdenEstadoCambiado.EventType,
+                DespachoSolicitado.EventType
+            },
+            outbox.Eventos.Select(e => e.EventType).ToArray());
+
+        var cambios = outbox.PorTipo(OrdenEstadoCambiado.EventType)
+            .Select(e => Assert.IsType<OrdenEstadoCambiadoData>(e.Data))
+            .ToList();
+        Assert.Equal(EstadoOrden.CONFIRMADA, cambios[0].EstadoNuevo);
+        Assert.Equal(EstadoOrden.CONFIRMADA, cambios[1].EstadoAnterior);
+        Assert.Equal(EstadoOrden.DESPACHO_SOLICITADO, cambios[1].EstadoNuevo);
+        Assert.Equal(PasoSaga.DESPACHO, cambios[1].PasoSaga);
+        Assert.False(cambios[1].EsCompensacion);
+
+        var despacho = Assert.Single(outbox.PorTipo(DespachoSolicitado.EventType));
+        Assert.Equal(DespachoSolicitado.RoutingKey, despacho.RoutingKey);
+        Assert.Equal(orden.Id, despacho.AggregateId);
+        Assert.Equal(orden.Secuencia, despacho.Sequence);
+        var data = Assert.IsType<DespachoSolicitadoData>(despacho.Data);
+        Assert.Equal(OrdenId, data.OrdenId);
+        Assert.Equal("RSV-2026-000042", data.ReservaId);
+        Assert.Equal(MetodoEntrega.DOMICILIO, data.MetodoEntrega);
+        Assert.Single(data.Lineas);
+
+        // Certificacion, CONFIRMADA, DESPACHO_SOLICITADO y los cuatro eventos de
+        // outbox salen de un solo SaveChanges.
+        Assert.Equal(1, unidad.Confirmaciones);
+    }
+
+    [Fact]
+    public async Task Una_orden_con_alerta_fiscal_no_se_despacha_mientras_no_llegue_la_certificacion()
+    {
+        var (manejador, ordenes, outbox, unidad) = Construir();
+        var orden = OrdenEnConfirmadaPendienteFiscal();
+        ordenes.Precargar(orden);
+        var fallida = new ManejadorCertificacionSatFallida(
+            ordenes,
+            unidad,
+            NullLogger<ManejadorCertificacionSatFallida>.Instance);
+
+        await fallida.ManejarAsync(
+            new CertificacionSatFallidaData(
+                DocumentoFiscalId: "6f5e4b3c-2a1d-43ca-999f-073d651ef222",
+                OrdenId: OrdenId,
+                TipoDocumento: TipoDocumentoFiscal.FACTURA,
+                Serie: "A",
+                NumeroDocumento: "00000002",
+                Intentos: 4,
+                UltimoCodigo: "SAT_NO_DISPONIBLE",
+                UltimoMotivo: "La SAT no respondio dentro del timeout configurado.",
+                FallidaEn: new DateTime(2026, 9, 12, 10, 15, 30, DateTimeKind.Utc)),
+            CancellationToken.None);
+
+        // La alerta no cambia el estado ni solicita el despacho: la orden queda
+        // varada en CONFIRMADA_PENDIENTE_FISCAL hasta el reintento manual.
+        Assert.True(orden.AlertaFiscal);
+        Assert.Equal(EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL, orden.Estado);
+        Assert.Empty(outbox.Eventos);
+
+        // Tras el reintento manual la certificacion si llega, y ahi se despacha.
+        await manejador.ManejarAsync(CrearDatosCertificados(), CancellationToken.None);
+
+        Assert.Equal(EstadoOrden.DESPACHO_SOLICITADO, orden.Estado);
+        Assert.Single(outbox.PorTipo(DespachoSolicitado.EventType));
+    }
+
+    [Fact]
     public async Task Orden_con_pagoId_real_lo_persiste_para_uso_en_eventos_futuros()
     {
         var (manejador, ordenes, outbox, unidad) = Construir();
@@ -170,7 +258,7 @@ public sealed class ManejadorDocumentoFiscalCertificadoTests
 
         await manejador.ManejarAsync(CrearDatosCertificados(), CancellationToken.None);
 
-        Assert.Equal(EstadoOrden.CONFIRMADA, orden.Estado);
+        Assert.Equal(EstadoOrden.DESPACHO_SOLICITADO, orden.Estado);
         Assert.Equal("PAG-2026-008877", orden.PagoId);
 
         // El evento 12 (OrdenCertificadaFiscalmente) se emitio correctamente.
