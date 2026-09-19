@@ -157,8 +157,21 @@ public sealed class ServicioDevolucion
                 Tipo: devolucion.Tipo,
                 EsParcial: devolucion.EsParcial,
                 UbicacionReingresoId: devolucion.UbicacionReingresoId,
+                // UbicacionOrigenReservaId y ReservaId son la misma reserva para
+                // toda la orden (una sola reserva por orden, ver InventarioReservado):
+                // se repiten en cada linea para que Inventario no dependa de nada
+                // fuera del evento al reingresar. orden.Estado == ENTREGADA aqui
+                // garantiza que la reserva ya se confirmo, pero se usa string.Empty
+                // como respaldo defensivo, igual que el resto de identificadores
+                // reales de Orden (ver ResolverPagoId).
                 Lineas: devolucion.Lineas
-                    .Select(l => new DevolucionLineaData(l.Sku, l.Cantidad, l.Motivo, l.SkuReemplazo))
+                    .Select(l => new DevolucionLineaData(
+                        l.Sku,
+                        l.Cantidad,
+                        l.Motivo,
+                        l.SkuReemplazo,
+                        UbicacionOrigenReservaId: orden.UbicacionReservaId ?? string.Empty,
+                        ReservaId: orden.ReservaId ?? string.Empty))
                     .ToList(),
                 Moneda: devolucion.Moneda,
                 MontoReembolso: devolucion.MontoReembolso.ToString(),

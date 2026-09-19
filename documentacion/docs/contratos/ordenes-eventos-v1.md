@@ -1,16 +1,27 @@
-# Contrato de eventos del contexto Órdenes — v1.2
+# Contrato de eventos del contexto Órdenes — v1.3
 
 **Proyecto:** SGO-Logic — Fase 2
 **Curso:** Análisis y Diseño de Sistemas 2, Sección B
 **Contexto emisor:** Órdenes
 **Autor:** 202300410 — Angel David Martínez García
 **Estado:** listo para congelamiento
-**Fecha:** 2026-09-12
+**Fecha:** 2026-09-19
 **Depende de:** `sgo-eventos-envelope-v1.md`
 
 ---
 
-## 0. Cambios respecto a v1.1
+## 0. Cambios respecto a v1.2
+
+`DevolucionRegistrada` (evento 11) agrega dos campos nuevos en cada elemento de `lineas`, para que Inventario pueda reingresar la cantidad devuelta sin tener que volver a preguntarle a Órdenes de dónde salió la reserva original:
+
+| # | Cambio | Detalle |
+|---|---|---|
+| 1 | `lineas[].ubicacionOrigenReservaId` | Ubicación desde la que Inventario confirmó la reserva original (el `ubicacionId` de `InventarioReservado`). Órdenes ahora lo persiste en `Orden.UbicacionReservaId` al consumir ese evento. |
+| 2 | `lineas[].reservaId` | El mismo `reservaId` real de la orden (`Orden.ReservaId`), repetido por línea para que cada línea sea autocontenida. |
+
+Cambio retrocompatible: son campos nuevos al final de `DevolucionLineaData`, con valor por defecto `""` en el tipo .NET. No se renombró ni se quitó ningún campo existente; los consumidores actuales (Pagos, Facturación) siguen funcionando sin cambios.
+
+## 0.1 Cambios respecto a v1.1
 
 Los eventos 11 (`DevolucionRegistrada`) y 12 (`OrdenCertificadaFiscalmente`) pasan de definidos-pero-no-emitidos a **implementados**: ambos se publican desde el código de Órdenes contra la topología descrita aquí. Esto trae tres cambios de bindings:
 
@@ -22,7 +33,7 @@ Los eventos 11 (`DevolucionRegistrada`) y 12 (`OrdenCertificadaFiscalmente`) pas
 
 Sigue vigente todo lo resuelto en v1.1 (objeciones 1 a 10, tabla de la sección "Cambios respecto a v1" de esa versión, no repetida aquí).
 
-## 0.1 Cambios respecto a v1
+## 0.2 Cambios respecto a v1
 
 Esta versión incorpora las objeciones de Julio Herrera (Auditoría, base técnica), Jonathan Jerónimo (Consulta de Estado, Notificaciones) y Francisco Castillo (Integración POS, Integración ERP).
 
@@ -638,6 +649,8 @@ Dispara tres reacciones en paralelo: reingreso de inventario, nota de crédito y
 | `lineas[].cantidad` | integer | sí | Menor o igual a lo comprado. |
 | `lineas[].motivo` | string | sí | Texto corto. |
 | `lineas[].skuReemplazo` | string \| null | sí | Solo cuando `tipo` es `CAMBIO`. |
+| `lineas[].ubicacionOrigenReservaId` | string | sí (desde v1.3) | Ubicación desde la que Inventario confirmó la reserva original de la orden (`ubicacionId` de `InventarioReservado`). Misma reserva para todas las líneas de una orden. Con lo que hoy consume Ordenes de `InventarioReservado`, siempre trae un valor real cuando la orden llegó a `ENTREGADA`. |
+| `lineas[].reservaId` | string | sí (desde v1.3) | El `reservaId` real de la reserva de inventario de la orden, repetido en cada línea para que Inventario no dependa de nada fuera del evento al reingresar. |
 | `moneda` | string | sí | Enum `Moneda`. |
 | `montoReembolso` | string | sí | Decimal como cadena. `"0.00"` en cambio sin diferencia. |
 | `pagoOriginalId` | string | sí | Pago sobre el que se aplica el reembolso. |
@@ -658,7 +671,9 @@ Dispara tres reacciones en paralelo: reingreso de inventario, nota de crédito y
       "sku": "SKU-LB-00871",
       "cantidad": 1,
       "motivo": "Producto con abolladura en la puerta",
-      "skuReemplazo": null
+      "skuReemplazo": null,
+      "ubicacionOrigenReservaId": "CD-01",
+      "reservaId": "RSV-2026-004410"
     }
   ],
   "moneda": "GTQ",

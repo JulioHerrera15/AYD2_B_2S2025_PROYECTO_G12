@@ -467,6 +467,11 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
                         .HasColumnType("integer")
                         .HasColumnName("version");
 
+                    b.Property<string>("UbicacionReservaId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("ubicacion_reserva_id");
+
                     b.Property<string>("UbicacionSolicitadaId")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")

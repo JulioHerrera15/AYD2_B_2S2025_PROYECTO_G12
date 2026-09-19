@@ -150,7 +150,7 @@ public sealed class ManejadorEventosInventario
         InventarioReservadoData datos,
         CancellationToken cancelacion)
     {
-        orden.RegistrarReserva(datos.ReservaId);
+        orden.RegistrarReserva(datos.ReservaId, datos.UbicacionId);
 
         var transicion1 = orden.TransicionarA(EstadoOrden.INVENTARIO_RESERVADO, pasoSaga: PasoSaga.RESERVA);
 
