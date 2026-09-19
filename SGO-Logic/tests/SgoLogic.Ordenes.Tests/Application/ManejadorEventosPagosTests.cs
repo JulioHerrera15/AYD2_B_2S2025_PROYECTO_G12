@@ -40,6 +40,7 @@ public sealed class ManejadorEventosPagosTests
     {
         var orden = CrearOrden();
         orden.TransicionarA(EstadoOrden.RESERVA_SOLICITADA);
+        orden.RegistrarReserva("RSV-2026-000042", "CD-01");
         orden.TransicionarA(EstadoOrden.INVENTARIO_RESERVADO);
         orden.TransicionarA(EstadoOrden.COBRO_SOLICITADO);
         return orden;

@@ -28,6 +28,33 @@ public sealed class ServicioConfirmacionOrdenTests
         new[] { new LineaOrden("SKU-LB-00871", "Refrigeradora 12 pies", 1, 1250.00m) },
         150.00m);
 
+    private static readonly DireccionEntregaData DireccionDePrueba = new(
+        Pais.GT, "Guatemala", "San Juan Sacatepequez", "5a avenida 3-21 zona 2", "Porton azul");
+
+    private static Orden CrearOrdenA(DireccionEntregaData direccion) => new(
+        OrdenId,
+        "000777",
+        "CLI-000045",
+        Canal.WEB,
+        MetodoEntrega.DOMICILIO,
+        Moneda.GTQ,
+        MedioPago.TARJETA,
+        new[] { new LineaOrden("SKU-LB-00871", "Refrigeradora 12 pies", 1, 1250.00m) },
+        150.00m,
+        direccionEntrega: direccion);
+
+    /// <summary>Lleva la orden hasta CONFIRMADA con reserva registrada, como en la saga real.</summary>
+    private static void AvanzarHastaConfirmada(Orden orden)
+    {
+        orden.TransicionarA(EstadoOrden.RESERVA_SOLICITADA);
+        orden.RegistrarReserva("RSV-2026-000042", "CD-01");
+        orden.TransicionarA(EstadoOrden.INVENTARIO_RESERVADO);
+        orden.TransicionarA(EstadoOrden.COBRO_SOLICITADO);
+        orden.TransicionarA(EstadoOrden.PAGO_APLICADO);
+        orden.TransicionarA(EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL);
+        orden.TransicionarA(EstadoOrden.CONFIRMADA);
+    }
+
     private static CrearOrdenRequest CrearOrdenRequest(
         Canal canal = Canal.WEB,
         string medioPago = "TARJETA") => new(
@@ -321,6 +348,7 @@ public sealed class ServicioConfirmacionOrdenTests
             EstadoOrden.RESERVA_SOLICITADA,
             EstadoOrden.INVENTARIO_RESERVADO,
             EstadoOrden.COBRO_SOLICITADO);
+        orden.RegistrarReserva("RSV-2026-000042", "CD-01");
         ordenes.Precargar(orden);
 
         await servicio.AplicarTransicionAsync(
@@ -336,7 +364,172 @@ public sealed class ServicioConfirmacionOrdenTests
         Assert.Equal(LiberacionReservaSolicitada.RoutingKey, liberacion.RoutingKey);
         var data = Assert.IsType<LiberacionReservaSolicitadaData>(liberacion.Data);
         Assert.Equal(orden.Id, data.OrdenId);
+        Assert.Equal("RSV-2026-000042", data.ReservaId);
         Assert.Equal(MotivoLiberacionReserva.COBRO_SIN_RESPUESTA, data.Motivo);
+    }
+
+    [Theory]
+    [InlineData(EstadoOrden.CANCELADA)]
+    [InlineData(EstadoOrden.RECHAZADA)]
+    public async Task Una_compensacion_sin_reserva_conocida_no_publica_LiberacionReservaSolicitada(
+        EstadoOrden estadoDestino)
+    {
+        var (servicio, ordenes, outbox, unidad) = Construir();
+        var orden = CrearOrdenEn(EstadoOrden.RESERVA_SOLICITADA);
+        ordenes.Precargar(orden);
+
+        await servicio.AplicarTransicionAsync(
+            orden.Id,
+            estadoDestino,
+            PasoSaga.RESERVA,
+            "Cancelada antes de InventarioReservado",
+            esCompensacion: true,
+            CancellationToken.None);
+
+        // Sin reservaId no hay nada que liberar y no se inventa uno: la
+        // expiracion por TTL de Inventario cubre una reserva tardia.
+        Assert.Equal(estadoDestino, orden.Estado);
+        Assert.Single(outbox.PorTipo(OrdenEstadoCambiado.EventType));
+        Assert.Empty(outbox.PorTipo(LiberacionReservaSolicitada.EventType));
+        Assert.Equal(1, unidad.Confirmaciones);
+    }
+
+    [Fact]
+    public async Task DespachoSolicitado_a_domicilio_lleva_el_reservaId_real_y_la_direccion_de_entrega()
+    {
+        var (servicio, ordenes, outbox, _) = Construir();
+        var orden = CrearOrdenA(DireccionDePrueba);
+        AvanzarHastaConfirmada(orden);
+        ordenes.Precargar(orden);
+
+        await servicio.AplicarTransicionAsync(
+            orden.Id, EstadoOrden.DESPACHO_SOLICITADO, PasoSaga.DESPACHO, null, false, CancellationToken.None);
+
+        var evento = Assert.Single(outbox.PorTipo(DespachoSolicitado.EventType));
+        Assert.Equal(DespachoSolicitado.RoutingKey, evento.RoutingKey);
+        var data = Assert.IsType<DespachoSolicitadoData>(evento.Data);
+        Assert.Equal(orden.Id, data.OrdenId);
+        Assert.Equal("RSV-2026-000042", data.ReservaId);
+        Assert.Equal(MetodoEntrega.DOMICILIO, data.MetodoEntrega);
+        Assert.Null(data.UbicacionRecogidaId);
+        Assert.Equal(DireccionDePrueba, data.DireccionEntrega);
+        var linea = Assert.Single(data.Lineas);
+        Assert.Equal("SKU-LB-00871", linea.Sku);
+        Assert.Equal(1, linea.Cantidad);
+    }
+
+    [Fact]
+    public async Task DespachoSolicitado_de_recogida_lleva_la_tienda_y_no_lleva_direccion()
+    {
+        var (servicio, ordenes, outbox, _) = Construir();
+        var orden = new Orden(
+            OrdenId,
+            "000777",
+            "CLI-000045",
+            Canal.WEB,
+            MetodoEntrega.RECOGIDA_TIENDA,
+            Moneda.GTQ,
+            MedioPago.TARJETA,
+            new[] { new LineaOrden("SKU-LB-00871", "Refrigeradora 12 pies", 1, 1250.00m) },
+            150.00m,
+            ubicacionSolicitadaId: "TDA-014",
+            direccionEntrega: DireccionDePrueba);
+        AvanzarHastaConfirmada(orden);
+        ordenes.Precargar(orden);
+
+        await servicio.AplicarTransicionAsync(
+            orden.Id, EstadoOrden.DESPACHO_SOLICITADO, PasoSaga.DESPACHO, null, false, CancellationToken.None);
+
+        var data = Assert.IsType<DespachoSolicitadoData>(
+            Assert.Single(outbox.PorTipo(DespachoSolicitado.EventType)).Data);
+        Assert.Equal(MetodoEntrega.RECOGIDA_TIENDA, data.MetodoEntrega);
+        Assert.Equal("TDA-014", data.UbicacionRecogidaId);
+        Assert.Null(data.DireccionEntrega);
+    }
+
+    [Fact]
+    public async Task Crear_orden_a_domicilio_con_direccion_la_conserva_y_la_incluye_en_OrdenCreada()
+    {
+        var (servicio, ordenes, outbox, _) = Construir();
+
+        var dto = await servicio.CrearOrdenAsync(
+            CrearOrdenRequest() with { DireccionEntrega = DireccionDePrueba }, CancellationToken.None);
+
+        var orden = await ordenes.ObtenerPorIdAsync(dto.Id, CancellationToken.None);
+        Assert.Equal(DireccionDePrueba, orden!.DireccionEntrega);
+        var data = Assert.IsType<OrdenCreadaData>(Assert.Single(outbox.Eventos).Data);
+        Assert.Equal(DireccionDePrueba, data.DireccionEntrega);
+    }
+
+    [Fact]
+    public async Task Crear_orden_sin_direccion_sigue_funcionando_y_emite_direccion_nula()
+    {
+        var (servicio, _, outbox, _) = Construir();
+
+        await servicio.CrearOrdenAsync(CrearOrdenRequest(), CancellationToken.None);
+
+        var data = Assert.IsType<OrdenCreadaData>(Assert.Single(outbox.Eventos).Data);
+        Assert.Null(data.DireccionEntrega);
+    }
+
+    [Fact]
+    public async Task Crear_orden_con_direccion_incompleta_lanza_ArgumentException_y_no_escribe()
+    {
+        var (servicio, _, outbox, unidad) = Construir();
+
+        await Assert.ThrowsAsync<ArgumentException>(() => servicio.CrearOrdenAsync(
+            CrearOrdenRequest() with { DireccionEntrega = DireccionDePrueba with { Municipio = " " } },
+            CancellationToken.None));
+
+        Assert.Empty(outbox.Eventos);
+        Assert.Equal(0, unidad.Confirmaciones);
+    }
+
+    [Fact]
+    public async Task Cambiar_a_domicilio_conserva_la_direccion_y_la_manda_en_MetodoEntregaModificado()
+    {
+        var (servicio, ordenes, outbox, _) = Construir();
+        var orden = new Orden(
+            OrdenId,
+            "000777",
+            "CLI-000045",
+            Canal.WEB,
+            MetodoEntrega.RECOGIDA_TIENDA,
+            Moneda.GTQ,
+            MedioPago.TARJETA,
+            new[] { new LineaOrden("SKU-LB-00871", "Refrigeradora 12 pies", 1, 1250.00m) },
+            150.00m,
+            ubicacionSolicitadaId: "TDA-014");
+        ordenes.Precargar(orden);
+
+        await servicio.CambiarMetodoEntregaAsync(
+            orden.Id,
+            new CambiarMetodoEntregaRequest(
+                MetodoEntrega.DOMICILIO, SolicitanteCambio.CLIENTE, DireccionEntrega: DireccionDePrueba),
+            CancellationToken.None);
+
+        Assert.Equal(DireccionDePrueba, orden.DireccionEntrega);
+        Assert.Null(orden.UbicacionSolicitadaId);
+        var data = Assert.IsType<MetodoEntregaModificadoData>(Assert.Single(outbox.Eventos).Data);
+        Assert.Equal(DireccionDePrueba, data.DireccionEntrega);
+    }
+
+    [Fact]
+    public async Task Cambiar_a_recogida_borra_la_direccion_de_la_orden()
+    {
+        var (servicio, ordenes, outbox, _) = Construir();
+        var orden = CrearOrdenA(DireccionDePrueba);
+        ordenes.Precargar(orden);
+
+        await servicio.CambiarMetodoEntregaAsync(
+            orden.Id,
+            new CambiarMetodoEntregaRequest(
+                MetodoEntrega.RECOGIDA_TIENDA, SolicitanteCambio.CLIENTE, "TDA-014"),
+            CancellationToken.None);
+
+        Assert.Null(orden.DireccionEntrega);
+        var data = Assert.IsType<MetodoEntregaModificadoData>(Assert.Single(outbox.Eventos).Data);
+        Assert.Null(data.DireccionEntrega);
     }
 
     [Fact]

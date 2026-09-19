@@ -91,7 +91,8 @@ public sealed class ServicioConfirmacionOrden
             lineas,
             solicitud.Impuestos,
             solicitud.UbicacionSolicitadaId,
-            receptorCui: receptorCui);
+            receptorCui: receptorCui,
+            direccionEntrega: solicitud.DireccionEntrega);
 
         await _ordenes.AgregarAsync(orden, cancelacion);
 
@@ -118,7 +119,7 @@ public sealed class ServicioConfirmacionOrden
                     .Select(linea => new OrdenCreadaLineaData(
                         linea.Sku, linea.Descripcion, linea.Cantidad, linea.PrecioUnitario, linea.Subtotal))
                     .ToList(),
-                DireccionEntrega: null,
+                DireccionEntrega: orden.DireccionEntrega,
                 CreadaEn: orden.CreadaEn));
 
         await _unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
@@ -209,7 +210,10 @@ public sealed class ServicioConfirmacionOrden
 
         // Puede lanzar ArgumentException (recogida sin ubicacion) o
         // InvalidOperationException (orden terminal); en ese caso no se escribe nada.
-        orden.CambiarMetodoEntrega(solicitud.MetodoEntregaNuevo, solicitud.UbicacionRecogidaId);
+        orden.CambiarMetodoEntrega(
+            solicitud.MetodoEntregaNuevo,
+            solicitud.UbicacionRecogidaId,
+            solicitud.DireccionEntrega);
 
         _outbox.Encolar(
             MetodoEntregaModificado.EventType,
@@ -223,7 +227,7 @@ public sealed class ServicioConfirmacionOrden
                 MetodoEntregaAnterior: metodoAnterior,
                 MetodoEntregaNuevo: solicitud.MetodoEntregaNuevo,
                 UbicacionRecogidaId: orden.UbicacionSolicitadaId,
-                DireccionEntrega: solicitud.DireccionEntrega,
+                DireccionEntrega: orden.DireccionEntrega,
                 SolicitadoPor: solicitud.SolicitadoPor,
                 ModificadoEn: DateTime.UtcNow));
 

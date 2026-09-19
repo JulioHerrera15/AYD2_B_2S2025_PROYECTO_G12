@@ -1,4 +1,5 @@
 using SgoLogic.Contracts.Enumeraciones;
+using SgoLogic.Contracts.Eventos.Ordenes;
 
 namespace SgoLogic.Ordenes.Api.Application.Ordenes;
 
@@ -16,6 +17,11 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes;
 /// vacio, el servicio lo resuelve a "CF". Cuando se envia, debe ser "CF" o una
 /// cadena de solo digitos; cualquier otra cosa es 400.
 /// </param>
+/// <param name="DireccionEntrega">
+/// Direccion de entrega a domicilio. Opcional para no romper a quien crea ordenes
+/// sin ella; se ignora si el metodo es recogida en tienda. Es lo que Despacho le
+/// manda a LogiExpress al pedir la guia.
+/// </param>
 public sealed record CrearOrdenRequest(
     string ClienteId,
     Canal Canal,
@@ -25,7 +31,8 @@ public sealed record CrearOrdenRequest(
     decimal Impuestos,
     IReadOnlyList<CrearLineaOrdenRequest> Lineas,
     string? UbicacionSolicitadaId = null,
-    string? ReceptorCui = null);
+    string? ReceptorCui = null,
+    DireccionEntregaData? DireccionEntrega = null);
 
 public sealed record CrearLineaOrdenRequest(
     string Sku,
