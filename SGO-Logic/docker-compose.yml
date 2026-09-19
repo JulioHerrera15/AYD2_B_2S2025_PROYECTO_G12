@@ -252,6 +252,36 @@ services:
       timeout: 5s
       retries: 5
 
+  despacho-api:
+    build:
+      context: .
+      dockerfile: src/Services/SgoLogic.Despacho.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Postgres: Host=db-operacional;Port=5432;Database=sgo_despacho;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__RabbitMq: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      Outbox__Source: despacho
+      Outbox__PollingIntervalMs: ${OUTBOX_POLLING_MS}
+      Outbox__MaxReintentos: ${OUTBOX_MAX_REINTENTOS}
+      Outbox__BatchSize: ${OUTBOX_BATCH_SIZE}
+      LogiExpress__BaseUrl: http://logiexpress-mock:8080
+      Inventario__BaseUrl: http://inventario-api:8080
+    ports:
+      - "8097:8080"
+    depends_on:
+      db-operacional:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      logiexpress-mock:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   payklik-mock:
     build:
       context: .
@@ -290,6 +320,21 @@ services:
         condition: service_healthy
       payklik-mock:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  logiexpress-mock:
+    build:
+      context: .
+      dockerfile: src/Services/SgoLogic.Mocks.LogiExpress/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      ASPNETCORE_URLS: http://+:8080
+    ports:
+      - "8096:8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
       interval: 10s
