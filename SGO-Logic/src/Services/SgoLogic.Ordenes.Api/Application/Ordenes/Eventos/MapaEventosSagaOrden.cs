@@ -18,9 +18,11 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes.Eventos;
 ///
 /// Ordenes consume las respuestas de Inventario via
 /// <see cref="Consumers.InventarioEventosConsumidor" />, por lo que
-/// <see cref="Orden.ReservaId" /> se conoce al emitir los eventos de saga.
-/// <see cref="ResolverReservaId" /> usa el id real cuando esta disponible; de lo
-/// contrario cae al placeholder. pagoId y el CUI del receptor ya no son placeholder:
+/// <see cref="Orden.ReservaId" /> se conoce al emitir los eventos de saga. Ya no
+/// hay placeholder de reserva: si la orden aun no tiene reserva, no se publica
+/// LiberacionReservaSolicitada (no hay nada que liberar; si Inventario llegara a
+/// crearla, la expiracion por TTL de HU-002 la libera sola) y DespachoSolicitado
+/// lleva el reservaId vacio. pagoId y el CUI del receptor ya no son placeholder:
 /// <see cref="ResolverPagoId" /> usa <see cref="Orden.PagoId" /> (persistido por
 /// <see cref="Application.Ordenes.ManejadorEventosPagos" /> al consumir
 /// PagoAplicado) y <see cref="Orden.ReceptorCui" /> viene de la orden desde su
@@ -189,13 +191,18 @@ public static class MapaEventosSagaOrden
             DespachoSolicitado.RoutingKey,
             new DespachoSolicitadoData(
                 OrdenId: orden.Id,
-                ReservaId: ResolverReservaId(orden),
+                ReservaId: orden.ReservaId ?? string.Empty,
                 MetodoEntrega: orden.MetodoEntrega,
+                // Despacho resuelve el origen preguntandole a Inventario (fuente de
+                // verdad de donde se descontaron las unidades); la sugerencia es
+                // solo un respaldo opcional, asi que Ordenes no la manda.
                 UbicacionOrigenSugerida: null,
                 UbicacionRecogidaId: orden.MetodoEntrega == MetodoEntrega.RECOGIDA_TIENDA
                     ? orden.UbicacionSolicitadaId
                     : null,
-                DireccionEntrega: null,
+                DireccionEntrega: orden.MetodoEntrega == MetodoEntrega.DOMICILIO
+                    ? orden.DireccionEntrega
+                    : null,
                 Lineas: orden.Lineas
                     .Select(linea => new DespachoLineaData(linea.Sku, linea.Descripcion, linea.Cantidad))
                     .ToList(),
@@ -237,7 +244,17 @@ public static class MapaEventosSagaOrden
         Orden orden,
         TransicionOrden transicion,
         IOutboxWriter outbox,
-        MotivoLiberacionReserva? motivoExplicito) =>
+        MotivoLiberacionReserva? motivoExplicito)
+    {
+        // Sin reservaId no hay reserva conocida que liberar: la orden se cancelo o
+        // fue rechazada antes de InventarioReservado. Publicar el evento con un id
+        // inventado solo ensuciaria el bus; si Inventario alcanzara a crear la
+        // reserva, la expiracion por TTL (HU-002) la libera sola.
+        if (orden.ReservaId is null)
+        {
+            return;
+        }
+
         Encolar(
             outbox,
             orden,
@@ -245,13 +262,14 @@ public static class MapaEventosSagaOrden
             LiberacionReservaSolicitada.RoutingKey,
             new LiberacionReservaSolicitadaData(
                 OrdenId: orden.Id,
-                ReservaId: ResolverReservaId(orden),
+                ReservaId: orden.ReservaId,
                 // El evento de origen manda: un rechazo de tarjeta si tuvo
                 // respuesta del proveedor (COBRO_RECHAZADO). Sin motivo explicito
                 // se cae al derivado del estado destino, que preserva el
                 // comportamiento historico del resto de compensaciones.
                 Motivo: motivoExplicito ?? MotivoSegunEstadoDestino(transicion.EstadoNuevo),
                 SolicitadaEn: transicion.CambiadoEn));
+    }
 
     private static MotivoLiberacionReserva MotivoSegunEstadoDestino(EstadoOrden estadoNuevo) => estadoNuevo switch
     {
@@ -276,11 +294,6 @@ public static class MapaEventosSagaOrden
             TopologiaMensajeria.ExchangeEventos,
             routingKey,
             data);
-
-    // reservaId se conoce cuando Ordenes consume InventarioReservado. Antes de
-    // eso (por ejemplo, si algo cancelara la orden sin haber pasado por ahi) se
-    // cae al placeholder.
-    private static string ResolverReservaId(Orden orden) => orden.ReservaId ?? $"RSV-PENDIENTE-{orden.Id}";
 
     // pagoId ya no es siempre placeholder: ManejadorEventosPagos lo persiste en
     // Orden.PagoId al consumir PagoAplicado (item 7). Antes de eso (por ejemplo,

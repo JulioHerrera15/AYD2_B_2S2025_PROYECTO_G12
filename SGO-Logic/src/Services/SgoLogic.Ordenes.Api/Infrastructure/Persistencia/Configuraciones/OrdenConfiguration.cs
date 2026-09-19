@@ -47,6 +47,32 @@ public sealed class OrdenConfiguration : IEntityTypeConfiguration<Orden>
             .HasColumnName("ubicacion_solicitada_id")
             .HasMaxLength(64);
 
+        // Direccion de entrega a domicilio: dependiente opcional en la misma tabla.
+        // Si todas sus columnas son null, EF deja la navegacion en null.
+        builder.OwnsOne(orden => orden.DireccionEntrega, direccion =>
+        {
+            direccion.Property(d => d.Pais)
+                .HasColumnName("direccion_entrega_pais")
+                .HasConversion<string>()
+                .HasMaxLength(10);
+
+            direccion.Property(d => d.Departamento)
+                .HasColumnName("direccion_entrega_departamento")
+                .HasMaxLength(100);
+
+            direccion.Property(d => d.Municipio)
+                .HasColumnName("direccion_entrega_municipio")
+                .HasMaxLength(100);
+
+            direccion.Property(d => d.Direccion)
+                .HasColumnName("direccion_entrega_direccion")
+                .HasMaxLength(300);
+
+            direccion.Property(d => d.Referencia)
+                .HasColumnName("direccion_entrega_referencia")
+                .HasMaxLength(300);
+        });
+
         builder.Property(orden => orden.Moneda)
             .HasColumnName("moneda")
             .HasConversion<string>()
