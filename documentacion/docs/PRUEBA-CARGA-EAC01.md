@@ -10,7 +10,7 @@ Requiere el stack local arriba (`docker compose up -d` desde `SGO-Logic/`).
 No instala nada en la maquina: k6 y `psql` corren dentro de contenedores.
 
 ```bash
-docker run --rm --network sgo-logic_default -v "${PWD}/scripts/pruebas-carga:/scripts" -e ORDENES_POR_MINUTO=80 grafana/k6 run /scripts/eac01-hu023-carga.js
+k6 run -e ORDENES_POR_MINUTO=80 scripts/pruebas-carga/eac01-hu023-carga.js
 ```
 
 Al terminar, esperar al menos un minuto (el procesamiento del cobro es
@@ -28,11 +28,11 @@ si tu proyecto de compose tiene otro nombre, ajusta el `--network`.
 
 El script de carga (`eac01-hu023-carga.js`) crea ordenes de forma continua
 durante toda la corrida y, por cada una, la lleva hasta el punto donde
-arranca el cobro real contra PayKlik: crear -> confirmar. La saga avanza
-sola el resto del camino: RESERVA_SOLICITADA -> INVENTARIO_RESERVADO ->
-COBRO_SOLICITADO -> PAGO_APLICADO -> CONFIRMADA_PENDIENTE_FISCAL ->
-CONFIRMADA. Solo se fuerza DESPACHO_SOLICITADO porque el servicio de
-Logistica aun no existe.
+arranca el cobro real contra PayKlik: crear -> confirmar. No se fuerza
+ninguna transicion. La saga avanza sola hasta el cobro: RESERVA_SOLICITADA ->
+INVENTARIO_RESERVADO -> COBRO_SOLICITADO -> PAGO_APLICADO (o PAGO_PENDIENTE
+mientras PayKlik esta caido). La prueba no espera el despacho ni la entrega:
+EAC-01 mide el cobro.
 
 El script siembra existencias contra inventario-api (puerto 8094) al
 inicio de la corrida, con suficiente stock para todo el volumen de la
@@ -91,6 +91,9 @@ un fallo de HU-023, sin importar cuantas ordenes se hayan procesado bien.
   pero el entorno de este MVP es docker compose de una sola instancia por
   servicio (ADR-013), no Kubernetes: no hay HPA que probar todavia. Esta
   prueba corre contra esa unica instancia.
+- **Despacho y LogiExpress.** La orden no se lleva a `DESPACHO_SOLICITADO` ni
+  mas alla, y el umbral de aprobacion no depende de ello. Ese tramo se ejerce
+  con `scripts/pruebas/camino-feliz.ps1`.
 - **EAC-02 (consulta de estado bajo 5 s) y EAC-04 (escalabilidad sostenida).**
   Son HU-024 y HU-025, con sus propias pruebas. Esta prueba toca la vista de
   Consulta de Estado solo para saber si la orden es consultable, no mide su
