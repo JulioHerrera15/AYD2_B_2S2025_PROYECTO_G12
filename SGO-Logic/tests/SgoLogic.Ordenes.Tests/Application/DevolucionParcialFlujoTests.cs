@@ -38,6 +38,7 @@ public sealed class DevolucionParcialFlujoTests
             100.00m);
 
         orden.TransicionarA(EstadoOrden.RESERVA_SOLICITADA);
+        orden.RegistrarReserva("RSV-000888", "CD-01");
         orden.TransicionarA(EstadoOrden.INVENTARIO_RESERVADO);
         orden.TransicionarA(EstadoOrden.COBRO_SOLICITADO);
         orden.TransicionarA(EstadoOrden.PAGO_APLICADO);

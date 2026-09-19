@@ -154,6 +154,15 @@ public sealed partial class Orden
     public string? ReservaId { get; private set; }
 
     /// <summary>
+    /// Ubicacion de origen de la reserva de inventario (el ubicacionId que devuelve
+    /// Inventario en InventarioReservado). Se necesita para que, ante una devolucion
+    /// (HU-014), el evento DevolucionRegistrada le diga a Inventario donde reingresar
+    /// las unidades sin que tenga que volver a consultarlo. Null hasta que se
+    /// registra la reserva.
+    /// </summary>
+    public string? UbicacionReservaId { get; private set; }
+
+    /// <summary>
     /// Identificador real del pago aplicado (el autorizacionId que devuelve el
     /// proveedor, tomado de PagoAplicado). Reemplaza el placeholder
     /// PAG-PENDIENTE-&lt;id&gt; una vez que Ordenes consume ese evento. Null hasta
@@ -263,20 +272,27 @@ public sealed partial class Orden
     }
 
     /// <summary>
-    /// Registra el identificador real de la reserva de inventario. Lo llama
-    /// el manejador de eventos de Inventario al recibir InventarioReservado,
-    /// antes de transicionar a INVENTARIO_RESERVADO. Reemplaza el placeholder
-    /// RSV-PENDIENTE-&lt;id&gt; que usa DespachoSolicitado y
-    /// LiberacionReservaSolicitada.
+    /// Registra el identificador real de la reserva de inventario y la ubicacion
+    /// de origen. Lo llama el manejador de eventos de Inventario al recibir
+    /// InventarioReservado, antes de transicionar a INVENTARIO_RESERVADO. Reemplaza
+    /// el placeholder RSV-PENDIENTE-&lt;id&gt; que usa DespachoSolicitado y
+    /// LiberacionReservaSolicitada, y deja la ubicacion disponible para que
+    /// DevolucionRegistrada (HU-014) le diga a Inventario donde reingresar.
     /// </summary>
-    public void RegistrarReserva(string reservaId)
+    public void RegistrarReserva(string reservaId, string ubicacionId)
     {
         if (string.IsNullOrWhiteSpace(reservaId))
         {
             throw new ArgumentException("El identificador de la reserva es obligatorio.", nameof(reservaId));
         }
 
+        if (string.IsNullOrWhiteSpace(ubicacionId))
+        {
+            throw new ArgumentException("La ubicacion de la reserva es obligatoria.", nameof(ubicacionId));
+        }
+
         ReservaId = reservaId;
+        UbicacionReservaId = ubicacionId;
     }
 
     /// <summary>

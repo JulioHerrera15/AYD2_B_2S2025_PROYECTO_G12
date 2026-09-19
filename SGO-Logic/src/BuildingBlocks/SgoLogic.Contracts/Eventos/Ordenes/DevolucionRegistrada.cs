@@ -31,9 +31,17 @@ public sealed record DevolucionRegistradaData(
     string RegistradaPor,
     DateTime RegistradaEn);
 
-/// <summary>Linea devuelta dentro del evento DevolucionRegistrada.</summary>
+/// <summary>
+/// Linea devuelta dentro del evento DevolucionRegistrada. UbicacionOrigenReservaId
+/// y ReservaId se agregan en v1.3 del contrato para que Inventario pueda reingresar
+/// la cantidad devuelta sin tener que volver a preguntarle a Ordenes de donde salio
+/// la reserva original. Van al final y con valor por defecto para no romper a los
+/// consumidores existentes (Pagos, Facturacion) que ya construian este record.
+/// </summary>
 public sealed record DevolucionLineaData(
     string Sku,
     int Cantidad,
     string Motivo,
-    string? SkuReemplazo);
+    string? SkuReemplazo,
+    string UbicacionOrigenReservaId = "",
+    string ReservaId = "");
