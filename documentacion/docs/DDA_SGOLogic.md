@@ -2,8 +2,8 @@
 # SGO-Logic — Sistema de Gestión de Órdenes y Logística Omnicanal
 
 **Cliente:** MegaStore
-**Versión:** 1.0
-**Naturaleza del documento:** Definición de arquitectura de la Fase 1. Comprende la delimitación del problema, la identificación de partes interesadas y drivers, las decisiones de arquitectura y las vistas que las sustentan.
+**Versión:** 2.0
+**Naturaleza del documento:** Definición de arquitectura de la Fase 1. Comprende la delimitación del problema, la identificación de partes interesadas y drivers, las decisiones de arquitectura y las vistas que las sustentan. La versión 2.0 agrega la sección 14, Cambios de la Fase 2, que documenta cómo se materializó esa arquitectura en el MVP; las secciones 1 a 13 conservan el contenido de la Fase 1 y solo incorporan notas que remiten a los ADR posteriores.
 
 ---
 
@@ -27,6 +27,7 @@
     - 11.5 Diagramas de casos de uso expandidos
 12. Matrices de trazabilidad
 13. Vacíos de información y supuestos
+14. Cambios de la Fase 2
 
 ---
 
@@ -527,6 +528,8 @@ El despliegue inicial es on-premises sobre la infraestructura existente. Todos l
 
 Presupuesto y despliegue on-premises se refuerzan mutuamente: el techo mensual es alcanzable porque el despliegue inicial reutiliza infraestructura pagada y tecnologías sin licencia, en vez de contratar servicios administrados por demanda.
 
+**Nota de la Fase 2.** Kubernetes on-premises se mantiene como plataforma de producción. El entorno de ejecución del MVP es Docker Compose (ADR-013); su topología y el mapa de servicios se describen en las secciones 14.1 y 14.2.
+
 ---
 
 # 10. Decisiones de arquitectura (ADR)
@@ -545,6 +548,8 @@ Cada decisión se documenta con su contexto, la decisión adoptada, las alternat
 
 **Consecuencias.** Positivas: cada servicio escala de forma independiente; el aislamiento de fallas evita el efecto dominó; se reparte la responsabilidad entre integrantes sin choques; resuelve el diagnóstico de silos. Negativas: mayor complejidad operativa —múltiples servicios, bases y colas—, mitigada con capacitación presupuestada; la consistencia entre contextos pasa a ser eventual y exige coordinación explícita (ADR-002); aumenta la superficie a observar (CAR-12).
 
+**Nota de la Fase 2.** Kubernetes on-premises sigue siendo la plataforma de producción. El entorno de ejecución del MVP es Docker Compose, según ADR-013 (sección 14.1).
+
 ## ADR-002 — Saga orquestada centralizada para el ciclo de vida de la orden
 
 **Estado:** Aceptada.
@@ -556,6 +561,8 @@ Cada decisión se documenta con su contexto, la decisión adoptada, las alternat
 **Alternativas consideradas.** Cinco enfoques: (1) saga orquestada centralizada con máquina de estados interna; (2) coreografía pura por eventos, descartada porque impide el rastreo centralizado que exige Finanzas; (3) orquestación basada en base de datos, que aprovecha la SQL existente pero exige lógica de control propia; (4) orquestador con herramienta dedicada, descartado por exceder las competencias del equipo; (5) saga híbrida. Se eligió la saga orquestada centralizada por dar control total del estado, facilitar compensaciones y dejar registro exacto de cada paso, sin herramientas fuera del alcance del equipo. Se incorpora el matiz de la opción 5: las notificaciones se resuelven por coreografía, al ser un servicio secundario cuya falla no debe frenar la operación.
 
 **Consecuencias.** Positivas: concentra la lógica de compensación y el estado de la orden; permite exponer estados intermedios explícitos en vez de bloquear; da un punto único de instrumentación para auditar. Negativas: Órdenes se vuelve un punto de alto acoplamiento lógico, crítico para todo el flujo; la máquina de estados exige prueba exhaustiva conforme crecen los flujos alternativos.
+
+**Nota de la Fase 2.** El mecanismo con el que Órdenes se entera del resultado de cada paso y avanza la saga sin transiciones manuales se precisa en ADR-016 (sección 14.5).
 
 ## ADR-003 — Patrón Outbox con polling publisher para publicación confiable de eventos
 
@@ -569,6 +576,8 @@ Cada decisión se documenta con su contexto, la decisión adoptada, las alternat
 
 **Consecuencias.** Positivas: ningún evento se pierde aunque el bus no esté disponible en el instante de la escritura; evita el problema de escritura dual. Negativas: introduce latencia entre el cambio y la publicación, según el intervalo de polling; el publicador es un componente adicional que operar; exige disciplina para no publicar por otra vía.
 
+**Nota de la Fase 2.** El contrato común de mensajería sobre el que opera el Outbox (envelope, topología del broker, reintentos y bibliotecas compartidas) se registra en ADR-018. El intervalo de polling del publicador es de 2 segundos por defecto (sección 14.6).
+
 ## ADR-004 — CQRS ligero con Redis como modelo de lectura para consulta de estado
 
 **Estado:** Aceptada.
@@ -580,6 +589,8 @@ Cada decisión se documenta con su contexto, la decisión adoptada, las alternat
 **Alternativas consideradas.** Cinco opciones: (1) Redis materializado; (2) base SQL de solo lectura, con mayor latencia en picos; (3) NoSQL documental, ideal para la vista consolidada pero que introduce otro motor; (4) consultas directas por fan-out, descartadas por incumplir los cinco segundos si una dependencia está lenta; (5) motor de búsqueda, descartado por su alto consumo de recursos frente al techo mensual. Se eligió Redis materializado por reutilizar un motor ya adoptado, responder en el orden de milisegundos y mantener el costo al mínimo. Se asume la necesidad de una estrategia de recarga ante la caída de un nodo.
 
 **Consecuencias.** Positivas: la consulta no depende de la disponibilidad de los contextos de escritura ni de los externos; escala de forma independiente. Negativas: el modelo es eventualmente consistente, con una ventana breve entre el cambio real y su reflejo; introduce un componente de datos adicional.
+
+**Nota de la Fase 2.** La decisión de este ADR se mantiene. En el MVP, Consulta de Estado conserva la vista de cada orden en Redis y, además, en PostgreSQL como respaldo durable y fuente del historial; ver sección 14.6.
 
 ## ADR-005 — Bloqueo optimista con columna de versión y expiración por TTL para reserva de inventario
 
@@ -641,6 +652,8 @@ Cada decisión se documenta con su contexto, la decisión adoptada, las alternat
 
 **Consecuencias.** Positivas: una falla del proveedor no bloquea la orden ni pierde la compra; cada reintento queda auditado. Negativas: el cliente puede percibir estados intermedios más largos durante un incidente prolongado; el circuit breaker requiere calibrar sus umbrales de apertura y cierre —tasa de error, ventana de observación y tiempo de reintento— contra el patrón real de fallas de cada proveedor. Estos valores se definirán durante las pruebas de carga que simulan el pico de ocho veces, el mismo ejercicio en el que se fijan las réplicas mínima y máxima del servicio de Pagos, para no fijar umbrales sin datos de comportamiento real.
 
+**Nota de la Fase 2.** Pagos implementa el disyuntor hacia PayKlik. En Despacho, la solicitud de guía a LogiExpress se ejecuta sin circuit breaker y degrada a GUIA_PENDIENTE; esa excepción, su justificación y el riesgo que deja se registran en ADR-017. Los mocks con los que se provocan las fallas de ambos proveedores se describen en ADR-019.
+
 ## ADR-010 — Tokenización y no almacenamiento de datos de tarjeta
 
 **Estado:** Aceptada.
@@ -665,6 +678,8 @@ Cada decisión se documenta con su contexto, la decisión adoptada, las alternat
 
 **Consecuencias.** Positivas: el cliente recibe confirmación sin esperar a la SAT; la obligación fiscal se cumple siempre, de forma diferida y visible por un estado intermedio. Negativas: existe una ventana en la que la orden está confirmada pero sin respaldo fiscal completo, lo que exige precisar qué significa finalizar la orden frente a la SAT (VAC-03), hoy cubierto por el supuesto del cierre fiscal; si se agota el máximo de reintentos, se genera una alerta para revisión manual.
 
+**Nota de la Fase 2.** El comportamiento de la orden cuando se agotan los reintentos ante la SAT se registra en ADR-015: bandera de alerta fiscal con reintento manual, sin estado nuevo. El paso de CONFIRMADA_PENDIENTE_FISCAL a CONFIRMADA y a DESPACHO_SOLICITADO ocurre por eventos, sin intervención manual (ADR-016).
+
 ## ADR-012 — Propagación confiable de eventos al POS con reintentos e idempotencia
 
 **Estado:** Aceptada.
@@ -676,6 +691,20 @@ Cada decisión se documenta con su contexto, la decisión adoptada, las alternat
 **Alternativas consideradas.** Tres opciones: (1) publicación de eventos con identificador único, cola de fallidos y reintentos; (2) llamada síncrona directa a cada POS, descartada porque una tienda sin conexión bloquearía o perdería el evento; (3) que el POS consulte periódicamente al sistema, descartada porque exigiría modificar el POS. Se eligió la propagación por eventos con idempotencia y reintentos por garantizar que ninguna venta se pierda ni se duplique aunque una tienda esté fuera de línea, sin exigirle al POS ninguna capacidad nueva.
 
 **Consecuencias.** Positivas: ninguna venta se pierde ni se duplica en el POS aunque una tienda esté sin conexión; no exige que el POS exponga API ni consulte inventario central. Negativas: la reconciliación de una tienda fuera de línea depende de que el reintento la alcance, sin garantía de tiempo máximo declarada; el manejo de duplicados recae también del lado del POS.
+
+## Decisiones de la Fase 2 (ADR-013 en adelante)
+
+Las decisiones tomadas durante la Fase 2 se registran en archivos independientes en `documentacion/ADR/`, con el mismo formato que las anteriores. Los ADR-001 a ADR-012 no se modifican. El resumen de cada decisión se encuentra en la sección 14.5.
+
+| ADR | Decisión | Relación con la Fase 1 | Archivo | Estado |
+|---|---|---|---|---|
+| ADR-013 | Docker Compose como entorno de ejecución del MVP | Precisa el entorno de ejecución y mantiene ADR-001 como plataforma de producción | `documentacion/ADR/ADR-013-docker-compose-entorno-ejecucion-mvp.md` | Aceptada |
+| ADR-014 | El desacople exigido se cubre con Outbox y disyuntor | Confirma ADR-003 y ADR-009 como respuesta al requisito de desacople | `documentacion/ADR/ADR-014-desacople-outbox-y-disyuntor.md` | Aceptada |
+| ADR-015 | Bandera de alerta fiscal con reintento manual, sin estado nuevo | Completa ADR-011 | `documentacion/ADR/ADR-015-bandera-alerta-fiscal-sin-estado-nuevo.md` | Aceptada |
+| ADR-016 | La saga de Órdenes avanza por eventos de resultado, sin transiciones manuales | Concreta ADR-002 y ADR-003 | `documentacion/ADR/ADR-016-saga-dirigida-por-eventos-de-resultado.md` | Aceptada |
+| ADR-017 | Despacho consulta a Inventario por HTTP síncrono y degrada la guía sin circuit breaker | Precisa la excepción a ADR-014 y el desvío de ADR-009 | `documentacion/ADR/ADR-017-despacho-consulta-inventario-http-y-guia-pendiente-sin-disyuntor.md` | Aceptada |
+| ADR-018 | Contrato común de mensajería | Concreta ADR-003 | `documentacion/ADR/ADR-018-contrato-comun-de-mensajeria.md` | Aceptada |
+| ADR-019 | Los sistemas externos se simulan con mocks en contenedor y fallas configurables | Sustenta ADR-013 y las pruebas de resiliencia de ADR-009 | `documentacion/ADR/ADR-019-mocks-de-sistemas-externos-con-fallas-configurables.md` | Aceptada |
 
 ---
 
@@ -712,6 +741,8 @@ Muestran los artefactos físicos del sistema y su integración con los component
 **Vista física**
 
 ![Diagrama de Despliegue Físico](../img/Diagrama%20de%20Despliegue%20Físico.png)
+
+**Nota de la Fase 2.** Los diagramas de esta sección describen la plataforma de producción en Kubernetes. La topología del entorno de ejecución del MVP, en Docker Compose, se detalla en las secciones 14.1 y 14.2.
 
 ## 11.5 Diagramas de casos de uso de negocio y de casos de uso expandidos
 
@@ -929,6 +960,183 @@ Los siguientes puntos no están determinados por la información disponible y se
 | VAC-03 | Definición precisa de "finalizar la orden" respecto de la SAT. | ADR-011, RES-07 | Supuesto adoptado: es el cierre fiscal, distinto de la confirmación comercial al cliente. Por validar con el cliente. |
 | VAC-06 | Inventario de hardware existente on-premises. | RES-10, RES-14 | Abierto. Afecta el reparto del presupuesto entre inversión inicial y costo operativo. |
 | VAC-09 | Fuente definitiva del Catálogo Comercial. | CAR-11, CUN-08 | Abierto. La administración de catálogo, precios y promociones queda fuera del alcance; el sistema la consume como dependencia externa. Por validar con el cliente. |
+
+---
+
+# 14. Cambios de la Fase 2
+
+Esta sección documenta cómo se materializó la arquitectura definida en la Fase 1 durante la construcción del MVP. La Fase 2 respeta la arquitectura de la Fase 1 sin rediseñarla: los ADR-001 a ADR-012 no se modifican y el contenido de las secciones 1 a 13 corresponde a la Fase 1. Donde una decisión de la Fase 1 se concretó, precisó o acotó, la sección 10 incluye una nota que remite al ADR correspondiente. Las decisiones nuevas se registran como ADR independientes en `documentacion/ADR/`, del ADR-013 en adelante.
+
+| Versión | Alcance |
+|---|---|
+| 1.0 | Definición de arquitectura de la Fase 1: secciones 1 a 13. |
+| 2.0 | Incorpora la sección 14, Cambios de la Fase 2, y las referencias a ADR-013 en adelante en la sección 10. |
+
+Las rutas de archivos de esta sección se expresan desde la raíz del repositorio.
+
+## 14.1 Entorno de despliegue del MVP
+
+El entorno de ejecución del MVP es Docker Compose (ADR-013). El archivo `SGO-Logic/docker-compose.yml` levanta en una sola máquina, con `docker compose up --build`, 27 contenedores: los servicios del backbone, sus bases de datos por contexto, RabbitMQ, Redis, la pila de observabilidad y los mocks de los sistemas externos. La configuración se entrega por variables de entorno (`SGO-Logic/.env.example`) y los servicios del backbone exponen `/health/live` y `/health/ready`.
+
+Kubernetes on-premises se mantiene como plataforma de producción (ADR-001, RES-14, RES-15, sección 9.2). Docker Compose no la reemplaza: la topología de mensajería y el aislamiento de bases de datos por contexto son idénticos en ambos entornos, de modo que migrar entre ellos exige cambiar manifiestos de despliegue y no código de aplicación.
+
+| Componente | Versión en el MVP |
+|---|---|
+| Servicios .NET | .NET 8 |
+| Motor relacional | PostgreSQL 16 (tres instancias, ver 14.6) |
+| Broker de mensajería | RabbitMQ 3.13 con consola de administración |
+| Modelo de lectura y carrito | Redis 7 |
+| Métricas y tableros | Prometheus 2.55.1 y Grafana 11.3.1 |
+| Mocks de sistemas externos | .NET 8 y Node (ver 14.3) |
+
+## 14.2 Mapa de servicios y puertos
+
+Los puertos corresponden a los publicados en el host por `SGO-Logic/docker-compose.yml`. Entre contenedores, los servicios .NET escuchan en el puerto 8080.
+
+**Servicios de aplicación**
+
+| Servicio | Rol | Puerto en el host | Almacén de datos |
+|---|---|---|---|
+| `api-gateway` | Borde: punto único de entrada y ruteo por prefijo hacia los contextos. | 8080 | Ninguno |
+| `web` | Aplicación web ASP.NET Core MVC que consume el gateway. | 8092 | Ninguno |
+| `auth-api` | Identidad, emisión de JWT y carrito unificado. | 8088 | `sgo_auth` (instancia operacional) y Redis |
+| `ordenes-api` | Orquestador de la saga y ciclo de vida de la orden. | 8083 | `sgo_ordenes` (operacional) |
+| `inventario-api` | Existencias, reservas con TTL y consultas de disponibilidad. | 8094 | `sgo_inventario` (operacional) |
+| `pagos-api` | Cobro contra PayKlik, disyuntor y reembolsos. | 8085 | `sgo_pagos` (finanzas) |
+| `facturacion-api` | Documento fiscal y certificación asíncrona ante la SAT. | 8087 | `sgo_facturacion` (finanzas) |
+| `despacho-api` | Origen de despacho, guía con LogiExpress y estados de entrega. | 8097 | `sgo_despacho` (operacional) |
+| `consulta-estado-api` | Modelo de lectura del estado de las órdenes. | 8091 | `sgo_consulta_estado` (operacional) y Redis |
+| `notificaciones-api` | Notificaciones al cliente, aisladas del flujo principal. | 8090 | `sgo_notificaciones` (operacional) |
+| `integracion-pos-worker` | Propagación de eventos de venta hacia las instancias de POS. | 8095 | `sgo_integracion_pos` (operacional) |
+| `auditoria-worker` | Bitácora append-only de eventos. | 8093 | `sgo_auditoria` (instancia de auditoría) |
+| `sample-api` y `sample-worker` | Plantillas de servicio para crear contextos nuevos (`PLANTILLA-SERVICIO.md`). | 8081 y 8082 | `sgo_sample_api` y `sgo_sample_worker` (operacional) |
+
+**Mocks de sistemas externos**
+
+| Servicio | Simula | Puerto en el host |
+|---|---|---|
+| `payklik-mock` | PayKlik, pasarela de pago | 8084 |
+| `sat-mock` | SAT, certificación fiscal | 8086 |
+| `logiexpress-mock` | LogiExpress, transportista | 8096 |
+| `mock-mensajeria` | Proveedor de SMS, correo y push | 8089 |
+| `mock-erp` | ERP-Core sobre AS/400 | 4000 |
+| `mock-pos` | 32 instancias de POS | 4001 |
+
+**Infraestructura**
+
+| Servicio | Función | Puerto en el host |
+|---|---|---|
+| `rabbitmq` | Broker de mensajería (AMQP y consola de administración) | 5672 y 15672 |
+| `redis` | Modelo de lectura de Consulta de Estado y carrito | 6379 |
+| `prometheus` | Recolección de métricas | 9090 |
+| `grafana` | Tableros de observabilidad | 3000 |
+| `db-operacional`, `db-finanzas`, `db-auditoria` | Instancias de PostgreSQL | No se publican |
+
+## 14.3 Mocks de sistemas externos y fallas que simulan
+
+Los sistemas externos se simulan con mocks en contenedor que exponen el contrato conocido del sistema real y una API de administración para provocar fallas (ADR-019). Ningún mock recibe ni devuelve datos de tarjeta.
+
+| Mock | Fallas que simula | Cómo se provoca |
+|---|---|---|
+| `payklik-mock` | Latencia configurable, caída (503), rechazo del cargo por fondos insuficientes e intermitencia con probabilidad configurable. Idempotencia por `Idempotency-Key`. | `PUT /admin/modo` con `NORMAL`, `LENTO`, `CAIDO`, `RECHAZO` o `INTERMITENTE` |
+| `sat-mock` | Latencia, caída (503), rechazo de la certificación y una probabilidad de falla 503 aplicable en cualquier modo. | `PUT /admin/modo` con `NORMAL`, `LENTO`, `CAIDO` o `RECHAZO` |
+| `logiexpress-mock` | Latencia, caída y un timeout determinístico: una de cada 50 solicitudes de guía no responde. | `PUT /admin/modo`; el cambio del estado de rastreo de una guía se hace con `POST /admin/guias/{guiaId}/estado` |
+| `mock-mensajeria` | Falla del proveedor (respuesta 500) en SMS, correo y push. | Variable de configuración `MockMensajeria__ForzarFalla` o `POST /api/mensajes/config/falla?activa=true` |
+| `mock-erp` | Rechazo de lotes con totales que no cuadran (422), lotes duplicados (409), secuencia retrocedida (409) y caída con respuesta 503, 500 o timeout de 8 segundos. | `POST /erp/admin/caida` |
+| `mock-pos` | Tienda fuera de línea con respuesta 503, 500 o timeout, por tienda o de forma masiva. Idempotencia por tienda y `eventoId`. | `POST /pos/admin/{tiendaId}/caida` y `POST /pos/admin/caida-masiva` |
+
+El cambio de estado de rastreo que se aplica en `logiexpress-mock` no se propaga por sí solo a Despacho. En una demostración, los avances de entrega se informan al webhook de Despacho (`POST /api/despacho/{ordenId}/estados`), que es lo que haría el transportista real.
+
+## 14.4 Cambios a contratos de eventos
+
+Todos los contratos comparten el envelope de `sgo-eventos-envelope-v1.md` (ADR-018). La regla de versionado distingue cambios aditivos, que incrementan la versión menor sin renegociar, de cambios rompientes, que exigen la versión mayor. Ningún cambio de la Fase 2 fue rompiente.
+
+| Contrato | Versión | Cambios de la Fase 2 |
+|---|---|---|
+| `contratos/sgo-eventos-envelope-v1.md` | v1 | Sin cambio de versión. La topología del broker se completó en `TOPOLOGIA-MENSAJERIA.md`: colas quorum con límite de entregas y dueño de la dead letter. |
+| `contratos/ordenes-eventos-v1.md` | v1.4 | v1.1: incorpora las objeciones de los demás contextos antes del congelamiento (envelope y enumeraciones compartidos, `sequence` por agregado, evento 12 `OrdenCertificadaFiscalmente`). v1.2: implementa los eventos 11 y 12 y agrega la cola `ordenes.facturacion` y los bindings de `pagos.ordenes` y `facturacion.ordenes` a `ordenes.devolucion.registrada`. v1.3: `DevolucionRegistrada` agrega `lineas[].ubicacionOrigenReservaId` y `lineas[].reservaId`. v1.4: `DespachoSolicitado` lleva el `reservaId` real y la `direccionEntrega`; `POST /api/ordenes` acepta `direccionEntrega` como campo opcional; `LiberacionReservaSolicitada` no se publica cuando la orden no tiene reserva; se agrega la cola `ordenes.despacho`. |
+| `contratos/pagos-eventos-v1.md` | v1.1 | Agrega los eventos `ReembolsoAplicado` y `ReembolsoFallido`. Cambio aditivo. |
+| `contratos/inventario-eventos-v1.md` | v1 | Agrega el evento 3, `ReservaInventarioExpirada`, el 2026-09-12. Cambio aditivo. |
+| `contratos/facturacion-eventos-v1.md` | v1 | Sin cambio de versión: `DocumentoFiscalCertificado` y `CertificacionSatFallida`. |
+| `despacho-eventos-v1.md` | v1 | Contrato nuevo de la Fase 2: `OrigenDespachoDeterminado`, `GuiaAsignada`, `GuiaPendiente`, `PreparacionSolicitada`, `DespachoEstadoActualizado` y `PedidoListoParaRecoger`. |
+
+## 14.5 Resumen de ADR-013 en adelante
+
+Los archivos se encuentran en `documentacion/ADR/`. Todos tienen estado Aceptada.
+
+**ADR-013, Docker Compose como entorno de ejecución del MVP.** El MVP se ejecuta con Docker Compose para que pueda levantarse en una máquina limpia sin un clúster. Kubernetes on-premises sigue siendo la plataforma de producción y no se modifica. El escalado horizontal automático (HPA) no se ejecuta en el MVP.
+
+**ADR-014, El desacople exigido se cubre con Outbox y disyuntor.** No se introduce un mecanismo de desacople adicional: el patrón Outbox (ADR-003) desacopla la publicación de la disponibilidad del broker, y el disyuntor con backoff (ADR-009) evita que la caída de un proveedor externo se propague al flujo de negocio. La consecuencia aceptada es la latencia del polling y la consistencia eventual entre contextos. ADR-017 precisa la única excepción a la ausencia de llamadas síncronas entre contextos.
+
+**ADR-015, Bandera de alerta fiscal sin estado nuevo.** Cuando se agotan los reintentos de certificación ante la SAT, la orden se mantiene en `CONFIRMADA_PENDIENTE_FISCAL` con una bandera de alerta visible y consultable, y un reintento manual republica la solicitud. No se agrega un estado a la máquina de estados, cuyo contrato consumen otros contextos.
+
+**ADR-016, La saga de Órdenes avanza por eventos de resultado.** Órdenes consume los resultados de Inventario, Pagos, Facturación y Despacho por colas propias, valida cada transición contra la máquina de estados y encadena en una sola transacción el paso fiscal tras el pago y la solicitud de despacho tras la certificación. Tolera eventos fuera de orden y no requiere transiciones manuales.
+
+**ADR-017, Despacho consulta a Inventario por HTTP síncrono y degrada la guía sin circuit breaker.** Se aceptan dos excepciones acotadas a ADR-014 y ADR-009: una lectura síncrona de Inventario para determinar el origen del despacho y una única llamada a LogiExpress que, si falla, deja el despacho en `GUIA_PENDIENTE` sin detener la salida del pedido. El ADR registra el riesgo que queda: acoplamiento de disponibilidad con Inventario y ausencia de disyuntor durante una caída prolongada del proveedor.
+
+**ADR-018, Contrato común de mensajería.** Un envelope único con `transactionId`, `causationId` y `sequence`, una topología con colas quorum, dead letter y límite de entregas, reintentos en dos niveles y bibliotecas compartidas (`SgoLogic.Contracts` y `SgoLogic.BuildingBlocks`) sostienen la idempotencia, el orden y la reconstrucción de transacciones por Auditoría.
+
+**ADR-019, Los sistemas externos se simulan con mocks en contenedor.** Cada proveedor y sistema legacy tiene un mock con fallas configurables, lo que permite repetir las pruebas de resiliencia y levantar el MVP sin acceso a los sistemas reales. Node se usa únicamente en dos mocks y no forma parte del producto.
+
+## 14.6 Decisiones de implementación registradas en este documento
+
+Las siguientes decisiones no cambian un contrato entre contextos ni el entorno de despliegue: son detalles de implementación de un contexto o concretan una decisión de la Fase 1. Por eso se documentan aquí y no como ADR independientes.
+
+**Persistencia.** PostgreSQL es el motor relacional (decisión cerrada el 2026-09-07, coherente con el costo de licenciamiento nulo de la sección 9.1). Cada contexto es dueño de su propia base, con nombre `sgo_<contexto>`, y ningún contexto lee ni escribe la base de otro (ADR-001). Las bases se agrupan en tres instancias: operacional (Órdenes, Inventario, Despacho, Consulta de Estado, Auth, Notificaciones, Integración POS y las plantillas), finanzas (Pagos y Facturación) y auditoría (Auditoría, ADR-006). El acceso es con Entity Framework Core 8, las migraciones se aplican al arrancar cada servicio y la concurrencia es optimista con una columna de versión (ADR-005). Cada servicio conserva su tabla de Outbox en su propia base.
+
+**Consulta de Estado.** El servicio consume los eventos de Órdenes y mantiene la vista de cada orden en Redis, como caché caliente con vencimiento de 24 horas, y en PostgreSQL (`ordenes_vista`), como respaldo durable y fuente del historial paginado. Si Redis no responde, la consulta se sirve desde PostgreSQL. Esta configuración concreta la estrategia de recarga que ADR-004 declaraba necesaria y mantiene su decisión de fondo: la consulta no orquesta llamadas en tiempo real a otros contextos ni a sistemas externos.
+
+**Observabilidad.** Prometheus y Grafana implementan CAR-12. Cada servicio que registra los valores por defecto de la solución expone `/metrics` mediante prometheus-net, y Prometheus lo recoge cada 5 segundos según `SGO-Logic/observabilidad/prometheus.yml`. Grafana se aprovisiona por archivo con dos tableros, "SGO-Logic - Salud del sistema" y "SGO-Logic - Mensajería y resiliencia". Las métricas propias son `outbox_pendientes`, `outbox_publicados_total`, `outbox_fallidos_total`, `outbox_latencia_publicacion_segundos`, `mensajes_consumidos_total`, `mensajes_duplicados_total` y `alertas_fiscales_levantadas_total`, además de las métricas HTTP estándar. La instrumentación no incluye gestor de alertas, agregación de logs ni trazas distribuidas. Los sistemas externos se observan de forma indirecta, a través de las métricas de mensajería y de HTTP de los servicios que los consumen.
+
+**Borde, identidad y aplicación web.** El `api-gateway` usa YARP para enrutar por prefijo hacia los contextos. `auth-api` emite JWT y administra el carrito unificado en Redis. `web` es una aplicación ASP.NET Core MVC que consume el gateway.
+
+**Parámetros del Outbox.** El publicador consulta la tabla de Outbox cada 2 segundos (`OUTBOX_POLLING_MS`), procesa lotes de 20 filas (`OUTBOX_BATCH_SIZE`) y reintenta hasta 5 veces (`OUTBOX_MAX_REINTENTOS`) antes de enviar el mensaje a la dead letter. El intervalo de polling determina la latencia mínima de cada salto entre contextos (ADR-014).
+
+**Esquema de evidencia.** Las salidas de las corridas de verificación se guardan en `SGO-Logic/scripts/pruebas/evidencia/` como archivos `.txt` en UTF-8, con el nombre `<prueba>-<fecha>.txt`, y se versionan para conservar el historial. Los generan `SGO-Logic/scripts/pruebas/camino-feliz.ps1` (flujo completo de la saga), `SGO-Logic/scripts/pruebas-carga/eac01-hu023-carga.js` (carga con k6), `SGO-Logic/scripts/pruebas-carga/eac01-hu023-verificar.sh` (verificación contra las bases) y la lectura de `/metrics` de Órdenes. La evidencia de los demás escenarios de calidad se documenta en `documentacion/docs/`.
+
+## 14.7 Trazabilidad de decisiones
+
+Las rutas de código se expresan desde la raíz del repositorio.
+
+| Decisión | ADR | Archivos de código |
+|---|---|---|
+| Docker Compose como entorno del MVP | ADR-013 | `SGO-Logic/docker-compose.yml`, `SGO-Logic/.env.example`, `SGO-Logic/src/Services/*/Dockerfile` |
+| Desacople con Outbox y disyuntor | ADR-014 (con ADR-003 y ADR-009) | `SGO-Logic/src/BuildingBlocks/SgoLogic.BuildingBlocks/Outbox/OutboxPublisher.cs`, `SGO-Logic/src/Services/SgoLogic.Pagos.Api/Infrastructure/PayKlik/DisyuntorPayKlik.cs`, `SGO-Logic/src/Services/SgoLogic.Pagos.Api/Infrastructure/PayKlik/ClientePayKlikConDisyuntor.cs` |
+| Bandera de alerta fiscal con reintento manual | ADR-015 | `SGO-Logic/src/Services/SgoLogic.Ordenes.Api/Domain/Orden.cs`, `SGO-Logic/src/Services/SgoLogic.Ordenes.Api/Application/Ordenes/ManejadorCertificacionSatFallida.cs`, `SGO-Logic/src/Services/SgoLogic.Ordenes.Api/Application/Ordenes/ServicioConfirmacionOrden.cs` |
+| Saga de Órdenes dirigida por eventos de resultado | ADR-016 | `SGO-Logic/src/Services/SgoLogic.Ordenes.Api/Consumers/` (`InventarioEventosConsumidor.cs`, `PagosEventosConsumidor.cs`, `DocumentoFiscalCertificadoConsumidor.cs`, `DespachoEventosConsumidor.cs`), `SGO-Logic/src/Services/SgoLogic.Ordenes.Api/Application/Ordenes/` (`ManejadorEventosInventario.cs`, `ManejadorEventosPagos.cs`, `ManejadorDocumentoFiscalCertificado.cs`, `ManejadorEventosDespacho.cs`, `ServicioConfirmacionOrden.cs`, `TransicionEncadenada.cs`, `Eventos/MapaEventosSagaOrden.cs`), `SGO-Logic/src/Services/SgoLogic.Ordenes.Api/Domain/MaquinaEstadosOrden.cs` |
+| Despacho: consulta síncrona a Inventario y guía sin circuit breaker | ADR-017 | `SGO-Logic/src/Services/SgoLogic.Despacho.Api/Infrastructure/Inventario/ClienteInventarioHttp.cs`, `SGO-Logic/src/Services/SgoLogic.Despacho.Api/Infrastructure/LogiExpress/ClienteLogiExpressHttp.cs`, `SGO-Logic/src/Services/SgoLogic.Despacho.Api/Application/Despacho/ServicioDespacho.cs` |
+| Contrato común de mensajería | ADR-018 | `SGO-Logic/src/BuildingBlocks/SgoLogic.Contracts/IntegrationEvent.cs`, `SGO-Logic/src/BuildingBlocks/SgoLogic.BuildingBlocks/Messaging/`, `SGO-Logic/src/BuildingBlocks/SgoLogic.BuildingBlocks/Idempotencia/EventConsumerBase.cs`, `SGO-Logic/src/BuildingBlocks/SgoLogic.BuildingBlocks/Correlation/EventContext.cs` |
+| Mocks de sistemas externos | ADR-019 | `SGO-Logic/src/Services/SgoLogic.Mocks.PayKlik/`, `SGO-Logic/src/Services/SgoLogic.Mocks.SAT/`, `SGO-Logic/src/Services/SgoLogic.Mocks.LogiExpress/`, `SGO-Logic/src/Services/SgoLogic.MockMensajeria/`, `Mocks/mock-erp/`, `Mocks/mock-pos/` |
+| Persistencia con PostgreSQL, base por contexto y migraciones al arranque | ADR-001, ADR-005 (sin ADR propio, ver 14.6) | `SGO-Logic/scripts/postgres/crear-bases-adicionales.sh`, carpeta `Infrastructure/Persistencia/` de cada servicio |
+| Consulta de Estado con Redis y respaldo en PostgreSQL | ADR-004 (sin ADR propio, ver 14.6) | `SGO-Logic/src/Services/SgoLogic.ConsultaEstado.Api/Application/ConsultaEstadoService.cs`, `SGO-Logic/src/Services/SgoLogic.ConsultaEstado.Api/Consumers/ConsultaEstadoOrdenesConsumidor.cs`, `SGO-Logic/src/Services/SgoLogic.ConsultaEstado.Api/Infrastructure/ConsultaEstadoDbContext.cs` |
+| Observabilidad con Prometheus y Grafana | CAR-12 (sección 5.2, ver 14.6) | `SGO-Logic/observabilidad/prometheus.yml`, `SGO-Logic/observabilidad/grafana/provisioning/`, `SGO-Logic/src/BuildingBlocks/SgoLogic.BuildingBlocks/Metricas/MetricasSgo.cs` |
+| Borde con YARP e identidad con JWT | Sección 6.1, Borde (ver 14.6) | `SGO-Logic/src/Services/SgoLogic.ApiGateway/appsettings.json`, `SGO-Logic/src/Services/SgoLogic.Auth.Api/Application/JwtService.cs` |
+| Esquema de evidencia de verificación | Sin ADR (ver 14.6) | `SGO-Logic/scripts/pruebas/`, `SGO-Logic/scripts/pruebas-carga/`, `SGO-Logic/scripts/pruebas/evidencia/` |
+
+## 14.8 Umbrales del DoD y evidencia
+
+Los umbrales son los de los escenarios de atributos de calidad de la sección 7. Los valores medidos en cada corrida no se registran en este documento: se anotan en la tabla de umbrales de la bitácora del proyecto.
+
+| Atributo | Escenario (EAC) | Umbral según DDA sección 7 | Evidencia (ruta en el repositorio) |
+|---|---|---|---|
+| Disponibilidad | EAC-01 | Cero órdenes perdidas por indisponibilidad del proveedor; 100% de intentos fallidos auditados; disponibilidad del servicio de Pagos igual o superior a 99.9% durante el evento. | `SGO-Logic/scripts/pruebas-carga/eac01-hu023-carga.js`, `SGO-Logic/scripts/pruebas-carga/eac01-hu023-verificar.sh`, `SGO-Logic/scripts/pruebas/evidencia/eac01-carga-*.txt`, `SGO-Logic/scripts/pruebas/evidencia/eac01-verificacion-*.txt`, `SGO-Logic/scripts/pruebas/evidencia/metricas-ordenes-*.txt`, `documentacion/docs/PRUEBA-CARGA-EAC01.md` |
+| Rendimiento (consulta) | EAC-02 | Tiempo de respuesta inferior a 5 segundos para el 100% de las consultas, incluso bajo carga pico. | `SGO-Logic/scripts/pruebas-carga/eac02-hu024-carga.js`, `SGO-Logic/scripts/pruebas-carga/eac02-hu024-verificar.sh`, `documentacion/docs/PRUEBA-CARGA-EAC02.md` |
+| Rendimiento (auditoría) | EAC-03 | Recuperación en menos de 1 segundo; cero transacciones sin respaldo. | `SGO-Logic/tests/SgoLogic.Auditoria.Tests/CargaTransaccionTests.cs`, `SGO-Logic/tests/SgoLogic.Auditoria.Tests/InsercionYRecuperacionTests.cs`, `documentacion/docs/AUDITORIA.md` |
+| Escalabilidad | EAC-04 | Sostiene una demanda de ocho veces sin degradar EAC-01, EAC-02 ni EAC-03; la capacidad base se incrementa año a año dentro del techo operativo sin cambios arquitectónicos. | `deploy/k8s/consulta-estado-hpa.yaml`, `SGO-Logic/scripts/pruebas-carga/eac02-hu024-escalar.sh`, `SGO-Logic/scripts/pruebas-carga/docker-compose.scale-consulta.yml`, `documentacion/docs/PRUEBA-CARGA-EAC02.md` |
+| Consistencia de inventario | EAC-05 | Cero unidades comprometidas a más de un cliente; reservas no concluidas liberadas dentro del tiempo de expiración definido. | `SGO-Logic/tests/SgoLogic.Inventario.IntegrationTests/ReservaConcurrenteTests.cs`, `SGO-Logic/tests/SgoLogic.Inventario.Tests/Application/ServicioExpiracionReservasTests.cs`, `documentacion/docs/CONCURRENCIA-EAC05.md` |
+
+La evidencia del flujo completo de la saga, desde la creación de la orden hasta la entrega, se genera con `SGO-Logic/scripts/pruebas/camino-feliz.ps1` y se guarda en `SGO-Logic/scripts/pruebas/evidencia/camino-feliz-*.txt`. No corresponde a un escenario de calidad, pero verifica que el ciclo de la orden avanza sin transiciones manuales (ADR-016).
+
+## 14.9 Límites del MVP
+
+Los siguientes límites son alcance deliberado del MVP. Cada uno indica qué existe, qué no se incluye y qué ADR aplica.
+
+| Límite | Qué existe | Qué no se incluye | ADR aplicable |
+|---|---|---|---|
+| Guía en `GUIA_PENDIENTE` | Cuando LogiExpress no responde, el despacho pasa a `GUIA_PENDIENTE`, se publica `GuiaPendiente` y el pedido se prepara y sale igual. El dominio admite asignar la guía desde ese estado. | Un proceso que reintente automáticamente la solicitud de la guía. Mientras no se asigne, el cliente no recibe el enlace de rastreo. | ADR-017 |
+| Liberación de reservas de órdenes canceladas | Inventario libera las reservas no concluidas al vencer su TTL (HU-002; 900 segundos por defecto). Cuando Órdenes conoce la reserva, publica `LiberacionReservaSolicitada` con el `reservaId` real. | El consumo de `LiberacionReservaSolicitada` por parte de Inventario. Una orden cancelada libera su reserva por expiración TTL y no de forma inmediata. | ADR-016 y ADR-005 |
+| Devoluciones de tipo `CAMBIO` | El registro de una devolución total o parcial con su nota de crédito fiscal y su reembolso. El tipo `CAMBIO` registra el SKU de reemplazo y lo transmite en `DevolucionRegistrada`. | La nueva reserva y el despacho del producto de reemplazo. | Sin ADR: es alcance funcional de HU-014 (`contratos/ordenes-eventos-v1.md`, evento 11) |
+| Autoescalado en Kubernetes | `deploy/k8s/consulta-estado-hpa.yaml` define el Deployment, el Service y el HPA de Consulta de Estado (2 a 10 réplicas, umbrales de 70% de CPU y 80% de memoria) como evidencia documental de la plataforma de producción. El MVP demuestra réplicas manuales de `consulta-estado-api` balanceadas por el gateway, con `docker-compose.scale-consulta.yml` y `eac02-hu024-escalar.sh`. | El autoescalado en ejecución y los manifiestos de los demás servicios. El manifiesto existente usa una imagen con etiqueta `latest`, y los secretos (`sgo-secrets`) y el namespace (`sgo-logic`) que referencia no están definidos en el repositorio. | ADR-013 y ADR-001 |
 
 ---
 
