@@ -53,6 +53,12 @@ scrape_configs:
         labels: { servicio: api-gateway }
       - targets: ["web:8080"]
         labels: { servicio: web }
+      - targets: ["despacho-api:8080"]
+        labels: { servicio: despacho-api }
+      - targets: ["integracion-pos-worker:8080"]
+        labels: { servicio: integracion-pos-worker }
+      - targets: ["integracion-erp-worker:8080"]
+        labels: { servicio: integracion-erp-worker }
     dns_sd_configs:
       - names:
           - ordenes-api

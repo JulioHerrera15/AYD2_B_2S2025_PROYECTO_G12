@@ -4,10 +4,10 @@ Paquete combinado con los dos simuladores que el equipo necesita para desarrolla
 probar los contextos **Integración ERP** e **Integración POS** sin depender de los
 sistemas reales:
 
-| Mock | Puerto | Simula | Ver |
-|---|---|---|---|
-| `mock-erp/` | `4000` | ERP-Core sobre AS/400 | `mock-erp/README.md` |
-| `mock-pos/` | `4001` | 32 instancias de POS | `mock-pos/README.md` |
+| Mock | Puerto por defecto (Node puro) | Puerto de host (Docker Compose de este directorio) | Simula | Ver |
+|---|---|---|---|---|
+| `mock-erp/` | `4000` | `4100` | ERP-Core sobre AS/400 | `mock-erp/README.md` |
+| `mock-pos/` | `4001` | `4101` | 32 instancias de POS | `mock-pos/README.md` |
 
 ## Levantar ambos con Docker Compose
 
@@ -15,8 +15,15 @@ sistemas reales:
 docker compose up --build
 ```
 
-- Mock ERP: http://localhost:4000
-- Mock POS: http://localhost:4001
+- Mock ERP: http://localhost:4100
+- Mock POS: http://localhost:4101
+
+Puertos de host 4100/4101 (no 4000/4001) a propósito: el compose principal
+del proyecto (`SGO-Logic/docker-compose.yml`) ya publica `mock-erp` y
+`mock-pos` en 4000/4001. Con puertos de host distintos, este compose se
+puede levantar para desarrollar/probar los mocks de forma aislada sin
+chocar con el principal aunque los dos estén arriba a la vez. El puerto
+interno del contenedor no cambia (sigue siendo 4000/4001).
 
 Para correr en segundo plano: `docker compose up -d --build`.
 Para detener y limpiar: `docker compose down`.
@@ -30,6 +37,12 @@ Si el equipo no tiene Docker disponible, cada mock corre igual con Node.js puro:
 cd mock-erp && npm install && npm start   # puerto 4000
 cd mock-pos && npm install && npm start   # puerto 4001
 ```
+
+**Nota:** en este modo cada mock escucha en su puerto por defecto (4000 /
+4001) — distinto del puerto de host que publica el `docker-compose.yml` de
+este directorio (4100 / 4101). `test-cliente.sh` y `test-integracion.sh`
+apuntan a los puertos de Docker (4100/4101): para probarlos contra mocks
+levantados con `npm start`, ajusta la URL base al inicio de cada script.
 
 ## Estructura
 
@@ -52,7 +65,9 @@ sgo-logic-mocks/
 
 ## Prueba de extremo a extremo de cada mock
 
-Con ambos servicios levantados (Docker o Node):
+Con ambos servicios levantados con Docker Compose (`docker compose up
+--build` en este directorio; los scripts apuntan a los puertos de host
+4100/4101, ver nota arriba si vas a probar contra `npm start`):
 
 ```bash
 bash mock-erp/test-cliente.sh

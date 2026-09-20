@@ -9,8 +9,8 @@
 #   (o) cd mock-erp && npm start   /   cd mock-pos && npm start
 
 set -e
-ERP="http://localhost:4000"
-POS="http://localhost:4001"
+ERP="http://localhost:4100"
+POS="http://localhost:4101"
 
 ORDEN_ID="ORD-INT-001"
 TIENDA="T07"

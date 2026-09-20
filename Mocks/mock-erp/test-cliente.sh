@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 set -e
-BASE="http://localhost:4000"
+BASE="http://localhost:4100"
 
 echo "=== 1) Lote JSON correcto (ACEPTADO) ==="
 curl -s -X POST "$BASE/erp/lotes" -H "Content-Type: application/json" -d '{
