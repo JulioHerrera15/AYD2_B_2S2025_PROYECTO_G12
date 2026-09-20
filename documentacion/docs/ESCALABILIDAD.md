@@ -104,32 +104,34 @@ e-commerce típico es entre 10x y 30x el volumen de escritura equivalente,
 según esa misma prueba). Escala por CPU/memoria de instancias sin estado
 (el estado vive en Redis, no en el proceso), no por contención de base.
 
-### Integración ERP — **no implementada en este MVP** (aclaración necesaria)
+### Integración ERP — limitación de coordinación entre réplicas
 
-El DDA (ADR-008, EV-15) diseña un servicio "Integración ERP" con patrón
-**batch cada 30 minutos, carga plana** (consolidación de resúmenes de venta
-por temporizador contra el AS/400 legacy). Ese patrón está en el diseño,
-pero **no existe como microservicio en este repositorio**: no hay
-`SgoLogic.IntegracionErp` en `src/Services/`, ni un servicio correspondiente
-en `docker-compose.yml`. Lo único presente es el mock standalone `mock-erp`
-(puerto 4000), que hoy no tiene ningún consumidor real apuntándole.
+La Integración ERP ya existe como worker real
+([`SgoLogic.IntegracionErp.Worker`](../../SGO-Logic/src/Services/SgoLogic.IntegracionErp.Worker)),
+consolidación cada 30 minutos, transferencia CSV/XML al mock ERP y
+conciliación diaria conforme a ADR-008.
 
-Se documenta esto explícitamente en vez de inventar una carga medida para un
-servicio que no corre: si el criterio de aceptación de HU-025 pidiera
-demostrar escalado de Integración ERP, sería un bloqueo de alcance a
-resolver antes (implementar el servicio), no algo que esta HU pueda
-completar con evidencia real.
+**Limitación conocida:**
+[`ErpBatchWorker`](../../SGO-Logic/src/Services/SgoLogic.IntegracionErp.Worker/Workers/ErpBatchWorker.cs)
+usa un `PeriodicTimer` local por instancia. No existe actualmente un lease
+distribuido, coordinación entre réplicas ni una selección con `FOR UPDATE SKIP
+LOCKED` para reclamar la corrida. Si se despliega más de una réplica del
+worker, cada instancia puede disparar el batch en la misma ventana y competir
+por la creación/transferencia del lote.
 
-Para no dejar dudas: `integracion-pos-worker` sí existe como servicio real
-(`src/Services/SgoLogic.IntegracionPos.Worker`, dado de alta en
-`docker-compose.yml`), pero **no es un ejemplo de perfil batch**. Su único
-`BackgroundService` es
-[`PosEventosConsumidor`](../../SGO-Logic/src/Services/SgoLogic.IntegracionPos.Worker/Consumers/PosEventosConsumidor.cs),
-que consume eventos de RabbitMQ por suscripción — no hay temporizador ni
-`PeriodicTimer` en el servicio. Es orientado a eventos, igual que el resto
-del Backbone. Conclusión correcta: **ningún servicio con perfil batch existe
-hoy en el repositorio**; el patrón batch de 30 minutos (ADR-008, EV-15) está
-únicamente en el diseño, sin código que medir.
+El lote conserva `loteId`, secuencia, idempotencia y control de duplicados del
+ERP, por lo que el mock/ERP puede rechazar reenvíos repetidos; sin embargo,
+eso no evita el trabajo duplicado ni garantiza que una sola réplica sea la
+coordinadora de la ventana.
+
+**Mitigación operativa actual:** ejecutar una sola réplica de
+`integracion-erp-worker` en despliegues donde no exista coordinación externa y
+no escalar horizontalmente este worker como parte de HU-025. La corrección
+estructural pendiente es incorporar un lease distribuido o una reclamación
+atómica en PostgreSQL antes de habilitar múltiples réplicas.
+
+Esta limitación no aplica a `integracion-pos-worker`, cuyo consumo es orientado
+a eventos y utiliza RabbitMQ para distribuir el trabajo.
 
 ---
 
