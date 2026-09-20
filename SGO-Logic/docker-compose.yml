@@ -252,6 +252,41 @@ services:
       timeout: 5s
       retries: 5
 
+  integracion-erp-worker:
+    build:
+      context: .
+      dockerfile: src/Services/SgoLogic.IntegracionErp.Worker/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Postgres: Host=db-operacional;Port=5432;Database=sgo_integracion_erp;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__RabbitMq: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      Erp__BaseUrl: http://mock-erp:4000
+      Erp__Formato: ${ERP_FORMATO:-CSV}
+      Erp__TiempoEsperaMs: ${ERP_TIMEOUT_MS:-5000}
+      Erp__MaxReintentos: ${ERP_MAX_REINTENTOS:-3}
+      Erp__MaxIntentosLote: ${ERP_MAX_INTENTOS_LOTE:-5}
+      Erp__IntervaloConsolidacionMinutos: ${ERP_INTERVALO_MINUTOS:-30}
+      Erp__IntervaloConciliacionHoras: ${ERP_INTERVALO_CONCILIACION_HORAS:-24}
+      Outbox__Source: integracion-erp
+      Outbox__PollingIntervalMs: ${OUTBOX_POLLING_MS}
+      Outbox__MaxReintentos: ${OUTBOX_MAX_REINTENTOS}
+      Outbox__BatchSize: ${OUTBOX_BATCH_SIZE}
+    ports:
+      - "8096:8080"
+    depends_on:
+      db-operacional:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mock-erp:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   despacho-api:
     build:
       context: .
@@ -334,7 +369,7 @@ services:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
       ASPNETCORE_URLS: http://+:8080
     ports:
-      - "8096:8080"
+      - "8098:8080"
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
       interval: 10s
