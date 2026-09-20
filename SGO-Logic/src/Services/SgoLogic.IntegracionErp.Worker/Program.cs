@@ -11,6 +11,7 @@ using SgoLogic.IntegracionErp.Worker.Workers;
 var builder = WebApplication.CreateBuilder(args);
 builder.AddSgoDefaults();
 builder.Services.AddDbContext<IntegracionErpDbContext>(o => o.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
+builder.Services.AddSingleton<IErpBatchLock>(_ => new PostgresErpBatchLock(builder.Configuration.GetConnectionString("Postgres")!));
 builder.Services.AddSgoMessaging();
 builder.Services.AddOutbox<IntegracionErpDbContext>(builder.Configuration);
 builder.Services.Configure<ErpOptions>(builder.Configuration.GetSection(ErpOptions.Seccion));
