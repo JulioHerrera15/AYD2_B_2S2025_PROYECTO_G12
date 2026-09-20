@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 set -e
-BASE="http://localhost:4001"
+BASE="http://localhost:4101"
 
 echo "=== 1) Evento a T05 (ACEPTADO) ==="
 curl -s -X POST "$BASE/pos/T05/eventos" -H "Content-Type: application/json" -d '{

@@ -15,26 +15,40 @@ target por cada servicio que llama `AddSgoDefaults()` / `UseSgoDefaults()` en su
 `Program.cs`, que es lo que registra el middleware de prometheus-net y expone
 `/metrics` en el puerto interno 8080:
 
-| Servicio             | Target                    |
-|----------------------|---------------------------|
-| sample-api           | sample-api:8080           |
-| sample-worker        | sample-worker:8080        |
-| auth-api             | auth-api:8080             |
-| ordenes-api          | ordenes-api:8080          |
-| inventario-api       | inventario-api:8080       |
-| pagos-api            | pagos-api:8080             |
-| facturacion-api      | facturacion-api:8080      |
-| notificaciones-api   | notificaciones-api:8080   |
-| mock-mensajeria      | mock-mensajeria:8080      |
-| consulta-estado-api  | consulta-estado-api:8080  |
-| api-gateway          | api-gateway:8080          |
-| web                  | web:8080                  |
-| auditoria-worker     | auditoria-worker:8080     |
+| Servicio                | Target                      |
+|-------------------------|------------------------------|
+| sample-api              | sample-api:8080              |
+| sample-worker           | sample-worker:8080           |
+| auth-api                | auth-api:8080                |
+| ordenes-api             | ordenes-api:8080              |
+| inventario-api          | inventario-api:8080           |
+| pagos-api               | pagos-api:8080                |
+| facturacion-api         | facturacion-api:8080          |
+| notificaciones-api      | notificaciones-api:8080       |
+| mock-mensajeria         | mock-mensajeria:8080          |
+| consulta-estado-api     | consulta-estado-api:8080      |
+| api-gateway             | api-gateway:8080              |
+| web                     | web:8080                      |
+| auditoria-worker        | auditoria-worker:8080         |
+| despacho-api            | despacho-api:8080             |
+| integracion-pos-worker  | integracion-pos-worker:8080   |
+| integracion-erp-worker  | integracion-erp-worker:8080   |
 
-**payklik-mock y sat-mock quedan fuera a proposito**: son servicios standalone
-que no referencian `SgoLogic.BuildingBlocks`, no llaman `AddSgoDefaults()` y no
-exponen `/metrics`. Agregarlos como target los mostraria permanentemente en
-rojo en el tablero de salud sin que eso sea un problema real.
+`ordenes-api`, `auditoria-worker` y `consulta-estado-api` se descubren por
+`dns_sd_configs` en vez de `static_configs` (son los tres que hoy se escalan
+con `docker compose --scale`, ver
+`scripts/escalabilidad/docker-compose.scale.yml`): un target estatico por
+nombre de servicio solo raspa una replica, mientras que la resolucion DNS da
+de alta un target por cada replica activa. Sin `--scale` el comportamiento es
+el mismo que un target estatico. Detalle en el propio
+`observabilidad/prometheus.yml` (comentario de cabecera) y en
+`documentacion/docs/ESCALABILIDAD.md`.
+
+**payklik-mock, sat-mock, logiexpress-mock y mock-erp/mock-pos quedan fuera a
+proposito**: son servicios standalone que no referencian
+`SgoLogic.BuildingBlocks`, no llaman `AddSgoDefaults()` y no exponen
+`/metrics`. Agregarlos como target los mostraria permanentemente en rojo en
+el tablero de salud sin que eso sea un problema real.
 
 Cada target lleva la etiqueta `servicio` (el nombre del contenedor en el
 compose), que es la que usan todos los paneles de Grafana para separar series
@@ -176,7 +190,7 @@ Cuando el equipo cree el servicio de Logistica u otro nuevo que use
 
 Si el servicio nuevo **no** usa `AddSgoDefaults()` (por ejemplo, otro mock
 standalone), no expone `/metrics` y no debe agregarse como target — igual que
-`payklik-mock` y `sat-mock`.
+`payklik-mock`, `sat-mock` y `logiexpress-mock`.
 
 ## Verificacion
 
@@ -188,7 +202,7 @@ docker compose up --build
 
 ### 2. Confirmar que Prometheus ve todos los targets arriba
 
-Entrar a `http://localhost:9090/targets`. Los trece targets del job
+Entrar a `http://localhost:9090/targets`. Los 16 targets del job
 `sgo-logic` deben quedar en **UP** en cuanto sus contenedores respectivos
 pasan el healthcheck (puede tomar unos segundos tras el arranque). Si alguno
 queda en `DOWN`, revisar `docker compose logs <servicio>`.
@@ -201,7 +215,7 @@ y la carpeta "SGO-Logic" con los dos tableros ya deben estar ahi, sin crear
 nada a mano.
 
 - En **Salud del sistema**, con el stack recien levantado y sin trafico
-  todavia, el panel de estado debe mostrar los trece servicios en verde
+  todavia, el panel de estado debe mostrar los 16 servicios en verde
   (ACTIVO); latencia y tasa de peticiones estaran en "No data" hasta el
   siguiente paso.
 - En **Mensajeria y resiliencia**, `outbox_pendientes` deberia estar en cero o
