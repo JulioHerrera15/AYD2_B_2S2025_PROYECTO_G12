@@ -41,3 +41,198 @@ El repositorio se organiza en dos partes:
 
 ### Implementación
 - [SGO-Logic/](SGO-Logic/) — Prototipo ASP.NET Core (.NET 8) del sistema, alineado con el estilo de microservicios por contexto delimitado definido en ADR-001.
+
+---
+
+## Instalación y despliegue
+
+Guía para levantar el sistema completo en una máquina limpia con Docker.
+**El `docker-compose.yml` vive dentro de `SGO-Logic/`, no en la raíz del
+repositorio** — es el primer paso y el más fácil de saltarse por accidente.
+
+### Requisitos previos
+
+- **Docker y Docker Compose** (el plugin `docker compose`, no el binario
+  standalone `docker-compose` de la v1 — todos los comandos de este
+  documento y de los scripts del repositorio usan la sintaxis nueva). Es el
+  único requisito real: cada servicio .NET se compila dentro de su propio
+  contenedor al correr `docker compose up --build`, así que **no hace falta
+  tener el SDK de .NET 8 instalado en la máquina host**.
+  - El único script del repositorio que invoca el SDK de .NET
+    (`SGO-Logic/scripts/dev/dn.ps1`, pensado para correr comandos `dotnet`
+    sueltos como migraciones de EF Core) tampoco lo requiere localmente:
+    levanta el SDK dentro de un contenedor (`mcr.microsoft.com/dotnet/sdk:8.0`)
+    por su cuenta. Es una conveniencia de desarrollo, no un requisito para
+    correr el sistema.
+- **RAM.** No se midió el consumo exacto del stack; como referencia
+  razonable — son 27 contenedores, entre ellos unos 20 procesos .NET además
+  de tres instancias de PostgreSQL, RabbitMQ, Redis, Prometheus y Grafana —
+  reserva al menos 8 GB de RAM para el motor de Docker, con más margen si
+  vas a correr además las pruebas de carga (`scripts/pruebas-carga/`,
+  `scripts/escalabilidad/`) en paralelo.
+
+### Pasos de despliegue
+
+```bash
+git clone https://github.com/JulioHerrera15/AYD2_B_2S2025_PROYECTO_G12.git
+cd AYD2_B_2S2025_PROYECTO_G12/SGO-Logic   # el compose vive aqui, NO en la raiz del repositorio
+cp .env.example .env
+docker compose up -d --build
+docker compose ps
+```
+
+La primera corrida tarda más porque construye alrededor de 20 imágenes .NET
+además de descargar las imágenes base (PostgreSQL, RabbitMQ, Redis,
+Prometheus, Grafana): en una corrida verificada desde cero tomó
+aproximadamente 55 segundos hasta que los 27 contenedores quedaron
+`healthy`. Corridas posteriores son más rápidas porque Docker reutiliza las
+capas ya construidas. `docker compose ps` debe mostrar los 27 servicios en
+estado `healthy`; si alguno queda `unhealthy` o reiniciando, revisa sus
+logs con `docker compose logs -f <servicio>`.
+
+### Verificación
+
+- **Salud agregada:** `docker compose ps` sin ningún servicio en estado
+  distinto de `healthy`.
+- **API Gateway:** `http://localhost:8080/health/live` debe responder 200.
+  Es el punto de entrada único hacia Auth/Carrito, Consulta de Estado,
+  Notificaciones, Órdenes, Pagos, Facturación, Inventario y Auditoría.
+- **UI de demo:** `http://localhost:8092` (`web`) — habla con el sistema
+  exclusivamente a través del API Gateway.
+- **Consola de RabbitMQ:** `http://localhost:15672`, con el usuario y
+  contraseña de tu `.env` (`RABBITMQ_USER` / `RABBITMQ_PASSWORD`; con
+  `.env.example` sin modificar, `sgo_admin` / `change_me`).
+- **Grafana:** `http://localhost:3000`, con el usuario y contraseña de tu
+  `.env` (`GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD`; con
+  `.env.example` sin modificar, `admin` / `change_me`). Trae dos tableros
+  aprovisionados por archivo — detalle en
+  [`documentacion/docs/OBSERVABILIDAD.md`](documentacion/docs/OBSERVABILIDAD.md).
+- **Prometheus:** `http://localhost:9090/targets` — los targets del job
+  `sgo-logic` deben aparecer `UP`.
+
+### Servicios y puertos
+
+Puertos de host verificados con `docker compose ps` sobre una corrida
+limpia (27 contenedores).
+
+**Servicios del sistema** (contextos de negocio, ASP.NET Core / .NET 8):
+
+| Servicio | Puerto | Qué es |
+|---|---|---|
+| `api-gateway` | 8080 | Punto de entrada único (YARP), enruta hacia el resto de contextos |
+| `auth-api` | 8088 | Autenticación (JWT) y carrito de compras (Redis) |
+| `ordenes-api` | 8083 | Órdenes: creación, confirmación, transiciones de la saga, devoluciones |
+| `inventario-api` | 8094 | Reservas de inventario con TTL y bloqueo optimista (ADR-005) |
+| `pagos-api` | 8085 | Cobro contra la pasarela de pago |
+| `facturacion-api` | 8087 | Certificación fiscal ante la SAT |
+| `despacho-api` | 8097 | Despacho de órdenes, integrado con el proveedor de logística |
+| `notificaciones-api` | 8090 | Envío de notificaciones al cliente |
+| `consulta-estado-api` | 8091 | Modelo de lectura CQRS (Redis + fallback a SQL) del estado de una orden |
+| `auditoria-worker` | 8093 | Bitácora inmutable de todos los eventos del sistema |
+| `integracion-pos-worker` | 8095 | Sincronización con el punto de venta de tienda física |
+| `web` | 8092 | UI de demostración; habla con el sistema vía `api-gateway` |
+| `sample-api` / `sample-worker` | 8081 / 8082 | Servicios de ejemplo de la base técnica (outbox + consumidor), no son parte del dominio de negocio |
+
+**Mocks de proveedores externos** (simulan sistemas que en producción son reales):
+
+| Servicio | Puerto | Qué es |
+|---|---|---|
+| `payklik-mock` | 8084 | Pasarela de pago simulada |
+| `sat-mock` | 8086 | Certificación fiscal simulada (SAT) |
+| `logiexpress-mock` | 8096 | Proveedor de despacho simulado |
+| `mock-mensajeria` | 8089 | Envío de SMS/email simulado, con modo de falla forzada configurable |
+| `mock-erp` | 4000 | ERP legacy simulado (AS/400) — hoy sin ningún servicio propio del sistema consumiéndolo (ver [`documentacion/docs/ESCALABILIDAD.md`](documentacion/docs/ESCALABILIDAD.md)) |
+| `mock-pos` | 4001 | Punto de venta de tienda física simulado |
+
+**Infraestructura:**
+
+| Servicio | Puerto | Qué es |
+|---|---|---|
+| `rabbitmq` | 5672 (AMQP), 15672 (consola web) | Bus de eventos |
+| `redis` | 6379 | Caché de lectura (Consulta de Estado) y sesión/carrito con TTL (Auth) |
+| `db-operacional` | sin publicar, solo red interna | PostgreSQL: bases de Órdenes, Inventario, Auth, Consulta de Estado, Notificaciones, Integración POS, Despacho y los servicios de ejemplo |
+| `db-finanzas` | sin publicar, solo red interna | PostgreSQL: bases de Pagos y Facturación |
+| `db-auditoria` | sin publicar, solo red interna | PostgreSQL: base de Auditoría, separada por diseño |
+
+**Observabilidad:**
+
+| Servicio | Puerto | Qué es |
+|---|---|---|
+| `prometheus` | 9090 | Scraping de métricas de cada servicio |
+| `grafana` | 3000 | Tableros sobre las métricas de Prometheus |
+
+### Variables de entorno configurables
+
+Todas viven en `.env` (creado a partir de `.env.example` en el paso
+anterior). Esto es lo que trae hoy el archivo, agrupado por área:
+
+**PostgreSQL / credenciales compartidas**
+- `POSTGRES_USER` / `POSTGRES_PASSWORD` — usuario y contraseña compartidos
+  por los tres contenedores de PostgreSQL, cada uno con su propia base y
+  volumen.
+- `POSTGRES_OPERACIONAL_DB`, `POSTGRES_OPERACIONAL_MULTIPLE_DATABASES` — la
+  base principal y la lista de bases adicionales creadas en
+  `db-operacional` (una por servicio).
+- `POSTGRES_FINANZAS_DB`, `POSTGRES_FINANZAS_MULTIPLE_DATABASES` — lo mismo
+  para `db-finanzas`.
+- `POSTGRES_AUDITORIA_DB` — base de `db-auditoria`.
+- `PG_AUDIT_USER` / `PG_AUDIT_PASS` — usuario restringido (solo
+  INSERT+SELECT) con el que corre `auditoria-worker` en tiempo de
+  ejecución; las migraciones corren aparte, con `POSTGRES_USER`. Detalle en
+  [`documentacion/docs/AUDITORIA.md`](documentacion/docs/AUDITORIA.md).
+
+**RabbitMQ**
+- `RABBITMQ_USER` / `RABBITMQ_PASSWORD` — credenciales del broker y de su
+  consola de administración (puerto 15672).
+
+**Redis**
+- `REDIS_PASSWORD` — usado tanto por el carrito/sesión de `auth-api` como
+  por el caché de lectura de `consulta-estado-api`.
+
+**Outbox** (aplica a todo contexto que publica eventos)
+- `OUTBOX_POLLING_MS` — cada cuántos milisegundos el publicador revisa la
+  tabla de outbox en busca de filas pendientes.
+- `OUTBOX_BATCH_SIZE` — cuántas filas pendientes toma como máximo cada
+  ciclo de polling.
+- `OUTBOX_MAX_REINTENTOS` — reintentos de publicación antes de marcar una
+  fila como fallida y enviarla a la dead letter. Detalle en
+  [`documentacion/docs/TOPOLOGIA-MENSAJERIA.md`](documentacion/docs/TOPOLOGIA-MENSAJERIA.md).
+
+**Auth**
+- `JWT_SECRET` — clave de firma de los tokens JWT (mínimo 32 caracteres).
+- `AUTH_JWT_EXPIRACION_MINUTOS` — vigencia del token.
+- `AUTH_CARRITO_TTL_SEGUNDOS` — TTL del carrito de compras en Redis.
+
+**Mensajería simulada**
+- `MOCK_MENSAJERIA_FORZAR_FALLA` — en `true`, hace que el mock de
+  mensajería falle a propósito, para demostrar el aislamiento de fallos en
+  Notificaciones.
+
+**Integración POS**
+- `POS_BASE_URL` — declarada en `.env.example`, pero no está referenciada
+  en `docker-compose.yml` ni en el código de `integracion-pos-worker` (que
+  apunta a `mock-pos` por una dirección fija de red interna,
+  `http://mock-pos:4001`, no por esta variable). Se documenta tal como está
+  en el archivo, sin inventar para qué la usa.
+
+**Grafana**
+- `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` — credenciales de acceso
+  a Grafana.
+
+### Detener y limpiar
+
+```bash
+docker compose down       # detiene y elimina los contenedores; conserva los volumes (datos de las bases)
+docker compose down -v    # ademas borra los volumes: BORRA los datos de Postgres, RabbitMQ y Grafana
+```
+
+### Documentación de apoyo para operar el sistema
+
+Para escalar, depurar o extender el sistema ya levantado:
+
+- [`documentacion/docs/OBSERVABILIDAD.md`](documentacion/docs/OBSERVABILIDAD.md) — qué mide Prometheus, los tableros de Grafana, cómo reproducir las demostraciones de resiliencia.
+- [`documentacion/docs/TOPOLOGIA-MENSAJERIA.md`](documentacion/docs/TOPOLOGIA-MENSAJERIA.md) — exchanges, colas, routing keys, política de reintentos y dead-letter de RabbitMQ.
+- [`documentacion/docs/ESCALABILIDAD.md`](documentacion/docs/ESCALABILIDAD.md) — cómo escalar servicios horizontalmente con `docker compose --scale` y la evidencia medida de esa prueba.
+- [`documentacion/docs/AUDITORIA.md`](documentacion/docs/AUDITORIA.md) — diseño de la bitácora inmutable y su evidencia medida de latencia.
+- [`documentacion/docs/PRUEBA-CARGA-EAC01.md`](documentacion/docs/PRUEBA-CARGA-EAC01.md) y [`documentacion/docs/PRUEBA-CARGA-EAC02.md`](documentacion/docs/PRUEBA-CARGA-EAC02.md) — pruebas de carga de resiliencia (caída de la pasarela de pago) y de rendimiento de Consulta de Estado.
+- [`documentacion/docs/contratos/PLANTILLA-SERVICIO.md`](documentacion/docs/contratos/PLANTILLA-SERVICIO.md) — cómo aplicar outbox, publicar eventos y escribir un consumidor, para quien vaya a tocar un servicio existente o crear uno nuevo.
