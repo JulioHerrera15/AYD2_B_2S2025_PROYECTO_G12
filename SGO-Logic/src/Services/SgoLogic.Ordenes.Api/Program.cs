@@ -41,6 +41,11 @@ builder.Services.AddHostedService<PagosEventosConsumidor>();
 builder.Services.AddScoped<ManejadorEventosInventario>();
 builder.Services.AddHostedService<InventarioEventosConsumidor>();
 
+// Consumo de los estados de entrega de Despacho: DESPACHO_SOLICITADO -> EN_PREPARACION ->
+// EN_TRANSITO / LISTA_PARA_RECOGER -> ENTREGADA.
+builder.Services.AddScoped<ManejadorEventosDespacho>();
+builder.Services.AddHostedService<DespachoEventosConsumidor>();
+
 // Consumo del resultado de certificacion fiscal: cierre CONFIRMADA_PENDIENTE_FISCAL → CONFIRMADA (HU-005).
 builder.Services.AddScoped<ManejadorDocumentoFiscalCertificado>();
 builder.Services.AddScoped<ManejadorCertificacionSatFallida>();

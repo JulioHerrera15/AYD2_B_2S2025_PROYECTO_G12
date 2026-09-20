@@ -1,12 +1,19 @@
 // EAC-01 / HU-023 — cero ordenes perdidas por indisponibilidad de PayKlik
-// durante el pico de Black Friday (8x). Corre con k6 en contenedor (no
-// requiere instalar nada en la maquina del desarrollador):
+// durante el pico de Black Friday (8x). Corre con k6 directo en el host
+// (Windows o Linux), contra los puertos que publica docker-compose.yml. Desde la
+// raiz de SGO-Logic:
 //
-//   docker run --rm --network sgo-logic_default -v "${PWD}/scripts/pruebas-carga:/scripts" -e ORDENES_POR_MINUTO=80 grafana/k6 run /scripts/eac01-hu023-carga.js
+//   k6 run -e ORDENES_POR_MINUTO=80 scripts/pruebas-carga/eac01-hu023-carga.js
 //
-// (la red se confirmo con `docker network ls`: el compose de este repo la crea
-// como sgo-logic_default; si tu docker compose usara otro nombre de proyecto,
-// ajusta el --network).
+// Las URLs por defecto son las del host: ordenes 8083, inventario 8094 y el admin
+// de PayKlik 8084. Cada una se puede cambiar con -e ORDENES_URL, -e INVENTARIO_URL
+// y -e PAYKLIK_ADMIN_URL.
+//
+// Con k6 en contenedor, "localhost" es el propio contenedor: hay que apuntar al
+// host con host.docker.internal (Docker Desktop) o unirlo a la red del compose y
+// usar los nombres de servicio (`--network sgo-logic_default`, puerto 8080):
+//
+//   docker run --rm -v "${PWD}/scripts/pruebas-carga:/scripts" -e ORDENES_URL=http://host.docker.internal:8083 -e INVENTARIO_URL=http://host.docker.internal:8094 -e PAYKLIK_ADMIN_URL=http://host.docker.internal:8084 -e ORDENES_POR_MINUTO=80 grafana/k6 run /scripts/eac01-hu023-carga.js
 //
 // ---------------------------------------------------------------------------
 // Volumen de la prueba (punto 1 del encargo)
@@ -48,12 +55,13 @@
 //      - Ordenes emite CobroSolicitado (outbox)
 //      - Pagos procesa el cobro contra PayKlik (ServicioCobro)
 //
-// La prueba EAC-01 no necesita forzar reserva ni cobro: la saga los maneja.
-// Solo se fuerza DESPACHO_SOLICITADO porque el servicio de Logistica aun no
-// existe. El VU de k6 no espera el resultado del cobro: la secuencia
-// asincrona via outbox es lo que EAC-01 exige validar. La verificacion de
-// que el cobro se resolvio (o quedo auditado como fallido) se hace aparte,
-// contra las bases, con el segundo script.
+// La prueba EAC-01 no fuerza ninguna transicion: reserva y cobro los maneja la
+// saga. El VU de k6 termina despues de confirmar y no espera ni el resultado
+// del cobro ni la entrega: EAC-01 mide el cobro, y lo que pasa despues
+// (despacho, LogiExpress) queda fuera de esta prueba. La secuencia asincrona
+// via outbox es lo que EAC-01 exige validar. La verificacion de que el cobro se
+// resolvio (o quedo auditado como fallido) se hace aparte, contra las bases,
+// con el segundo script.
 //
 // ---------------------------------------------------------------------------
 // Tres fases (punto 4 del encargo)
@@ -75,9 +83,12 @@ import http from 'k6/http';
 import { check } from 'k6';
 import { Counter } from 'k6/metrics';
 
-const ORDENES_URL = (__ENV.ORDENES_URL || 'http://ordenes-api:8080').replace(/\/+$/, '');
-const INVENTARIO_URL = (__ENV.INVENTARIO_URL || 'http://inventario-api:8080').replace(/\/+$/, '');
-const PAYKLIK_ADMIN_URL = (__ENV.PAYKLIK_ADMIN_URL || 'http://payklik-mock:8080').replace(/\/+$/, '');
+// Puertos publicados en el host por docker-compose.yml (ordenes-api 8083,
+// inventario-api 8094, payklik-mock 8084). Es lo que k6 ve al correr fuera de
+// Docker; con k6 en contenedor se sobreescriben con -e (ver el encabezado).
+const ORDENES_URL = (__ENV.ORDENES_URL || 'http://localhost:8083').replace(/\/+$/, '');
+const INVENTARIO_URL = (__ENV.INVENTARIO_URL || 'http://localhost:8094').replace(/\/+$/, '');
+const PAYKLIK_ADMIN_URL = (__ENV.PAYKLIK_ADMIN_URL || 'http://localhost:8084').replace(/\/+$/, '');
 
 const ORDENES_POR_MINUTO = Number(__ENV.ORDENES_POR_MINUTO || 80);
 const CALENTAMIENTO_SEG = Number(__ENV.CALENTAMIENTO_SEG || 90);
@@ -242,25 +253,14 @@ export function flujoOrden() {
   }
 
   // La saga avanza sola desde aqui: RESERVA_SOLICITADA -> INVENTARIO_RESERVADO
-  // -> COBRO_SOLICITADO -> PAGO_APLICADO -> CONFIRMADA_PENDIENTE_FISCAL ->
-  // CONFIRMADA. No se fuerza ninguna de estas transiciones.
+  // -> COBRO_SOLICITADO -> PAGO_APLICADO (o PAGO_PENDIENTE si PayKlik esta
+  // caido) y, con pago aplicado, sigue con la certificacion fiscal y la solicitud
+  // de despacho. El VU termina aqui: no fuerza ninguna transicion y no espera el
+  // resultado del cobro ni la entrega.
 
-  // Forzada: DESPACHO_SOLICITADO. Temporal hasta que exista el servicio de
-  // Logistica; sin esto la orden queda en CONFIRMADA y no avanza mas.
-  const resDespacho = http.post(
-    `${ORDENES_URL}/api/ordenes/${ordenId}/transiciones`,
-    JSON.stringify({
-      estadoDestino: 'DESPACHO_SOLICITADO',
-      pasoSaga: 'DESPACHO',
-      motivo: 'logistica no existe como servicio: transicion forzada temporal',
-    }),
-    { ...JSON_HEADERS, tags: { paso: 'despacho_solicitado' } }
-  );
-  if (check(resDespacho, { 'despacho solicitado forzado (200)': (r) => r.status === 200 })) {
-    ordenesConCobroSolicitado.add(1);
-  } else {
-    fallosSincronos.add(1);
-  }
+  // La parte sincrona de la orden (crear + confirmar) salio bien: la saga ya
+  // tiene el encargo de solicitar el cobro.
+  ordenesConCobroSolicitado.add(1);
 }
 
 export function teardown(data) {

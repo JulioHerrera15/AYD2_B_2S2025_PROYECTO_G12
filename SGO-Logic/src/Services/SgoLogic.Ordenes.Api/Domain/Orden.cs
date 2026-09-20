@@ -1,5 +1,6 @@
 ﻿using System.Text.RegularExpressions;
 using SgoLogic.Contracts.Enumeraciones;
+using SgoLogic.Contracts.Eventos.Ordenes;
 
 namespace SgoLogic.Ordenes.Api.Domain;
 
@@ -41,7 +42,8 @@ public sealed partial class Orden
         decimal impuestos,
         string? ubicacionSolicitadaId = null,
         DateTime? creadaEn = null,
-        string receptorCui = "CF")
+        string receptorCui = "CF",
+        DireccionEntregaData? direccionEntrega = null)
     {
         if (string.IsNullOrWhiteSpace(id))
         {
@@ -88,6 +90,8 @@ public sealed partial class Orden
             throw new ArgumentException("El CUI del receptor es obligatorio.", nameof(receptorCui));
         }
 
+        ValidarDireccion(direccionEntrega);
+
         Id = id;
         NumeroOrden = numeroOrden;
         ClienteId = clienteId;
@@ -96,6 +100,7 @@ public sealed partial class Orden
         Moneda = moneda;
         MedioPago = medioPago;
         UbicacionSolicitadaId = ubicacionSolicitadaId;
+        DireccionEntrega = metodoEntrega == MetodoEntrega.DOMICILIO ? direccionEntrega : null;
         Impuestos = impuestos;
         Estado = EstadoOrden.CREADA;
         Secuencia = 1;
@@ -116,6 +121,13 @@ public sealed partial class Orden
     public MetodoEntrega MetodoEntrega { get; private set; }
 
     public string? UbicacionSolicitadaId { get; private set; }
+
+    /// <summary>
+    /// Direccion de entrega a domicilio. Es opcional para no romper a quien crea
+    /// ordenes sin ella; cuando existe viaja en OrdenCreada, DespachoSolicitado y
+    /// MetodoEntregaModificado. Siempre null si el metodo es recogida en tienda.
+    /// </summary>
+    public DireccionEntregaData? DireccionEntrega { get; private set; }
 
     public Moneda Moneda { get; private set; }
 
@@ -147,11 +159,19 @@ public sealed partial class Orden
 
     /// <summary>
     /// Identificador real de la reserva de inventario (el reservaId que devuelve
-    /// Inventario, tomado de InventarioReservado). Reemplaza el placeholder
-    /// RSV-PENDIENTE-&lt;id&gt; una vez que Ordenes consume ese evento. Null hasta
-    /// entonces.
+    /// Inventario, tomado de InventarioReservado). Null hasta que Ordenes consume
+    /// ese evento; mientras sea null no hay reserva conocida que liberar.
     /// </summary>
     public string? ReservaId { get; private set; }
+
+    /// <summary>
+    /// Ubicacion de origen de la reserva de inventario (el ubicacionId que devuelve
+    /// Inventario en InventarioReservado). Se necesita para que, ante una devolucion
+    /// (HU-014), el evento DevolucionRegistrada le diga a Inventario donde reingresar
+    /// las unidades sin que tenga que volver a consultarlo. Null hasta que se
+    /// registra la reserva.
+    /// </summary>
+    public string? UbicacionReservaId { get; private set; }
 
     /// <summary>
     /// Identificador real del pago aplicado (el autorizacionId que devuelve el
@@ -242,7 +262,10 @@ public sealed partial class Orden
     /// Cambio de metodo de entrega posterior a la confirmacion (EV-31). No es una
     /// transicion de estado: la orden sigue donde estaba.
     /// </summary>
-    public void CambiarMetodoEntrega(MetodoEntrega metodoNuevo, string? ubicacionRecogidaId)
+    public void CambiarMetodoEntrega(
+        MetodoEntrega metodoNuevo,
+        string? ubicacionRecogidaId,
+        DireccionEntregaData? direccionEntrega = null)
     {
         if (EsTerminal)
         {
@@ -257,26 +280,53 @@ public sealed partial class Orden
                 nameof(ubicacionRecogidaId));
         }
 
+        ValidarDireccion(direccionEntrega);
+
         MetodoEntrega = metodoNuevo;
         UbicacionSolicitadaId = metodoNuevo == MetodoEntrega.RECOGIDA_TIENDA ? ubicacionRecogidaId : null;
+        DireccionEntrega = metodoNuevo == MetodoEntrega.DOMICILIO ? direccionEntrega : null;
         Secuencia += 1;
     }
 
+    private static void ValidarDireccion(DireccionEntregaData? direccion)
+    {
+        if (direccion is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(direccion.Departamento)
+            || string.IsNullOrWhiteSpace(direccion.Municipio)
+            || string.IsNullOrWhiteSpace(direccion.Direccion))
+        {
+            throw new ArgumentException(
+                "La direccion de entrega exige departamento, municipio y direccion.",
+                nameof(direccion));
+        }
+    }
+
     /// <summary>
-    /// Registra el identificador real de la reserva de inventario. Lo llama
-    /// el manejador de eventos de Inventario al recibir InventarioReservado,
-    /// antes de transicionar a INVENTARIO_RESERVADO. Reemplaza el placeholder
-    /// RSV-PENDIENTE-&lt;id&gt; que usa DespachoSolicitado y
-    /// LiberacionReservaSolicitada.
+    /// Registra el identificador real de la reserva de inventario y la ubicacion
+    /// de origen. Lo llama el manejador de eventos de Inventario al recibir
+    /// InventarioReservado, antes de transicionar a INVENTARIO_RESERVADO. El
+    /// reservaId lo usan DespachoSolicitado y LiberacionReservaSolicitada, y la
+    /// ubicacion queda disponible para que DevolucionRegistrada (HU-014) le diga a
+    /// Inventario donde reingresar.
     /// </summary>
-    public void RegistrarReserva(string reservaId)
+    public void RegistrarReserva(string reservaId, string ubicacionId)
     {
         if (string.IsNullOrWhiteSpace(reservaId))
         {
             throw new ArgumentException("El identificador de la reserva es obligatorio.", nameof(reservaId));
         }
 
+        if (string.IsNullOrWhiteSpace(ubicacionId))
+        {
+            throw new ArgumentException("La ubicacion de la reserva es obligatoria.", nameof(ubicacionId));
+        }
+
         ReservaId = reservaId;
+        UbicacionReservaId = ubicacionId;
     }
 
     /// <summary>

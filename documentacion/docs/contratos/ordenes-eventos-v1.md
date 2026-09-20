@@ -1,16 +1,42 @@
-# Contrato de eventos del contexto Órdenes — v1.2
+# Contrato de eventos del contexto Órdenes — v1.4
 
 **Proyecto:** SGO-Logic — Fase 2
 **Curso:** Análisis y Diseño de Sistemas 2, Sección B
 **Contexto emisor:** Órdenes
 **Autor:** 202300410 — Angel David Martínez García
 **Estado:** listo para congelamiento
-**Fecha:** 2026-09-12
+**Fecha:** 2026-09-19
 **Depende de:** `sgo-eventos-envelope-v1.md`
 
 ---
 
-## 0. Cambios respecto a v1.1
+## 0. Cambios respecto a v1.3
+
+`DespachoSolicitado` (evento 7) deja de viajar con valores de relleno y con la dirección siempre vacía. Ningún campo se renombró ni se quitó: lo que cambia es el valor con que Órdenes llena campos que ya existían, más un campo opcional nuevo en la entrada HTTP de creación.
+
+| # | Cambio | Detalle |
+|---|---|---|
+| 1 | `reservaId` real en el evento 7 | Sale de `Orden.ReservaId`, el `reservaId` de `InventarioReservado`. Antes era `RSV-PENDIENTE-<ordenId>`. Si la orden no tiene reserva llega como cadena vacía, nunca inventado. |
+| 2 | `direccionEntrega` poblada en el evento 7 | Antes iba siempre `null`. Ahora lleva la dirección de la orden cuando el método es `DOMICILIO`; sigue en `null` si es recogida en tienda o si la orden se creó sin dirección. Misma forma que en `OrdenCreada`. |
+| 3 | `direccionEntrega` en los eventos 1 y 10 | `OrdenCreada` y `MetodoEntregaModificado` la toman de `Orden.DireccionEntrega`. Antes el evento 1 iba siempre en `null`. |
+| 4 | `POST /api/ordenes` acepta `direccionEntrega` | Campo opcional nuevo, con la forma de la sección 7.1. Se ignora si el método es recogida en tienda. Órdenes la persiste en cinco columnas nulas nuevas (migración `DireccionEntregaOrden`). |
+| 5 | `LiberacionReservaSolicitada` (evento 4) sin placeholder | Si la orden aún no tiene `reservaId` (se canceló o se rechazó antes de `InventarioReservado`) el evento no se publica: no hay reserva conocida que liberar. Si Inventario alcanzara a crearla, la expiración por TTL (HU-002) la libera sola. |
+| 6 | Cola `ordenes.despacho` | Órdenes consume `despacho.estado.actualizado` y `despacho.pedido.listo-para-recoger` para llevar la orden a `EN_PREPARACION`, `EN_TRANSITO`, `LISTA_PARA_RECOGER` y `ENTREGADA`. Ver sección 4. No cambia ningún evento que Órdenes publique. |
+
+Cambio retrocompatible: el tipo `DespachoSolicitadoData` es el mismo, así que Despacho lo deserializa sin tocar código. Los cambios 1, 2, 3 y 5 alteran solo el valor que llega; el cambio 4 agrega un campo opcional. El evento 4 deja de emitirse en un caso, y hoy ningún consumidor actúa sobre él (Inventario todavía no liga `ordenes.reserva.liberacion-solicitada`; Auditoría lo recibe por `#`).
+
+## 0.1 Cambios respecto a v1.2
+
+`DevolucionRegistrada` (evento 11) agrega dos campos nuevos en cada elemento de `lineas`, para que Inventario pueda reingresar la cantidad devuelta sin tener que volver a preguntarle a Órdenes de dónde salió la reserva original:
+
+| # | Cambio | Detalle |
+|---|---|---|
+| 1 | `lineas[].ubicacionOrigenReservaId` | Ubicación desde la que Inventario confirmó la reserva original (el `ubicacionId` de `InventarioReservado`). Órdenes ahora lo persiste en `Orden.UbicacionReservaId` al consumir ese evento. |
+| 2 | `lineas[].reservaId` | El mismo `reservaId` real de la orden (`Orden.ReservaId`), repetido por línea para que cada línea sea autocontenida. |
+
+Cambio retrocompatible: son campos nuevos al final de `DevolucionLineaData`, con valor por defecto `""` en el tipo .NET. No se renombró ni se quitó ningún campo existente; los consumidores actuales (Pagos, Facturación) siguen funcionando sin cambios.
+
+## 0.2 Cambios respecto a v1.1
 
 Los eventos 11 (`DevolucionRegistrada`) y 12 (`OrdenCertificadaFiscalmente`) pasan de definidos-pero-no-emitidos a **implementados**: ambos se publican desde el código de Órdenes contra la topología descrita aquí. Esto trae tres cambios de bindings:
 
@@ -22,7 +48,7 @@ Los eventos 11 (`DevolucionRegistrada`) y 12 (`OrdenCertificadaFiscalmente`) pas
 
 Sigue vigente todo lo resuelto en v1.1 (objeciones 1 a 10, tabla de la sección "Cambios respecto a v1" de esa versión, no repetida aquí).
 
-## 0.1 Cambios respecto a v1
+## 0.3 Cambios respecto a v1
 
 Esta versión incorpora las objeciones de Julio Herrera (Auditoría, base técnica), Jonathan Jerónimo (Consulta de Estado, Notificaciones) y Francisco Castillo (Integración POS, Integración ERP).
 
@@ -147,6 +173,24 @@ Cada consumidor declara su propia cola durable. El nombre de la cola y sus argum
 
 El primer binding (`DocumentoFiscalCertificado`) cierra la transición y emite el evento 12 de este documento. El segundo (`CertificacionSatFallida`) levanta la bandera de alerta fiscal sobre la orden sin cambiarle el estado (ADR-011, ADR-015); no produce ningún evento nuevo de Órdenes, solo un cambio interno visible por consulta.
 
+**Cola nueva `ordenes.despacho`, dueño Órdenes.** Es la cola propia de Órdenes para **consumir** los eventos que publica Despacho (`despacho-eventos-v1`), simétrica a `despacho.ordenes`. Sin ella la orden se queda para siempre en `DESPACHO_SOLICITADO`. Solo liga los dos eventos que cambian el estado de la orden; origen, guía y preparación no lo cambian y no se ligan.
+
+| Cola | Dueño | Bindings | Exchange de origen |
+|---|---|---|---|
+| `ordenes.despacho` | Angel (Órdenes) | `despacho.estado.actualizado`, `despacho.pedido.listo-para-recoger` | `sgo.eventos` (propiedad de Despacho, ver `despacho-eventos-v1.md`) |
+
+Mapeo de `estadoNuevo` de Despacho a `EstadoOrden`. No se agregó ningún estado a la orden:
+
+| Estado de Despacho | Estado de la orden |
+|---|---|
+| `EN_PREPARACION` | `EN_PREPARACION` |
+| `EN_TRANSITO` | `EN_TRANSITO` |
+| `LISTA_PARA_RECOGER` (o `PedidoListoParaRecoger`) | `LISTA_PARA_RECOGER` |
+| `ENTREGADA` (también la recogida en tienda) | `ENTREGADA` |
+| `ORIGEN_PENDIENTE`, `RECOGIDA_TIENDA`, `GUIA_SOLICITADA`, `GUIA_ASIGNADA`, `GUIA_PENDIENTE`, `INCIDENCIA`, `ANULADA` | Sin equivalente: solo se registra en el log, la orden no se mueve. |
+
+Un evento sobre un estado que la orden ya superó se ignora. Si llega un estado posterior saltándose uno intermedio, se aplican las transiciones intermedias en la misma transacción (a domicilio pasa por `EN_TRANSITO`, en recogida por `LISTA_PARA_RECOGER`). Cada transición emite `OrdenEstadoCambiado` como cualquier otra.
+
 **Por qué `notificaciones.ordenes` solo recibe el evento 2.** Es la respuesta a la objeción 8. Si la cola nunca recibe los eventos 8 y 9, es imposible que Notificaciones emita dos avisos del mismo hecho, aunque alguien se equivoque programando. La restricción vive en la topología, no en la disciplina de quien la implementa.
 
 **Por qué `erp.ordenes` recibe ahora `OrdenCancelada` (objeción 9).** El catálogo de estados permite cancelar una orden ya confirmada, por ejemplo con motivo `FRAUDE`. Si eso ocurre dentro de la ventana de 30 minutos anterior a la corrida del worker de consolidación (HU-013, ADR-008), el lote incluiría una venta que ya no existe y la conciliación (HU-022) tendría que descubrirlo después. El diseño no espera que la conciliación absorba ese caso: la conciliación existe para detectar lo que no se pudo prevenir, no para limpiar lo que sí. Con el binding, Integración ERP excluye la venta antes de armar el lote.
@@ -216,7 +260,7 @@ Routing key `ordenes.orden.creada`. Se emite al persistir la orden, antes de sol
 | `lineas[].cantidad` | integer | sí | Mayor que cero. |
 | `lineas[].precioUnitario` | string | sí | Decimal como cadena. |
 | `lineas[].subtotal` | string | sí | Decimal como cadena. |
-| `direccionEntrega` | object \| null | sí | `null` si es recogida en tienda. |
+| `direccionEntrega` | object \| null | sí | `null` si es recogida en tienda, o si la orden se creó sin dirección (campo opcional de `POST /api/ordenes`). |
 | `direccionEntrega.pais` | string | condicional | Enum `Pais`. |
 | `direccionEntrega.departamento` | string | condicional | |
 | `direccionEntrega.municipio` | string | condicional | |
@@ -333,7 +377,7 @@ Distinto de la expiración por TTL: esa la dispara el temporizador de Inventario
 | Campo de `data` | Tipo | Obligatorio | Notas |
 |---|---|---|---|
 | `ordenId` | string | sí | |
-| `reservaId` | string | sí | El que devolvió Inventario al reservar. |
+| `reservaId` | string | sí | El que devolvió Inventario al reservar. Si la orden aún no tiene reserva el evento no se publica. |
 | `motivo` | string | sí | Enum `MotivoLiberacionReserva`. |
 | `solicitadaEn` | string | sí | ISO 8601 UTC. |
 
@@ -449,13 +493,13 @@ Routing key `ordenes.despacho.solicitado`. Órdenes pide a Despacho determinar e
 | Campo de `data` | Tipo | Obligatorio | Notas |
 |---|---|---|---|
 | `ordenId` | string | sí | |
-| `reservaId` | string | sí | Ata el despacho a la reserva vigente. |
+| `reservaId` | string | sí | Ata el despacho a la reserva vigente: el `reservaId` real de `InventarioReservado`. Cadena vacía si la orden no llegó a tener reserva. |
 | `metodoEntrega` | string | sí | Enum `MetodoEntrega`. |
-| `ubicacionOrigenSugerida` | object \| null | sí | Sugerencia; Despacho decide el origen final. |
+| `ubicacionOrigenSugerida` | object \| null | sí | Sugerencia; Despacho decide el origen final. Órdenes hoy la envía en `null`: Despacho pregunta a Inventario, que es donde se descontaron las unidades. |
 | `ubicacionOrigenSugerida.id` | string | condicional | |
 | `ubicacionOrigenSugerida.tipo` | string | condicional | Enum `TipoUbicacion`. |
 | `ubicacionRecogidaId` | string \| null | sí | Tienda de recogida; `null` si es domicilio (HU-020). |
-| `direccionEntrega` | object \| null | sí | Misma forma que en `OrdenCreada`. `null` si es recogida. |
+| `direccionEntrega` | object \| null | sí | Misma forma que en `OrdenCreada`. Es la dirección de la orden (`Orden.DireccionEntrega`). `null` si es recogida o si la orden se creó sin dirección. |
 | `lineas` | array | sí | Mínimo un elemento. |
 | `lineas[].sku` | string | sí | |
 | `lineas[].descripcion` | string | sí | |
@@ -638,6 +682,8 @@ Dispara tres reacciones en paralelo: reingreso de inventario, nota de crédito y
 | `lineas[].cantidad` | integer | sí | Menor o igual a lo comprado. |
 | `lineas[].motivo` | string | sí | Texto corto. |
 | `lineas[].skuReemplazo` | string \| null | sí | Solo cuando `tipo` es `CAMBIO`. |
+| `lineas[].ubicacionOrigenReservaId` | string | sí (desde v1.3) | Ubicación desde la que Inventario confirmó la reserva original de la orden (`ubicacionId` de `InventarioReservado`). Misma reserva para todas las líneas de una orden. Con lo que hoy consume Ordenes de `InventarioReservado`, siempre trae un valor real cuando la orden llegó a `ENTREGADA`. |
+| `lineas[].reservaId` | string | sí (desde v1.3) | El `reservaId` real de la reserva de inventario de la orden, repetido en cada línea para que Inventario no dependa de nada fuera del evento al reingresar. |
 | `moneda` | string | sí | Enum `Moneda`. |
 | `montoReembolso` | string | sí | Decimal como cadena. `"0.00"` en cambio sin diferencia. |
 | `pagoOriginalId` | string | sí | Pago sobre el que se aplica el reembolso. |
@@ -658,7 +704,9 @@ Dispara tres reacciones en paralelo: reingreso de inventario, nota de crédito y
       "sku": "SKU-LB-00871",
       "cantidad": 1,
       "motivo": "Producto con abolladura en la puerta",
-      "skuReemplazo": null
+      "skuReemplazo": null,
+      "ubicacionOrigenReservaId": "CD-01",
+      "reservaId": "RSV-2026-004410"
     }
   ],
   "moneda": "GTQ",
@@ -752,4 +800,4 @@ Ninguno bloquea el congelamiento. Los supuestos 1 y 2 de la v1 quedaron cerrados
 2. **TTL de reserva.** Se emite como parámetro en el evento 3; el valor definitivo lo fija Inventario (HU-001).
 3. **Precios del Catálogo Comercial.** Viajan congelados al momento de la compra. El Catálogo es dependencia externa fuera del alcance (CUN-08) y no es fuente de verdad después de creada la orden.
 4. **Ventana de exclusión del lote ERP.** El binding a `OrdenCancelada` permite excluir la venta antes de consolidar, pero una cancelación que llegue **después** de enviado el lote sigue siendo trabajo de la conciliación (HU-022). Ese caso no se puede prevenir por topología.
-5. **`reservaId` sigue siendo un valor de relleno; `pagoId` y el CUI del receptor ya no lo son.** Órdenes todavía no consume las respuestas de Inventario, así que `reservaId` (eventos 4 y 7) y `tiendaDestinoId` se siguen rellenando con un valor derivado del identificador de la orden (`RSV-PENDIENTE-<id>`) o con `null`, marcados `PENDIENTE` en el código hasta que exista el consumidor de Inventario. `pagoId` (eventos 8 y 9) dejó de ser placeholder: se toma de `Orden.PagoId`, que `ManejadorEventosPagos` persiste al consumir `PagoAplicado`. El CUI del receptor (evento 6) también dejó de ser placeholder: viene de `Orden.ReceptorCui`, capturado desde la creación de la orden (`"CF"` por defecto si el cliente no da uno).
+5. **`reservaId`, `pagoId` y el CUI del receptor ya no son valores de relleno.** Órdenes consume las respuestas de Inventario (`ordenes.inventario`), así que `reservaId` (eventos 4 y 7) sale de `Orden.ReservaId`, que `ManejadorEventosInventario` persiste al consumir `InventarioReservado`; el `RSV-PENDIENTE-<id>` ya no existe. Si la orden se cancela o se rechaza antes de tener reserva, el evento 4 no se publica y el evento 7 lleva `reservaId` vacío. `pagoId` (eventos 8 y 9) se toma de `Orden.PagoId`, que `ManejadorEventosPagos` persiste al consumir `PagoAplicado`. El CUI del receptor (evento 6) viene de `Orden.ReceptorCui`, capturado desde la creación de la orden (`"CF"` por defecto si el cliente no da uno). Lo único que sigue en relleno es `tiendaDestinoId`, que se emite en `null`, marcado `PENDIENTE` en el código.

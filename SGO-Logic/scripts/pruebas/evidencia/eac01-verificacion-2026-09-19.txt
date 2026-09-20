@@ -1,0 +1,22 @@
+﻿=== EAC-01 / HU-023 ÔÇö verificacion (prefijo cliente_id: CARGA-EAC01-%) ===
+ordenes_creadas=285
+ordenes_estado_consultable=285
+ordenes_pago_aplicado=0
+ordenes_pago_pendiente=121
+ordenes_cobro_solicitado_sin_intento_pago=0
+---
+distribucion_completa_por_estado_orden:
+  DESPACHO_SOLICITADO = 164
+  PAGO_PENDIENTE = 121
+---
+intentos_pago_por_resultado:
+  INICIADO = 0
+  EXITOSO = 164
+  FALLIDO = 134
+  RECHAZADO = 0
+---
+ordenes_sin_ningun_intento_de_pago=0
+ordenes_en_estado_no_consultable=0
+ordenes_perdidas_total=0
+===
+RESULTADO=APROBADO (0 ordenes perdidas de 285 creadas)

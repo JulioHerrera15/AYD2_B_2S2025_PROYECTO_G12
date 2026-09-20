@@ -13,7 +13,9 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes;
 /// <see cref="ServicioConfirmacionOrden.AplicarTransicionAsync" />, que encola
 /// el <see cref="Contracts.Eventos.Ordenes.OrdenEstadoCambiado" /> (evento 2) y
 /// el <see cref="Contracts.Eventos.Ordenes.OrdenCertificadaFiscalmente" />
-/// (evento 12) en el outbox, todo dentro de una sola transacción de base de datos.
+/// (evento 12) en el outbox. A continuación, en la misma transacción, la orden
+/// pasa a DESPACHO_SOLICITADO y se encola el
+/// <see cref="Contracts.Eventos.Ordenes.DespachoSolicitado" /> (evento 7).
 ///
 /// Comportamiento ante estados inesperados:
 /// <list type="bullet">
@@ -91,6 +93,18 @@ public sealed class ManejadorDocumentoFiscalCertificado
                 datos.Folio,
                 datos.CertificadaEn);
 
+        // Certificada la factura, el despacho se solicita en la misma transaccion:
+        // sin esto la orden se quedaria en CONFIRMADA esperando a que alguien la
+        // empuje. Se despacha despues de CONFIRMADA, no antes: la maquina de
+        // estados no permite DESPACHO_SOLICITADO desde CONFIRMADA_PENDIENTE_FISCAL.
+        var despachoTrasCertificar = new[]
+        {
+            new TransicionEncadenada(
+                EstadoOrden.DESPACHO_SOLICITADO,
+                PasoSaga.DESPACHO,
+                "Certificacion fiscal completada: se solicita el despacho")
+        };
+
         await _servicio.AplicarTransicionAsync(
             datos.OrdenId,
             EstadoOrden.CONFIRMADA,
@@ -98,6 +112,7 @@ public sealed class ManejadorDocumentoFiscalCertificado
             motivo: null,
             esCompensacion: false,
             cancelacion,
-            antesDeTransicionar: antesDeTransicionar);
+            antesDeTransicionar: antesDeTransicionar,
+            encadenadas: despachoTrasCertificar);
     }
 }

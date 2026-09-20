@@ -47,6 +47,7 @@ public sealed class ServicioDevolucionTests
     {
         var orden = CrearOrdenConDosLineas();
         orden.TransicionarA(EstadoOrden.RESERVA_SOLICITADA);
+        orden.RegistrarReserva("RSV-000777", "CD-01");
         orden.TransicionarA(EstadoOrden.INVENTARIO_RESERVADO);
         orden.TransicionarA(EstadoOrden.COBRO_SOLICITADO);
         orden.TransicionarA(EstadoOrden.PAGO_APLICADO);
@@ -63,6 +64,7 @@ public sealed class ServicioDevolucionTests
     {
         var orden = CrearOrdenConUnaLinea();
         orden.TransicionarA(EstadoOrden.RESERVA_SOLICITADA);
+        orden.RegistrarReserva("RSV-000778", "CD-01");
         orden.TransicionarA(EstadoOrden.INVENTARIO_RESERVADO);
         orden.TransicionarA(EstadoOrden.COBRO_SOLICITADO);
         orden.TransicionarA(EstadoOrden.PAGO_APLICADO);
@@ -142,6 +144,9 @@ public sealed class ServicioDevolucionTests
         Assert.Equal(OrdenId, data.OrdenOriginalId);
         Assert.True(data.EsParcial);
         Assert.Equal("5000.00", data.MontoReembolso);
+        Assert.Single(data.Lineas);
+        Assert.Equal("RSV-000777", data.Lineas[0].ReservaId);
+        Assert.Equal("CD-01", data.Lineas[0].UbicacionOrigenReservaId);
 
         Assert.Equal(1, unidad.Confirmaciones);
     }

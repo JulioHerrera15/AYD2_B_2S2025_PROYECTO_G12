@@ -467,6 +467,11 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
                         .HasColumnType("integer")
                         .HasColumnName("version");
 
+                    b.Property<string>("UbicacionReservaId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("ubicacion_reserva_id");
+
                     b.Property<string>("UbicacionSolicitadaId")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")
@@ -554,6 +559,53 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_linea_orden_orden");
+                });
+
+            modelBuilder.Entity("SgoLogic.Ordenes.Api.Domain.Orden", b =>
+                {
+                    b.OwnsOne("SgoLogic.Contracts.Eventos.Ordenes.DireccionEntregaData", "DireccionEntrega", b1 =>
+                        {
+                            b1.Property<string>("OrdenId")
+                                .HasColumnType("character varying(64)");
+
+                            b1.Property<string>("Departamento")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("direccion_entrega_departamento");
+
+                            b1.Property<string>("Direccion")
+                                .IsRequired()
+                                .HasMaxLength(300)
+                                .HasColumnType("character varying(300)")
+                                .HasColumnName("direccion_entrega_direccion");
+
+                            b1.Property<string>("Municipio")
+                                .IsRequired()
+                                .HasMaxLength(100)
+                                .HasColumnType("character varying(100)")
+                                .HasColumnName("direccion_entrega_municipio");
+
+                            b1.Property<string>("Pais")
+                                .IsRequired()
+                                .HasMaxLength(10)
+                                .HasColumnType("character varying(10)")
+                                .HasColumnName("direccion_entrega_pais");
+
+                            b1.Property<string>("Referencia")
+                                .HasMaxLength(300)
+                                .HasColumnType("character varying(300)")
+                                .HasColumnName("direccion_entrega_referencia");
+
+                            b1.HasKey("OrdenId");
+
+                            b1.ToTable("orden", "ordenes");
+
+                            b1.WithOwner()
+                                .HasForeignKey("OrdenId");
+                        });
+
+                    b.Navigation("DireccionEntrega");
                 });
 
             modelBuilder.Entity("SgoLogic.Ordenes.Api.Domain.TransicionOrden", b =>
