@@ -144,6 +144,45 @@
         "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
         "tooltip": { "mode": "multi" }
       }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Reparto de carga entre instancias (HU-025 / EAC-04)",
+      "description": "Peticiones HTTP atendidas por ordenes-api, eventos publicados desde su outbox y mensajes consumidos por auditoria-worker, desglosados por instancia (etiqueta instance = ip:puerto de cada replica) y no solo por servicio. Al escalar con docker compose --scale, cada linea es una replica distinta: evidencia de que el trabajo se reparte y ninguna instancia queda ociosa ni duplica.",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "sum(rate(http_requests_received_total{servicio=\"ordenes-api\"}[30s])) by (instance)",
+          "legendFormat": "peticiones/s ordenes-api {{instance}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "sum(rate(outbox_publicados_total{servicio=\"ordenes-api\"}[30s])) by (instance)",
+          "legendFormat": "outbox publicados/s ordenes-api {{instance}}",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "sum(rate(mensajes_consumidos_total{servicio=\"auditoria-worker\"}[30s])) by (instance)",
+          "legendFormat": "consumidos/s auditoria-worker {{instance}}",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5, "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      }
     }
   ]
 }

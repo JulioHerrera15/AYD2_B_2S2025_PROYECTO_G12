@@ -42,7 +42,7 @@ El manifiesto oficial se encuentra en [`deploy/k8s/consulta-estado-hpa.yaml`](..
   * *Scale-Down:* Gradual (`stabilizationWindowSeconds: 300`, máximo 10% por minuto) para evitar oscilaciones o flapping de pods.
 
 ### B. En el MVP Local (Docker Compose - ADR-013)
-Docker Compose permite demostrar el escalado dinámico de réplicas de `consulta-estado-api` sin colisión de puertos gracias a [`docker-compose.scale-consulta.yml`](../../SGO-Logic/scripts/pruebas-carga/docker-compose.scale-consulta.yml).
+Docker Compose permite demostrar el escalado dinámico de réplicas de `consulta-estado-api` sin colisión de puertos gracias a [`docker-compose.scale.yml`](../../SGO-Logic/scripts/escalabilidad/docker-compose.scale.yml) (override consolidado con HU-025/EAC-04, que resuelve el mismo problema para `ordenes-api` y `auditoria-worker`; antes vivía como `docker-compose.scale-consulta.yml` en `scripts/pruebas-carga/`).
 
 Para escalar el servicio a 3 réplicas en caliente:
 ```bash
