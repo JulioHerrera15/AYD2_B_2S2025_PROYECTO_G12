@@ -14,7 +14,7 @@ El repositorio se organiza en dos partes:
 ## Índice
 
 ### Documentación de arquitectura
-- [docs/DDA_SGOLogic.md](documentacion/docs/DDA_SGOLogic.md) — Documento de Definición de Arquitectura completo: catálogo de evidencia, stakeholders y preocupaciones, casos de uso de negocio, características priorizadas, drivers funcionales y casos de uso expandidos (CU-01 a CU-15), drivers de calidad, drivers de restricción, restricciones de infraestructura, ADR, vistas arquitectónicas y matrices de trazabilidad.
+- [docs/DDA_SGOLogic.md](documentacion/docs/DDA_SGOLogic.md) — Documento de Definición de Arquitectura, **versión 2.0**: catálogo de evidencia, stakeholders y preocupaciones, casos de uso de negocio, características priorizadas, drivers funcionales y casos de uso expandidos (CU-01 a CU-15), drivers de calidad, drivers de restricción, restricciones de infraestructura, ADR, vistas arquitectónicas y matrices de trazabilidad de la Fase 1, más la sección 14 (Cambios de la Fase 2), que documenta cómo se materializó esa arquitectura en el MVP.
 - [docs/contratos/](documentacion/docs/contratos/) — Contratos de eventos publicados entre contextos (p. ej. [ordenes-eventos-v1.md](documentacion/docs/contratos/ordenes-eventos-v1.md)).
 
 #### ADR — Architecture Decision Records
@@ -30,6 +30,13 @@ El repositorio se organiza en dos partes:
 - [ADR-010 Tokenización y no almacenamiento de datos de tarjeta](documentacion/ADR/ADR-010-tokenizacion-no-almacenamiento-datos-tarjeta.md)
 - [ADR-011 Certificación fiscal asíncrona ante la SAT](documentacion/ADR/ADR-011-certificacion-fiscal-asincrona-sat.md)
 - [ADR-012 Propagación confiable de eventos al POS](documentacion/ADR/ADR-012-propagacion-eventos-pos.md)
+- [ADR-013 Docker Compose como entorno de ejecución del MVP](documentacion/ADR/ADR-013-docker-compose-entorno-ejecucion-mvp.md)
+- [ADR-014 El desacople exigido por el enunciado se cubre con Outbox y disyuntor, sin mecanismo nuevo](documentacion/ADR/ADR-014-desacople-outbox-y-disyuntor.md)
+- [ADR-015 Bandera de alerta fiscal con reintento manual, sin estado nuevo, cuando se agotan los reintentos de certificación](documentacion/ADR/ADR-015-bandera-alerta-fiscal-sin-estado-nuevo.md)
+- [ADR-016 La saga de Órdenes avanza por eventos de resultado de Inventario, Pagos, Facturación y Despacho, sin transiciones manuales](documentacion/ADR/ADR-016-saga-dirigida-por-eventos-de-resultado.md)
+- [ADR-017 Despacho consulta a Inventario por HTTP síncrono y trata la guía de LogiExpress como degradación, sin circuit breaker](documentacion/ADR/ADR-017-despacho-consulta-inventario-http-y-guia-pendiente-sin-disyuntor.md)
+- [ADR-018 Contrato común de mensajería: envelope único, topología pub/sub con colas quorum y bibliotecas compartidas](documentacion/ADR/ADR-018-contrato-comun-de-mensajeria.md)
+- [ADR-019 Los sistemas externos se simulan con mocks en contenedor y fallas configurables](documentacion/ADR/ADR-019-mocks-de-sistemas-externos-con-fallas-configurables.md)
 
 #### Diagramas
 - [diagramas_CDU/](documentacion/diagramas_CDU/) — Diagramas de los casos de uso expandidos CU-01 a CU-15 (formatos editable `.drawio` y de imagen).
@@ -63,9 +70,15 @@ repositorio** — es el primer paso y el más fácil de saltarse por accidente.
     sueltos como migraciones de EF Core) tampoco lo requiere localmente:
     levanta el SDK dentro de un contenedor (`mcr.microsoft.com/dotnet/sdk:8.0`)
     por su cuenta. Es una conveniencia de desarrollo, no un requisito para
-    correr el sistema.
+    correr el sistema. Dos cosas a tener en cuenta si lo usas: (1) requiere
+    que el stack ya esté arriba — se conecta a la red
+    `sgo-logic_default` del compose principal, así que falla si nada la ha
+    creado todavía; (2) la cadena de conexión que usa está fija en el
+    script (`Username=sgo_admin;Password=change_me` contra
+    `sgo_ordenes`), no la lee de tu `.env` — si cambiaste esas credenciales,
+    edita el script o pásalas por variable de entorno antes de correrlo.
 - **RAM.** No se midió el consumo exacto del stack; como referencia
-  razonable — son 27 contenedores, entre ellos unos 20 procesos .NET además
+  razonable — son 28 contenedores, entre ellos unos 20 procesos .NET además
   de tres instancias de PostgreSQL, RabbitMQ, Redis, Prometheus y Grafana —
   reserva al menos 8 GB de RAM para el motor de Docker, con más margen si
   vas a correr además las pruebas de carga (`scripts/pruebas-carga/`,
@@ -81,14 +94,13 @@ docker compose up -d --build
 docker compose ps
 ```
 
-La primera corrida tarda más porque construye alrededor de 20 imágenes .NET
-además de descargar las imágenes base (PostgreSQL, RabbitMQ, Redis,
-Prometheus, Grafana): en una corrida verificada desde cero tomó
-aproximadamente 55 segundos hasta que los 27 contenedores quedaron
-`healthy`. Corridas posteriores son más rápidas porque Docker reutiliza las
-capas ya construidas. `docker compose ps` debe mostrar los 27 servicios en
-estado `healthy`; si alguno queda `unhealthy` o reiniciando, revisa sus
-logs con `docker compose logs -f <servicio>`.
+La primera corrida tarda **varios minutos**, no segundos: descarga las
+imágenes base (PostgreSQL, RabbitMQ, Redis, Prometheus, Grafana) y
+construye alrededor de 20 imágenes .NET desde cero. Corridas posteriores
+son mucho más rápidas porque Docker reutiliza las capas ya construidas y
+las imágenes base ya están en caché local. `docker compose ps` debe
+mostrar los 28 servicios en estado `healthy`; si alguno queda `unhealthy`
+o reiniciando, revisa sus logs con `docker compose logs -f <servicio>`.
 
 ### Verificación
 
@@ -110,28 +122,85 @@ logs con `docker compose logs -f <servicio>`.
 - **Prometheus:** `http://localhost:9090/targets` — los targets del job
   `sgo-logic` deben aparecer `UP`.
 
+### Registro y verificación de cuenta
+
+`auth-api` no envía correo de verdad: el código de verificación de un
+registro nuevo se escribe en los **logs de `auth-api`**, no llega a ningún
+buzón. Quien siga la UI de demo (`http://localhost:8092`) para registrarse
+se queda trabado en el paso de verificación si no sabe esto.
+
+```bash
+docker compose logs auth-api | grep "Codigo de verificacion"
+```
+
+El mensaje de log está marcado explícitamente como de demo
+(`Application/AuthService.cs`: `"DEMO — Codigo de verificacion para
+{Email}: {Codigo}"`). Los tres endpoints del flujo son
+`POST /api/auth/registro`, `POST /api/auth/verificar` (con el código de
+arriba) y `POST /api/auth/login`.
+
+### Datos de ejemplo para la demo
+
+No existe un script dedicado que siembre productos, existencias y usuarios
+de una sola vez. Lo que sí existe, y es lo mismo que usan los scripts de
+prueba del repositorio (`scripts/pruebas/camino-feliz.ps1`,
+`scripts/pruebas-carga/*.js`):
+
+- **Existencias de inventario** — no hay un catálogo de productos separado:
+  un "producto" es solo un SKU con descripción libre que se manda inline al
+  crear una orden. Antes de poder confirmar órdenes contra ese SKU, hay que
+  sembrar existencias en Inventario:
+
+  ```bash
+  curl -X PUT http://localhost:8094/api/inventario/existencias \
+    -H "Content-Type: application/json" \
+    -d '{"sku":"SKU-DEMO","ubicacionId":"CD-01","tipoUbicacion":"CENTRO_DISTRIBUCION","cantidadFisica":100}'
+  ```
+
+- **Usuario** — no hay un usuario de demo pre-creado; se registra uno real
+  con el flujo de la sección anterior (`registro` → código del log →
+  `verificar` → `login`).
+
+Si necesitas dejar el sistema con un recorrido completo de punta a punta
+(orden creada, pagada, facturada, despachada y entregada) para una demo,
+`scripts/pruebas/camino-feliz.ps1` hace exactamente eso — siembra su propio
+SKU y corre la saga completa hasta `ENTREGADA`.
+
 ### Servicios y puertos
 
-Puertos de host verificados con `docker compose ps` sobre una corrida
-limpia (27 contenedores).
+Puertos de host re-derivados directamente de `docker-compose.yml` (no de
+una corrida anterior, que puede haber quedado desactualizada si se agregó
+o movió algún servicio). Son 28 contenedores en total.
 
 **Servicios del sistema** (contextos de negocio, ASP.NET Core / .NET 8):
 
 | Servicio | Puerto | Qué es |
 |---|---|---|
 | `api-gateway` | 8080 | Punto de entrada único (YARP), enruta hacia el resto de contextos |
-| `auth-api` | 8088 | Autenticación (JWT) y carrito de compras (Redis) |
+| `sample-api` | 8081 | Servicio de ejemplo de la base técnica (outbox), no es parte del dominio de negocio |
+| `sample-worker` | 8082 | Servicio de ejemplo de la base técnica (consumidor), no es parte del dominio de negocio |
 | `ordenes-api` | 8083 | Órdenes: creación, confirmación, transiciones de la saga, devoluciones |
-| `inventario-api` | 8094 | Reservas de inventario con TTL y bloqueo optimista (ADR-005) |
 | `pagos-api` | 8085 | Cobro contra la pasarela de pago |
 | `facturacion-api` | 8087 | Certificación fiscal ante la SAT |
-| `despacho-api` | 8097 | Despacho de órdenes, integrado con el proveedor de logística |
+| `auth-api` | 8088 | Autenticación (JWT) y carrito de compras (Redis) |
 | `notificaciones-api` | 8090 | Envío de notificaciones al cliente |
 | `consulta-estado-api` | 8091 | Modelo de lectura CQRS (Redis + fallback a SQL) del estado de una orden |
-| `auditoria-worker` | 8093 | Bitácora inmutable de todos los eventos del sistema |
-| `integracion-pos-worker` | 8095 | Sincronización con el punto de venta de tienda física |
 | `web` | 8092 | UI de demostración; habla con el sistema vía `api-gateway` |
-| `sample-api` / `sample-worker` | 8081 / 8082 | Servicios de ejemplo de la base técnica (outbox + consumidor), no son parte del dominio de negocio |
+| `auditoria-worker` | 8093 | Bitácora inmutable de todos los eventos del sistema |
+| `inventario-api` | 8094 | Reservas de inventario con TTL y bloqueo optimista (ADR-005) |
+| `integracion-pos-worker` | 8095 | Sincronización con el punto de venta de tienda física, orientado a eventos |
+| `integracion-erp-worker` | 8096 | Consolidación batch hacia el ERP legacy (ver nota abajo y [`documentacion/docs/ESCALABILIDAD.md`](documentacion/docs/ESCALABILIDAD.md)) |
+| `despacho-api` | 8097 | Despacho de órdenes, integrado con el proveedor de logística |
+
+**Servicio nuevo desde la última revisión de este README:**
+`integracion-erp-worker` (8096) no existía antes. Es un contexto híbrido:
+consume eventos de la saga de Órdenes (`OrdenConfirmada`, `OrdenCancelada`,
+`OrdenCertificadaFiscalmente`, `DevolucionRegistrada`) igual que el resto
+del Backbone, pero además corre un `PeriodicTimer` propio que consolida un
+lote cada 30 minutos (`Erp__IntervaloConsolidacionMinutos`, configurable)
+y lo transfiere por HTTP a `mock-erp`, más otro temporizador de
+conciliación cada 24 horas. Su llegada movió `logiexpress-mock` de 8096 a
+8098 — si algo tuyo tenía ese puerto anotado, actualízalo.
 
 **Mocks de proveedores externos** (simulan sistemas que en producción son reales):
 
@@ -139,9 +208,9 @@ limpia (27 contenedores).
 |---|---|---|
 | `payklik-mock` | 8084 | Pasarela de pago simulada |
 | `sat-mock` | 8086 | Certificación fiscal simulada (SAT) |
-| `logiexpress-mock` | 8096 | Proveedor de despacho simulado |
+| `logiexpress-mock` | 8098 | Proveedor de despacho simulado |
 | `mock-mensajeria` | 8089 | Envío de SMS/email simulado, con modo de falla forzada configurable |
-| `mock-erp` | 4000 | ERP legacy simulado (AS/400) — hoy sin ningún servicio propio del sistema consumiéndolo (ver [`documentacion/docs/ESCALABILIDAD.md`](documentacion/docs/ESCALABILIDAD.md)) |
+| `mock-erp` | 4000 | ERP legacy simulado (AS/400); ahora sí consumido, por `integracion-erp-worker` |
 | `mock-pos` | 4001 | Punto de venta de tienda física simulado |
 
 **Infraestructura:**
@@ -150,7 +219,7 @@ limpia (27 contenedores).
 |---|---|---|
 | `rabbitmq` | 5672 (AMQP), 15672 (consola web) | Bus de eventos |
 | `redis` | 6379 | Caché de lectura (Consulta de Estado) y sesión/carrito con TTL (Auth) |
-| `db-operacional` | sin publicar, solo red interna | PostgreSQL: bases de Órdenes, Inventario, Auth, Consulta de Estado, Notificaciones, Integración POS, Despacho y los servicios de ejemplo |
+| `db-operacional` | sin publicar, solo red interna | PostgreSQL: bases de Órdenes, Inventario, Auth, Consulta de Estado, Notificaciones, Integración POS, Integración ERP, Despacho y los servicios de ejemplo |
 | `db-finanzas` | sin publicar, solo red interna | PostgreSQL: bases de Pagos y Facturación |
 | `db-auditoria` | sin publicar, solo red interna | PostgreSQL: base de Auditoría, separada por diseño |
 
@@ -214,6 +283,20 @@ anterior). Esto es lo que trae hoy el archivo, agrupado por área:
   apunta a `mock-pos` por una dirección fija de red interna,
   `http://mock-pos:4001`, no por esta variable). Se documenta tal como está
   en el archivo, sin inventar para qué la usa.
+
+**Integración ERP** (`integracion-erp-worker`)
+- `ERP_FORMATO` — formato del lote consolidado (`CSV`, por defecto).
+- `ERP_TIMEOUT_MS` — tiempo de espera del cliente HTTP hacia `mock-erp`.
+- `ERP_MAX_REINTENTOS` — reintentos del cliente HTTP por lote.
+- `ERP_MAX_INTENTOS_LOTE` — intentos antes de marcar un lote `FALLIDO`.
+- `ERP_INTERVALO_MINUTOS` — cada cuánto corre el temporizador de
+  consolidación batch (30 minutos por defecto, ver
+  [`documentacion/docs/ESCALABILIDAD.md`](documentacion/docs/ESCALABILIDAD.md)).
+- `ERP_INTERVALO_CONCILIACION_HORAS` — cada cuánto corre el temporizador de
+  conciliación contra `mock-erp` (24 horas por defecto).
+- `ERP_BASE_URL` — igual que `POS_BASE_URL`: declarada en `.env.example`
+  pero no referenciada en `docker-compose.yml` (que apunta a `mock-erp` por
+  la dirección fija `http://mock-erp:4000`).
 
 **Grafana**
 - `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` — credenciales de acceso

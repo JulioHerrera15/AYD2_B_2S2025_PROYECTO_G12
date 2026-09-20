@@ -104,32 +104,60 @@ e-commerce típico es entre 10x y 30x el volumen de escritura equivalente,
 según esa misma prueba). Escala por CPU/memoria de instancias sin estado
 (el estado vive en Redis, no en el proceso), no por contención de base.
 
-### Integración ERP — **no implementada en este MVP** (aclaración necesaria)
+### Integración ERP (`integracion-erp-worker`) — híbrido: ingesta por eventos, transferencia por temporizador batch
 
-El DDA (ADR-008, EV-15) diseña un servicio "Integración ERP" con patrón
-**batch cada 30 minutos, carga plana** (consolidación de resúmenes de venta
-por temporizador contra el AS/400 legacy). Ese patrón está en el diseño,
-pero **no existe como microservicio en este repositorio**: no hay
-`SgoLogic.IntegracionErp` en `src/Services/`, ni un servicio correspondiente
-en `docker-compose.yml`. Lo único presente es el mock standalone `mock-erp`
-(puerto 4000), que hoy no tiene ningún consumidor real apuntándole.
+**Corrección respecto a una versión anterior de este documento**, que
+afirmaba que Integración ERP no existía como microservicio: eso dejó de ser
+cierto. `SgoLogic.IntegracionErp.Worker` existe, está dado de alta en
+`docker-compose.yml` (`integracion-erp-worker`, puerto 8096, base propia
+`sgo_integracion_erp` en `db-operacional`) y corre tres `BackgroundService`
+distintos:
 
-Se documenta esto explícitamente en vez de inventar una carga medida para un
-servicio que no corre: si el criterio de aceptación de HU-025 pidiera
-demostrar escalado de Integración ERP, sería un bloqueo de alcance a
-resolver antes (implementar el servicio), no algo que esta HU pueda
-completar con evidencia real.
+- [`ErpOrdenesConsumidor`](../../SGO-Logic/src/Services/SgoLogic.IntegracionErp.Worker/Consumers/ErpOrdenesConsumidor.cs)
+  — orientado a eventos, igual que el resto del Backbone: consume
+  `OrdenConfirmada`, `OrdenCancelada`, `OrdenCertificadaFiscalmente` y
+  `DevolucionRegistrada` desde `sgo.eventos` y mantiene un libro de ventas
+  local (`Ventas`). Esta parte del servicio tiene el mismo perfil de carga
+  que cualquier otro consumidor de la saga: sigue el ritmo de Órdenes, sin
+  temporizador propio.
+- [`ErpBatchWorker`](../../SGO-Logic/src/Services/SgoLogic.IntegracionErp.Worker/Workers/ErpBatchWorker.cs)
+  — este sí es el patrón que diseña el DDA (ADR-008, EV-15): un
+  `PeriodicTimer` real, cada `Erp__IntervaloConsolidacionMinutos` (**30
+  minutos por defecto**, variable de entorno `ERP_INTERVALO_MINUTOS`),
+  que consolida las ventas pendientes en un lote (CSV/XML/JSON según
+  `Erp__Formato`) y lo transfiere por **HTTP** (no por mensajería) contra
+  `mock-erp`, vía `ClienteErpHttp`.
+- [`ErpConciliacionWorker`](../../SGO-Logic/src/Services/SgoLogic.IntegracionErp.Worker/Workers/ErpConciliacionWorker.cs)
+  — un segundo `PeriodicTimer`, cada `Erp__IntervaloConciliacionHoras`
+  (**24 horas por defecto**), que pide a `mock-erp` un resumen y lo compara
+  contra los lotes ya transferidos (cuadre de totales y conteo de
+  registros), registrando diferencias.
 
-Para no dejar dudas: `integracion-pos-worker` sí existe como servicio real
-(`src/Services/SgoLogic.IntegracionPos.Worker`, dado de alta en
-`docker-compose.yml`), pero **no es un ejemplo de perfil batch**. Su único
+Esto confirma el patrón que el DDA anticipó — batch, carga plana, sin pico
+propio disparado por un cliente — pero no como un canal de mensajería
+propio: la transferencia real hacia el ERP es HTTP síncrono contra el mock,
+no una publicación sobre el exchange `sgo.erp` (que sigue sin usuario, ver
+[`TOPOLOGIA-MENSAJERIA.md`](TOPOLOGIA-MENSAJERIA.md)). El resultado de cada
+lote sí se publica como evento (`LoteErpProcesado`) sobre `sgo.eventos`,
+igual que cualquier otro contexto.
+
+**Nada de esto está medido.** HU-025 no incluyó a `integracion-erp-worker`
+en la corrida de carga (sección 6): lo de arriba es lo que dice el código,
+no una cifra de throughput observada. Vale la pena señalar, sin medirlo
+todavía, una consideración estructural para cuando alguien intente escalar
+este servicio: sus dos temporizadores no coordinan entre réplicas (a
+diferencia del outbox, no usan `SKIP LOCKED` ni un mecanismo equivalente),
+así que escalarlo con `--scale` tal como está haría que cada réplica
+consolidara y transfiriera el mismo lote de ventas pendientes por su
+cuenta — un riesgo real de duplicar lotes hacia el ERP, no algo ya
+verificado aquí.
+
+`integracion-pos-worker` sigue siendo, como decía la versión anterior de
+este documento, puramente orientado a eventos: su único
 `BackgroundService` es
 [`PosEventosConsumidor`](../../SGO-Logic/src/Services/SgoLogic.IntegracionPos.Worker/Consumers/PosEventosConsumidor.cs),
-que consume eventos de RabbitMQ por suscripción — no hay temporizador ni
-`PeriodicTimer` en el servicio. Es orientado a eventos, igual que el resto
-del Backbone. Conclusión correcta: **ningún servicio con perfil batch existe
-hoy en el repositorio**; el patrón batch de 30 minutos (ADR-008, EV-15) está
-únicamente en el diseño, sin código que medir.
+sin temporizador ni `PeriodicTimer`. Esa parte de la sección seguía siendo
+exacta y no cambió.
 
 ---
 
