@@ -143,6 +143,50 @@ public sealed class PosEventosConsumidor : BackgroundService
                 total,
                 cancelacion);
 
+            if (!respuesta.Aceptado && !respuesta.Duplicado)
+            {
+                contexto.RegistrosEnvioPos.Add(new RegistroEnvioPos
+                {
+                    EventoId = sobre.EventId,
+                    OrdenId = ordenId,
+                    NumeroOrden = numeroOrden ?? ordenId,
+                    TiendaId = tiendaDestinoId ?? "",
+                    PosInstanciaId = posInstanciaId,
+                    TipoEvento = tipoEvento,
+                    EstadoEnvio = respuesta.Estado,
+                    CodigoHttp = respuesta.CodigoHttp,
+                    Respuesta = respuesta.RespuestaRaw,
+                    IntentoNumero = 1,
+                    FechaEnvio = DateTime.UtcNow
+                });
+
+                var auditoriaFallida = scope.ServiceProvider.GetRequiredService<IOutboxWriter>();
+                auditoriaFallida.Encolar(
+                    VentaPosPropagada.EventType,
+                    VentaPosPropagada.AggregateType,
+                    sobre.AggregateId,
+                    sequence: sobre.Sequence + 1,
+                    exchange: TopologiaMensajeria.ExchangeEventos,
+                    routingKey: VentaPosPropagada.RoutingKey,
+                    data: new VentaPosPropagadaData(
+                        ordenId,
+                        numeroOrden ?? ordenId,
+                        tiendaDestinoId ?? "",
+                        posInstanciaId,
+                        sobre.EventId,
+                        tipoEvento,
+                        respuesta.Estado,
+                        total,
+                        DateTime.UtcNow,
+                        respuesta.Mensaje));
+
+                await contexto.SaveChangesAsync(cancelacion);
+                _logger.LogWarning(
+                    "El POS no acepto el evento {EventId} despues de los reintentos locales; se devuelve a RabbitMQ para reentrega.",
+                    sobre.EventId);
+                return false;
+            }
+
             contexto.RegistrosEnvioPos.Add(new RegistroEnvioPos
             {
                 EventoId = sobre.EventId,
