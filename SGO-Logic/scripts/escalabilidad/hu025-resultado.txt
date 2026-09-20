@@ -1,0 +1,16 @@
+
+===============================================================================
+ CARGA HU-025 / EAC-04 — ESCALABILIDAD HORIZONTAL
+===============================================================================
+ RUN_ID                 : 1789868620
+ Prefijo cliente_id      : CARGA-HU025-1789868620
+ SKU sembrado            : SKU-ESCALA-HU025-1789868620
+ Peticiones HTTP totales : 35635
+ Ordenes creadas         : 17817
+ Ordenes confirmadas     : 17817
+ Fallos                  : 0
+
+ Siguiente paso: espera ~60s a que drene el outbox y corre, anotando la hora
+ de inicio de esta corrida como DESDE (UTC, ISO 8601):
+   DESDE="<hora de inicio>" ./verificar.sh
+===============================================================================

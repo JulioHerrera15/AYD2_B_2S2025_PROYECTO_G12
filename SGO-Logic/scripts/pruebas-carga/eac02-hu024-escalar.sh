@@ -20,7 +20,7 @@ echo "Escalando consulta-estado-api a: ${REPLICAS} replicas..."
 cd "${DIR_SGO}"
 
 # Escalar el servicio usando el archivo override que libera puertos de host
-docker compose -f docker-compose.yml -f scripts/pruebas-carga/docker-compose.scale-consulta.yml up -d --scale consulta-estado-api="${REPLICAS}" --no-recreate
+docker compose -f docker-compose.yml -f scripts/escalabilidad/docker-compose.scale.yml up -d --scale consulta-estado-api="${REPLICAS}" --no-recreate
 
 echo ""
 echo "Verificando instancias activas de consulta-estado-api:"
