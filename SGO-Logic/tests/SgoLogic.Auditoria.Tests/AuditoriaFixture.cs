@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using SgoLogic.Auditoria.Worker.Infrastructure;
 using Testcontainers.PostgreSql;
+using Testcontainers.RabbitMq;
 
 namespace SgoLogic.Auditoria.Tests;
 
@@ -24,9 +25,12 @@ public sealed class AuditoriaFixture : IAsyncLifetime
         .WithPassword("sgo_test")
         .Build();
 
+    public RabbitMqContainer RabbitMq { get; } = new RabbitMqBuilder("rabbitmq:3.13-management-alpine")
+        .Build();
+
     public async Task InitializeAsync()
     {
-        await Postgres.StartAsync();
+        await Task.WhenAll(Postgres.StartAsync(), RabbitMq.StartAsync());
 
         var cadenaPropietario = Postgres.GetConnectionString();
 
@@ -45,6 +49,7 @@ public sealed class AuditoriaFixture : IAsyncLifetime
     public async Task DisposeAsync()
     {
         await Postgres.DisposeAsync();
+        await RabbitMq.DisposeAsync();
     }
 
     public string CadenaConexionPropietario() => Postgres.GetConnectionString();

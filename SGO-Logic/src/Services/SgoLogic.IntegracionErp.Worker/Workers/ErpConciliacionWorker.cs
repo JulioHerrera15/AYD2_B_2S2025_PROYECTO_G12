@@ -9,8 +9,8 @@ namespace SgoLogic.IntegracionErp.Worker.Workers;
 
 public sealed class ErpConciliacionWorker : BackgroundService
 {
-    private readonly IServiceScopeFactory _scopeFactory; private readonly ErpOptions _opciones; private readonly ILogger<ErpConciliacionWorker> _logger;
-    public ErpConciliacionWorker(IServiceScopeFactory scopeFactory, IOptions<ErpOptions> opciones, ILogger<ErpConciliacionWorker> logger) { _scopeFactory = scopeFactory; _opciones = opciones.Value; _logger = logger; }
+    private readonly IServiceScopeFactory _scopeFactory; private readonly ErpOptions _opciones; private readonly IErpBatchLock _batchLock; private readonly ILogger<ErpConciliacionWorker> _logger;
+    public ErpConciliacionWorker(IServiceScopeFactory scopeFactory, IOptions<ErpOptions> opciones, IErpBatchLock batchLock, ILogger<ErpConciliacionWorker> logger) { _scopeFactory = scopeFactory; _opciones = opciones.Value; _batchLock = batchLock; _logger = logger; }
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         await EjecutarAsync(stoppingToken);
@@ -23,7 +23,18 @@ public sealed class ErpConciliacionWorker : BackgroundService
 
     private async Task EjecutarAsync(CancellationToken cancelacion)
     {
-        try { using var scope = _scopeFactory.CreateScope(); await scope.ServiceProvider.GetRequiredService<ConsolidacionErpService>().ConciliarAsync(cancelacion); }
+        try
+        {
+            await using var lease = await _batchLock.TryAcquireAsync(cancelacion);
+            if (lease is null)
+            {
+                _logger.LogDebug("Otra replica ya esta ejecutando una operacion ERP; se omite este ciclo de conciliacion.");
+                return;
+            }
+
+            using var scope = _scopeFactory.CreateScope();
+            await scope.ServiceProvider.GetRequiredService<ConsolidacionErpService>().ConciliarAsync(cancelacion);
+        }
         catch (OperationCanceledException) when (cancelacion.IsCancellationRequested) { }
         catch (Exception ex) { _logger.LogError(ex, "Error en conciliacion ERP"); }
     }
