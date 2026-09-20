@@ -179,3 +179,80 @@ mensajes de **ese** contexto llegaron a `Fallido` y fueron a dead letter.
   `EventConsumerBase`: están en `docs/contratos/PLANTILLA-SERVICIO.md`.
 - El contrato de datos de `sgo.sat` y `sgo.erp`: son internos de Facturación e
   Integración ERP respectivamente, y cada uno documenta el suyo.
+
+## 8. Evidencia medida del Outbox (HU-008)
+
+Los cuatro criterios de aceptación de HU-008 están cumplidos; esta sección
+resume la evidencia medida, para que quien lea este documento no tenga que
+ir a buscarla. El detalle completo de la corrida (configuración, salida de
+`carga.js`, panel de Grafana, salida completa de `verificar.sh`) vive en
+[`ESCALABILIDAD.md`, sección 6](ESCALABILIDAD.md#6-resultados-medidos) — acá
+solo lo atado a cada criterio, sin repetirlo.
+
+Corrida del 2026-09-20 (la misma de HU-025/EAC-04): 17,817 órdenes creadas y
+confirmadas, 3 réplicas de `ordenes-api` y 3 de `auditoria-worker`
+compitiendo, `OUTBOX_BATCH_SIZE=200`, `OUTBOX_POLLING_MS=500`.
+
+**Escritura en la misma transacción del cambio de negocio.** Las 17,817
+órdenes produjeron 124,719 filas en `outbox_messages` (~7 eventos por orden,
+la secuencia completa de la saga), sin filas huérfanas: cada evento nace
+atado a la transacción que lo originó.
+
+**Marcado como publicado solo tras confirmación del broker.** Estado final
+de `public.outbox_messages` en `sgo_ordenes`:
+
+```
+  estado   | count
+-----------+--------
+ Publicado | 124719
+(1 row)
+```
+
+Cero en `Pendiente`, cero en `Fallido`. Las 124,719 filas `Publicado`
+coinciden exactamente con las 124,719 que `auditoria-worker` registró
+(`scripts/escalabilidad/verificar.sh`):
+
+```
+outbox_ordenes_event_id_publicados_dos_veces=0
+outbox_ordenes_publicados_total_desde=124719
+outbox_ordenes_publicados_sin_llegar_a_auditoria=0
+RESULTADO=APROBADO
+```
+
+Sin desfase entre lo marcado publicado y lo entregado. Esta corrida además
+valida `FOR UPDATE SKIP LOCKED` (sección 4.1) en condiciones reales de
+concurrencia: 3 réplicas de `ordenes-api` publicando contra la misma tabla,
+`outbox_ordenes_event_id_publicados_dos_veces=0` — ningún evento se publicó
+dos veces con varios publicadores del mismo servicio compitiendo por las
+mismas filas.
+
+**Permanencia y reintento ante fallo del broker.** Esta corrida no incluyó
+una caída deliberada de RabbitMQ, así que no es evidencia de este criterio
+específico — decir lo contrario sería impreciso. La evidencia reproducible
+de "ante fallo del broker, el evento permanece pendiente y se reintenta" ya
+está documentada aparte, en
+[`OBSERVABILIDAD.md`](OBSERVABILIDAD.md), sección "Provocar movimiento en
+`outbox_pendientes`": `docker compose stop rabbitmq` con tráfico corriendo
+hace crecer `outbox_pendientes` sin mover `outbox_fallidos_total` (mientras
+la caída dure menos que `OUTBOX_MAX_REINTENTOS`), y `docker compose start
+rabbitmq` lo drena de vuelta a cero.
+
+Lo que esta corrida sí muestra, relacionado pero distinto: bajo el volumen
+de HU-025 el outbox de `ordenes-api` acumuló hasta 32.9 K eventos
+pendientes (la saga propagándose a través de Inventario y Pagos, ver
+ESCALABILIDAD.md sección 6) y drenó por completo sin perder ninguno —
+evidencia de que el mecanismo tolera respaldo bajo carga sostenida, no solo
+bajo caída del broker.
+
+**Dead-letter al agotar reintentos.** Profundidad de `sgo.eventos.dlq` al
+terminar la corrida:
+
+```
+sgo.eventos.dlq 0
+```
+
+Esta corrida no generó fallos que agotaran reintentos, así que no ejercitó
+la ruta a dead-letter — el cero es lo esperable sin fallos, no evidencia del
+mecanismo en sí. Esa ruta (una fila `Fallido` terminando en
+`sgo.eventos.dlx`) la cubren los tests de integración de BuildingBlocks, no
+esta medición.
