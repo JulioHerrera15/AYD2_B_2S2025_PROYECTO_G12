@@ -91,6 +91,18 @@ public sealed record HistorialClienteModel(
     int TotalRegistros,
     List<OrdenHistorialResumenModel> Ordenes);
 
+// ── Modelos de Despacho ─────────────────────────────────────────────────────
+public sealed record DespachoOrdenModel(
+    string DespachoId,
+    string OrdenId,
+    string Estado,
+    string MetodoEntrega,
+    string? GuiaId,
+    string? TrackingUrl,
+    string? Transportista,
+    string? UbicacionOrigenId,
+    DateTime? ActualizadoEn);
+
 public sealed class GatewayClient
 {
     private readonly HttpClient _http;
@@ -263,5 +275,17 @@ public sealed class GatewayClient
         }
         var err = await res.Content.ReadAsStringAsync(ct);
         return (false, null, err);
+    }
+
+    // ── Despacho ────────────────────────────────────────────────────────────────
+    /// <summary>
+    /// Consulta el estado real de despacho de una orden via GET /api/despacho/{ordenId}.
+    /// Retorna null si el despacho todavía no existe para la orden (saga aún en etapas tempranas).
+    /// </summary>
+    public async Task<DespachoOrdenModel?> ObtenerDespachoOrdenAsync(string ordenId, CancellationToken ct = default)
+    {
+        var res = await _http.GetAsync($"/api/despacho/{ordenId}", ct);
+        if (!res.IsSuccessStatusCode) return null;
+        return await res.Content.ReadFromJsonAsync<DespachoOrdenModel>(JsonOptions, ct);
     }
 }

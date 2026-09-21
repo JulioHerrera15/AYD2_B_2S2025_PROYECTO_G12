@@ -6,6 +6,7 @@ using SgoLogic.BuildingBlocks.Serialization;
 using SgoLogic.Contracts;
 using SgoLogic.Contracts.Enumeraciones;
 using SgoLogic.Contracts.Eventos.Ordenes;
+using SgoLogic.Contracts.Eventos.Despacho;
 using SgoLogic.ConsultaEstado.Api.Domain;
 using SgoLogic.ConsultaEstado.Api.Infrastructure;
 using StackExchange.Redis;
@@ -48,7 +49,11 @@ public sealed class ConsultaEstadoOrdenesConsumidor
     protected override IReadOnlyCollection<BindingCola> Bindings { get; } =
     [
         new BindingCola(TopologiaMensajeria.ExchangeEventos, "ordenes.orden.*"),
-        new BindingCola(TopologiaMensajeria.ExchangeEventos, "ordenes.devolucion.*")
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, "ordenes.devolucion.*"),
+        // Eventos de Despacho para enriquecer la vista (HU-020)
+        // IMPORTANTE: estos eventos NO escriben el campo Estado — solo DespachoId/GuiaDespacho/EstadoDespacho
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, DespachoEstadoActualizado.RoutingKey),
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, PedidoListoParaRecoger.RoutingKey)
     ];
 
     protected override async Task ManejarAsync(
@@ -66,6 +71,9 @@ public sealed class ConsultaEstadoOrdenesConsumidor
             OrdenConfirmada.EventType   => ManejarOrdenConfirmada(evento, contexto, cancelacion),
             OrdenCancelada.EventType    => ManejarOrdenCancelada(evento, contexto, cancelacion),
             OrdenCertificadaFiscalmente.EventType => ManejarOrdenCertificadaFiscalmente(evento, contexto, cancelacion),
+            // Eventos de Despacho — enriquecen la vista sin tocar Estado
+            DespachoEstadoActualizado.EventType   => ManejarDespachoEstadoActualizado(evento, contexto, cancelacion),
+            PedidoListoParaRecoger.EventType      => ManejarPedidoListoParaRecoger(evento, contexto, cancelacion),
             // Eventos que no impactan la vista de estado se ackean sin procesar
             _ => Task.CompletedTask
         });
@@ -246,5 +254,60 @@ public sealed class ConsultaEstadoOrdenesConsumidor
         var json = JsonSerializer.Serialize(vista);
         // TTL de 24 horas en Redis; PostgreSQL es el fallback durable
         await _redis.StringSetAsync(clave, json, TimeSpan.FromHours(24));
+    }
+
+    // ── Handlers de eventos de Despacho ─────────────────────────────────────────
+
+    /// <summary>
+    /// Evento 5 del contrato Despacho: cambio de estado de entrega.
+    /// Enriquece DespachoId y EstadoDespacho en la vista.
+    /// NUNCA escribe el campo Estado de la orden — ese solo lo escriben eventos 1 y 2 de Órdenes.
+    /// </summary>
+    private async Task ManejarDespachoEstadoActualizado(
+        IntegrationEvent<JsonElement> evt,
+        ConsultaEstadoDbContext ctx,
+        CancellationToken ct)
+    {
+        var data = Deserializar<DespachoEstadoActualizadoData>(evt.Data);
+        var vista = await ObtenerOCrearVista(data.OrdenId, ctx, ct);
+
+        // NO se usa AplicarSequence aquí porque el aggregateId de Despacho es distinto
+        // al de Órdenes; gestionar su propio sequence causaría conflictos. Lo procesamos
+        // siempre (last-write-wins) ya que solo enriquece campos de despacho.
+        vista.DespachoId = data.DespachoId;
+        vista.EstadoDespacho = data.EstadoNuevo;
+        vista.ActualizadaEn = DateTime.UtcNow;
+
+        await ctx.SaveChangesAsync(ct);
+        await ActualizarRedis(vista, ct);
+
+        _logger.LogInformation(
+            "Vista orden {OrdenId} enriquecida con estado despacho {EstadoDespacho} (Despacho {DespachoId})",
+            data.OrdenId, data.EstadoNuevo, data.DespachoId);
+    }
+
+    /// <summary>
+    /// Evento 6 del contrato Despacho: pedido listo para recoger en tienda (HU-020).
+    /// Enriquece EstadoDespacho = LISTA_PARA_RECOGER en la vista.
+    /// NUNCA escribe el campo Estado de la orden.
+    /// </summary>
+    private async Task ManejarPedidoListoParaRecoger(
+        IntegrationEvent<JsonElement> evt,
+        ConsultaEstadoDbContext ctx,
+        CancellationToken ct)
+    {
+        var data = Deserializar<PedidoListoParaRecogerData>(evt.Data);
+        var vista = await ObtenerOCrearVista(data.OrdenId, ctx, ct);
+
+        vista.DespachoId = data.DespachoId;
+        vista.EstadoDespacho = "LISTA_PARA_RECOGER";
+        vista.ActualizadaEn = DateTime.UtcNow;
+
+        await ctx.SaveChangesAsync(ct);
+        await ActualizarRedis(vista, ct);
+
+        _logger.LogInformation(
+            "Vista orden {OrdenId} marcada LISTA_PARA_RECOGER en tienda {UbicacionRecogidaId}",
+            data.OrdenId, data.UbicacionRecogidaId);
     }
 }
