@@ -64,35 +64,6 @@ Content-Type: application/json
   "motivo": "Cliente confirmo la compra"
 }
 
-### Avanzar la saga: RESERVA_SOLICITADA -> INVENTARIO_RESERVADO
-POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/transiciones
-Content-Type: application/json
-
-{
-  "estadoDestino": "INVENTARIO_RESERVADO",
-  "pasoSaga": "RESERVA"
-}
-
-### Avanzar la saga: INVENTARIO_RESERVADO -> COBRO_SOLICITADO (emite CobroSolicitado con el medioPago real)
-POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/transiciones
-Content-Type: application/json
-
-{
-  "estadoDestino": "COBRO_SOLICITADO",
-  "pasoSaga": "COBRO"
-}
-
-### Compensacion: COBRO_SOLICITADO -> PAGO_PENDIENTE (emite LiberacionReservaSolicitada)
-POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/transiciones
-Content-Type: application/json
-
-{
-  "estadoDestino": "PAGO_PENDIENTE",
-  "pasoSaga": "COBRO",
-  "motivo": "PayKlik no respondio dentro del timeout configurado",
-  "esCompensacion": true
-}
-
 ### Cambiar el metodo de entrega (emite MetodoEntregaModificado)
 POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/metodo-entrega
 Content-Type: application/json
@@ -101,13 +72,4 @@ Content-Type: application/json
   "metodoEntregaNuevo": "RECOGIDA_TIENDA",
   "solicitadoPor": "CLIENTE",
   "ubicacionRecogidaId": "TDA-014"
-}
-
-### Cancelar la orden (emite OrdenCancelada)
-POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/transiciones
-Content-Type: application/json
-
-{
-  "estadoDestino": "CANCELADA",
-  "motivo": "Cancelada por el cliente"
 }

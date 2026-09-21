@@ -121,30 +121,6 @@ ordenes.MapPost("/{id}/confirmar", async (
     }
 });
 
-ordenes.MapPost("/{id}/transiciones", async (
-    string id,
-    TransicionarOrdenRequest solicitud,
-    ServicioConfirmacionOrden servicio,
-    CancellationToken cancelacion) =>
-{
-    try
-    {
-        var resultado = await servicio.AplicarTransicionAsync(
-            id,
-            solicitud.EstadoDestino,
-            solicitud.PasoSaga,
-            solicitud.Motivo,
-            solicitud.EsCompensacion,
-            cancelacion);
-        return Results.Ok(resultado);
-    }
-    catch (Exception ex) when (
-        ex is ExcepcionOrdenNoEncontrada or ExcepcionTransicionInvalida or ExcepcionConflictoConcurrencia)
-    {
-        return MapearError(ex);
-    }
-});
-
 ordenes.MapPost("/{id}/metodo-entrega", async (
     string id,
     CambiarMetodoEntregaRequest solicitud,
