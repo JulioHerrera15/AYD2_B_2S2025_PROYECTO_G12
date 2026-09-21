@@ -33,9 +33,9 @@ caso de uso de confirmacion de orden. No son obvias desde el codigo.
 - Por lo tanto `POST /api/ordenes/{id}/confirmar` aplica `CREADA -> RESERVA_SOLICITADA`.
   (Una version anterior aplicaba `CONFIRMADA_PENDIENTE_FISCAL -> CONFIRMADA`, que no
   sale del estado inicial; se corrigio.)
-- `POST /api/ordenes/{id}/transiciones` aplica una transicion arbitraria (estado
-  destino, paso de saga, motivo opcional, bandera de compensacion) para recorrer el
-  resto de la maquina desde la demo. Misma logica que la confirmacion.
+- El resto de la maquina lo recorren los consumidores de eventos (ADR-016). El
+  endpoint `POST /api/ordenes/{id}/transiciones`, que aplicaba una transicion
+  arbitraria desde la demo, se elimino el 2026-09-21.
 - La validacion de si la transicion es legal la hace el dominio
   (`Orden.TransicionarA` -> `ExcepcionTransicionInvalida`); el servicio de
   aplicacion no la captura, la deja subir sin escribir nada.

@@ -287,7 +287,8 @@ public sealed class ManejadorDocumentoFiscalCertificadoTests
                 MedioPago: "TARJETA",
                 Impuestos: 150.00m,
                 Lineas: new[] { new CrearLineaOrdenRequest("SKU-LB-00871", "Refrigeradora 12 pies", 1, 1250.00m) },
-                ReceptorCui: "2547896320101"),
+                ReceptorCui: "2547896320101",
+                TokenMedioPago: "tok_pk_9f2a7c41d8e0b3a6c5d4e1f2"),
             CancellationToken.None);
 
         Assert.NotNull(dto);
@@ -302,7 +303,8 @@ public sealed class ManejadorDocumentoFiscalCertificadoTests
                 MedioPago: "TARJETA",
                 Impuestos: 100.00m,
                 Lineas: new[] { new CrearLineaOrdenRequest("SKU-LB-00871", "Refrigeradora 12 pies", 1, 1250.00m) },
-                ReceptorCui: "CF"),
+                ReceptorCui: "CF",
+                TokenMedioPago: "tok_pk_9f2a7c41d8e0b3a6c5d4e1f2"),
             CancellationToken.None);
 
         Assert.NotNull(dtoCf);
@@ -317,7 +319,8 @@ public sealed class ManejadorDocumentoFiscalCertificadoTests
                 MedioPago: "TARJETA",
                 Impuestos: 100.00m,
                 Lineas: new[] { new CrearLineaOrdenRequest("SKU-LB-00871", "Refrigeradora 12 pies", 1, 1250.00m) },
-                ReceptorCui: "ABC123"),
+                ReceptorCui: "ABC123",
+                TokenMedioPago: "tok_pk_9f2a7c41d8e0b3a6c5d4e1f2"),
             CancellationToken.None));
     }
 

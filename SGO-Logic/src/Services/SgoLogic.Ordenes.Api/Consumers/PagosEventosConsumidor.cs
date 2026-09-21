@@ -169,8 +169,16 @@ public sealed class PagosEventosConsumidor : BackgroundService
     private static EventoPagoRecibido CrearAplicado(IntegrationEvent<JsonElement> sobre, PagoAplicadoData datos) =>
         Crear(sobre, datos.OrdenId, motivo: null, autorizacionId: datos.AutorizacionId);
 
+    // Solo redacta el motivo: Ordenes trata todo PagoRechazado igual. Los codigos
+    // TOKEN_* (pagos-eventos-v1 v1.2) son un problema con el token del medio de pago,
+    // no un rechazo del proveedor, y con TOKEN_REQUERIDO Pagos no llega a llamar al proveedor.
     private static EventoPagoRecibido CrearRechazado(IntegrationEvent<JsonElement> sobre, PagoRechazadoData datos) =>
-        Crear(sobre, datos.OrdenId, $"Cobro rechazado por el proveedor (codigo {datos.CodigoRespuesta})");
+        Crear(
+            sobre,
+            datos.OrdenId,
+            datos.CodigoRespuesta.StartsWith("TOKEN_", StringComparison.Ordinal)
+                ? $"Cobro rechazado por un problema con el token del medio de pago (codigo {datos.CodigoRespuesta})"
+                : $"Cobro rechazado por el proveedor (codigo {datos.CodigoRespuesta})");
 
     private static EventoPagoRecibido CrearPendiente(IntegrationEvent<JsonElement> sobre, PagoPendienteData datos) =>
         Crear(sobre, datos.OrdenId, datos.MotivoFalla);

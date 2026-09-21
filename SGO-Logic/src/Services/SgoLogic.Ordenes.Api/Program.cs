@@ -81,6 +81,14 @@ ordenes.MapPost("/", async (
             statusCode: StatusCodes.Status400BadRequest,
             extensions: new Dictionary<string, object?> { ["codigo"] = "medio_pago_no_habilitado" });
     }
+    catch (ExcepcionTokenMedioPagoRequerido ex)
+    {
+        return Results.Problem(
+            title: "Token de medio de pago requerido",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status400BadRequest,
+            extensions: new Dictionary<string, object?> { ["codigo"] = "token_medio_pago_requerido" });
+    }
     catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
     {
         return Results.Problem(
@@ -104,30 +112,6 @@ ordenes.MapPost("/{id}/confirmar", async (
     try
     {
         var resultado = await servicio.ConfirmarOrdenAsync(id, solicitud?.Motivo, cancelacion);
-        return Results.Ok(resultado);
-    }
-    catch (Exception ex) when (
-        ex is ExcepcionOrdenNoEncontrada or ExcepcionTransicionInvalida or ExcepcionConflictoConcurrencia)
-    {
-        return MapearError(ex);
-    }
-});
-
-ordenes.MapPost("/{id}/transiciones", async (
-    string id,
-    TransicionarOrdenRequest solicitud,
-    ServicioConfirmacionOrden servicio,
-    CancellationToken cancelacion) =>
-{
-    try
-    {
-        var resultado = await servicio.AplicarTransicionAsync(
-            id,
-            solicitud.EstadoDestino,
-            solicitud.PasoSaga,
-            solicitud.Motivo,
-            solicitud.EsCompensacion,
-            cancelacion);
         return Results.Ok(resultado);
     }
     catch (Exception ex) when (

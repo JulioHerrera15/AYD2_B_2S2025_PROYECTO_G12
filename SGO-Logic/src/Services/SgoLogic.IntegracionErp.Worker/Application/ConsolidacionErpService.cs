@@ -98,18 +98,69 @@ public sealed class ConsolidacionErpService
     {
         var resumen = await _cliente.ObtenerResumenAsync(cancelacion);
         if (resumen is null) return;
-        foreach (var confirmacion in resumen.Lotes)
+
+        var fechaConciliacion = DateTime.UtcNow.Date;
+        var confirmaciones = resumen.Lotes.ToDictionary(x => x.LoteId, StringComparer.Ordinal);
+        var lotesLocales = await _contexto.Lotes
+            .AsNoTracking()
+            .Where(x => x.EnviadoEn != null && x.Estado != "GENERADO")
+            .ToListAsync(cancelacion);
+
+        foreach (var lote in lotesLocales)
         {
-            var lote = await _contexto.Lotes.FirstOrDefaultAsync(x => x.LoteId == confirmacion.LoteId, cancelacion);
-            if (lote is null) continue;
-            var conciliada = lote.CantidadRegistros == confirmacion.CantidadRegistros && Math.Abs(lote.MontoTotal - confirmacion.MontoTotal) <= 0.01m;
-            _contexto.Conciliaciones.Add(new ConciliacionErp
+            confirmaciones.TryGetValue(lote.LoteId, out var confirmacion);
+            var registrosErp = confirmacion?.CantidadRegistros ?? 0;
+            var montoErp = confirmacion?.MontoTotal ?? 0m;
+            var diferencias = new List<string>();
+
+            if (confirmacion is null)
+                diferencias.Add("No existe confirmacion para el lote enviado.");
+            else
             {
-                Fecha = DateTime.UtcNow.Date, LoteId = lote.LoteId, RegistrosSgo = lote.CantidadRegistros, MontoSgo = lote.MontoTotal,
-                RegistrosErp = confirmacion.CantidadRegistros, MontoErp = confirmacion.MontoTotal, Conciliada = conciliada,
-                Diferencias = conciliada ? null : $"SGO={lote.CantidadRegistros}/{lote.MontoTotal:0.00}; ERP={confirmacion.CantidadRegistros}/{confirmacion.MontoTotal:0.00}"
-            });
+                if (!string.Equals(confirmacion.Estado, "ACEPTADO", StringComparison.OrdinalIgnoreCase))
+                    diferencias.Add($"Estado ERP={confirmacion.Estado}; se esperaba ACEPTADO.");
+                if (lote.CantidadRegistros != registrosErp)
+                    diferencias.Add($"Cantidad SGO={lote.CantidadRegistros}; ERP={registrosErp}.");
+                if (Math.Abs(lote.MontoTotal - montoErp) > 0.01m)
+                    diferencias.Add($"Monto SGO={lote.MontoTotal:0.00}; ERP={montoErp:0.00}.");
+            }
+
+            await GuardarConciliacionAsync(
+                fechaConciliacion, lote.LoteId, lote.CantidadRegistros, lote.MontoTotal,
+                registrosErp, montoErp, diferencias, cancelacion);
         }
+
+        foreach (var confirmacion in resumen.Lotes.Where(x => !lotesLocales.Any(l => l.LoteId == x.LoteId)))
+        {
+            await GuardarConciliacionAsync(
+                fechaConciliacion, confirmacion.LoteId, 0, 0m, confirmacion.CantidadRegistros,
+                confirmacion.MontoTotal,
+                [$"El ERP reporta un lote sin registro local; estado ERP={confirmacion.Estado}."],
+                cancelacion);
+        }
+
         await _contexto.SaveChangesAsync(cancelacion);
+    }
+
+    private async Task GuardarConciliacionAsync(
+        DateTime fecha, string loteId, int registrosSgo, decimal montoSgo, int registrosErp,
+        decimal montoErp, IReadOnlyCollection<string> diferencias, CancellationToken cancelacion)
+    {
+        var conciliacion = await _contexto.Conciliaciones
+            .FirstOrDefaultAsync(x => x.Fecha == fecha && x.LoteId == loteId, cancelacion);
+
+        if (conciliacion is null)
+        {
+            conciliacion = new ConciliacionErp { Fecha = fecha, LoteId = loteId };
+            _contexto.Conciliaciones.Add(conciliacion);
+        }
+
+        conciliacion.RegistrosSgo = registrosSgo;
+        conciliacion.MontoSgo = montoSgo;
+        conciliacion.RegistrosErp = registrosErp;
+        conciliacion.MontoErp = montoErp;
+        conciliacion.Conciliada = diferencias.Count == 0;
+        conciliacion.Diferencias = conciliacion.Conciliada ? null : string.Join(" ", diferencias);
+        conciliacion.CreadaEn = DateTime.UtcNow;
     }
 }

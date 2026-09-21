@@ -6,6 +6,10 @@ Accept: application/json
 
 ### Crear una orden (estado inicial CREADA, emite OrdenCreada).
 # El servidor genera id (ORD-<anio>-<correlativo 6 digitos>) y numeroOrden.
+# Con medioPago TARJETA, tokenMedioPago es obligatorio: es el token que devuelve
+# POST http://localhost:8084/v1/tokens (payklik-mock) al tokenizar la tarjeta desde el
+# navegador. Nunca se envia el numero de tarjeta, el CVV ni el vencimiento. Con
+# TRANSFERENCIA o BILLETERA_DIGITAL el campo no aplica. La orden no devuelve el token.
 # @name crearOrden
 POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/
 Content-Type: application/json
@@ -16,6 +20,7 @@ Content-Type: application/json
   "metodoEntrega": "DOMICILIO",
   "moneda": "GTQ",
   "medioPago": "TARJETA",
+  "tokenMedioPago": "tok_pk_390369109c1dbac6d48a121d",
   "impuestos": 150.00,
   "ubicacionSolicitadaId": null,
   "lineas": [
@@ -59,35 +64,6 @@ Content-Type: application/json
   "motivo": "Cliente confirmo la compra"
 }
 
-### Avanzar la saga: RESERVA_SOLICITADA -> INVENTARIO_RESERVADO
-POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/transiciones
-Content-Type: application/json
-
-{
-  "estadoDestino": "INVENTARIO_RESERVADO",
-  "pasoSaga": "RESERVA"
-}
-
-### Avanzar la saga: INVENTARIO_RESERVADO -> COBRO_SOLICITADO (emite CobroSolicitado con el medioPago real)
-POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/transiciones
-Content-Type: application/json
-
-{
-  "estadoDestino": "COBRO_SOLICITADO",
-  "pasoSaga": "COBRO"
-}
-
-### Compensacion: COBRO_SOLICITADO -> PAGO_PENDIENTE (emite LiberacionReservaSolicitada)
-POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/transiciones
-Content-Type: application/json
-
-{
-  "estadoDestino": "PAGO_PENDIENTE",
-  "pasoSaga": "COBRO",
-  "motivo": "PayKlik no respondio dentro del timeout configurado",
-  "esCompensacion": true
-}
-
 ### Cambiar el metodo de entrega (emite MetodoEntregaModificado)
 POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/metodo-entrega
 Content-Type: application/json
@@ -96,13 +72,4 @@ Content-Type: application/json
   "metodoEntregaNuevo": "RECOGIDA_TIENDA",
   "solicitadoPor": "CLIENTE",
   "ubicacionRecogidaId": "TDA-014"
-}
-
-### Cancelar la orden (emite OrdenCancelada)
-POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/{{ordenId}}/transiciones
-Content-Type: application/json
-
-{
-  "estadoDestino": "CANCELADA",
-  "motivo": "Cancelada por el cliente"
 }

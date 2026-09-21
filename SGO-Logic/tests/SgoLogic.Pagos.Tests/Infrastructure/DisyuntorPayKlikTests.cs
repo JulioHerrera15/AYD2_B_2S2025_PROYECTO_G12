@@ -94,6 +94,28 @@ public sealed class DisyuntorPayKlikTests
     }
 
     [Fact]
+    public async Task Un_token_de_medio_de_pago_no_valido_no_cuenta_como_falla_y_no_abre_el_circuito()
+    {
+        var disyuntor = Disyuntor();
+
+        // Un token invalido es un error del cliente: PayKlik respondio (422). La
+        // excepcion sube al servicio de cobro, pero el circuito no la cuenta.
+        for (var i = 0; i < 10; i++)
+        {
+            var ex = await Assert.ThrowsAsync<TokenMedioPagoInvalidoException>(() => disyuntor.EjecutarAsync<int>(
+                _ => throw new TokenMedioPagoInvalidoException(CodigosToken.Invalido, "Token invalido."),
+                CancellationToken.None));
+
+            Assert.Equal(CodigosToken.Invalido, ex.Codigo);
+        }
+
+        var salud = disyuntor.Salud();
+        Assert.Equal("CERRADO", salud.Estado);
+        Assert.Equal(0, salud.FallosRecientes);
+        Assert.Null(salud.UltimaApertura);
+    }
+
+    [Fact]
     public async Task Un_rechazo_de_negocio_no_abre_el_circuito()
     {
         var disyuntor = Disyuntor();

@@ -2,7 +2,7 @@
 # SGO-Logic — Sistema de Gestión de Órdenes y Logística Omnicanal
 
 **Cliente:** MegaStore
-**Versión:** 2.0
+**Versión:** 2.1
 **Naturaleza del documento:** Definición de arquitectura de la Fase 1. Comprende la delimitación del problema, la identificación de partes interesadas y drivers, las decisiones de arquitectura y las vistas que las sustentan. La versión 2.0 agrega la sección 14, Cambios de la Fase 2, que documenta cómo se materializó esa arquitectura en el MVP; las secciones 1 a 13 conservan el contenido de la Fase 1 y solo incorporan notas que remiten a los ADR posteriores.
 
 ---
@@ -705,6 +705,7 @@ Las decisiones tomadas durante la Fase 2 se registran en archivos independientes
 | ADR-017 | Despacho consulta a Inventario por HTTP síncrono y degrada la guía sin circuit breaker | Precisa la excepción a ADR-014 y el desvío de ADR-009 | `documentacion/ADR/ADR-017-despacho-consulta-inventario-http-y-guia-pendiente-sin-disyuntor.md` | Aceptada |
 | ADR-018 | Contrato común de mensajería | Concreta ADR-003 | `documentacion/ADR/ADR-018-contrato-comun-de-mensajeria.md` | Aceptada |
 | ADR-019 | Los sistemas externos se simulan con mocks en contenedor y fallas configurables | Sustenta ADR-013 y las pruebas de resiliencia de ADR-009 | `documentacion/ADR/ADR-019-mocks-de-sistemas-externos-con-fallas-configurables.md` | Aceptada |
+| ADR-020 | La autenticación se valida en el borde, en el API Gateway, con el JWT emitido por Auth | Concreta la responsabilidad de autenticación del Borde de la sección 6.1 | `documentacion/ADR/ADR-020-autenticacion-en-el-borde.md` | Aceptada |
 
 ---
 
@@ -783,19 +784,19 @@ Los casos de uso expandidos CU-01 a CU-15 se representan a continuación. Corres
 ![CU-10](../diagramas_CDU/CU-10.svg)
 
 **CU-11**
-![CU-11](../diagramas_CDU/CU-11.svg)
+![CU-11](../diagramas_CDU/CU-11.drawio.svg)
 
 **CU-12**
-![CU-12](../diagramas_CDU/CU-12.svg)
+![CU-12](../diagramas_CDU/CU-12.drawio.svg)
 
 **CU-13**
-![CU-13](../diagramas_CDU/CU-13.svg)
+![CU-13](../diagramas_CDU/CU-13.drawio.svg)
 
 **CU-14**
-![CU-14](../diagramas_CDU/CU-14.svg)
+![CU-14](../diagramas_CDU/CU-14.drawio.svg)
 
 **CU-15**
-![CU-15](../diagramas_CDU/CU-15.svg)
+![CU-15](../diagramas_CDU/CU-15.drawio.svg)
 El siguiente diagrama presenta el flujo principal del sistema: el recorrido de punta a punta de una compra omnicanal, desde el reconocimiento del cliente hasta la confirmación de la orden.
 
 ![Flujo Principal del Sistema](../img/DDA_05%20-%20Flujo%20Principal%20del%20Sistema_%20Experiencia%20del%20Carrito%20Omnicanal%20(Preliminar%20v0.1).svg)
@@ -971,12 +972,13 @@ Esta sección documenta cómo se materializó la arquitectura definida en la Fas
 |---|---|
 | 1.0 | Definición de arquitectura de la Fase 1: secciones 1 a 13. |
 | 2.0 | Incorpora la sección 14, Cambios de la Fase 2, y las referencias a ADR-013 en adelante en la sección 10. |
+| 2.1 (2026-09-21) | Agrega ADR-020, autenticación en el borde, al índice de la sección 10 y a las secciones 14.5 a 14.7. Corrige la sección 14.1 (28 contenedores), la sección 14.2 (agrega `integracion-erp-worker` en el puerto 8096 y corrige `logiexpress-mock` al puerto 8098), la sección 14.6 (agrega la base `sgo_integracion_erp` a la instancia operacional) y las secciones 14.8 y 14.9 (ruta real del compose de escalado, `SGO-Logic/scripts/escalabilidad/docker-compose.scale.yml`). Corrige los enlaces de los diagramas CU-11 a CU-15 de la sección 11.5, cuyos archivos son `.drawio.svg`. |
 
 Las rutas de archivos de esta sección se expresan desde la raíz del repositorio.
 
 ## 14.1 Entorno de despliegue del MVP
 
-El entorno de ejecución del MVP es Docker Compose (ADR-013). El archivo `SGO-Logic/docker-compose.yml` levanta en una sola máquina, con `docker compose up --build`, 27 contenedores: los servicios del backbone, sus bases de datos por contexto, RabbitMQ, Redis, la pila de observabilidad y los mocks de los sistemas externos. La configuración se entrega por variables de entorno (`SGO-Logic/.env.example`) y los servicios del backbone exponen `/health/live` y `/health/ready`.
+El entorno de ejecución del MVP es Docker Compose (ADR-013). El archivo `SGO-Logic/docker-compose.yml` levanta en una sola máquina, con `docker compose up --build`, 28 contenedores: los servicios del backbone, sus bases de datos por contexto, RabbitMQ, Redis, la pila de observabilidad y los mocks de los sistemas externos. La configuración se entrega por variables de entorno (`SGO-Logic/.env.example`) y los servicios del backbone exponen `/health/live` y `/health/ready`.
 
 Kubernetes on-premises se mantiene como plataforma de producción (ADR-001, RES-14, RES-15, sección 9.2). Docker Compose no la reemplaza: la topología de mensajería y el aislamiento de bases de datos por contexto son idénticos en ambos entornos, de modo que migrar entre ellos exige cambiar manifiestos de despliegue y no código de aplicación.
 
@@ -1008,6 +1010,7 @@ Los puertos corresponden a los publicados en el host por `SGO-Logic/docker-compo
 | `consulta-estado-api` | Modelo de lectura del estado de las órdenes. | 8091 | `sgo_consulta_estado` (operacional) y Redis |
 | `notificaciones-api` | Notificaciones al cliente, aisladas del flujo principal. | 8090 | `sgo_notificaciones` (operacional) |
 | `integracion-pos-worker` | Propagación de eventos de venta hacia las instancias de POS. | 8095 | `sgo_integracion_pos` (operacional) |
+| `integracion-erp-worker` | Consolidación de ventas y envío batch al ERP-Core, con conciliación. | 8096 | `sgo_integracion_erp` (operacional) |
 | `auditoria-worker` | Bitácora append-only de eventos. | 8093 | `sgo_auditoria` (instancia de auditoría) |
 | `sample-api` y `sample-worker` | Plantillas de servicio para crear contextos nuevos (`PLANTILLA-SERVICIO.md`). | 8081 y 8082 | `sgo_sample_api` y `sgo_sample_worker` (operacional) |
 
@@ -1017,7 +1020,7 @@ Los puertos corresponden a los publicados en el host por `SGO-Logic/docker-compo
 |---|---|---|
 | `payklik-mock` | PayKlik, pasarela de pago | 8084 |
 | `sat-mock` | SAT, certificación fiscal | 8086 |
-| `logiexpress-mock` | LogiExpress, transportista | 8096 |
+| `logiexpress-mock` | LogiExpress, transportista | 8098 |
 | `mock-mensajeria` | Proveedor de SMS, correo y push | 8089 |
 | `mock-erp` | ERP-Core sobre AS/400 | 4000 |
 | `mock-pos` | 32 instancias de POS | 4001 |
@@ -1034,11 +1037,11 @@ Los puertos corresponden a los publicados en el host por `SGO-Logic/docker-compo
 
 ## 14.3 Mocks de sistemas externos y fallas que simulan
 
-Los sistemas externos se simulan con mocks en contenedor que exponen el contrato conocido del sistema real y una API de administración para provocar fallas (ADR-019). Ningún mock recibe ni devuelve datos de tarjeta.
+Los sistemas externos se simulan con mocks en contenedor que exponen el contrato conocido del sistema real y una API de administración para provocar fallas (ADR-019). Ningún servicio de SGO-Logic recibe ni devuelve datos de tarjeta: el único lugar donde existen es el proceso de `payklik-mock`, que hace las veces de PayKlik al tokenizar (sección 14.3.1). Los demás mocks no reciben datos de tarjeta.
 
 | Mock | Fallas que simula | Cómo se provoca |
 |---|---|---|
-| `payklik-mock` | Latencia configurable, caída (503), rechazo del cargo por fondos insuficientes e intermitencia con probabilidad configurable. Idempotencia por `Idempotency-Key`. | `PUT /admin/modo` con `NORMAL`, `LENTO`, `CAIDO`, `RECHAZO` o `INTERMITENTE` |
+| `payklik-mock` | Latencia configurable, caída (503), rechazo del cargo por fondos insuficientes e intermitencia con probabilidad configurable, tanto en el cargo como en la tokenización. Idempotencia por `Idempotency-Key`. Tokenización de la tarjeta (`POST /v1/tokens`) con token de un solo uso y vigencia corta; el cargo con un token inexistente, vencido o ya usado responde 422, distinto del rechazo por fondos. | `PUT /admin/modo` con `NORMAL`, `LENTO`, `CAIDO`, `RECHAZO` o `INTERMITENTE`. `GET /admin/tokens` lista los tokens emitidos (token, últimos cuatro, marca y vigencia, nunca el número de tarjeta). |
 | `sat-mock` | Latencia, caída (503), rechazo de la certificación y una probabilidad de falla 503 aplicable en cualquier modo. | `PUT /admin/modo` con `NORMAL`, `LENTO`, `CAIDO` o `RECHAZO` |
 | `logiexpress-mock` | Latencia, caída y un timeout determinístico: una de cada 50 solicitudes de guía no responde. | `PUT /admin/modo`; el cambio del estado de rastreo de una guía se hace con `POST /admin/guias/{guiaId}/estado` |
 | `mock-mensajeria` | Falla del proveedor (respuesta 500) en SMS, correo y push. | Variable de configuración `MockMensajeria__ForzarFalla` o `POST /api/mensajes/config/falla?activa=true` |
@@ -1046,6 +1049,22 @@ Los sistemas externos se simulan con mocks en contenedor que exponen el contrato
 | `mock-pos` | Tienda fuera de línea con respuesta 503, 500 o timeout, por tienda o de forma masiva. Idempotencia por tienda y `eventoId`. | `POST /pos/admin/{tiendaId}/caida` y `POST /pos/admin/caida-masiva` |
 
 El cambio de estado de rastreo que se aplica en `logiexpress-mock` no se propaga por sí solo a Despacho. En una demostración, los avances de entrega se informan al webhook de Despacho (`POST /api/despacho/{ordenId}/estados`), que es lo que haría el transportista real.
+
+### 14.3.1 Flujo de tokenización de la tarjeta
+
+Este flujo ejecuta ADR-010 sin modificarlo: la tokenización se delega a PayKlik y SGO-Logic guarda solo el token y los metadatos del intento. **El número de tarjeta (PAN), el código de seguridad (CVV) y la fecha de vencimiento nunca entran al perímetro de SGO-Logic.** Ningún servicio (Órdenes, Pagos, Facturación, `api-gateway` ni `web`) los recibe, los propaga, los registra en un log ni los persiste; lo único que cruza hacia SGO-Logic es el token y sus metadatos no sensibles (últimos cuatro dígitos y marca).
+
+| Paso | Qué ocurre | Qué dato de tarjeta ve |
+|---|---|---|
+| 1. Tokenizar | El navegador envía la tarjeta directo a `POST /v1/tokens` de PayKlik (en el MVP, `payklik-mock`, puerto 8084; el mock abre CORS en ese endpoint porque lo llama el navegador). PayKlik valida el número con Luhn, el CVV de 3 o 4 dígitos y que la tarjeta no esté vencida, descarta el número y el CVV, y responde con un token opaco de un solo uso, los últimos cuatro dígitos, la marca deducida del BIN y la vigencia del token (900 segundos, configurable en `Tokenizacion:VigenciaSegundos`). | Solo el navegador y PayKlik. |
+| 2. Crear la orden | El checkout llama a `POST /api/ordenes` con el campo `tokenMedioPago`, obligatorio cuando el medio de pago es `TARJETA` y ignorado para transferencia y billetera. Órdenes lo conserva solo hasta emitir `CobroSolicitado`, porque ese evento sale después, cuando Inventario confirma la reserva: la columna `ordenes.orden.token_medio_pago` es nula salvo en ese tramo y no se devuelve en ninguna respuesta ni en ningún evento distinto de `CobroSolicitado`. | Solo el token. |
+| 3. Solicitar el cobro | `CobroSolicitado` lleva `tokenMedioPago` hacia Pagos (`ordenes-eventos-v1`, evento 5). Los campos `ultimosCuatro` y `marca` del evento quedan nulos: los resuelve PayKlik. | Solo el token. |
+| 4. Cobrar | Pagos envía el token a `POST /v1/cargos`. PayKlik lo resuelve contra su almacén en memoria, consume el token y devuelve los últimos cuatro dígitos y la marca reales de la tarjeta. Un cargo con `TARJETA` sin token se rechaza en Pagos antes de llamar a PayKlik. | Solo el token, los últimos cuatro y la marca. |
+| 5. Registrar | Pagos persiste el token, los últimos cuatro y la marca en `pagos.intento_pago`. El token no viaja en los eventos de resultado (`pagos-eventos-v1`, sección 1). | Solo el token, los últimos cuatro y la marca. |
+
+Un token inexistente, vencido o ya usado es un error del cliente, no una caída del proveedor: PayKlik responde 422 con un código (`TOKEN_INVALIDO`, `TOKEN_VENCIDO`, `TOKEN_YA_USADO`), Pagos lo registra como intento `RECHAZADO` y publica `PagoRechazado` con ese `codigoRespuesta`, sin reintento, sin enlace de reintento y sin que cuente como falla para el disyuntor (ADR-009). Así se distingue del rechazo por fondos insuficientes, que PayKlik responde con 200, estado `RECHAZADO` y código `51`.
+
+El almacén de tokens de `payklik-mock` vive solo en la memoria del proceso: no hay base de datos, un reinicio invalida los tokens y el mock conserva únicamente los últimos cuatro dígitos, la marca y el mes y año de expiración, no el número de tarjeta ni el CVV. La prueba automatizada `CobroTokenizadoTests` (`SGO-Logic/tests/SgoLogic.Pagos.Tests/Application/CobroTokenizadoTests.cs`) verifica que un cobro tokenizado no deja PAN ni CVV en la entidad persistida, en el modelo de la base ni en el payload del Outbox, y falla si se agrega a esos tipos un campo con datos de tarjeta.
 
 ## 14.4 Cambios a contratos de eventos
 
@@ -1055,7 +1074,7 @@ Todos los contratos comparten el envelope de `sgo-eventos-envelope-v1.md` (ADR-0
 |---|---|---|
 | `contratos/sgo-eventos-envelope-v1.md` | v1 | Sin cambio de versión. La topología del broker se completó en `TOPOLOGIA-MENSAJERIA.md`: colas quorum con límite de entregas y dueño de la dead letter. |
 | `contratos/ordenes-eventos-v1.md` | v1.4 | v1.1: incorpora las objeciones de los demás contextos antes del congelamiento (envelope y enumeraciones compartidos, `sequence` por agregado, evento 12 `OrdenCertificadaFiscalmente`). v1.2: implementa los eventos 11 y 12 y agrega la cola `ordenes.facturacion` y los bindings de `pagos.ordenes` y `facturacion.ordenes` a `ordenes.devolucion.registrada`. v1.3: `DevolucionRegistrada` agrega `lineas[].ubicacionOrigenReservaId` y `lineas[].reservaId`. v1.4: `DespachoSolicitado` lleva el `reservaId` real y la `direccionEntrega`; `POST /api/ordenes` acepta `direccionEntrega` como campo opcional; `LiberacionReservaSolicitada` no se publica cuando la orden no tiene reserva; se agrega la cola `ordenes.despacho`. |
-| `contratos/pagos-eventos-v1.md` | v1.1 | Agrega los eventos `ReembolsoAplicado` y `ReembolsoFallido`. Cambio aditivo. |
+| `contratos/pagos-eventos-v1.md` | v1.2 | v1.1: agrega los eventos `ReembolsoAplicado` y `ReembolsoFallido`. v1.2: `PagoRechazado.codigoRespuesta` admite los códigos internos `TOKEN_REQUERIDO`, `TOKEN_INVALIDO`, `TOKEN_VENCIDO` y `TOKEN_YA_USADO`, por el flujo de tokenización de la sección 14.3.1. Cambios aditivos. |
 | `contratos/inventario-eventos-v1.md` | v1 | Agrega el evento 3, `ReservaInventarioExpirada`, el 2026-09-12. Cambio aditivo. |
 | `contratos/facturacion-eventos-v1.md` | v1 | Sin cambio de versión: `DocumentoFiscalCertificado` y `CertificacionSatFallida`. |
 | `despacho-eventos-v1.md` | v1 | Contrato nuevo de la Fase 2: `OrigenDespachoDeterminado`, `GuiaAsignada`, `GuiaPendiente`, `PreparacionSolicitada`, `DespachoEstadoActualizado` y `PedidoListoParaRecoger`. |
@@ -1078,17 +1097,19 @@ Los archivos se encuentran en `documentacion/ADR/`. Todos tienen estado Aceptada
 
 **ADR-019, Los sistemas externos se simulan con mocks en contenedor.** Cada proveedor y sistema legacy tiene un mock con fallas configurables, lo que permite repetir las pruebas de resiliencia y levantar el MVP sin acceso a los sistemas reales. Node se usa únicamente en dos mocks y no forma parte del producto.
 
+**ADR-020, La autenticación se valida en el borde.** El API Gateway valida el JWT emitido por Auth con `AddJwtBearer` y el secreto compartido `Auth:JwtSecret`, y lo exige en las rutas de órdenes, pagos, facturación, inventario, despacho y auditoría; `/api/auth/*` y `/health/*` quedan anónimas. La exigencia se activa con la bandera `Gateway:ExigirJwt`, apagada por defecto para no romper los scripts de carga. Los servicios internos confían en la red interna y no revalidan el token. El riesgo que queda: en el MVP los puertos de cada servicio siguen publicados en el host, y quien los use evade el gateway; en producción solo se expone el gateway. Se descartaron la validación del JWT en cada servicio y el mTLS entre servicios.
+
 ## 14.6 Decisiones de implementación registradas en este documento
 
 Las siguientes decisiones no cambian un contrato entre contextos ni el entorno de despliegue: son detalles de implementación de un contexto o concretan una decisión de la Fase 1. Por eso se documentan aquí y no como ADR independientes.
 
-**Persistencia.** PostgreSQL es el motor relacional (decisión cerrada el 2026-09-07, coherente con el costo de licenciamiento nulo de la sección 9.1). Cada contexto es dueño de su propia base, con nombre `sgo_<contexto>`, y ningún contexto lee ni escribe la base de otro (ADR-001). Las bases se agrupan en tres instancias: operacional (Órdenes, Inventario, Despacho, Consulta de Estado, Auth, Notificaciones, Integración POS y las plantillas), finanzas (Pagos y Facturación) y auditoría (Auditoría, ADR-006). El acceso es con Entity Framework Core 8, las migraciones se aplican al arrancar cada servicio y la concurrencia es optimista con una columna de versión (ADR-005). Cada servicio conserva su tabla de Outbox en su propia base.
+**Persistencia.** PostgreSQL es el motor relacional (decisión cerrada el 2026-09-07, coherente con el costo de licenciamiento nulo de la sección 9.1). Cada contexto es dueño de su propia base, con nombre `sgo_<contexto>`, y ningún contexto lee ni escribe la base de otro (ADR-001). Las bases se agrupan en tres instancias: operacional (Órdenes, Inventario, Despacho, Consulta de Estado, Auth, Notificaciones, Integración POS, Integración ERP y las plantillas), finanzas (Pagos y Facturación) y auditoría (Auditoría, ADR-006). El acceso es con Entity Framework Core 8, las migraciones se aplican al arrancar cada servicio y la concurrencia es optimista con una columna de versión (ADR-005). Cada servicio conserva su tabla de Outbox en su propia base.
 
 **Consulta de Estado.** El servicio consume los eventos de Órdenes y mantiene la vista de cada orden en Redis, como caché caliente con vencimiento de 24 horas, y en PostgreSQL (`ordenes_vista`), como respaldo durable y fuente del historial paginado. Si Redis no responde, la consulta se sirve desde PostgreSQL. Esta configuración concreta la estrategia de recarga que ADR-004 declaraba necesaria y mantiene su decisión de fondo: la consulta no orquesta llamadas en tiempo real a otros contextos ni a sistemas externos.
 
 **Observabilidad.** Prometheus y Grafana implementan CAR-12. Cada servicio que registra los valores por defecto de la solución expone `/metrics` mediante prometheus-net, y Prometheus lo recoge cada 5 segundos según `SGO-Logic/observabilidad/prometheus.yml`. Grafana se aprovisiona por archivo con dos tableros, "SGO-Logic - Salud del sistema" y "SGO-Logic - Mensajería y resiliencia". Las métricas propias son `outbox_pendientes`, `outbox_publicados_total`, `outbox_fallidos_total`, `outbox_latencia_publicacion_segundos`, `mensajes_consumidos_total`, `mensajes_duplicados_total` y `alertas_fiscales_levantadas_total`, además de las métricas HTTP estándar. La instrumentación no incluye gestor de alertas, agregación de logs ni trazas distribuidas. Los sistemas externos se observan de forma indirecta, a través de las métricas de mensajería y de HTTP de los servicios que los consumen.
 
-**Borde, identidad y aplicación web.** El `api-gateway` usa YARP para enrutar por prefijo hacia los contextos. `auth-api` emite JWT y administra el carrito unificado en Redis. `web` es una aplicación ASP.NET Core MVC que consume el gateway.
+**Borde, identidad y aplicación web.** El `api-gateway` usa YARP para enrutar por prefijo hacia los contextos. `auth-api` emite JWT y administra el carrito unificado en Redis. La validación del JWT en el gateway se decide en ADR-020. `web` es una aplicación ASP.NET Core MVC que consume el gateway.
 
 **Parámetros del Outbox.** El publicador consulta la tabla de Outbox cada 2 segundos (`OUTBOX_POLLING_MS`), procesa lotes de 20 filas (`OUTBOX_BATCH_SIZE`) y reintenta hasta 5 veces (`OUTBOX_MAX_REINTENTOS`) antes de enviar el mensaje a la dead letter. El intervalo de polling determina la latencia mínima de cada salto entre contextos (ADR-014).
 
@@ -1110,7 +1131,7 @@ Las rutas de código se expresan desde la raíz del repositorio.
 | Persistencia con PostgreSQL, base por contexto y migraciones al arranque | ADR-001, ADR-005 (sin ADR propio, ver 14.6) | `SGO-Logic/scripts/postgres/crear-bases-adicionales.sh`, carpeta `Infrastructure/Persistencia/` de cada servicio |
 | Consulta de Estado con Redis y respaldo en PostgreSQL | ADR-004 (sin ADR propio, ver 14.6) | `SGO-Logic/src/Services/SgoLogic.ConsultaEstado.Api/Application/ConsultaEstadoService.cs`, `SGO-Logic/src/Services/SgoLogic.ConsultaEstado.Api/Consumers/ConsultaEstadoOrdenesConsumidor.cs`, `SGO-Logic/src/Services/SgoLogic.ConsultaEstado.Api/Infrastructure/ConsultaEstadoDbContext.cs` |
 | Observabilidad con Prometheus y Grafana | CAR-12 (sección 5.2, ver 14.6) | `SGO-Logic/observabilidad/prometheus.yml`, `SGO-Logic/observabilidad/grafana/provisioning/`, `SGO-Logic/src/BuildingBlocks/SgoLogic.BuildingBlocks/Metricas/MetricasSgo.cs` |
-| Borde con YARP e identidad con JWT | Sección 6.1, Borde (ver 14.6) | `SGO-Logic/src/Services/SgoLogic.ApiGateway/appsettings.json`, `SGO-Logic/src/Services/SgoLogic.Auth.Api/Application/JwtService.cs` |
+| Borde con YARP e identidad con JWT | Sección 6.1, Borde (ver 14.6); ADR-020 para la validación del JWT en el gateway | `SGO-Logic/src/Services/SgoLogic.ApiGateway/Program.cs`, `SGO-Logic/src/Services/SgoLogic.ApiGateway/appsettings.json`, `SGO-Logic/src/Services/SgoLogic.Auth.Api/Application/JwtService.cs` |
 | Esquema de evidencia de verificación | Sin ADR (ver 14.6) | `SGO-Logic/scripts/pruebas/`, `SGO-Logic/scripts/pruebas-carga/`, `SGO-Logic/scripts/pruebas/evidencia/` |
 
 ## 14.8 Umbrales del DoD y evidencia
@@ -1122,7 +1143,7 @@ Los umbrales son los de los escenarios de atributos de calidad de la sección 7.
 | Disponibilidad | EAC-01 | Cero órdenes perdidas por indisponibilidad del proveedor; 100% de intentos fallidos auditados; disponibilidad del servicio de Pagos igual o superior a 99.9% durante el evento. | `SGO-Logic/scripts/pruebas-carga/eac01-hu023-carga.js`, `SGO-Logic/scripts/pruebas-carga/eac01-hu023-verificar.sh`, `SGO-Logic/scripts/pruebas/evidencia/eac01-carga-*.txt`, `SGO-Logic/scripts/pruebas/evidencia/eac01-verificacion-*.txt`, `SGO-Logic/scripts/pruebas/evidencia/metricas-ordenes-*.txt`, `documentacion/docs/PRUEBA-CARGA-EAC01.md` |
 | Rendimiento (consulta) | EAC-02 | Tiempo de respuesta inferior a 5 segundos para el 100% de las consultas, incluso bajo carga pico. | `SGO-Logic/scripts/pruebas-carga/eac02-hu024-carga.js`, `SGO-Logic/scripts/pruebas-carga/eac02-hu024-verificar.sh`, `documentacion/docs/PRUEBA-CARGA-EAC02.md` |
 | Rendimiento (auditoría) | EAC-03 | Recuperación en menos de 1 segundo; cero transacciones sin respaldo. | `SGO-Logic/tests/SgoLogic.Auditoria.Tests/CargaTransaccionTests.cs`, `SGO-Logic/tests/SgoLogic.Auditoria.Tests/InsercionYRecuperacionTests.cs`, `documentacion/docs/AUDITORIA.md` |
-| Escalabilidad | EAC-04 | Sostiene una demanda de ocho veces sin degradar EAC-01, EAC-02 ni EAC-03; la capacidad base se incrementa año a año dentro del techo operativo sin cambios arquitectónicos. | `deploy/k8s/consulta-estado-hpa.yaml`, `SGO-Logic/scripts/pruebas-carga/eac02-hu024-escalar.sh`, `SGO-Logic/scripts/pruebas-carga/docker-compose.scale-consulta.yml`, `documentacion/docs/PRUEBA-CARGA-EAC02.md` |
+| Escalabilidad | EAC-04 | Sostiene una demanda de ocho veces sin degradar EAC-01, EAC-02 ni EAC-03; la capacidad base se incrementa año a año dentro del techo operativo sin cambios arquitectónicos. | `deploy/k8s/consulta-estado-hpa.yaml`, `SGO-Logic/scripts/pruebas-carga/eac02-hu024-escalar.sh`, `SGO-Logic/scripts/escalabilidad/docker-compose.scale.yml`, `documentacion/docs/PRUEBA-CARGA-EAC02.md` |
 | Consistencia de inventario | EAC-05 | Cero unidades comprometidas a más de un cliente; reservas no concluidas liberadas dentro del tiempo de expiración definido. | `SGO-Logic/tests/SgoLogic.Inventario.IntegrationTests/ReservaConcurrenteTests.cs`, `SGO-Logic/tests/SgoLogic.Inventario.Tests/Application/ServicioExpiracionReservasTests.cs`, `documentacion/docs/CONCURRENCIA-EAC05.md` |
 
 La evidencia del flujo completo de la saga, desde la creación de la orden hasta la entrega, se genera con `SGO-Logic/scripts/pruebas/camino-feliz.ps1` y se guarda en `SGO-Logic/scripts/pruebas/evidencia/camino-feliz-*.txt`. No corresponde a un escenario de calidad, pero verifica que el ciclo de la orden avanza sin transiciones manuales (ADR-016).
@@ -1136,7 +1157,7 @@ Los siguientes límites son alcance deliberado del MVP. Cada uno indica qué exi
 | Guía en `GUIA_PENDIENTE` | Cuando LogiExpress no responde, el despacho pasa a `GUIA_PENDIENTE`, se publica `GuiaPendiente` y el pedido se prepara y sale igual. El dominio admite asignar la guía desde ese estado. | Un proceso que reintente automáticamente la solicitud de la guía. Mientras no se asigne, el cliente no recibe el enlace de rastreo. | ADR-017 |
 | Liberación de reservas de órdenes canceladas | Inventario libera las reservas no concluidas al vencer su TTL (HU-002; 900 segundos por defecto). Cuando Órdenes conoce la reserva, publica `LiberacionReservaSolicitada` con el `reservaId` real. | El consumo de `LiberacionReservaSolicitada` por parte de Inventario. Una orden cancelada libera su reserva por expiración TTL y no de forma inmediata. | ADR-016 y ADR-005 |
 | Devoluciones de tipo `CAMBIO` | El registro de una devolución total o parcial con su nota de crédito fiscal y su reembolso. El tipo `CAMBIO` registra el SKU de reemplazo y lo transmite en `DevolucionRegistrada`. | La nueva reserva y el despacho del producto de reemplazo. | Sin ADR: es alcance funcional de HU-014 (`contratos/ordenes-eventos-v1.md`, evento 11) |
-| Autoescalado en Kubernetes | `deploy/k8s/consulta-estado-hpa.yaml` define el Deployment, el Service y el HPA de Consulta de Estado (2 a 10 réplicas, umbrales de 70% de CPU y 80% de memoria) como evidencia documental de la plataforma de producción. El MVP demuestra réplicas manuales de `consulta-estado-api` balanceadas por el gateway, con `docker-compose.scale-consulta.yml` y `eac02-hu024-escalar.sh`. | El autoescalado en ejecución y los manifiestos de los demás servicios. El manifiesto existente usa una imagen con etiqueta `latest`, y los secretos (`sgo-secrets`) y el namespace (`sgo-logic`) que referencia no están definidos en el repositorio. | ADR-013 y ADR-001 |
+| Autoescalado en Kubernetes | `deploy/k8s/consulta-estado-hpa.yaml` define el Deployment, el Service y el HPA de Consulta de Estado (2 a 10 réplicas, umbrales de 70% de CPU y 80% de memoria) como evidencia documental de la plataforma de producción. El MVP demuestra réplicas manuales de `consulta-estado-api` balanceadas por el gateway, con `scripts/escalabilidad/docker-compose.scale.yml` y `scripts/pruebas-carga/eac02-hu024-escalar.sh`. | El autoescalado en ejecución y los manifiestos de los demás servicios. El manifiesto existente usa una imagen con etiqueta `latest`, y los secretos (`sgo-secrets`) y el namespace (`sgo-logic`) que referencia no están definidos en el repositorio. | ADR-013 y ADR-001 |
 
 ---
 

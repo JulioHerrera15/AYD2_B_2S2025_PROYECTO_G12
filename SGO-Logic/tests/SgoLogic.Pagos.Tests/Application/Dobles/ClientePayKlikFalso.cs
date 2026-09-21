@@ -1,3 +1,4 @@
+using SgoLogic.Mocks.PayKlik;
 using SgoLogic.Pagos.Api.Application.Pagos;
 
 namespace SgoLogic.Pagos.Tests.Application.Dobles;
@@ -64,6 +65,43 @@ public sealed class ClientePayKlikFalso : IClientePayKlik
                 "4242", "VISA", DateTime.UtcNow));
         });
     }
+
+    /// <summary>
+    /// PayKlik responde que el token no sirve (422 con un codigo TOKEN_*). El cliente
+    /// real lo traduce a <see cref="TokenMedioPagoInvalidoException" />.
+    /// </summary>
+    public static ClientePayKlikFalso TokenNoValido(string codigo) =>
+        new(_ => Task.FromException<ResultadoPayKlik>(
+            new TokenMedioPagoInvalidoException(codigo, "PayKlik rechazo el token del medio de pago.")));
+
+    /// <summary>
+    /// Se comporta como el cobro del mock de PayKlik: resuelve el token contra un
+    /// <see cref="AlmacenTokens" /> real, lo consume y devuelve los ultimos cuatro y
+    /// la marca de la tarjeta tokenizada. Un token inexistente, vencido o ya usado
+    /// lanza <see cref="TokenMedioPagoInvalidoException" />, igual que el 422.
+    /// </summary>
+    public static ClientePayKlikFalso ResuelveTokens(AlmacenTokens almacen) =>
+        new(peticion =>
+        {
+            var consumo = almacen.Consumir(peticion.TokenMedioPago);
+
+            if (consumo.Resultado != ResultadoConsumoToken.Consumido)
+            {
+                var codigo = consumo.Resultado switch
+                {
+                    ResultadoConsumoToken.Vencido => CodigosToken.Vencido,
+                    ResultadoConsumoToken.YaUsado => CodigosToken.YaUsado,
+                    _ => CodigosToken.Invalido
+                };
+
+                return Task.FromException<ResultadoPayKlik>(
+                    new TokenMedioPagoInvalidoException(codigo, "PayKlik rechazo el token del medio de pago."));
+            }
+
+            return Task.FromResult(new ResultadoPayKlik(
+                "PK-TEST-TOKEN", EstadoRespuestaPayKlik.APROBADO, "00", "Cargo aprobado",
+                consumo.Tarjeta!.UltimosCuatro, consumo.Tarjeta.Marca, DateTime.UtcNow));
+        });
 
     /// <summary>Simula el disyuntor abierto: lanza sin registrar la peticion.</summary>
     public static ClientePayKlikFalso CircuitoAbierto() =>

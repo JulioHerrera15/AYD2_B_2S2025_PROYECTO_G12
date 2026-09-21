@@ -107,11 +107,15 @@ public sealed class IntentoPago
         string codigoRespuesta,
         string mensajeRespuesta,
         int latenciaMs,
-        DateTime? finalizadoEn = null)
+        DateTime? finalizadoEn = null,
+        string? ultimosCuatro = null,
+        string? marca = null)
     {
         Estado = EstadoIntentoPago.RECHAZADO;
         CodigoRespuesta = codigoRespuesta;
         MensajeRespuesta = mensajeRespuesta;
+        UltimosCuatro = ultimosCuatro ?? UltimosCuatro;
+        Marca = marca ?? Marca;
         LatenciaMs = latenciaMs;
         FinalizadoEn = (finalizadoEn ?? DateTime.UtcNow).ToUniversalTime();
     }

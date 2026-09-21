@@ -64,7 +64,9 @@ public sealed class ServicioConfirmacionOrdenTests
         Moneda: Moneda.GTQ,
         MedioPago: medioPago,
         Impuestos: 150.00m,
-        Lineas: new[] { new CrearLineaOrdenRequest("SKU-LB-00871", "Refrigeradora 12 pies", 1, 1250.00m) });
+        Lineas: new[] { new CrearLineaOrdenRequest("SKU-LB-00871", "Refrigeradora 12 pies", 1, 1250.00m) },
+        // La tarjeta exige el token que emitio PayKlik (ADR-010); los demas medios no lo llevan.
+        TokenMedioPago: medioPago == "TARJETA" ? "tok_pk_9f2a7c41d8e0b3a6c5d4e1f2" : null);
 
     private static Orden CrearOrdenEn(params EstadoOrden[] camino)
     {

@@ -172,6 +172,38 @@
                     <span class="material-symbols-outlined text-secondary text-[18px]">verified_user</span>
                     <span>Conformidad PCI-DSS: Ningún número de tarjeta (PAN) ni CVV se almacena ni procesa en nuestros servidores.</span>
                 </div>
+
+                <!-- Panel de datos de tarjeta — solo visible con TARJETA -->
+                <div id="panel-tarjeta" class="mt-4 pt-4 border-t border-border-subtle/50 flex flex-col gap-3">
+                    <p class="text-xs font-semibold text-on-surface-variant flex items-center gap-1.5">
+                        <span class="material-symbols-outlined text-[16px] text-secondary">lock</span>
+                        Datos de tarjeta — tokenizados por PayKlik, nunca llegan a nuestros servidores
+                    </p>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div class="sm:col-span-2">
+                            <label class="block text-xs font-semibold text-on-surface-variant mb-1">Número de Tarjeta</label>
+                            <input id="pan-input" type="text" inputmode="numeric" maxlength="19"
+                                   placeholder="0000 0000 0000 0000" autocomplete="cc-number"
+                                   class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary tracking-widest" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-on-surface-variant mb-1">Vencimiento (MM/AA)</label>
+                            <input id="exp-input" type="text" inputmode="numeric" maxlength="5"
+                                   placeholder="MM/AA" autocomplete="cc-exp"
+                                   class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary" />
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-on-surface-variant mb-1">CVV</label>
+                            <input id="cvv-input" type="password" inputmode="numeric" maxlength="4"
+                                   placeholder="•••" autocomplete="cc-csc"
+                                   class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary" />
+                        </div>
+                    </div>
+                    <!-- Campo oculto que recibirá el token de PayKlik -->
+                    <input type="hidden" id="token-medio-pago" name="tokenMedioPago" />
+                    <!-- Mensaje de estado de tokenización -->
+                    <div id="tokenizacion-status" class="hidden text-xs text-text-muted"></div>
+                </div>
             </div>
         </div>
 
@@ -226,7 +258,8 @@
                 </div>
 
                 <!-- Submit Button -->
-                <button type="submit"
+                <button type="button" id="btn-confirmar"
+                        onclick="tokenizarYConfirmar(event)"
                         class="w-full mt-6 bg-primary text-on-primary py-3 px-4 rounded-xl text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all shadow-sm flex items-center justify-center gap-2">
                     <span class="material-symbols-outlined text-[20px]">lock</span>
                     Confirmar y Pagar Orden
@@ -243,11 +276,12 @@
 </div>
 
 <script>
+    // ── Toggle método de entrega ──────────────────────────────────────────────
     function toggleEntrega(valor) {
         const panelDomicilio = document.getElementById('panel-domicilio');
-        const panelTienda = document.getElementById('panel-tienda');
+        const panelTienda    = document.getElementById('panel-tienda');
         const labelDomicilio = document.getElementById('label-domicilio');
-        const labelTienda = document.getElementById('label-tienda');
+        const labelTienda    = document.getElementById('label-tienda');
 
         if (valor === 'RECOGIDA_TIENDA') {
             panelDomicilio.classList.add('hidden');
@@ -263,6 +297,82 @@
             labelDomicilio.classList.remove('border-border-subtle/80');
             labelTienda.classList.remove('border-primary');
             labelTienda.classList.add('border-border-subtle/80');
+        }
+    }
+
+    // ── Toggle panel de tarjeta según método de pago ──────────────────────────
+    document.querySelectorAll('input[name="medioPago"]').forEach(radio => {
+        radio.addEventListener('change', function () {
+            const panelTarjeta = document.getElementById('panel-tarjeta');
+            if (this.value === 'TARJETA') {
+                panelTarjeta.classList.remove('hidden');
+            } else {
+                panelTarjeta.classList.add('hidden');
+            }
+        });
+    });
+
+    // ── Tokenización PCI-DSS: PAN → PayKlik → token, nunca pasa por SgoLogic.Web ──
+    async function tokenizarYConfirmar(e) {
+        const btn = document.getElementById('btn-confirmar');
+        const statusEl = document.getElementById('tokenizacion-status');
+        const medioPago = document.querySelector('input[name="medioPago"]:checked')?.value;
+
+        // Si el medio de pago no es TARJETA, enviar el formulario directamente
+        if (medioPago !== 'TARJETA') {
+            btn.closest('form').submit();
+            return;
+        }
+
+        const pan = document.getElementById('pan-input').value.replace(/\s/g, '');
+        const cvv = document.getElementById('cvv-input').value;
+        const exp = document.getElementById('exp-input').value;
+
+        if (!pan || !cvv || !exp) {
+            statusEl.textContent = 'Completa todos los datos de la tarjeta.';
+            statusEl.classList.remove('hidden', 'text-secondary');
+            statusEl.classList.add('text-error');
+            return;
+        }
+
+        btn.disabled = true;
+        statusEl.textContent = 'Tokenizando con PayKlik...';
+        statusEl.classList.remove('hidden', 'text-error');
+        statusEl.classList.add('text-text-muted');
+
+        try {
+            // ⚠️ SEGURIDAD RES-08: el PAN se envía DIRECTAMENTE a PayKlik (mock en 8084).
+            // Nunca transita por SgoLogic.Web, el gateway, ni ningún servicio propio.
+            const payklikUrl = window.location.hostname === 'localhost'
+                ? 'http://localhost:8084/api/tokenizar'
+                : '/api/pagos/tokenizar'; // fallback en docker a través del gateway
+
+            const tokenRes = await fetch(payklikUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pan, cvv, vencimiento: exp })
+            });
+
+            if (!tokenRes.ok) throw new Error(`PayKlik respondió ${tokenRes.status}`);
+
+            const { token } = await tokenRes.json();
+
+            // Solo el token (nunca el PAN) se pone en el campo oculto del formulario
+            document.getElementById('token-medio-pago').value = token;
+
+            statusEl.textContent = '✓ Tarjeta tokenizada — enviando orden...';
+            statusEl.classList.remove('text-text-muted', 'text-error');
+            statusEl.classList.add('text-secondary');
+
+            // Pequeño delay visual antes de enviar
+            setTimeout(() => btn.closest('form').submit(), 400);
+
+        } catch (err) {
+            console.error('Error tokenizando:', err);
+            statusEl.textContent = 'No se pudo tokenizar la tarjeta. Verifica los datos e intenta de nuevo.';
+            statusEl.classList.remove('text-text-muted', 'text-secondary');
+            statusEl.classList.add('text-error');
+            btn.disabled = false;
         }
     }
 </script>

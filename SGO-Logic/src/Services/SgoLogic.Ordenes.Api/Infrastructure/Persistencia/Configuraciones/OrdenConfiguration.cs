@@ -137,6 +137,13 @@ public sealed class OrdenConfiguration : IEntityTypeConfiguration<Orden>
             .IsRequired()
             .HasDefaultValue("CF");
 
+        // Token opaco de la tarjeta (ADR-010): nullable y transitorio. Se escribe al
+        // crear la orden y se pone en NULL al emitir CobroSolicitado. Nunca guarda
+        // numero de tarjeta, CVV ni vencimiento: esos no entran a SGO-Logic.
+        builder.Property(orden => orden.TokenMedioPago)
+            .HasColumnName("token_medio_pago")
+            .HasMaxLength(Orden.LongitudMaximaTokenMedioPago);
+
         builder.Property(orden => orden.PagoId)
             .HasColumnName("pago_id")
             .HasMaxLength(128);
