@@ -311,6 +311,8 @@ services:
         condition: service_healthy
       logiexpress-mock:
         condition: service_healthy
+      inventario-api:
+        condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
       interval: 10s
@@ -504,6 +506,16 @@ services:
       notificaciones-api:
         condition: service_healthy
       mock-mensajeria:
+        condition: service_healthy
+      ordenes-api:
+        condition: service_healthy
+      pagos-api:
+        condition: service_healthy
+      facturacion-api:
+        condition: service_healthy
+      inventario-api:
+        condition: service_healthy
+      despacho-api:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
