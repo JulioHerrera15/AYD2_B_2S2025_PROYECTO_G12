@@ -1,3 +1,4 @@
+using SgoLogic.BuildingBlocks.Idempotencia;
 using SgoLogic.BuildingBlocks.Messaging;
 using SgoLogic.Contracts;
 using SgoLogic.Contracts.Eventos.Despacho;
