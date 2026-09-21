@@ -8,19 +8,28 @@
 # Tres bloques independientes, cada uno con sus propios chequeos:
 #
 #   1) RES-08 — ningun PAN, CVV ni fecha de vencimiento de tarjeta se persiste
-#      en ninguna base ni aparece en los logs. Genera una orden con pago real
-#      (usando un marcador de prueba reconocible) y barre las tres instancias
-#      de Postgres (db-operacional, db-finanzas, db-auditoria) y los logs de
-#      todos los contenedores. Complementa (no duplica) el test por reflexion
-#      ya existente en tests/SgoLogic.Pagos.Tests/Application/ServicioCobroTests.cs
-#      (Ningun_tipo_del_contexto_Pagos_expone_campos_de_PAN_CVV_o_vencimiento):
-#      ese test verifica la FORMA de los tipos de Pagos en tiempo de compilacion;
-#      este bloque verifica el CONTENIDO real de las bases en tiempo de ejecucion.
+#      en ninguna base ni aparece en los logs. Desde que PayKlik tokeniza de
+#      verdad (ADR-010): tokeniza una tarjeta de prueba contra el mock
+#      (POST /v1/tokens, el unico punto de todo el sistema que ve un PAN/CVV,
+#      y corre dentro del proceso del mock), genera una orden real con ese
+#      token y con un marcador de texto libre reconocible, y barre las tres
+#      instancias de Postgres (db-operacional, db-finanzas, db-auditoria) y
+#      los logs de todos los contenedores. Complementa (no duplica) los tests
+#      ya existentes en tests/SgoLogic.Pagos.Tests/Application/ServicioCobroTests.cs
+#      CobroTokenizadoTests.cs y Infrastructure/TokenizacionMockTests.cs:
+#      esos prueban la FORMA de los tipos y el comportamiento contra un EF
+#      Core InMemory/doble de PayKlik, en tiempo de compilacion o con dobles;
+#      este bloque prueba el CONTENIDO real de las bases y del mock real
+#      corriendo, de punta a punta.
 #   2) Validacion de JWT — el unico endpoint protegido por [Authorize] en todo
 #      el sistema (POST /api/carrito/asociar) rechaza sin token, con token
 #      malformado, expirado y firmado con otra clave, y acepta uno valido.
 #      Ademas confirma y reporta (no corrige) que el API Gateway no exige
-#      autenticacion en ninguna ruta, ni siquiera pagos o facturacion.
+#      autenticacion en ninguna ruta, ni siquiera pagos o facturacion. ADR-020
+#      (2026-09-21) ya documenta la decision de validar el JWT en el borde con
+#      una bandera Gateway:ExigirJwt por defecto apagada, pero esa bandera y
+#      su validacion todavia no existen en el codigo (ver SEGURIDAD.md) — el
+#      comportamiento medido aqui sigue siendo el de sin ninguna proteccion.
 #   3) Permisos de Auditoria — reusa la evidencia ya demostrada por
 #      PermisosInmutabilidadTests (rol restringido sin UPDATE/DELETE, trigger
 #      que bloquea incluso al dueno) contra la base real, sin reimplementar
@@ -135,38 +144,76 @@ echo ""
 echo "--- Bloque 1: RES-08 (no persistencia de PAN/CVV) ---"
 
 RUN_ID="segsweep-$(date +%s)"
+PAYKLIK_URL="${PAYKLIK_URL:-http://localhost:8084}"
 PAN_PRUEBA="4111111111111111"
 CVV_PRUEBA="123"
-VENC_PRUEBA="12/29"
-MARCADOR_PAN="NUMERO_PRUEBA=${PAN_PRUEBA}"
+MES_EXPIRACION=12
+ANIO_EXPIRACION=$(( $(date +%Y) + 3 ))
+VENC_PRUEBA="${MES_EXPIRACION}/$(printf '%02d' $((ANIO_EXPIRACION % 100)))"
 MARCADOR_CVV="CVV_PRUEBA=${CVV_PRUEBA}"
 MARCADOR_VENC="VENC_PRUEBA=${VENC_PRUEBA}"
-DESCRIPCION_CANARIO="Prueba RES-08 ${RUN_ID}: ${MARCADOR_PAN} ${MARCADOR_CVV} ${MARCADOR_VENC}"
+DESCRIPCION_CANARIO="Prueba RES-08 ${RUN_ID}: NUMERO_PRUEBA=${PAN_PRUEBA} ${MARCADOR_CVV} ${MARCADOR_VENC}"
 SKU_CANARIO="SKU-SEGURIDAD-${RUN_ID}"
 
-echo "Marcador de prueba inyectado (no es un PAN real, es un canario para el barrido): ${MARCADOR_PAN}"
+echo "PAN de prueba (Visa de prueba estandar, no real) usado para tokenizar Y como canario de texto libre: ${PAN_PRUEBA}"
 
-# --- 1.0 Generar una orden real con pago, cargando el marcador en la
-# descripcion de linea (el unico campo de texto libre que un cliente controla
-# y que efectivamente viaja hasta el evento de dominio -> Auditoria). Esto NO
-# simula un atacante metiendo un PAN en un campo de pago: se verifico en el
-# codigo que ningun endpoint de creacion/confirmacion de orden ni de Pagos
-# acepta numero de tarjeta o CVV como entrada (ver SEGURIDAD.md). El marcador
-# sirve para demostrar que el barrido de abajo SI detecta datos sensibles en
-# cualquier tabla/columna de texto o jsonb donde de verdad aparezcan.
+# --- 1.0a Tokenizar una tarjeta de prueba contra PayKlik, igual que lo haria
+# el navegador (ADR-010, ADR-020 en README/tokenizacion): POST /v1/tokens es
+# el UNICO punto de todo el sistema que ve el PAN/CVV, y corre dentro del
+# proceso del mock, nunca dentro de SGO-Logic. Complementa (no duplica) los
+# tests unitarios de Angel en
+# tests/SgoLogic.Pagos.Tests/Infrastructure/TokenizacionMockTests.cs
+# y tests/SgoLogic.Pagos.Tests/Application/CobroTokenizadoTests.cs, que
+# prueban lo mismo contra un EF Core InMemory y un doble de PayKlik: este
+# bloque lo prueba contra el sistema real, de punta a punta, con Postgres de
+# verdad y el mock corriendo en su propio contenedor.
+TOKEN_OK=1
+TOKEN_PAGO=""
+RESP_TOKEN=$(curl -sf -X POST "${PAYKLIK_URL}/v1/tokens" -H "Content-Type: application/json" \
+  -d "{\"numeroTarjeta\":\"${PAN_PRUEBA}\",\"cvv\":\"${CVV_PRUEBA}\",\"mesExpiracion\":${MES_EXPIRACION},\"anioExpiracion\":${ANIO_EXPIRACION}}") || TOKEN_OK=0
+if [ "$TOKEN_OK" -eq 1 ]; then
+  TOKEN_PAGO=$(extraer_campo "$RESP_TOKEN" "token")
+  TOKEN_ULTIMOS_CUATRO=$(extraer_campo "$RESP_TOKEN" "ultimosCuatro")
+  TOKEN_MARCA=$(extraer_campo "$RESP_TOKEN" "marca")
+  if [ -z "$TOKEN_PAGO" ]; then TOKEN_OK=0; fi
+fi
+if [ "$TOKEN_OK" -eq 1 ]; then
+  echo "Tarjeta tokenizada contra PayKlik: token=${TOKEN_PAGO} ultimosCuatro=${TOKEN_ULTIMOS_CUATRO} marca=${TOKEN_MARCA}"
+else
+  echo "ADVERTENCIA: no se pudo tokenizar la tarjeta de prueba contra ${PAYKLIK_URL}/v1/tokens." >&2
+  FALLAS_EJECUCION+=("tokenizacion de tarjeta de prueba contra PayKlik")
+fi
+
+# --- 1.0b Confirmar que TARJETA sin token se sigue rechazando (limite duro:
+# ExcepcionTokenMedioPagoRequerido). Si esto alguna vez responde 201, alguien
+# quito la validacion y volvio a abrir la puerta a cobrar sin tokenizar.
+CODIGO_SIN_TOKEN_ORDEN=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${GATEWAY}/api/ordenes" \
+  -H "Content-Type: application/json" \
+  -d "{\"clienteId\":\"SEGURIDAD-${RUN_ID}-sin-token\",\"canal\":\"WEB\",\"metodoEntrega\":\"RECOGIDA_TIENDA\",\"moneda\":\"GTQ\",\"medioPago\":\"TARJETA\",\"impuestos\":12.0,\"lineas\":[{\"sku\":\"${SKU_CANARIO}\",\"descripcion\":\"sin token\",\"cantidad\":1,\"precioUnitario\":100.0}]}")
+echo "POST /api/ordenes con TARJETA y sin tokenMedioPago -> ${CODIGO_SIN_TOKEN_ORDEN} (se espera 400)"
+if [ "$CODIGO_SIN_TOKEN_ORDEN" != "400" ]; then
+  HALLAZGOS_BLOQUEANTES+=("POST /api/ordenes con medioPago=TARJETA y sin tokenMedioPago respondio ${CODIGO_SIN_TOKEN_ORDEN}, se esperaba 400 (ExcepcionTokenMedioPagoRequerido)")
+fi
+
+# --- 1.0c Generar la orden real con el token obtenido en 1.0a, cargando
+# ademas el marcador canario en la descripcion de linea (el unico campo de
+# texto libre que un cliente controla y que efectivamente viaja hasta el
+# evento de dominio -> Auditoria). El token SI es un dato real que ahora
+# cruza el sistema (Ordenes -> Pagos -> PayKlik): por eso 1.3/1.4 mas abajo
+# verifican su ciclo de vida, no solo el marcador de texto libre.
 ORDEN_ID=""
-CANARIO_OK=1
-{
+CANARIO_OK=$TOKEN_OK
+if [ "$CANARIO_OK" -eq 1 ]; then
   curl -sf -X PUT "${GATEWAY}/api/inventario/existencias" \
     -H "Content-Type: application/json" \
     -d "{\"sku\":\"${SKU_CANARIO}\",\"ubicacionId\":\"CD-01\",\"tipoUbicacion\":\"CENTRO_DISTRIBUCION\",\"cantidadFisica\":10}" \
-    > /dev/null
-} || CANARIO_OK=0
+    > /dev/null || CANARIO_OK=0
+fi
 
 if [ "$CANARIO_OK" -eq 1 ]; then
   CREAR_BODY=$(python3 -c "
 import json, sys
-cliente_id, sku, descripcion = sys.argv[1], sys.argv[2], sys.argv[3]
+cliente_id, sku, descripcion, token = sys.argv[1], sys.argv[2], sys.argv[3], sys.argv[4]
 print(json.dumps({
     'clienteId': cliente_id,
     'canal': 'WEB',
@@ -174,6 +221,7 @@ print(json.dumps({
     'moneda': 'GTQ',
     'medioPago': 'TARJETA',
     'impuestos': 12.0,
+    'tokenMedioPago': token,
     'lineas': [{
         'sku': sku,
         'descripcion': descripcion,
@@ -181,7 +229,7 @@ print(json.dumps({
         'precioUnitario': 100.0
     }]
 }))
-" "SEGURIDAD-${RUN_ID}" "$SKU_CANARIO" "$DESCRIPCION_CANARIO")
+" "SEGURIDAD-${RUN_ID}" "$SKU_CANARIO" "$DESCRIPCION_CANARIO" "$TOKEN_PAGO")
   RESP_ORDEN=$(curl -sf -X POST "${GATEWAY}/api/ordenes" -H "Content-Type: application/json" -d "$CREAR_BODY") || CANARIO_OK=0
   if [ "$CANARIO_OK" -eq 1 ]; then
     ORDEN_ID=$(extraer_campo "$RESP_ORDEN" "id")
@@ -234,7 +282,7 @@ barrer_contenedor() {
     local archivo="${TMP_DIR}/barrido_${etiqueta_contenedor}_${base}.txt"
     if compose exec -T -e PGPASSWORD="$clave" "$contenedor" \
         psql -U "$usuario" -d "$base" -v ON_ERROR_STOP=1 -tA \
-        -v patron1="%${MARCADOR_PAN}%" -v patron2="%${MARCADOR_CVV}%" -v patron3="%${MARCADOR_VENC}%" \
+        -v patron1="%${PAN_PRUEBA}%" -v patron2="%${MARCADOR_CVV}%" -v patron3="%${MARCADOR_VENC}%" \
         < "${DIR_SCRIPT}/barrido-columnas.sql" > "$archivo" 2>"${archivo}.err"; then
       rm -f "${archivo}.err"
       RESULTADOS_BARRIDO_ARCHIVOS+=("${etiqueta_contenedor}|${base}|${archivo}")
@@ -311,9 +359,11 @@ if [ "$TOTAL_PAN_SHAPED" -gt 0 ]; then
   HALLAZGOS_BLOQUEANTES+=("Se encontraron ${TOTAL_PAN_SHAPED} valor(es) con forma de numero de tarjeta (13-19 digitos seguidos) en pagos.pago/intento_pago — ver ${TMP_DIR}/pan_shaped_pagos.txt")
 fi
 
-# --- 1.4 Confirmar que lo permitido (token, ultimos 4, marca) es lo que
-# efectivamente quedo para el intento generado por esta corrida.
-if [ "$CANARIO_OK" -eq 1 ]; then
+# --- 1.4 Confirmar que Pagos resolvio la tarjeta REAL tokenizada (no un
+# valor fijo de mock): ahora que hay una tarjeta de verdad detras del token,
+# ultimos_cuatro y marca deben coincidir exactamente con lo que devolvio
+# POST /v1/tokens en 1.0a, no con cualquier valor.
+if [ "$CANARIO_OK" -eq 1 ] && [ "$TOKEN_OK" -eq 1 ]; then
   consulta_intento_canario() {
     psql_en db-finanzas "$USUARIO_FINANZAS" "$CLAVE_FINANZAS" sgo_pagos -c "
       SELECT i.token_medio_pago, i.ultimos_cuatro, i.marca, i.estado
@@ -322,8 +372,36 @@ if [ "$CANARIO_OK" -eq 1 ]; then
       ORDER BY i.intento_numero DESC LIMIT 1;
     " | tr -d '\r'
   }
-  ejecutar consulta_intento_canario "$TMP_DIR/intento_canario.txt" "intento de pago de la orden canario" || true
-  echo "Intento de pago de la orden canario (token|ultimos_cuatro|marca|estado): $(cat "$TMP_DIR/intento_canario.txt")"
+  if ejecutar consulta_intento_canario "$TMP_DIR/intento_canario.txt" "intento de pago de la orden canario"; then
+    IFS='|' read -r TOKEN_EN_INTENTO ULTIMOS_EN_INTENTO MARCA_EN_INTENTO ESTADO_EN_INTENTO < "$TMP_DIR/intento_canario.txt"
+    echo "Intento de pago de la orden canario (token|ultimos_cuatro|marca|estado): $(cat "$TMP_DIR/intento_canario.txt")"
+    if [ "$ULTIMOS_EN_INTENTO" != "$TOKEN_ULTIMOS_CUATRO" ] || [ "$MARCA_EN_INTENTO" != "$TOKEN_MARCA" ]; then
+      HALLAZGOS_BLOQUEANTES+=("pagos.intento_pago quedo con ultimos_cuatro=${ULTIMOS_EN_INTENTO}/marca=${MARCA_EN_INTENTO}, pero la tokenizacion real devolvio ultimos_cuatro=${TOKEN_ULTIMOS_CUATRO}/marca=${TOKEN_MARCA} — Pagos no esta resolviendo la tarjeta tokenizada de verdad")
+    fi
+    if [ "$TOKEN_EN_INTENTO" != "$TOKEN_PAGO" ]; then
+      HALLAZGOS_BLOQUEANTES+=("pagos.intento_pago.token_medio_pago (${TOKEN_EN_INTENTO}) no coincide con el token emitido por PayKlik (${TOKEN_PAGO})")
+    fi
+  fi
+fi
+
+# --- 1.4b El token es opaco (no es el riesgo que previene RES-08), pero
+# igual se verifica su ciclo de vida documentado: Orden.TomarTokenMedioPago()
+# lo suelta al emitir CobroSolicitado, asi que no debe quedar en la orden
+# despues de que la saga curso el cobro.
+if [ "$CANARIO_OK" -eq 1 ] && [ "$TOKEN_OK" -eq 1 ]; then
+  consulta_token_orden() {
+    psql_en db-operacional "$USUARIO_OPERACIONAL" "$CLAVE_OPERACIONAL" sgo_ordenes -c "
+      SELECT token_medio_pago FROM ordenes.orden WHERE id = '${ORDEN_ID}';
+    " | tr -d '\r'
+  }
+  if ejecutar consulta_token_orden "$TMP_DIR/token_orden.txt" "token_medio_pago de la orden canario tras el cobro"; then
+    TOKEN_RESIDUAL="$(cat "$TMP_DIR/token_orden.txt")"
+    if [ -n "$TOKEN_RESIDUAL" ]; then
+      HALLAZGOS_BLOQUEANTES+=("ordenes.orden.token_medio_pago sigue con un valor (${TOKEN_RESIDUAL}) despues de que la saga curso el cobro; TomarTokenMedioPago() deberia haberlo dejado en NULL")
+    else
+      echo "ordenes.orden.token_medio_pago quedo en NULL tras el cobro, como documenta Orden.TomarTokenMedioPago()."
+    fi
+  fi
 fi
 
 # --- 1.5 Barrido de logs de TODO el stack -----------------------------------
