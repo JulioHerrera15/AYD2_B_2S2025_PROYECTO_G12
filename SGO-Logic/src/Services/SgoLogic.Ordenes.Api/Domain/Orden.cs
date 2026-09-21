@@ -43,7 +43,8 @@ public sealed partial class Orden
         string? ubicacionSolicitadaId = null,
         DateTime? creadaEn = null,
         string receptorCui = "CF",
-        DireccionEntregaData? direccionEntrega = null)
+        DireccionEntregaData? direccionEntrega = null,
+        string? tokenMedioPago = null)
     {
         if (string.IsNullOrWhiteSpace(id))
         {
@@ -92,6 +93,13 @@ public sealed partial class Orden
 
         ValidarDireccion(direccionEntrega);
 
+        if (tokenMedioPago is not null && tokenMedioPago.Length > LongitudMaximaTokenMedioPago)
+        {
+            throw new ArgumentException(
+                $"El token del medio de pago no puede exceder {LongitudMaximaTokenMedioPago} caracteres.",
+                nameof(tokenMedioPago));
+        }
+
         Id = id;
         NumeroOrden = numeroOrden;
         ClienteId = clienteId;
@@ -106,9 +114,13 @@ public sealed partial class Orden
         Secuencia = 1;
         CreadaEn = creadaEn ?? DateTime.UtcNow;
         ReceptorCui = receptorCui;
+        TokenMedioPago = string.IsNullOrWhiteSpace(tokenMedioPago) ? null : tokenMedioPago.Trim();
 
         _lineas.AddRange(lineasMaterializadas);
     }
+
+    /// <summary>Largo maximo del token del medio de pago; coincide con la columna token_medio_pago.</summary>
+    public const int LongitudMaximaTokenMedioPago = 200;
 
     public string Id { get; private set; }
 
@@ -156,6 +168,29 @@ public sealed partial class Orden
     /// CertificacionFiscalSolicitada; no cambia despues de creada la orden.
     /// </summary>
     public string ReceptorCui { get; private set; }
+
+    /// <summary>
+    /// Token opaco de la tarjeta que emitio PayKlik (ADR-010). Existe solo para
+    /// cruzar el tramo entre crear la orden y emitir CobroSolicitado, que sale
+    /// despues, cuando Inventario confirma la reserva. Se pone en null en cuanto
+    /// se emite el evento (<see cref="TomarTokenMedioPago" />) o la orden llega a un
+    /// estado terminal sin haberlo emitido. Nunca sale en OrdenDto ni en OrdenCreada,
+    /// OrdenEstadoCambiado o cualquier otro evento: solo en CobroSolicitado.
+    /// No es el numero de tarjeta ni el CVV: esos no entran a SGO-Logic.
+    /// </summary>
+    public string? TokenMedioPago { get; private set; }
+
+    /// <summary>
+    /// Entrega el token para armar CobroSolicitado y lo suelta: despues de esto la
+    /// orden ya no lo conserva. Devuelve null si no hay (medio de pago sin token, o
+    /// un segundo CobroSolicitado de la misma orden).
+    /// </summary>
+    public string? TomarTokenMedioPago()
+    {
+        var token = TokenMedioPago;
+        TokenMedioPago = null;
+        return token;
+    }
 
     /// <summary>
     /// Identificador real de la reserva de inventario (el reservaId que devuelve
@@ -243,6 +278,13 @@ public sealed partial class Orden
         var estadoAnterior = Estado;
         Estado = estadoNuevo;
         Secuencia += 1;
+
+        // Una orden que termina (rechazada, cancelada) antes de cobrarse no vuelve a
+        // necesitar el token: no se deja guardado.
+        if (EsTerminal)
+        {
+            TokenMedioPago = null;
+        }
 
         var transicion = new TransicionOrden(
             Id,

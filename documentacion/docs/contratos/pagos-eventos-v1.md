@@ -1,15 +1,40 @@
-# Contrato de eventos del contexto Pagos — v1.1
+# Contrato de eventos del contexto Pagos — v1.2
 
 **Proyecto:** SGO-Logic — Fase 2
 **Curso:** Análisis y Diseño de Sistemas 2, Sección B
 **Contexto emisor:** Pagos
 **Estado:** propuesto para congelamiento
-**Fecha:** 2026-09-12
+**Fecha:** 2026-09-20
 **Depende de:** `sgo-eventos-envelope-v1.md`
 
 ---
 
-## 0. Cambios respecto a v1
+## 0. Cambios respecto a v1.1
+
+Se ejecuta la tokenización de ADR-010: el cobro con `TARJETA` se hace con el token
+que PayKlik emite al tokenizar la tarjeta en el navegador, que Órdenes propaga en
+`CobroSolicitado.tokenMedioPago` (`ordenes-eventos-v1`, evento 5). El contrato de
+eventos de Pagos cambia en un solo punto: el campo `codigoRespuesta` de
+`PagoRechazado` admite cuatro códigos internos nuevos, que distinguen un problema
+con el token de un rechazo del proveedor.
+
+| Código | Cuándo se emite |
+|---|---|
+| `TOKEN_REQUERIDO` | El cobro es con `TARJETA` y la solicitud no trae token. Pagos lo rechaza sin invocar a PayKlik. |
+| `TOKEN_INVALIDO` | PayKlik respondió 422: no conoce el token. |
+| `TOKEN_VENCIDO` | PayKlik respondió 422: el token expiró antes del cobro. |
+| `TOKEN_YA_USADO` | PayKlik respondió 422: el token ya se usó en otro cargo (son de un solo uso). |
+
+Cambio aditivo (envelope sección 8): no agrega ni quita campos, no cambia sus
+tipos ni la lista de eventos, y ningún consumidor actual interpreta el valor de
+`codigoRespuesta` de `PagoRechazado`; el consumidor de Órdenes trata cualquier
+`PagoRechazado` igual. No requiere renegociar con los consumidores.
+
+Un problema con el token es un error del cliente, no una falla del proveedor: el
+pago queda `RECHAZADO` (no `PENDIENTE`), no hay enlace de reintento, no hay
+reintento automático y no cuenta para el disyuntor (regla 1 de la sección 6).
+
+## 0.0 Cambios de v1.1 respecto a v1
 
 Se agregan dos eventos de resultado de reembolso (`ReembolsoAplicado`,
 `ReembolsoFallido`), que Pagos publica al consumir `ordenes.devolucion.registrada`
@@ -52,6 +77,12 @@ contexto:** número completo de tarjeta (PAN), código de seguridad (CVV/CVC) y
 fecha de vencimiento completa (RES-08, EV-25, ADR-010). Solo se transmite y se
 persiste: token del proveedor, últimos cuatro dígitos y marca. El token del medio
 de pago **no viaja** en los eventos de resultado; se queda en la base de Pagos.
+
+El número de tarjeta y el CVV existen únicamente en el navegador y en PayKlik, que
+tokeniza la tarjeta (`POST /v1/tokens`) y descarta esos datos. Pagos recibe el
+token en `CobroSolicitado.tokenMedioPago` (`ordenes-eventos-v1`, evento 5), lo
+envía a PayKlik en el cargo y persiste el token, los últimos cuatro dígitos y la
+marca que PayKlik devuelve. El flujo completo está en la sección 14.3.1 del DDA.
 
 ---
 
@@ -132,6 +163,12 @@ recibe dos `data` distintos, `pagos.ordenes` no usa esa clase base: despacha por
    desenlace de la invocación a PayKlik:
    - Aprobado → `PagoAplicado`.
    - Rechazado → `PagoRechazado`.
+   - Cobro con `TARJETA` sin token, o token que PayKlik declara inexistente,
+     vencido o ya usado (422) → `PagoRechazado` con `codigoRespuesta`
+     `TOKEN_REQUERIDO`, `TOKEN_INVALIDO`, `TOKEN_VENCIDO` o `TOKEN_YA_USADO`. Es un
+     error del cliente y no una falla del proveedor: no hay reintento, no hay
+     enlace de reintento y el disyuntor no lo cuenta. Con `TOKEN_REQUERIDO` Pagos
+     ni siquiera invoca a PayKlik.
    - Timeout, 5xx o excepción de red → `PagoPendiente` (con enlace de reintento).
 2. **Un reembolso produce exactamente un evento de resultado**, con la misma
    lógica de desenlace que el cobro pero sin enlace de reintento ni estado
@@ -215,7 +252,7 @@ forma explícita.
 | `medioPago` | string | sí | Enum `MedioPago`. |
 | `intentoNumero` | integer | sí | Número del intento rechazado. |
 | `estado` | string | sí | Siempre `"RECHAZADO"`. |
-| `codigoRespuesta` | string | sí | Código del proveedor (`"51"` fondos insuficientes, etc.). |
+| `codigoRespuesta` | string | sí | Código del proveedor (`"51"` fondos insuficientes, etc.) o, desde v1.2, uno de los códigos internos de Pagos `"TOKEN_REQUERIDO"`, `"TOKEN_INVALIDO"`, `"TOKEN_VENCIDO"` y `"TOKEN_YA_USADO"` (sección 0), que indican un problema con el token del medio de pago y no un rechazo del proveedor. |
 | `ocurridoEn` | string | sí | ISO 8601 UTC. |
 
 ```json

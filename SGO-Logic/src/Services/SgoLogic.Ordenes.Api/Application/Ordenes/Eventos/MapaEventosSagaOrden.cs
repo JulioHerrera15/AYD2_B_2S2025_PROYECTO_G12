@@ -102,7 +102,9 @@ public static class MapaEventosSagaOrden
                 Moneda: orden.Moneda,
                 Monto: orden.Total,
                 MedioPago: orden.MedioPago,
-                TokenMedioPago: null,
+                // El token cruza hacia Pagos solo aqui y la orden lo suelta al
+                // tomarlo. Ultimos cuatro y marca los resuelve PayKlik al cobrar.
+                TokenMedioPago: orden.TomarTokenMedioPago(),
                 UltimosCuatro: null,
                 Marca: null,
                 IntentoNumero: orden.Transiciones.Count(t => t.EstadoNuevo == EstadoOrden.COBRO_SOLICITADO),

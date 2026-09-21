@@ -6,6 +6,10 @@ Accept: application/json
 
 ### Crear una orden (estado inicial CREADA, emite OrdenCreada).
 # El servidor genera id (ORD-<anio>-<correlativo 6 digitos>) y numeroOrden.
+# Con medioPago TARJETA, tokenMedioPago es obligatorio: es el token que devuelve
+# POST http://localhost:8084/v1/tokens (payklik-mock) al tokenizar la tarjeta desde el
+# navegador. Nunca se envia el numero de tarjeta, el CVV ni el vencimiento. Con
+# TRANSFERENCIA o BILLETERA_DIGITAL el campo no aplica. La orden no devuelve el token.
 # @name crearOrden
 POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/
 Content-Type: application/json
@@ -16,6 +20,7 @@ Content-Type: application/json
   "metodoEntrega": "DOMICILIO",
   "moneda": "GTQ",
   "medioPago": "TARJETA",
+  "tokenMedioPago": "tok_pk_390369109c1dbac6d48a121d",
   "impuestos": 150.00,
   "ubicacionSolicitadaId": null,
   "lineas": [

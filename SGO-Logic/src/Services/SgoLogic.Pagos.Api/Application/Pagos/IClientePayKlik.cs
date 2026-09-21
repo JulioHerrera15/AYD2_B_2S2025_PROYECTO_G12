@@ -20,6 +20,10 @@ public interface IClientePayKlik
     /// <see cref="CircuitoAbiertoException" /> cuando el disyuntor esta abierto y no
     /// se llego a invocar al proveedor. El servicio de cobro traduce todas esas a
     /// pago PENDIENTE.
+    ///
+    /// Lanza <see cref="TokenMedioPagoInvalidoException" /> cuando el proveedor
+    /// responde que el token no sirve. A diferencia de las anteriores no es una falla
+    /// del proveedor: el servicio de cobro lo traduce a pago RECHAZADO.
     /// </summary>
     Task<ResultadoPayKlik> CargarAsync(
         PeticionCargoPayKlik peticion,
@@ -40,7 +44,10 @@ public interface IClientePayKlik
         CancellationToken cancelacion);
 }
 
-/// <summary>Peticion de cargo hacia PayKlik. Solo token opaco, nunca PAN ni CVV.</summary>
+/// <summary>
+/// Peticion de cargo hacia PayKlik. Solo el token opaco que emitio PayKlik al
+/// tokenizar la tarjeta en el navegador, nunca PAN ni CVV.
+/// </summary>
 public sealed record PeticionCargoPayKlik(
     string Referencia,
     string Monto,
@@ -70,6 +77,44 @@ public sealed record ResultadoPayKlik(
     string? UltimosCuatro,
     string? Marca,
     DateTime ProcesadoEn);
+
+/// <summary>
+/// Codigos de rechazo por problemas con el token del medio de pago. Son codigos
+/// internos de Pagos (no del proveedor) y viajan en <c>codigoRespuesta</c> del
+/// intento y de <c>PagoRechazado</c>; ninguno coincide con un codigo de rechazo de
+/// negocio de PayKlik (por ejemplo "51", fondos insuficientes).
+/// </summary>
+public static class CodigosToken
+{
+    /// <summary>Cobro con TARJETA sin token: Pagos lo rechaza sin llamar a PayKlik.</summary>
+    public const string Requerido = "TOKEN_REQUERIDO";
+
+    /// <summary>PayKlik no conoce el token.</summary>
+    public const string Invalido = "TOKEN_INVALIDO";
+
+    /// <summary>El token expiro antes del cobro.</summary>
+    public const string Vencido = "TOKEN_VENCIDO";
+
+    /// <summary>El token ya se uso en otro cargo (son de un solo uso).</summary>
+    public const string YaUsado = "TOKEN_YA_USADO";
+}
+
+/// <summary>
+/// PayKlik respondio 422: el token del medio de pago no sirve (inexistente, vencido
+/// o ya usado). Es un error del cliente, no una falla del proveedor: PayKlik esta
+/// arriba y respondio bien. Por eso NO cuenta para el disyuntor, NO se reintenta y
+/// el servicio de cobro lo traduce a pago RECHAZADO con <see cref="Codigo" />.
+/// </summary>
+public sealed class TokenMedioPagoInvalidoException : Exception
+{
+    public TokenMedioPagoInvalidoException(string codigo, string mensaje) : base(mensaje)
+    {
+        Codigo = codigo;
+    }
+
+    /// <summary>Uno de los valores de <see cref="CodigosToken" />.</summary>
+    public string Codigo { get; }
+}
 
 /// <summary>El proveedor no esta disponible (respondio 5xx o un cuerpo invalido).</summary>
 public sealed class PayKlikNoDisponibleException : Exception
