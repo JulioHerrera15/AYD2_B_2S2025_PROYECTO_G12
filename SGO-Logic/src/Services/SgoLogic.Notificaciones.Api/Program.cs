@@ -29,8 +29,11 @@ builder.Services.AddHttpClient<IMockMensajeriaClient, MockMensajeriaClient>(http
     http.Timeout = TimeSpan.FromSeconds(10);
 });
 
-// ── Consumidor de eventos ─────────────────────────────────────────────────────
+// ── Consumidores de eventos ───────────────────────────────────────────────────
 builder.Services.AddHostedService<NotificacionesOrdenesConsumidor>();
+// Consumidor separado para eventos de Despacho (HU-020 — listo-para-recoger)
+// Cola independiente para respetar la topología cerrada de notificaciones.ordenes
+builder.Services.AddHostedService<NotificacionesDespachoConsumidor>();
 
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();

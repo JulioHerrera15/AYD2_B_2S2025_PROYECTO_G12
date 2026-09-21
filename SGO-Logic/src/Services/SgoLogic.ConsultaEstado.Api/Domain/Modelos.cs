@@ -38,6 +38,14 @@ public sealed class OrdenVista
     public bool? RequiereReembolso { get; set; }
     public decimal? MontoReembolso { get; set; }
 
+    // ── Datos de Despacho (eventos de SgoLogic.Despacho — NO tocan Estado) ───
+    /// <summary>Id del despacho asignado por el contexto Despacho.</summary>
+    public string? DespachoId { get; set; }
+    /// <summary>Número de guía emitida por LogiExpress (null si es recogida en tienda o aún no asignada).</summary>
+    public string? GuiaDespacho { get; set; }
+    /// <summary>Estado interno del despacho (EN_PREPARACION, EN_TRANSITO, ENTREGADO, etc.).</summary>
+    public string? EstadoDespacho { get; set; }
+
     // ── Control de ordenamiento (por aggregateId) ─────────────────────────────
     /// <summary>Ultimo sequence aplicado para este aggregateId. Parte de la regla last-writer-wins.</summary>
     public int UltimoSequence { get; set; }

@@ -40,6 +40,9 @@ public sealed class ConsultaEstadoDbContext : DbContext
             b.Property(o => o.MotivoUltimoCambio).HasColumnName("motivo_ultimo_cambio");
             b.Property(o => o.RequiereReembolso).HasColumnName("requiere_reembolso");
             b.Property(o => o.MontoReembolso).HasColumnName("monto_reembolso").HasPrecision(18, 2);
+            b.Property(o => o.DespachoId).HasColumnName("despacho_id").HasMaxLength(64);
+            b.Property(o => o.GuiaDespacho).HasColumnName("guia_despacho").HasMaxLength(80);
+            b.Property(o => o.EstadoDespacho).HasColumnName("estado_despacho").HasMaxLength(30);
             b.Property(o => o.UltimoSequence).HasColumnName("ultimo_sequence");
             b.Property(o => o.CreadaEn).HasColumnName("creada_en").HasColumnType("timestamptz");
             b.Property(o => o.ActualizadaEn).HasColumnName("actualizada_en").HasColumnType("timestamptz");
