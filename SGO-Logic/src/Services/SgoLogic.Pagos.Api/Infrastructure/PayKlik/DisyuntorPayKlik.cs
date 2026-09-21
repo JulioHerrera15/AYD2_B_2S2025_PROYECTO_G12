@@ -17,6 +17,12 @@ namespace SgoLogic.Pagos.Api.Infrastructure.PayKlik;
 /// (<see cref="PayKlikNoDisponibleException" />). Un rechazo de negocio no lanza
 /// excepcion: el proveedor respondio bien, asi que el circuito lo ve como exito.
 ///
+/// No cuenta como fallo un token de medio de pago no valido
+/// (<see cref="TokenMedioPagoInvalidoException" />, el 422 de PayKlik): es un error
+/// del cliente y el proveedor esta arriba. Como ninguna de las condiciones de
+/// arriba lo cubre, el circuito lo ve como una respuesta del proveedor (exito) y la
+/// excepcion sube sin tocar la ventana de fallos.
+///
 /// Es singleton: el estado del circuito y la ventana de fallos recientes viven
 /// entre solicitudes.
 /// </summary>

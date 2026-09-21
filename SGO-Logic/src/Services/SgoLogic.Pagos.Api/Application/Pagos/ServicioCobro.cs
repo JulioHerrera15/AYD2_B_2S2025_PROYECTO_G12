@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SgoLogic.BuildingBlocks.Messaging;
 using SgoLogic.BuildingBlocks.Outbox;
+using SgoLogic.Contracts.Enumeraciones;
 using SgoLogic.Contracts.Eventos.Pagos;
 using SgoLogic.Pagos.Api.Domain;
 using SgoLogic.Pagos.Api.Infrastructure.Persistencia;
@@ -31,6 +32,13 @@ namespace SgoLogic.Pagos.Api.Application.Pagos;
 /// excepcion: son un resultado de negocio valido y se traducen a pago PENDIENTE
 /// con enlace de reintento. Solo suben las excepciones tecnicas del propio lado
 /// (base caida), para que el consumidor nackee.
+///
+/// Tokenizacion (ADR-010): el cobro con TARJETA se hace con el token que PayKlik
+/// emitio al tokenizar la tarjeta en el navegador; ningun servicio de SGO-Logic ve
+/// el numero ni el CVV. Un cobro con TARJETA sin token, o con un token que PayKlik
+/// declara invalido, vencido o ya usado, termina en pago RECHAZADO con un codigo
+/// TOKEN_* (<see cref="CodigosToken" />), sin reintento y sin contar contra el
+/// disyuntor: es un error del cliente, no una falla del proveedor.
 /// </summary>
 public sealed class ServicioCobro
 {
@@ -75,6 +83,32 @@ public sealed class ServicioCobro
             _contexto.Pagos.Add(pago);
         }
 
+        // Un cobro con TARJETA sin token no se puede cobrar: PayKlik nunca recibe el
+        // numero de tarjeta, solo el token que emitio al tokenizar en el navegador.
+        // Se rechaza sin llamar al proveedor (no es una falla suya ni pasa por el
+        // disyuntor) y el rechazo llega a Ordenes por PagoRechazado para que la saga
+        // compense.
+        if (solicitud.MedioPago == MedioPago.TARJETA && string.IsNullOrWhiteSpace(solicitud.TokenMedioPago))
+        {
+            _logger.LogWarning(
+                "Cobro de {OrdenId} con TARJETA sin token de medio de pago; se rechaza sin invocar a PayKlik.",
+                pago.OrdenId);
+
+            var ocurridoSinToken = DateTime.UtcNow;
+            var intentoSinToken = pago.RegistrarIntento(
+                solicitud.MedioPago, tokenMedioPago: null, solicitud.UltimosCuatro, solicitud.Marca);
+            _contexto.Intentos.Add(intentoSinToken);
+
+            intentoSinToken.MarcarRechazado(
+                CodigosToken.Requerido,
+                "El cobro con TARJETA requiere un token de medio de pago; no se invoco a PayKlik.",
+                latenciaMs: 0,
+                ocurridoSinToken);
+            pago.MarcarRechazado(ocurridoSinToken);
+            EncolarPagoRechazado(pago, intentoSinToken, CodigosToken.Requerido, ocurridoSinToken);
+            return pago;
+        }
+
         // El header Idempotency-Key hacia PayKlik es el identificador del PAGO, no
         // del intento: asi los reintentos (automaticos o por enlace) no duplican el
         // cargo.
@@ -113,6 +147,25 @@ public sealed class ServicioCobro
                     ("CIRCUITO_ABIERTO", "El disyuntor de PayKlik esta abierto; no se invoco al proveedor.");
                 circuitoAbierto = true;
             }
+            catch (TokenMedioPagoInvalidoException ex)
+            {
+                // El token no sirve (inexistente, vencido o ya usado). PayKlik esta
+                // arriba y respondio bien, asi que esto no es una falla del proveedor:
+                // no se reintenta, el disyuntor no lo cuenta y el pago queda RECHAZADO
+                // con un codigo TOKEN_* que lo distingue del rechazo por fondos ("51").
+                cronometro.Stop();
+                var ocurridoConTokenInvalido = DateTime.UtcNow;
+
+                _logger.LogWarning(
+                    "Cobro de {OrdenId} rechazado por token de medio de pago no valido ({Codigo}).",
+                    pago.OrdenId, ex.Codigo);
+
+                intento.MarcarRechazado(
+                    ex.Codigo, ex.Message, (int)cronometro.ElapsedMilliseconds, ocurridoConTokenInvalido);
+                pago.MarcarRechazado(ocurridoConTokenInvalido);
+                EncolarPagoRechazado(pago, intento, ex.Codigo, ocurridoConTokenInvalido);
+                return pago;
+            }
             catch (PayKlikNoDisponibleException ex)
             {
                 (codigoFalla, motivoFalla) = ("PROVEEDOR_5XX", ex.Message);
@@ -149,9 +202,14 @@ public sealed class ServicioCobro
 
                     case EstadoRespuestaPayKlik.RECHAZADO:
                         intento.MarcarRechazado(
-                            resultado.CodigoRespuesta, resultado.Mensaje, latenciaMs, ocurridoEn);
+                            resultado.CodigoRespuesta,
+                            resultado.Mensaje,
+                            latenciaMs,
+                            ocurridoEn,
+                            resultado.UltimosCuatro,
+                            resultado.Marca);
                         pago.MarcarRechazado(ocurridoEn);
-                        EncolarPagoRechazado(pago, intento, resultado, ocurridoEn);
+                        EncolarPagoRechazado(pago, intento, resultado.CodigoRespuesta, ocurridoEn);
                         return pago;
                 }
             }
@@ -224,7 +282,7 @@ public sealed class ServicioCobro
                 Marca: intento.Marca,
                 OcurridoEn: ocurridoEn));
 
-    private void EncolarPagoRechazado(Pago pago, IntentoPago intento, ResultadoPayKlik resultado, DateTime ocurridoEn) =>
+    private void EncolarPagoRechazado(Pago pago, IntentoPago intento, string codigoRespuesta, DateTime ocurridoEn) =>
         _outbox.Encolar(
             PagoRechazado.EventType,
             PagoRechazado.AggregateType,
@@ -241,7 +299,7 @@ public sealed class ServicioCobro
                 MedioPago: pago.MedioPago,
                 IntentoNumero: intento.IntentoNumero,
                 Estado: EstadoPago.RECHAZADO,
-                CodigoRespuesta: resultado.CodigoRespuesta,
+                CodigoRespuesta: codigoRespuesta,
                 OcurridoEn: ocurridoEn));
 
     private void EncolarPagoPendiente(

@@ -30,4 +30,10 @@ public sealed class PoliticaMediosPago
 
     public bool EstaHabilitado(Canal canal, MedioPago medioPago) =>
         MediosHabilitados(canal).Contains(medioPago);
+
+    /// <summary>
+    /// Indica si el medio de pago se cobra con un token de tarjeta emitido por el
+    /// proveedor (ADR-010). Solo TARJETA: transferencia y billetera no llevan token.
+    /// </summary>
+    public bool RequiereToken(MedioPago medioPago) => medioPago == MedioPago.TARJETA;
 }

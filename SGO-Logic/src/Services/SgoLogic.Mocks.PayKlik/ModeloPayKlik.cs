@@ -15,7 +15,11 @@ public enum ModoMock
     INTERMITENTE
 }
 
-/// <summary>Peticion de cargo. Nunca recibe numero de tarjeta ni CVV: solo un token opaco.</summary>
+/// <summary>
+/// Peticion de cargo. Nunca recibe numero de tarjeta ni CVV: solo el token opaco
+/// que emitio POST /v1/tokens. Para TARJETA el token es obligatorio; para los demas
+/// medios de pago se ignora.
+/// </summary>
 public sealed record PeticionCargo(
     string Referencia,
     string Monto,

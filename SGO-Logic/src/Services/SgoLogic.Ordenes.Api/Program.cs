@@ -81,6 +81,14 @@ ordenes.MapPost("/", async (
             statusCode: StatusCodes.Status400BadRequest,
             extensions: new Dictionary<string, object?> { ["codigo"] = "medio_pago_no_habilitado" });
     }
+    catch (ExcepcionTokenMedioPagoRequerido ex)
+    {
+        return Results.Problem(
+            title: "Token de medio de pago requerido",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status400BadRequest,
+            extensions: new Dictionary<string, object?> { ["codigo"] = "token_medio_pago_requerido" });
+    }
     catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
     {
         return Results.Problem(

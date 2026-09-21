@@ -18,6 +18,9 @@ public sealed class EstadoMock
     /// <summary>Almacen de idempotencia para reembolsos: clave del header Idempotency-Key -> respuesta ya calculada.</summary>
     public AlmacenIdempotenciaReembolso IdempotenciaReembolso { get; } = new();
 
+    /// <summary>Tokens de tarjeta emitidos por POST /v1/tokens. Solo en memoria: nunca se persiste.</summary>
+    public AlmacenTokens Tokens { get; } = new();
+
     public ConfiguracionMock Configuracion
     {
         get

@@ -22,6 +22,14 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes;
 /// sin ella; se ignora si el metodo es recogida en tienda. Es lo que Despacho le
 /// manda a LogiExpress al pedir la guia.
 /// </param>
+/// <param name="TokenMedioPago">
+/// Token opaco que PayKlik emitio al tokenizar la tarjeta (POST /v1/tokens, llamado
+/// directo desde el navegador). Obligatorio cuando el medio de pago es TARJETA;
+/// para transferencia o billetera no aplica y se ignora. NUNCA es el numero de
+/// tarjeta, el CVV ni el vencimiento: esos datos no entran a SGO-Logic (ADR-010).
+/// La orden lo conserva solo hasta emitir CobroSolicitado y no lo devuelve en
+/// ninguna respuesta.
+/// </param>
 public sealed record CrearOrdenRequest(
     string ClienteId,
     Canal Canal,
@@ -32,7 +40,8 @@ public sealed record CrearOrdenRequest(
     IReadOnlyList<CrearLineaOrdenRequest> Lineas,
     string? UbicacionSolicitadaId = null,
     string? ReceptorCui = null,
-    DireccionEntregaData? DireccionEntrega = null);
+    DireccionEntregaData? DireccionEntrega = null,
+    string? TokenMedioPago = null);
 
 public sealed record CrearLineaOrdenRequest(
     string Sku,

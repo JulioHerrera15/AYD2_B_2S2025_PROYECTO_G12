@@ -1034,11 +1034,11 @@ Los puertos corresponden a los publicados en el host por `SGO-Logic/docker-compo
 
 ## 14.3 Mocks de sistemas externos y fallas que simulan
 
-Los sistemas externos se simulan con mocks en contenedor que exponen el contrato conocido del sistema real y una API de administración para provocar fallas (ADR-019). Ningún mock recibe ni devuelve datos de tarjeta.
+Los sistemas externos se simulan con mocks en contenedor que exponen el contrato conocido del sistema real y una API de administración para provocar fallas (ADR-019). Ningún servicio de SGO-Logic recibe ni devuelve datos de tarjeta: el único lugar donde existen es el proceso de `payklik-mock`, que hace las veces de PayKlik al tokenizar (sección 14.3.1). Los demás mocks no reciben datos de tarjeta.
 
 | Mock | Fallas que simula | Cómo se provoca |
 |---|---|---|
-| `payklik-mock` | Latencia configurable, caída (503), rechazo del cargo por fondos insuficientes e intermitencia con probabilidad configurable. Idempotencia por `Idempotency-Key`. | `PUT /admin/modo` con `NORMAL`, `LENTO`, `CAIDO`, `RECHAZO` o `INTERMITENTE` |
+| `payklik-mock` | Latencia configurable, caída (503), rechazo del cargo por fondos insuficientes e intermitencia con probabilidad configurable, tanto en el cargo como en la tokenización. Idempotencia por `Idempotency-Key`. Tokenización de la tarjeta (`POST /v1/tokens`) con token de un solo uso y vigencia corta; el cargo con un token inexistente, vencido o ya usado responde 422, distinto del rechazo por fondos. | `PUT /admin/modo` con `NORMAL`, `LENTO`, `CAIDO`, `RECHAZO` o `INTERMITENTE`. `GET /admin/tokens` lista los tokens emitidos (token, últimos cuatro, marca y vigencia, nunca el número de tarjeta). |
 | `sat-mock` | Latencia, caída (503), rechazo de la certificación y una probabilidad de falla 503 aplicable en cualquier modo. | `PUT /admin/modo` con `NORMAL`, `LENTO`, `CAIDO` o `RECHAZO` |
 | `logiexpress-mock` | Latencia, caída y un timeout determinístico: una de cada 50 solicitudes de guía no responde. | `PUT /admin/modo`; el cambio del estado de rastreo de una guía se hace con `POST /admin/guias/{guiaId}/estado` |
 | `mock-mensajeria` | Falla del proveedor (respuesta 500) en SMS, correo y push. | Variable de configuración `MockMensajeria__ForzarFalla` o `POST /api/mensajes/config/falla?activa=true` |
@@ -1046,6 +1046,22 @@ Los sistemas externos se simulan con mocks en contenedor que exponen el contrato
 | `mock-pos` | Tienda fuera de línea con respuesta 503, 500 o timeout, por tienda o de forma masiva. Idempotencia por tienda y `eventoId`. | `POST /pos/admin/{tiendaId}/caida` y `POST /pos/admin/caida-masiva` |
 
 El cambio de estado de rastreo que se aplica en `logiexpress-mock` no se propaga por sí solo a Despacho. En una demostración, los avances de entrega se informan al webhook de Despacho (`POST /api/despacho/{ordenId}/estados`), que es lo que haría el transportista real.
+
+### 14.3.1 Flujo de tokenización de la tarjeta
+
+Este flujo ejecuta ADR-010 sin modificarlo: la tokenización se delega a PayKlik y SGO-Logic guarda solo el token y los metadatos del intento. **El número de tarjeta (PAN), el código de seguridad (CVV) y la fecha de vencimiento nunca entran al perímetro de SGO-Logic.** Ningún servicio (Órdenes, Pagos, Facturación, `api-gateway` ni `web`) los recibe, los propaga, los registra en un log ni los persiste; lo único que cruza hacia SGO-Logic es el token y sus metadatos no sensibles (últimos cuatro dígitos y marca).
+
+| Paso | Qué ocurre | Qué dato de tarjeta ve |
+|---|---|---|
+| 1. Tokenizar | El navegador envía la tarjeta directo a `POST /v1/tokens` de PayKlik (en el MVP, `payklik-mock`, puerto 8084; el mock abre CORS en ese endpoint porque lo llama el navegador). PayKlik valida el número con Luhn, el CVV de 3 o 4 dígitos y que la tarjeta no esté vencida, descarta el número y el CVV, y responde con un token opaco de un solo uso, los últimos cuatro dígitos, la marca deducida del BIN y la vigencia del token (900 segundos, configurable en `Tokenizacion:VigenciaSegundos`). | Solo el navegador y PayKlik. |
+| 2. Crear la orden | El checkout llama a `POST /api/ordenes` con el campo `tokenMedioPago`, obligatorio cuando el medio de pago es `TARJETA` y ignorado para transferencia y billetera. Órdenes lo conserva solo hasta emitir `CobroSolicitado`, porque ese evento sale después, cuando Inventario confirma la reserva: la columna `ordenes.orden.token_medio_pago` es nula salvo en ese tramo y no se devuelve en ninguna respuesta ni en ningún evento distinto de `CobroSolicitado`. | Solo el token. |
+| 3. Solicitar el cobro | `CobroSolicitado` lleva `tokenMedioPago` hacia Pagos (`ordenes-eventos-v1`, evento 5). Los campos `ultimosCuatro` y `marca` del evento quedan nulos: los resuelve PayKlik. | Solo el token. |
+| 4. Cobrar | Pagos envía el token a `POST /v1/cargos`. PayKlik lo resuelve contra su almacén en memoria, consume el token y devuelve los últimos cuatro dígitos y la marca reales de la tarjeta. Un cargo con `TARJETA` sin token se rechaza en Pagos antes de llamar a PayKlik. | Solo el token, los últimos cuatro y la marca. |
+| 5. Registrar | Pagos persiste el token, los últimos cuatro y la marca en `pagos.intento_pago`. El token no viaja en los eventos de resultado (`pagos-eventos-v1`, sección 1). | Solo el token, los últimos cuatro y la marca. |
+
+Un token inexistente, vencido o ya usado es un error del cliente, no una caída del proveedor: PayKlik responde 422 con un código (`TOKEN_INVALIDO`, `TOKEN_VENCIDO`, `TOKEN_YA_USADO`), Pagos lo registra como intento `RECHAZADO` y publica `PagoRechazado` con ese `codigoRespuesta`, sin reintento, sin enlace de reintento y sin que cuente como falla para el disyuntor (ADR-009). Así se distingue del rechazo por fondos insuficientes, que PayKlik responde con 200, estado `RECHAZADO` y código `51`.
+
+El almacén de tokens de `payklik-mock` vive solo en la memoria del proceso: no hay base de datos, un reinicio invalida los tokens y el mock conserva únicamente los últimos cuatro dígitos, la marca y el mes y año de expiración, no el número de tarjeta ni el CVV. La prueba automatizada `CobroTokenizadoTests` (`SGO-Logic/tests/SgoLogic.Pagos.Tests/Application/CobroTokenizadoTests.cs`) verifica que un cobro tokenizado no deja PAN ni CVV en la entidad persistida, en el modelo de la base ni en el payload del Outbox, y falla si se agrega a esos tipos un campo con datos de tarjeta.
 
 ## 14.4 Cambios a contratos de eventos
 
@@ -1055,7 +1071,7 @@ Todos los contratos comparten el envelope de `sgo-eventos-envelope-v1.md` (ADR-0
 |---|---|---|
 | `contratos/sgo-eventos-envelope-v1.md` | v1 | Sin cambio de versión. La topología del broker se completó en `TOPOLOGIA-MENSAJERIA.md`: colas quorum con límite de entregas y dueño de la dead letter. |
 | `contratos/ordenes-eventos-v1.md` | v1.4 | v1.1: incorpora las objeciones de los demás contextos antes del congelamiento (envelope y enumeraciones compartidos, `sequence` por agregado, evento 12 `OrdenCertificadaFiscalmente`). v1.2: implementa los eventos 11 y 12 y agrega la cola `ordenes.facturacion` y los bindings de `pagos.ordenes` y `facturacion.ordenes` a `ordenes.devolucion.registrada`. v1.3: `DevolucionRegistrada` agrega `lineas[].ubicacionOrigenReservaId` y `lineas[].reservaId`. v1.4: `DespachoSolicitado` lleva el `reservaId` real y la `direccionEntrega`; `POST /api/ordenes` acepta `direccionEntrega` como campo opcional; `LiberacionReservaSolicitada` no se publica cuando la orden no tiene reserva; se agrega la cola `ordenes.despacho`. |
-| `contratos/pagos-eventos-v1.md` | v1.1 | Agrega los eventos `ReembolsoAplicado` y `ReembolsoFallido`. Cambio aditivo. |
+| `contratos/pagos-eventos-v1.md` | v1.2 | v1.1: agrega los eventos `ReembolsoAplicado` y `ReembolsoFallido`. v1.2: `PagoRechazado.codigoRespuesta` admite los códigos internos `TOKEN_REQUERIDO`, `TOKEN_INVALIDO`, `TOKEN_VENCIDO` y `TOKEN_YA_USADO`, por el flujo de tokenización de la sección 14.3.1. Cambios aditivos. |
 | `contratos/inventario-eventos-v1.md` | v1 | Agrega el evento 3, `ReservaInventarioExpirada`, el 2026-09-12. Cambio aditivo. |
 | `contratos/facturacion-eventos-v1.md` | v1 | Sin cambio de versión: `DocumentoFiscalCertificado` y `CertificacionSatFallida`. |
 | `despacho-eventos-v1.md` | v1 | Contrato nuevo de la Fase 2: `OrigenDespachoDeterminado`, `GuiaAsignada`, `GuiaPendiente`, `PreparacionSolicitada`, `DespachoEstadoActualizado` y `PedidoListoParaRecoger`. |

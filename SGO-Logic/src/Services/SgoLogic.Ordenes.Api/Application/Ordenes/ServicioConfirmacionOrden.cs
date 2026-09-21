@@ -54,7 +54,10 @@ public sealed class ServicioConfirmacionOrden
     /// y el numero de orden los genera el servidor a partir de la secuencia
     /// <c>ordenes.orden_correlativo</c>: id ORD-&lt;anio UTC&gt;-&lt;correlativo de
     /// 6 digitos&gt;. Rechaza con <see cref="ExcepcionMedioPagoNoHabilitado" /> un
-    /// medio de pago que no este habilitado para el canal.
+    /// medio de pago que no este habilitado para el canal y con
+    /// <see cref="ExcepcionTokenMedioPagoRequerido" /> una orden con TARJETA sin
+    /// token. OrdenCreada no lleva el token: la orden lo conserva hasta emitir
+    /// CobroSolicitado.
     /// </summary>
     public async Task<OrdenDto> CrearOrdenAsync(CrearOrdenRequest solicitud, CancellationToken cancelacion)
     {
@@ -68,6 +71,15 @@ public sealed class ServicioConfirmacionOrden
         if (!_politicaMediosPago.EstaHabilitado(solicitud.Canal, medioPago))
         {
             throw new ExcepcionMedioPagoNoHabilitado(solicitud.Canal, medioPago);
+        }
+
+        // ADR-010: la tarjeta se cobra con el token que PayKlik emitio en el navegador.
+        // Aqui solo se exige y se conserva hasta CobroSolicitado; ningun dato de
+        // tarjeta llega a este servicio. Para los medios sin token se ignora.
+        var requiereToken = _politicaMediosPago.RequiereToken(medioPago);
+        if (requiereToken && string.IsNullOrWhiteSpace(solicitud.TokenMedioPago))
+        {
+            throw new ExcepcionTokenMedioPagoRequerido(medioPago);
         }
 
         var lineas = (solicitud.Lineas ?? Array.Empty<CrearLineaOrdenRequest>())
@@ -92,7 +104,8 @@ public sealed class ServicioConfirmacionOrden
             solicitud.Impuestos,
             solicitud.UbicacionSolicitadaId,
             receptorCui: receptorCui,
-            direccionEntrega: solicitud.DireccionEntrega);
+            direccionEntrega: solicitud.DireccionEntrega,
+            tokenMedioPago: requiereToken ? solicitud.TokenMedioPago : null);
 
         await _ordenes.AgregarAsync(orden, cancelacion);
 
