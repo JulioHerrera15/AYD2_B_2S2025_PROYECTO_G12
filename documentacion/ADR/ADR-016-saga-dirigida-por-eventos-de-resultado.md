@@ -22,7 +22,7 @@ Durante la construcción del MVP quedaron dos tramos del ciclo de la orden que n
 6. **Política de errores y deduplicación.** Una transición inválida o un evento desconocido se confirman sin reencolar. Un fallo transitorio se rechaza con reencolado para que actúen el límite de entregas y la dead letter (ADR-018). La deduplicación por `eventId` se registra en `ordenes.mensaje_procesado`, dentro del mismo `SaveChanges` que las transiciones y las filas de Outbox, de modo que quedan todas o ninguna.
 7. **Sin identificadores inventados.** Si la orden se cancela o se rechaza antes de que exista una reserva, no se publica `LiberacionReservaSolicitada`, porque no hay un `reservaId` real que liberar; cualquier reserva que llegue a crearse expira por TTL (ADR-005).
 
-El endpoint `POST /api/ordenes/{id}/transiciones` se conserva como herramienta de recuperación operativa y de demostración. Deja de ser un paso del flujo normal.
+El endpoint `POST /api/ordenes/{id}/transiciones`, concebido en el MVP para recorrer la máquina de estados a mano, se eliminó de Órdenes el 2026-09-21: ningún script, prueba ni pantalla lo usa y contradice esta decisión, porque permite mover la orden sin que ningún evento de resultado la respalde. La máquina de estados sigue validando toda transición que aplican los consumidores.
 
 ## Alternativas consideradas
 
@@ -40,7 +40,7 @@ Se evaluaron cinco opciones: (1) orquestación por eventos de resultado, con col
 - Cada salto entre contextos atraviesa un ciclo de polling del Outbox (2 segundos por defecto, ADR-014), por lo que el ciclo completo acumula esa latencia varias veces y el estado de la orden puede ir por detrás del estado interno del contexto de origen.
 - Los cuatro consumidores repiten un mismo patrón de consumo. La clase base común no se usa porque está tipada a un único tipo de dato por cola, así que la alineación entre los cuatro depende de revisión conjunta.
 - Una orden cancelada antes de reservar depende de la expiración por TTL para liberar cualquier reserva tardía, con el tiempo de espera que esa expiración implica.
-- Una orden detenida por una falla ajena a la saga solo se recupera con la herramienta operativa de transiciones, que requiere un operador.
+- Una orden detenida por una falla ajena a la saga no cuenta con un endpoint de recuperación: requiere la intervención directa de un operador sobre la base de datos de Órdenes.
 
 ## Preocupaciones y evidencia que atiende
 

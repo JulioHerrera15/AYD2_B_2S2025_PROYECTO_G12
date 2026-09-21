@@ -37,7 +37,7 @@ param(
     [int]$TimeoutSeg = 60,
     [string]$InventarioUrl = 'http://localhost:8094',
     [string]$DespachoUrl = 'http://localhost:8097',
-    [string]$LogiExpressUrl = 'http://localhost:8096',
+    [string]$LogiExpressUrl = 'http://localhost:8098',
     [string]$Sku = 'SKU-CAMINO-FELIZ',
     [string]$UbicacionId = 'CD-01'
 )
