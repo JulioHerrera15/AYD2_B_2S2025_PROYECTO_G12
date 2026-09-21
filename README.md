@@ -141,30 +141,33 @@ arriba) y `POST /api/auth/login`.
 
 ### Datos de ejemplo para la demo
 
-No existe un script dedicado que siembre productos, existencias y usuarios
-de una sola vez. Lo que sí existe, y es lo mismo que usan los scripts de
-prueba del repositorio (`scripts/pruebas/camino-feliz.ps1`,
-`scripts/pruebas-carga/*.js`):
+```bash
+./scripts/demo/sembrar-demo.sh
+```
 
-- **Existencias de inventario** — no hay un catálogo de productos separado:
-  un "producto" es solo un SKU con descripción libre que se manda inline al
-  crear una orden. Antes de poder confirmar órdenes contra ese SKU, hay que
-  sembrar existencias en Inventario:
+Siembra lo mínimo persistido que existe hoy para una demo: un usuario
+(`demo@sgo.local` por defecto, o `DEMO_EMAIL`) y existencias repetibles de
+tres SKUs entre centro de distribución y tienda. No hay un catálogo de
+productos separado — un "producto" es solo un SKU con descripción libre que
+se manda inline al crear una orden — así que el script no siembra nombres ni
+precios de catálogo, solo identidad e inventario.
 
-  ```bash
-  curl -X PUT http://localhost:8094/api/inventario/existencias \
-    -H "Content-Type: application/json" \
-    -d '{"sku":"SKU-DEMO","ubicacionId":"CD-01","tipoUbicacion":"CENTRO_DISTRIBUCION","cantidadFisica":100}'
-  ```
+La primera corrida registra el usuario y se detiene pidiendo el código de
+verificación (el mismo mecanismo de la sección anterior):
 
-- **Usuario** — no hay un usuario de demo pre-creado; se registra uno real
-  con el flujo de la sección anterior (`registro` → código del log →
-  `verificar` → `login`).
+```bash
+docker compose logs auth-api | grep -i codigo
+DEMO_VERIFICATION_CODE=123456 ./scripts/demo/sembrar-demo.sh
+```
 
-Si necesitas dejar el sistema con un recorrido completo de punta a punta
-(orden creada, pagada, facturada, despachada y entregada) para una demo,
-`scripts/pruebas/camino-feliz.ps1` hace exactamente eso — siembra su propio
-SKU y corre la saga completa hasta `ENTREGADA`.
+`BASE_URL`, `DEMO_EMAIL`, `DEMO_PASSWORD`, `DEMO_NOMBRE` y
+`DEMO_VERIFICATION_CODE` son configurables por variable de entorno — detalle
+en `scripts/demo/README.md`.
+
+Si en cambio necesitas un recorrido completo de punta a punta (orden creada,
+pagada, facturada, despachada y entregada) para una demo,
+`scripts/pruebas/camino-feliz.ps1` hace eso — siembra su propio SKU y corre
+la saga completa hasta `ENTREGADA`.
 
 ### Servicios y puertos
 
@@ -177,8 +180,8 @@ o movió algún servicio). Son 28 contenedores en total.
 | Servicio | Puerto | Qué es |
 |---|---|---|
 | `api-gateway` | 8080 | Punto de entrada único (YARP), enruta hacia el resto de contextos |
-| `sample-api` | 8081 | Servicio de ejemplo de la base técnica (outbox), no es parte del dominio de negocio |
-| `sample-worker` | 8082 | Servicio de ejemplo de la base técnica (consumidor), no es parte del dominio de negocio |
+| `sample-api` | 8081 | Plantilla de referencia (ver nota abajo), no es parte del dominio de negocio |
+| `sample-worker` | 8082 | Plantilla de referencia (ver nota abajo), no es parte del dominio de negocio |
 | `ordenes-api` | 8083 | Órdenes: creación, confirmación, transiciones de la saga, devoluciones |
 | `pagos-api` | 8085 | Cobro contra la pasarela de pago |
 | `facturacion-api` | 8087 | Certificación fiscal ante la SAT |
@@ -191,6 +194,13 @@ o movió algún servicio). Son 28 contenedores en total.
 | `integracion-pos-worker` | 8095 | Sincronización con el punto de venta de tienda física, orientado a eventos |
 | `integracion-erp-worker` | 8096 | Consolidación batch hacia el ERP legacy (ver nota abajo y [`documentacion/docs/ESCALABILIDAD.md`](documentacion/docs/ESCALABILIDAD.md)) |
 | `despacho-api` | 8097 | Despacho de órdenes, integrado con el proveedor de logística |
+
+**`sample-api` / `sample-worker` se quedan arriba en el arranque por
+defecto**, pero no son parte del flujo de negocio: son la plantilla de
+referencia de la base técnica para crear un servicio nuevo (outbox +
+consumidor) y sirven además como verificación en vivo del patrón outbox
+(`SgoLogic.Sample.Api` escribe, `SgoLogic.Sample.Worker` consume) sin
+depender de ningún contexto de negocio para probarlo.
 
 **Servicio nuevo desde la última revisión de este README:**
 `integracion-erp-worker` (8096) no existía antes. Es un contexto híbrido:
@@ -277,14 +287,8 @@ anterior). Esto es lo que trae hoy el archivo, agrupado por área:
   mensajería falle a propósito, para demostrar el aislamiento de fallos en
   Notificaciones.
 
-**Integración POS**
-- `POS_BASE_URL` — declarada en `.env.example`, pero no está referenciada
-  en `docker-compose.yml` ni en el código de `integracion-pos-worker` (que
-  apunta a `mock-pos` por una dirección fija de red interna,
-  `http://mock-pos:4001`, no por esta variable). Se documenta tal como está
-  en el archivo, sin inventar para qué la usa.
-
-**Integración ERP** (`integracion-erp-worker`)
+**Integración ERP** (`integracion-erp-worker`) — la dirección de `mock-erp`
+va fija por red interna en `docker-compose.yml`, no por variable de entorno.
 - `ERP_FORMATO` — formato del lote consolidado (`CSV`, por defecto).
 - `ERP_TIMEOUT_MS` — tiempo de espera del cliente HTTP hacia `mock-erp`.
 - `ERP_MAX_REINTENTOS` — reintentos del cliente HTTP por lote.
@@ -294,9 +298,6 @@ anterior). Esto es lo que trae hoy el archivo, agrupado por área:
   [`documentacion/docs/ESCALABILIDAD.md`](documentacion/docs/ESCALABILIDAD.md)).
 - `ERP_INTERVALO_CONCILIACION_HORAS` — cada cuánto corre el temporizador de
   conciliación contra `mock-erp` (24 horas por defecto).
-- `ERP_BASE_URL` — igual que `POS_BASE_URL`: declarada en `.env.example`
-  pero no referenciada en `docker-compose.yml` (que apunta a `mock-erp` por
-  la dirección fija `http://mock-erp:4000`).
 
 **Grafana**
 - `GRAFANA_ADMIN_USER` / `GRAFANA_ADMIN_PASSWORD` — credenciales de acceso
