@@ -496,6 +496,8 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
       ASPNETCORE_URLS: http://+:8080
+      Gateway__ExigirJwt: ${GATEWAY_EXIGIR_JWT:-false}
+      Auth__JwtSecret: ${JWT_SECRET}
     ports:
       - "8080:8080"
     depends_on:
