@@ -143,14 +143,14 @@ igual que cualquier otro contexto.
 
 **Nada de esto está medido.** HU-025 no incluyó a `integracion-erp-worker`
 en la corrida de carga (sección 6): lo de arriba es lo que dice el código,
-no una cifra de throughput observada. Vale la pena señalar, sin medirlo
-todavía, una consideración estructural para cuando alguien intente escalar
-este servicio: sus dos temporizadores no coordinan entre réplicas (a
-diferencia del outbox, no usan `SKIP LOCKED` ni un mecanismo equivalente),
-así que escalarlo con `--scale` tal como está haría que cada réplica
-consolidara y transfiriera el mismo lote de ventas pendientes por su
-cuenta — un riesgo real de duplicar lotes hacia el ERP, no algo ya
-verificado aquí.
+no una cifra de throughput observada. Los dos temporizadores comparten ahora
+un advisory lock de PostgreSQL (`sgo-logic.integracion-erp.batch`), mantenido
+durante la operación completa. Si una réplica ya está consolidando o
+conciliando, las demás omiten ese ciclo; si la réplica termina, PostgreSQL
+libera el lock automáticamente. Esto permite escalar el contenedor sin
+duplicar lotes ni reportes de conciliación. La garantía está cubierta por
+pruebas unitarias de HU-022 para comparación e idempotencia del reporte;
+el throughput de varias réplicas todavía no se ha medido.
 
 `integracion-pos-worker` sigue siendo, como decía la versión anterior de
 este documento, puramente orientado a eventos: su único

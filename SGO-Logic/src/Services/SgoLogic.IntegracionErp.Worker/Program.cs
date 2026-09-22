@@ -76,5 +76,5 @@ app.MapPost("/api/erp/lotes/{loteId}/reintentar", async (
 	return Results.Accepted($"/api/erp/lotes/{loteId}", new { loteId, estado = lote.Estado });
 });
 
-using (var scope = app.Services.CreateScope()) scope.ServiceProvider.GetRequiredService<IntegracionErpDbContext>().Database.EnsureCreated();
+using (var scope = app.Services.CreateScope()) scope.ServiceProvider.GetRequiredService<IntegracionErpDbContext>().Database.Migrate();
 app.Run();
