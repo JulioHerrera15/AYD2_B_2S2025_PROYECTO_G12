@@ -48,6 +48,7 @@ El repositorio se organiza en dos partes:
 
 ### Implementación
 - [SGO-Logic/](SGO-Logic/) — Prototipo ASP.NET Core (.NET 8) del sistema, alineado con el estilo de microservicios por contexto delimitado definido en ADR-001.
+- [docs/MIGRACIONES-BASELINE.md](documentacion/docs/MIGRACIONES-BASELINE.md) — Procedimiento para registrar como baseline una base ERP persistente creada originalmente con `EnsureCreated()`.
 
 ---
 
