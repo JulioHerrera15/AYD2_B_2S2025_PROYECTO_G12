@@ -133,6 +133,32 @@ except Exception:
 " "$1" "$2" 2>/dev/null
 }
 
+# llamar_http <metodo> <url> [cuerpo] -- deja el resultado en HTTP_CODE/HTTP_BODY
+# (globales) y devuelve 0 si el codigo es 2xx. A diferencia de "curl -sf", nunca
+# oculta el cuerpo de un error: quien llama puede imprimirlo con
+# reportar_fallo_http para diagnosticar sin tener que repetir la llamada a mano.
+llamar_http() {
+  local metodo="$1" url="$2" cuerpo="${3:-}"
+  local salida
+  if [ -n "$cuerpo" ]; then
+    salida=$(curl -s -w '\n%{http_code}' -X "$metodo" "$url" -H "Content-Type: application/json" -d "$cuerpo")
+  else
+    salida=$(curl -s -w '\n%{http_code}' -X "$metodo" "$url" -H "Content-Type: application/json")
+  fi
+  HTTP_CODE="${salida##*$'\n'}"
+  HTTP_BODY="${salida%$'\n'*}"
+  case "$HTTP_CODE" in
+    2??) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+reportar_fallo_http() {
+  local paso="$1"
+  echo "  FALLO en '${paso}': HTTP ${HTTP_CODE:-sin respuesta}" >&2
+  echo "  Cuerpo: ${HTTP_BODY:-<vacio>}" >&2
+}
+
 echo "====================================================================="
 echo " SGO-Logic — Pruebas de seguridad del MVP                             "
 echo "====================================================================="
@@ -169,29 +195,39 @@ echo "PAN de prueba (Visa de prueba estandar, no real) usado para tokenizar Y co
 # verdad y el mock corriendo en su propio contenedor.
 TOKEN_OK=1
 TOKEN_PAGO=""
-RESP_TOKEN=$(curl -sf -X POST "${PAYKLIK_URL}/v1/tokens" -H "Content-Type: application/json" \
-  -d "{\"numeroTarjeta\":\"${PAN_PRUEBA}\",\"cvv\":\"${CVV_PRUEBA}\",\"mesExpiracion\":${MES_EXPIRACION},\"anioExpiracion\":${ANIO_EXPIRACION}}") || TOKEN_OK=0
-if [ "$TOKEN_OK" -eq 1 ]; then
-  TOKEN_PAGO=$(extraer_campo "$RESP_TOKEN" "token")
-  TOKEN_ULTIMOS_CUATRO=$(extraer_campo "$RESP_TOKEN" "ultimosCuatro")
-  TOKEN_MARCA=$(extraer_campo "$RESP_TOKEN" "marca")
-  if [ -z "$TOKEN_PAGO" ]; then TOKEN_OK=0; fi
+if llamar_http POST "${PAYKLIK_URL}/v1/tokens" "{\"numeroTarjeta\":\"${PAN_PRUEBA}\",\"cvv\":\"${CVV_PRUEBA}\",\"mesExpiracion\":${MES_EXPIRACION},\"anioExpiracion\":${ANIO_EXPIRACION}}"; then
+  TOKEN_PAGO=$(extraer_campo "$HTTP_BODY" "token")
+  TOKEN_ULTIMOS_CUATRO=$(extraer_campo "$HTTP_BODY" "ultimosCuatro")
+  TOKEN_MARCA=$(extraer_campo "$HTTP_BODY" "marca")
+  if [ -z "$TOKEN_PAGO" ]; then
+    TOKEN_OK=0
+    echo "ADVERTENCIA: POST /v1/tokens respondio ${HTTP_CODE} pero sin campo 'token' en el cuerpo." >&2
+    reportar_fallo_http "tokenizar tarjeta de prueba"
+  fi
+else
+  TOKEN_OK=0
+  reportar_fallo_http "tokenizar tarjeta de prueba contra ${PAYKLIK_URL}/v1/tokens"
 fi
 if [ "$TOKEN_OK" -eq 1 ]; then
   echo "Tarjeta tokenizada contra PayKlik: token=${TOKEN_PAGO} ultimosCuatro=${TOKEN_ULTIMOS_CUATRO} marca=${TOKEN_MARCA}"
 else
-  echo "ADVERTENCIA: no se pudo tokenizar la tarjeta de prueba contra ${PAYKLIK_URL}/v1/tokens." >&2
   FALLAS_EJECUCION+=("tokenizacion de tarjeta de prueba contra PayKlik")
 fi
 
 # --- 1.0b Confirmar que TARJETA sin token se sigue rechazando (limite duro:
 # ExcepcionTokenMedioPagoRequerido). Si esto alguna vez responde 201, alguien
 # quito la validacion y volvio a abrir la puerta a cobrar sin tokenizar.
-CODIGO_SIN_TOKEN_ORDEN=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${GATEWAY}/api/ordenes" \
-  -H "Content-Type: application/json" \
-  -d "{\"clienteId\":\"SEGURIDAD-${RUN_ID}-sin-token\",\"canal\":\"WEB\",\"metodoEntrega\":\"RECOGIDA_TIENDA\",\"moneda\":\"GTQ\",\"medioPago\":\"TARJETA\",\"impuestos\":12.0,\"lineas\":[{\"sku\":\"${SKU_CANARIO}\",\"descripcion\":\"sin token\",\"cantidad\":1,\"precioUnitario\":100.0}]}")
+# metodoEntrega=DOMICILIO (ver nota en 1.0c): esta orden nunca deberia llegar a
+# reservar inventario porque se espera que la falte de token la rechace antes,
+# pero si algun dia deja de rechazarla, no queremos que el 400 real venga de
+# RECOGIDA_TIENDA exigiendo ubicacionSolicitadaId y enmascare lo que aqui se
+# prueba (que TARJETA sin token esta prohibido).
+llamar_http POST "${GATEWAY}/api/ordenes" \
+  "{\"clienteId\":\"SEGURIDAD-${RUN_ID}-sin-token\",\"canal\":\"WEB\",\"metodoEntrega\":\"DOMICILIO\",\"moneda\":\"GTQ\",\"medioPago\":\"TARJETA\",\"impuestos\":12.0,\"lineas\":[{\"sku\":\"${SKU_CANARIO}\",\"descripcion\":\"sin token\",\"cantidad\":1,\"precioUnitario\":100.0}]}" || true
+CODIGO_SIN_TOKEN_ORDEN="$HTTP_CODE"
 echo "POST /api/ordenes con TARJETA y sin tokenMedioPago -> ${CODIGO_SIN_TOKEN_ORDEN} (se espera 400)"
 if [ "$CODIGO_SIN_TOKEN_ORDEN" != "400" ]; then
+  reportar_fallo_http "orden TARJETA sin token (se esperaba 400)"
   HALLAZGOS_BLOQUEANTES+=("POST /api/ordenes con medioPago=TARJETA y sin tokenMedioPago respondio ${CODIGO_SIN_TOKEN_ORDEN}, se esperaba 400 (ExcepcionTokenMedioPagoRequerido)")
 fi
 
@@ -201,13 +237,24 @@ fi
 # evento de dominio -> Auditoria). El token SI es un dato real que ahora
 # cruza el sistema (Ordenes -> Pagos -> PayKlik): por eso 1.3/1.4 mas abajo
 # verifican su ciclo de vida, no solo el marcador de texto libre.
+#
+# metodoEntrega=DOMICILIO (y no RECOGIDA_TIENDA): Orden exige
+# ubicacionSolicitadaId para RECOGIDA_TIENDA (Domain/Orden.cs), lo que
+# obligaria ademas a que el SKU canario tuviera stock en esa tienda exacta.
+# Este bloque prueba RES-08 (no persistencia de PAN/CVV), no logica de
+# despacho, asi que DOMICILIO es la opcion mas simple: Orden.ValidarDireccion
+# acepta direccionEntrega ausente sin exigir ningun campo adicional, y sigue
+# reservando el stock ya sembrado en CD-01/CENTRO_DISTRIBUCION sin tener que
+# introducir una ubicacion de tienda solo para este script (mismo patron que
+# scripts/pruebas-carga/eac01-hu023-carga.js y scripts/pruebas/camino-feliz.ps1).
 ORDEN_ID=""
 CANARIO_OK=$TOKEN_OK
 if [ "$CANARIO_OK" -eq 1 ]; then
-  curl -sf -X PUT "${GATEWAY}/api/inventario/existencias" \
-    -H "Content-Type: application/json" \
-    -d "{\"sku\":\"${SKU_CANARIO}\",\"ubicacionId\":\"CD-01\",\"tipoUbicacion\":\"CENTRO_DISTRIBUCION\",\"cantidadFisica\":10}" \
-    > /dev/null || CANARIO_OK=0
+  if ! llamar_http PUT "${GATEWAY}/api/inventario/existencias" \
+      "{\"sku\":\"${SKU_CANARIO}\",\"ubicacionId\":\"CD-01\",\"tipoUbicacion\":\"CENTRO_DISTRIBUCION\",\"cantidadFisica\":10}"; then
+    CANARIO_OK=0
+    reportar_fallo_http "sembrar existencias del SKU canario"
+  fi
 fi
 
 if [ "$CANARIO_OK" -eq 1 ]; then
@@ -217,7 +264,7 @@ cliente_id, sku, descripcion, token = sys.argv[1], sys.argv[2], sys.argv[3], sys
 print(json.dumps({
     'clienteId': cliente_id,
     'canal': 'WEB',
-    'metodoEntrega': 'RECOGIDA_TIENDA',
+    'metodoEntrega': 'DOMICILIO',
     'moneda': 'GTQ',
     'medioPago': 'TARJETA',
     'impuestos': 12.0,
@@ -230,16 +277,24 @@ print(json.dumps({
     }]
 }))
 " "SEGURIDAD-${RUN_ID}" "$SKU_CANARIO" "$DESCRIPCION_CANARIO" "$TOKEN_PAGO")
-  RESP_ORDEN=$(curl -sf -X POST "${GATEWAY}/api/ordenes" -H "Content-Type: application/json" -d "$CREAR_BODY") || CANARIO_OK=0
-  if [ "$CANARIO_OK" -eq 1 ]; then
-    ORDEN_ID=$(extraer_campo "$RESP_ORDEN" "id")
-    if [ -z "$ORDEN_ID" ]; then CANARIO_OK=0; fi
+  if llamar_http POST "${GATEWAY}/api/ordenes" "$CREAR_BODY"; then
+    ORDEN_ID=$(extraer_campo "$HTTP_BODY" "id")
+    if [ -z "$ORDEN_ID" ]; then
+      CANARIO_OK=0
+      echo "ADVERTENCIA: POST /api/ordenes respondio ${HTTP_CODE} pero sin campo 'id' en el cuerpo." >&2
+      reportar_fallo_http "crear orden canario"
+    fi
+  else
+    CANARIO_OK=0
+    reportar_fallo_http "crear orden canario"
   fi
 fi
 
 if [ "$CANARIO_OK" -eq 1 ]; then
-  curl -sf -X POST "${GATEWAY}/api/ordenes/${ORDEN_ID}/confirmar" \
-    -H "Content-Type: application/json" -d '{"motivo":"prueba de seguridad RES-08"}' > /dev/null || CANARIO_OK=0
+  if ! llamar_http POST "${GATEWAY}/api/ordenes/${ORDEN_ID}/confirmar" '{"motivo":"prueba de seguridad RES-08"}'; then
+    CANARIO_OK=0
+    reportar_fallo_http "confirmar orden canario ${ORDEN_ID}"
+  fi
 fi
 
 ESTADOS_ACEPTABLES="PAGO_APLICADO CONFIRMADA_PENDIENTE_FISCAL CONFIRMADA DESPACHO_SOLICITADO EN_PREPARACION EN_TRANSITO ENTREGADA"
@@ -247,15 +302,20 @@ ESTADO_ALCANZADO=""
 if [ "$CANARIO_OK" -eq 1 ]; then
   LIMITE=$((SECONDS + 60))
   while [ "$SECONDS" -lt "$LIMITE" ]; do
-    RESP=$(curl -sf "${GATEWAY}/api/ordenes/${ORDEN_ID}" 2>/dev/null) || RESP=""
-    ESTADO=$(extraer_campo "$RESP" "estado")
-    for e in $ESTADOS_ACEPTABLES; do
-      if [ "$ESTADO" = "$e" ]; then ESTADO_ALCANZADO="$ESTADO"; fi
-    done
+    if llamar_http GET "${GATEWAY}/api/ordenes/${ORDEN_ID}"; then
+      ESTADO=$(extraer_campo "$HTTP_BODY" "estado")
+      for e in $ESTADOS_ACEPTABLES; do
+        if [ "$ESTADO" = "$e" ]; then ESTADO_ALCANZADO="$ESTADO"; fi
+      done
+    fi
     if [ -n "$ESTADO_ALCANZADO" ]; then break; fi
     sleep 1
   done
-  if [ -z "$ESTADO_ALCANZADO" ]; then CANARIO_OK=0; fi
+  if [ -z "$ESTADO_ALCANZADO" ]; then
+    CANARIO_OK=0
+    echo "  Ultima respuesta de GET /api/ordenes/${ORDEN_ID}:" >&2
+    reportar_fallo_http "esperar a que la orden canario ${ORDEN_ID} llegue a un estado aceptable"
+  fi
 fi
 
 if [ "$CANARIO_OK" -eq 1 ]; then
@@ -405,8 +465,12 @@ if [ "$CANARIO_OK" -eq 1 ] && [ "$TOKEN_OK" -eq 1 ]; then
 fi
 
 # --- 1.5 Barrido de logs de TODO el stack -----------------------------------
+# Corre siempre, tenga o no exito el canario de arriba: MARCADOR_CVV,
+# MARCADOR_VENC y PAN_PRUEBA se definen incondicionalmente al inicio del
+# bloque, asi que no hay variable sin definir que haga fallar el "grep" bajo
+# "set -u" (antes referenciaba MARCADOR_PAN, que nunca llego a definirse).
 consulta_logs() {
-  compose logs --no-color 2>/dev/null | grep -F -i -e "$MARCADOR_PAN" -e "$MARCADOR_CVV" -e "$MARCADOR_VENC" -e "$PAN_PRUEBA"
+  compose logs --no-color 2>/dev/null | grep -F -i -e "$MARCADOR_CVV" -e "$MARCADOR_VENC" -e "$PAN_PRUEBA"
 }
 LOGS_MATCH="$(consulta_logs || true)"
 TOTAL_LOGS_MATCH=$(printf '%s' "$LOGS_MATCH" | sed '/^$/d' | wc -l | tr -d ' ')
@@ -491,35 +555,56 @@ CONTRASENA_PRUEBA="Prueba-Seguridad-2026!"
 TOKEN_VALIDO=""
 LOGIN_OK=1
 
-curl -sf -X POST "${GATEWAY}/api/auth/registro" -H "Content-Type: application/json" \
-  -d "{\"email\":\"${EMAIL_PRUEBA}\",\"contrasena\":\"${CONTRASENA_PRUEBA}\",\"nombreCompleto\":\"Prueba Seguridad\"}" \
-  > /dev/null || LOGIN_OK=0
+if ! llamar_http POST "${GATEWAY}/api/auth/registro" \
+    "{\"email\":\"${EMAIL_PRUEBA}\",\"contrasena\":\"${CONTRASENA_PRUEBA}\",\"nombreCompleto\":\"Prueba Seguridad\"}"; then
+  LOGIN_OK=0
+  reportar_fallo_http "registrar usuario de prueba para el flujo JWT"
+fi
 
 if [ "$LOGIN_OK" -eq 1 ]; then
   sleep 1
   CODIGO_VERIF=""
+  # AuthService.cs loguea "...para {Email}: {Codigo}" con Serilog, que
+  # renderiza los parametros de tipo string entre comillas dobles en la
+  # salida de consola (verificado contra AuthService.cs:56): la linea real es
+  # 'Codigo de verificacion para "correo@x": "854492"', no sin comillas. El
+  # patron y el sed toleran la comilla en vez de asumir que no esta.
   for _ in 1 2 3 4 5; do
     CODIGO_VERIF=$(compose logs --no-color auth-api 2>/dev/null \
-      | grep "Codigo de verificacion para ${EMAIL_PRUEBA}" \
+      | grep -E "Codigo de verificacion para \"?${EMAIL_PRUEBA}\"?:" \
       | tail -n1 \
-      | sed -n 's/.*: \([0-9]\{4,8\}\)[ \t]*$/\1/p')
+      | sed -n 's/.*: *"\{0,1\}\([0-9]\{4,8\}\)"\{0,1\}[[:space:]]*$/\1/p')
     [ -n "$CODIGO_VERIF" ] && break
     sleep 1
   done
-  [ -z "$CODIGO_VERIF" ] && LOGIN_OK=0
+  if [ -z "$CODIGO_VERIF" ]; then
+    LOGIN_OK=0
+    echo "  FALLO en 'leer codigo de verificacion de los logs de auth-api': ninguna linea matcheo 'Codigo de verificacion para ${EMAIL_PRUEBA}' tras 5 intentos (1s cada uno)." >&2
+    echo "  Lineas de auth-api que mencionan ese correo (si alguna):" >&2
+    compose logs --no-color auth-api 2>/dev/null | grep -F "${EMAIL_PRUEBA}" | tail -n3 | sed 's/^/    /' >&2
+  fi
 fi
 
 if [ "$LOGIN_OK" -eq 1 ]; then
-  curl -sf -X POST "${GATEWAY}/api/auth/verificar" -H "Content-Type: application/json" \
-    -d "{\"email\":\"${EMAIL_PRUEBA}\",\"codigo\":\"${CODIGO_VERIF}\"}" > /dev/null || LOGIN_OK=0
+  if ! llamar_http POST "${GATEWAY}/api/auth/verificar" \
+      "{\"email\":\"${EMAIL_PRUEBA}\",\"codigo\":\"${CODIGO_VERIF}\"}"; then
+    LOGIN_OK=0
+    reportar_fallo_http "verificar usuario de prueba para el flujo JWT"
+  fi
 fi
 
 if [ "$LOGIN_OK" -eq 1 ]; then
-  RESP_LOGIN=$(curl -sf -X POST "${GATEWAY}/api/auth/login" -H "Content-Type: application/json" \
-    -d "{\"email\":\"${EMAIL_PRUEBA}\",\"contrasena\":\"${CONTRASENA_PRUEBA}\"}") || LOGIN_OK=0
-  if [ "$LOGIN_OK" -eq 1 ]; then
-    TOKEN_VALIDO=$(extraer_campo "$RESP_LOGIN" "token")
-    [ -z "$TOKEN_VALIDO" ] && LOGIN_OK=0
+  if llamar_http POST "${GATEWAY}/api/auth/login" \
+      "{\"email\":\"${EMAIL_PRUEBA}\",\"contrasena\":\"${CONTRASENA_PRUEBA}\"}"; then
+    TOKEN_VALIDO=$(extraer_campo "$HTTP_BODY" "token")
+    if [ -z "$TOKEN_VALIDO" ]; then
+      LOGIN_OK=0
+      echo "ADVERTENCIA: POST /api/auth/login respondio ${HTTP_CODE} pero sin campo 'token' en el cuerpo." >&2
+      reportar_fallo_http "login de usuario de prueba para el flujo JWT"
+    fi
+  else
+    LOGIN_OK=0
+    reportar_fallo_http "login de usuario de prueba para el flujo JWT"
   fi
 fi
 
@@ -557,6 +642,37 @@ echo ""
 # =============================================================================
 echo "--- Bloque 3: permisos de Auditoria (reutilizando PermisosInmutabilidadTests) ---"
 
+# Las tres consultas de este bloque apuntan a "la ultima fila de
+# eventos_auditoria"; si la tabla esta vacia, esa subconsulta da NULL,
+# "WHERE id = NULL" no matchea ninguna fila, y psql devuelve el mismo tag
+# de siempre ("UPDATE 0"/"DELETE 0") sin ningun texto de error. Sin filas
+# que tocar:
+#   - Los dos chequeos con el usuario RESTRINGIDO no dependen de que haya
+#     filas: Postgres revisa el privilegio UPDATE/DELETE sobre la tabla al
+#     planear la sentencia, ANTES de evaluar el WHERE, asi que "permission
+#     denied" (42501) sale igual con la tabla vacia o llena. No comparten
+#     el defecto de abajo, pero igual se clasifican con la misma funcion
+#     por consistencia y como defensa adicional.
+#   - El chequeo con el usuario DUENO SI depende de que haya una fila: el
+#     trigger es "FOR EACH ROW", o sea que solo se dispara si el UPDATE
+#     afecta al menos una fila. Con la tabla vacia, el UPDATE de 0 filas
+#     tiene exito sin pasar por el trigger, y el resultado ("UPDATE 0") es
+#     indistinguible en forma de un "no se disparo el trigger" real salvo
+#     por el conteo de filas afectadas. Reportar eso como hallazgo seria
+#     un falso positivo: no se probo nada, no que la inmutabilidad fallo.
+clasificar_bloqueo_auditoria() {
+  # clasificar_bloqueo_auditoria <salida> <patron_bloqueo> <comando>
+  # Devuelve por stdout: bloqueado | sin_filas | no_bloqueado
+  local salida="$1" patron_bloqueo="$2" comando="$3"
+  if echo "$salida" | grep -qiE "$patron_bloqueo"; then
+    echo "bloqueado"
+  elif echo "$salida" | tr -d '\r' | grep -qE "^${comando} 0[[:space:]]*$"; then
+    echo "sin_filas"
+  else
+    echo "no_bloqueado"
+  fi
+}
+
 consulta_update_restringido() {
   psql_en db-auditoria "$USUARIO_AUDITORIA_APP" "$CLAVE_AUDITORIA_APP" sgo_auditoria -c "
     UPDATE eventos_auditoria SET event_type = event_type
@@ -564,11 +680,17 @@ consulta_update_restringido() {
   " 2>&1
 }
 SALIDA_UPDATE_RESTRINGIDO="$(consulta_update_restringido)"
-if echo "$SALIDA_UPDATE_RESTRINGIDO" | grep -q "permission denied\|42501"; then
-  echo "UPDATE con usuario restringido (${USUARIO_AUDITORIA_APP}) -> bloqueado por permisos (42501), como se esperaba."
-else
-  HALLAZGOS_BLOQUEANTES+=("UPDATE sobre eventos_auditoria con el usuario restringido de la aplicacion NO fue bloqueado por permisos: ${SALIDA_UPDATE_RESTRINGIDO}")
-fi
+case "$(clasificar_bloqueo_auditoria "$SALIDA_UPDATE_RESTRINGIDO" "permission denied|42501" "UPDATE")" in
+  bloqueado)
+    echo "UPDATE con usuario restringido (${USUARIO_AUDITORIA_APP}) -> bloqueado por permisos (42501), como se esperaba."
+    ;;
+  sin_filas)
+    FALLAS_EJECUCION+=("UPDATE con usuario restringido sobre eventos_auditoria no evaluado: la tabla esta vacia, no hay fila sobre la cual probar el bloqueo de permisos")
+    ;;
+  *)
+    HALLAZGOS_BLOQUEANTES+=("UPDATE sobre eventos_auditoria con el usuario restringido de la aplicacion NO fue bloqueado por permisos: ${SALIDA_UPDATE_RESTRINGIDO}")
+    ;;
+esac
 
 consulta_delete_restringido() {
   psql_en db-auditoria "$USUARIO_AUDITORIA_APP" "$CLAVE_AUDITORIA_APP" sgo_auditoria -c "
@@ -577,11 +699,17 @@ consulta_delete_restringido() {
   " 2>&1
 }
 SALIDA_DELETE_RESTRINGIDO="$(consulta_delete_restringido)"
-if echo "$SALIDA_DELETE_RESTRINGIDO" | grep -q "permission denied\|42501"; then
-  echo "DELETE con usuario restringido (${USUARIO_AUDITORIA_APP}) -> bloqueado por permisos (42501), como se esperaba."
-else
-  HALLAZGOS_BLOQUEANTES+=("DELETE sobre eventos_auditoria con el usuario restringido de la aplicacion NO fue bloqueado por permisos: ${SALIDA_DELETE_RESTRINGIDO}")
-fi
+case "$(clasificar_bloqueo_auditoria "$SALIDA_DELETE_RESTRINGIDO" "permission denied|42501" "DELETE")" in
+  bloqueado)
+    echo "DELETE con usuario restringido (${USUARIO_AUDITORIA_APP}) -> bloqueado por permisos (42501), como se esperaba."
+    ;;
+  sin_filas)
+    FALLAS_EJECUCION+=("DELETE con usuario restringido sobre eventos_auditoria no evaluado: la tabla esta vacia, no hay fila sobre la cual probar el bloqueo de permisos")
+    ;;
+  *)
+    HALLAZGOS_BLOQUEANTES+=("DELETE sobre eventos_auditoria con el usuario restringido de la aplicacion NO fue bloqueado por permisos: ${SALIDA_DELETE_RESTRINGIDO}")
+    ;;
+esac
 
 consulta_update_dueno() {
   psql_en db-auditoria "$USUARIO_AUDITORIA_OWNER" "$CLAVE_AUDITORIA_OWNER" sgo_auditoria -c "
@@ -590,11 +718,17 @@ consulta_update_dueno() {
   " 2>&1
 }
 SALIDA_UPDATE_DUENO="$(consulta_update_dueno)"
-if echo "$SALIDA_UPDATE_DUENO" | grep -qi "solo insercion\|bitacora inmutable\|P0001"; then
-  echo "UPDATE con usuario dueno (${USUARIO_AUDITORIA_OWNER}) -> bloqueado por el trigger (P0001), como se esperaba."
-else
-  HALLAZGOS_BLOQUEANTES+=("UPDATE sobre eventos_auditoria con el usuario DUENO de la tabla NO fue bloqueado por el trigger: ${SALIDA_UPDATE_DUENO}")
-fi
+case "$(clasificar_bloqueo_auditoria "$SALIDA_UPDATE_DUENO" "solo insercion|bitacora inmutable|P0001" "UPDATE")" in
+  bloqueado)
+    echo "UPDATE con usuario dueno (${USUARIO_AUDITORIA_OWNER}) -> bloqueado por el trigger (P0001), como se esperaba."
+    ;;
+  sin_filas)
+    FALLAS_EJECUCION+=("UPDATE con usuario dueno sobre eventos_auditoria no evaluado: la tabla esta vacia, no hay fila sobre la cual disparar el trigger FOR EACH ROW")
+    ;;
+  *)
+    HALLAZGOS_BLOQUEANTES+=("UPDATE sobre eventos_auditoria con el usuario DUENO de la tabla NO fue bloqueado por el trigger: ${SALIDA_UPDATE_DUENO}")
+    ;;
+esac
 
 echo ""
 echo "====================================================================="

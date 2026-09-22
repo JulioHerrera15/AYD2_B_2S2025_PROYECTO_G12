@@ -21,7 +21,23 @@
 -- pudo evaluar (por ejemplo, un tipo raro que no soporta el cast a texto) y
 -- se salto sin abortar el barrido completo.
 
-\set ON_ERROR_STOP off
+\set ON_ERROR_STOP on
+
+-- psql NO sustituye ":'variable'" dentro de un bloque con comillas de dolar
+-- (DO $$ ... $$ es opaco a su interpolacion de texto), asi que usar
+-- ":'patron1'" directamente adentro del DO fallaba en el servidor con
+-- "syntax error at or near ':'" -- verificado a mano contra un Postgres
+-- limpio. Ese error quedaba invisible porque este archivo traia
+-- "\set ON_ERROR_STOP off" (quitado arriba): con eso apagado, psql traga el
+-- error, sigue de largo, y el SELECT final tambien falla en silencio porque
+-- la tabla temporal nunca se llego a crear -- exit code 0, cero filas, sin
+-- ningun aviso. La sustitucion SI ocurre fuera de comillas de dolar, asi que
+-- los patrones se pasan a la sesion con SET (variables de configuracion
+-- "custom", no requieren ninguna extension) y el DO los lee con
+-- current_setting().
+SET sgo_barrido.patron1 = :'patron1';
+SET sgo_barrido.patron2 = :'patron2';
+SET sgo_barrido.patron3 = :'patron3';
 
 DO $$
 DECLARE
@@ -29,6 +45,9 @@ DECLARE
     n1 BIGINT;
     n2 BIGINT;
     n3 BIGINT;
+    patron1 TEXT := current_setting('sgo_barrido.patron1');
+    patron2 TEXT := current_setting('sgo_barrido.patron2');
+    patron3 TEXT := current_setting('sgo_barrido.patron3');
 BEGIN
     DROP TABLE IF EXISTS pg_temp.resultados_barrido;
     CREATE TABLE pg_temp.resultados_barrido (
@@ -54,9 +73,9 @@ BEGIN
                     count(*) FILTER (WHERE %I::text ILIKE %L),
                     count(*) FILTER (WHERE %I::text ILIKE %L)
                  FROM %I.%I',
-                r.column_name, :'patron1',
-                r.column_name, :'patron2',
-                r.column_name, :'patron3',
+                r.column_name, patron1,
+                r.column_name, patron2,
+                r.column_name, patron3,
                 r.table_schema, r.table_name
             ) INTO n1, n2, n3;
 
