@@ -37,7 +37,19 @@ if (exigirJwt)
             };
         });
 
-    builder.Services.AddAuthorization();
+    builder.Services.AddAuthorization(opciones =>
+    {
+        opciones.AddPolicy("RequireAuthenticatedUser", politica => politica.RequireAuthenticatedUser());
+    });
+}
+else
+{
+    // Con la bandera apagada (false), la politica se registra permitiendo todo para que
+    // YARP no falle al iniciar pero no se exija token en las peticiones.
+    builder.Services.AddAuthorization(opciones =>
+    {
+        opciones.AddPolicy("RequireAuthenticatedUser", politica => politica.RequireAssertion(_ => true));
+    });
 }
 
 builder.Services.AddReverseProxy()
@@ -50,8 +62,8 @@ app.UseSgoDefaults();
 if (exigirJwt)
 {
     app.UseAuthentication();
-    app.UseAuthorization();
 }
+app.UseAuthorization();
 
 // El middleware de autorizacion del gateway se aplica directamente sobre el pipeline
 // del proxy. Las rutas protegidas/anonimas se declaran en appsettings.json con la
