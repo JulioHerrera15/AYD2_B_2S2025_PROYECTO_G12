@@ -284,6 +284,7 @@ public sealed class GatewayClient
     /// </summary>
     public async Task<DespachoOrdenModel?> ObtenerDespachoOrdenAsync(string ordenId, CancellationToken ct = default)
     {
+        SetAuthHeader();
         var res = await _http.GetAsync($"/api/despacho/{ordenId}", ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<DespachoOrdenModel>(JsonOptions, ct);

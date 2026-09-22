@@ -1,4 +1,4 @@
-﻿
+
 Microsoft Visual Studio Solution File, Format Version 12.00
 # 
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "BuildingBlocks", "BuildingBlocks", "{73638F12-8AB5-4DCF-9349-69947E9591A6}"
@@ -74,6 +74,12 @@ EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgoLogic.Despacho.Api", "src\Services\SgoLogic.Despacho.Api\SgoLogic.Despacho.Api.csproj", "{BC54C830-99CF-4172-9A55-E23077D0249D}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgoLogic.Despacho.Tests", "tests\SgoLogic.Despacho.Tests\SgoLogic.Despacho.Tests.csproj", "{9C00BFCF-ADD1-4EF8-AE2F-80F9F94DA51A}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgoLogic.Auth.Tests", "tests\SgoLogic.Auth.Tests\SgoLogic.Auth.Tests.csproj", "{A2B3C4D5-E6F7-8901-BCDE-F12345678902}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgoLogic.ConsultaEstado.Tests", "tests\SgoLogic.ConsultaEstado.Tests\SgoLogic.ConsultaEstado.Tests.csproj", "{B3C4D5E6-F7A8-9012-CDEF-123456789013}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "SgoLogic.Notificaciones.Tests", "tests\SgoLogic.Notificaciones.Tests\SgoLogic.Notificaciones.Tests.csproj", "{C4D5E6F7-A8B9-0123-DEF0-123456789014}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -209,6 +215,18 @@ Global
 		{D5C2E9B4-2A4C-4B7D-9B5D-2F3C6A1E8D40}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{D5C2E9B4-2A4C-4B7D-9B5D-2F3C6A1E8D40}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{D5C2E9B4-2A4C-4B7D-9B5D-2F3C6A1E8D40}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A2B3C4D5-E6F7-8901-BCDE-F12345678902}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A2B3C4D5-E6F7-8901-BCDE-F12345678902}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A2B3C4D5-E6F7-8901-BCDE-F12345678902}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A2B3C4D5-E6F7-8901-BCDE-F12345678902}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B3C4D5E6-F7A8-9012-CDEF-123456789013}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B3C4D5E6-F7A8-9012-CDEF-123456789013}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B3C4D5E6-F7A8-9012-CDEF-123456789013}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B3C4D5E6-F7A8-9012-CDEF-123456789013}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C4D5E6F7-A8B9-0123-DEF0-123456789014}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C4D5E6F7-A8B9-0123-DEF0-123456789014}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C4D5E6F7-A8B9-0123-DEF0-123456789014}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C4D5E6F7-A8B9-0123-DEF0-123456789014}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{C3676945-26F4-47AE-885F-216D39618EAC} = {73638F12-8AB5-4DCF-9349-69947E9591A6}
@@ -244,5 +262,8 @@ Global
 		{9C00BFCF-ADD1-4EF8-AE2F-80F9F94DA51A} = {50912FCC-C9E4-4A2C-BA43-67D2C566F82A}
 		{A8C9B6E1-6F9B-4A21-8C86-5F2F4B5C0E31} = {49D8C3C9-93E0-407F-9507-B60CB6826275}
 		{D5C2E9B4-2A4C-4B7D-9B5D-2F3C6A1E8D40} = {50912FCC-C9E4-4A2C-BA43-67D2C566F82A}
+		{A2B3C4D5-E6F7-8901-BCDE-F12345678902} = {50912FCC-C9E4-4A2C-BA43-67D2C566F82A}
+		{B3C4D5E6-F7A8-9012-CDEF-123456789013} = {50912FCC-C9E4-4A2C-BA43-67D2C566F82A}
+		{C4D5E6F7-A8B9-0123-DEF0-123456789014} = {50912FCC-C9E4-4A2C-BA43-67D2C566F82A}
 	EndGlobalSection
 EndGlobal
