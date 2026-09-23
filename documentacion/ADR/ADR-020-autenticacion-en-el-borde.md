@@ -2,7 +2,7 @@
 
 **Estado:** Aceptada
 **Responsable:** Angel Martinez (202300410)
-**Fecha:** 2026-09-21
+**Fecha:** 2026-09-22
 
 ## Contexto
 
@@ -14,10 +14,10 @@ Esa brecha contradice la trazabilidad de quién ejecutó cada operación (PRE-05
 
 El JWT emitido por Auth se valida en el API Gateway y no en cada servicio. La decisión comprende seis reglas:
 
-1. **Validación con JwtBearer y secreto compartido.** El gateway registra `AddAuthentication` con `AddJwtBearer` y valida la firma con el mismo secreto `Auth:JwtSecret` que usa Auth para emitir el token, con los mismos parámetros de validación que Auth (firma y vencimiento; sin validación de emisor ni de audiencia). El secreto llega al gateway por la misma variable de entorno que a Auth (`JWT_SECRET`).
-2. **Rutas protegidas.** Se exige un token válido en las rutas de órdenes, pagos, facturación, inventario, despacho y auditoría, tanto en su prefijo `/api/<contexto>` como en su forma corta `/<contexto>` cuando la ruta la tiene. Una petición sin token o con un token inválido o vencido recibe 401 en el gateway y no llega al servicio.
-3. **Rutas anónimas.** Quedan sin exigencia de token `/api/auth/*` y `/auth/*` (registro e inicio de sesión, que son las rutas que emiten el token) y los puntos de salud `/health/*` del gateway. Las rutas de carrito siguen protegidas por Auth con su propio `[Authorize]`; esta decisión no las modifica.
-4. **Bandera de configuración.** La exigencia se activa con la bandera `Gateway:ExigirJwt` del gateway (variable de entorno `Gateway__ExigirJwt`; en el archivo `.env` del compose, `GATEWAY_EXIGIR_JWT`). Con la bandera en `false`, el gateway se comporta como hasta ahora: enruta sin validar. Con la bandera en `true`, aplica las reglas 2 y 3. El valor por defecto en `appsettings.json` del gateway y en el compose es `false`, para no romper los scripts de carga y de camino feliz que hoy llaman al gateway sin token.
+1. **Validación con JwtBearer y secreto compartido.** El gateway registra `AddAuthentication` con `AddJwtBearer` y valida la firma con el mismo secreto `Auth:JwtSecret` que usa Auth para emitir el token, con los mismos parámetros de validación que Auth (firma y vencimiento, con 30 segundos de tolerancia de reloj; sin validación de emisor ni de audiencia). Con la bandera encendida y sin `Auth:JwtSecret`, el gateway no arranca.
+2. **Rutas protegidas.** Se exige un token válido en las rutas de órdenes, pagos, facturación, inventario, despacho y auditoría, tanto en su prefijo `/api/<contexto>` como en su forma corta `/<contexto>` cuando la ruta la tiene. La implementación protege además `/api/erp/*`, la ruta de administración de Integración ERP. Cada ruta protegida declara en `appsettings.json` del gateway la política de YARP `RequireAuthenticatedUser`. Una petición sin token o con un token inválido o vencido recibe 401 en el gateway y no llega al servicio.
+3. **Rutas anónimas.** Quedan sin exigencia de token `/api/auth/*` y `/auth/*` (registro e inicio de sesión, que son las rutas que emiten el token) y los puntos de salud `/health/*` del gateway, que no son rutas del proxy. Las rutas de carrito siguen protegidas por Auth con su propio `[Authorize]`; esta decisión no las modifica.
+4. **Bandera de configuración.** La exigencia se activa con la bandera `Gateway:ExigirJwt` del gateway (variable de entorno `Gateway__ExigirJwt`). Con la bandera en `false`, el gateway se comporta como hasta ahora: registra la política `RequireAuthenticatedUser` como una que admite toda petición y enruta sin validar. Con la bandera en `true`, registra la autenticación JwtBearer y aplica las reglas 2 y 3. El valor por defecto en `appsettings.json` y `appsettings.Development.json` del gateway es `false`, para no romper los scripts de carga y de camino feliz que hoy llaman al gateway sin token.
 5. **Los servicios internos confían en la red interna.** Órdenes, Pagos, Facturación, Inventario, Despacho y Auditoría no revalidan el token: el gateway es el único punto donde se decide el acceso, y los servicios asumen que toda petición que llega por la red interna de Docker ya fue admitida. El gateway no reescribe ni propaga claims como encabezados adicionales; reenvía la petición con su encabezado `Authorization` original.
 6. **Los scripts cumplen la exigencia.** Los scripts k6 y el de camino feliz que llamen al gateway deben enviar el token obtenido en `POST /api/auth/login` o correr con la bandera apagada. Los scripts que llaman directamente al puerto de un servicio, sin pasar por el gateway, no se ven afectados.
 
@@ -38,6 +38,7 @@ Se evaluaron tres opciones: (1) validar el JWT una sola vez en el borde, con con
 - El token solo autentica: el JWT de Auth no incluye roles, de modo que el borde admite o rechaza al llamador pero no distingue qué operaciones puede ejecutar cada persona. La autorización por rol queda pendiente.
 - Auth y el gateway comparten un secreto simétrico. Quien lo conozca puede emitir tokens válidos, y su rotación exige reiniciar ambos servicios con el mismo valor.
 - Con la bandera apagada, que es el valor por defecto, el MVP no exige autenticación en el borde. Las rutas de consulta de estado, incidencias, notificaciones y mensajes quedan fuera del alcance de esta decisión y permanecen anónimas aunque la bandera se encienda.
+- Límite del MVP: el servicio `api-gateway` de `SGO-Logic/docker-compose.yml` no recibe hoy ni `Gateway__ExigirJwt` ni `Auth__JwtSecret`, y `.env.example` no define una variable para la bandera. En el stack de Docker Compose la exigencia queda siempre apagada; para encenderla hay que agregar al servicio `api-gateway` las variables `Gateway__ExigirJwt: "true"` y `Auth__JwtSecret: ${JWT_SECRET}`. La configuración del compose del gateway corresponde a su responsable (202300353).
 
 ## Preocupaciones y evidencia que atiende
 

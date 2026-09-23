@@ -286,6 +286,90 @@ public sealed class ServicioCobroTests
     }
 
     [Fact]
+    public async Task Dos_intentos_fallidos_en_un_cobro_dejan_dos_registros_auditables_y_un_solo_PagoPendiente()
+    {
+        var escenario = new Escenario();
+        var payklik = ClientePayKlikFalso.NoDisponible();
+
+        await using (var contexto = escenario.NuevoContexto())
+        {
+            await escenario.Servicio(contexto, payklik, new PayKlikOptions { MaxReintentos = 1, BackoffBaseMs = 0 })
+                .ProcesarCobroAsync(Solicitud(), CancellationToken.None);
+            await contexto.SaveChangesAsync();
+        }
+
+        Assert.Equal(2, payklik.Peticiones.Count);
+
+        await using var verificacion = escenario.NuevoContexto();
+        var pago = await verificacion.Pagos.Include(p => p.Intentos).SingleAsync();
+        Assert.Equal(EstadoPago.PENDIENTE, pago.Estado);
+        Assert.All(pago.Intentos, intento => Assert.Equal(EstadoIntentoPago.FALLIDO, intento.Estado));
+
+        // Un evento de auditoria por cada intento fallido, con su propio numero.
+        var auditables = escenario.Outbox.PorTipo(IntentoPagoFallido.EventType)
+            .OrderBy(evento => evento.Sequence)
+            .ToList();
+        Assert.Equal(2, auditables.Count);
+        Assert.All(auditables, evento =>
+        {
+            Assert.Equal(IntentoPagoFallido.AggregateType, evento.AggregateType);
+            Assert.Equal(IntentoPagoFallido.RoutingKey, evento.RoutingKey);
+            Assert.Equal(OrdenId, evento.AggregateId);
+        });
+        var primero = Assert.IsType<IntentoPagoFallidoData>(auditables[0].Data);
+        var segundo = Assert.IsType<IntentoPagoFallidoData>(auditables[1].Data);
+        Assert.Equal((1, true), (primero.IntentoNumero, primero.SeReintenta));
+        Assert.Equal((2, false), (segundo.IntentoNumero, segundo.SeReintenta));
+        Assert.Equal("PROVEEDOR_5XX", primero.CodigoRespuesta);
+
+        // La saga ve lo mismo que antes: un solo PagoPendiente, con la secuencia del
+        // pago y el numero del ultimo intento.
+        var pendiente = Assert.Single(escenario.Outbox.PorTipo(PagoPendiente.EventType));
+        Assert.Equal(1, pendiente.Sequence);
+        Assert.Equal(1, pago.Secuencia);
+        Assert.Equal(2, Assert.IsType<PagoPendienteData>(pendiente.Data).IntentoNumero);
+        Assert.Equal(3, escenario.Outbox.Eventos.Count);
+    }
+
+    [Fact]
+    public async Task Un_intento_fallido_superado_por_el_reintento_queda_auditado_y_PagoAplicado_conserva_su_secuencia()
+    {
+        var escenario = new Escenario();
+        var payklik = ClientePayKlikFalso.FallaLuegoAprueba(fallas5xx: 1);
+
+        await using var contexto = escenario.NuevoContexto();
+        await escenario.Servicio(contexto, payklik, new PayKlikOptions { MaxReintentos = 1, BackoffBaseMs = 0 })
+            .ProcesarCobroAsync(Solicitud(), CancellationToken.None);
+        await contexto.SaveChangesAsync();
+
+        var auditable = Assert.Single(escenario.Outbox.PorTipo(IntentoPagoFallido.EventType));
+        var data = Assert.IsType<IntentoPagoFallidoData>(auditable.Data);
+        Assert.Equal(1, data.IntentoNumero);
+        Assert.True(data.SeReintenta);
+
+        var aplicado = Assert.Single(escenario.Outbox.PorTipo(PagoAplicado.EventType));
+        Assert.Equal(1, aplicado.Sequence);
+        Assert.Empty(escenario.Outbox.PorTipo(PagoPendiente.EventType));
+    }
+
+    [Fact]
+    public async Task Un_cobro_aprobado_o_rechazado_sin_fallas_no_emite_IntentoPagoFallido()
+    {
+        var escenario = new Escenario();
+
+        await using (var contexto = escenario.NuevoContexto())
+        {
+            await escenario.Servicio(contexto, ClientePayKlikFalso.Aprueba())
+                .ProcesarCobroAsync(Solicitud("ORD-2026-000010"), CancellationToken.None);
+            await escenario.Servicio(contexto, ClientePayKlikFalso.Rechaza())
+                .ProcesarCobroAsync(Solicitud("ORD-2026-000011"), CancellationToken.None);
+            await contexto.SaveChangesAsync();
+        }
+
+        Assert.Empty(escenario.Outbox.PorTipo(IntentoPagoFallido.EventType));
+    }
+
+    [Fact]
     public async Task Los_reintentos_usan_la_misma_Idempotency_Key_el_identificador_del_pago()
     {
         var escenario = new Escenario();
@@ -311,7 +395,7 @@ public sealed class ServicioCobroTests
             typeof(SolicitudCobro), typeof(PeticionCargoPayKlik), typeof(ResultadoPayKlik),
             typeof(PagoDto), typeof(IntentoPagoDto),
             typeof(PagoAplicadoData), typeof(PagoRechazadoData), typeof(PagoPendienteData),
-            typeof(EnlaceReintentoData)
+            typeof(EnlaceReintentoData), typeof(IntentoPagoFallidoData)
         };
 
         var prohibidos = new[]

@@ -1,15 +1,35 @@
-# Contrato de eventos del contexto Pagos — v1.2
+# Contrato de eventos del contexto Pagos — v1.3
 
 **Proyecto:** SGO-Logic — Fase 2
 **Curso:** Análisis y Diseño de Sistemas 2, Sección B
 **Contexto emisor:** Pagos
 **Estado:** propuesto para congelamiento
-**Fecha:** 2026-09-20
+**Fecha:** 2026-09-22
 **Depende de:** `sgo-eventos-envelope-v1.md`
 
 ---
 
-## 0. Cambios respecto a v1.1
+## 0. Cambios de v1.3 respecto a v1.2
+
+Se agrega el evento 6, `IntentoPagoFallido` (`pagos.intento.fallido`), solo para
+auditoría. EAC-01 exige el 100% de intentos fallidos auditados, pero con el
+reintento con backoff (ADR-009) un cobro puede hacer dos llamadas a PayKlik: las
+dos quedaban como intento `FALLIDO` en `pagos.intento_pago` y solo la última
+llegaba a Auditoría, dentro de `PagoPendiente`. La prueba de carga del 2026-09-19
+medía 90.30% con ese criterio.
+
+Desde v1.3, cada intento de cobro que termina `FALLIDO` (timeout, 5xx, red o
+circuito abierto), intermedio o final, emite un `IntentoPagoFallido` por el
+Outbox, en la misma transacción que registra el intento. No es un evento de
+resultado: la regla 1 de la sección 6 no cambia y cada cobro sigue produciendo
+exactamente un `PagoAplicado`, `PagoRechazado` o `PagoPendiente`, con la misma
+`sequence` que antes. La routing key queda fuera de `pagos.pago.*` para que
+ningún consumidor de resultados lo reciba; solo lo recibe Auditoría por `#`.
+
+Cambio aditivo (envelope sección 8): agrega un evento nuevo y no toca los cinco
+existentes. No requiere renegociar con los consumidores.
+
+## 0.0 Cambios de v1.2 respecto a v1.1
 
 Se ejecuta la tokenización de ADR-010: el cobro con `TARJETA` se hace con el token
 que PayKlik emite al tokenizar la tarjeta en el navegador, que Órdenes propaga en
@@ -34,7 +54,7 @@ Un problema con el token es un error del cliente, no una falla del proveedor: el
 pago queda `RECHAZADO` (no `PENDIENTE`), no hay enlace de reintento, no hay
 reintento automático y no cuenta para el disyuntor (regla 1 de la sección 6).
 
-## 0.0 Cambios de v1.1 respecto a v1
+## 0.00 Cambios de v1.1 respecto a v1
 
 Se agregan dos eventos de resultado de reembolso (`ReembolsoAplicado`,
 `ReembolsoFallido`), que Pagos publica al consumir `ordenes.devolucion.registrada`
@@ -114,7 +134,8 @@ responda.
 
 ## 3. Catálogo de eventos
 
-Cinco eventos. Ninguno más se publica bajo `pagos.*` en esta versión.
+Seis eventos: cinco de resultado y uno de auditoría. Ninguno más se publica bajo
+`pagos.*` en esta versión.
 
 | # | `eventType` | Routing key | CU | Consumidores |
 |---|---|---|---|---|
@@ -123,8 +144,9 @@ Cinco eventos. Ninguno más se publica bajo `pagos.*` en esta versión.
 | 3 | `PagoPendiente` | `pagos.pago.pendiente` | CU-03, HU-004 | Órdenes, Consulta de Estado |
 | 4 | `ReembolsoAplicado` | `pagos.reembolso.aplicado` | HU-014 | Órdenes, Consulta de Estado |
 | 5 | `ReembolsoFallido` | `pagos.reembolso.fallido` | HU-014 | Órdenes, Consulta de Estado |
+| 6 | `IntentoPagoFallido` | `pagos.intento.fallido` | CU-03, HU-004, EAC-01 | Solo Auditoría |
 
-Auditoría consume los cinco por su binding `#` y no se lista fila por fila.
+Auditoría consume los seis por su binding `#` y no se lista fila por fila.
 
 ---
 
@@ -151,9 +173,9 @@ recibe dos `data` distintos, `pagos.ordenes` no usa esa clase base: despacha por
 | Campo | Valor en este contexto |
 |---|---|
 | `source` | `"pagos"` |
-| `aggregateType` | `"Pago"` en los cinco eventos. |
+| `aggregateType` | `"Pago"` en los eventos 1 a 5. `"IntentoPago"` en el evento 6. |
 | `aggregateId` | En los eventos 1 a 3, el `ordenId` de la orden que se está cobrando (formato `ORD-<año>-<correlativo de 6 dígitos>`); Pagos es un agregado por orden. En los eventos 4 y 5 (reembolso), el `devolucionId` (formato `DEV-<año>-<correlativo de 6 dígitos>`): el reembolso se identifica por la devolución que lo origina, no por la orden, porque una orden puede tener más de una devolución. |
-| `sequence` | En los eventos 1 a 3, asignado por Pagos, monotónico por `ordenId`, empieza en 1 con el primer evento de resultado de ese pago; un pago que pasa por `PENDIENTE` y luego `APLICADO` emite dos eventos con `sequence` 1 y 2. En los eventos 4 y 5, siempre `1`: cada devolución dispara un único intento de reembolso, sin reintento automático. |
+| `sequence` | En los eventos 1 a 3, asignado por Pagos, monotónico por `ordenId`, empieza en 1 con el primer evento de resultado de ese pago; un pago que pasa por `PENDIENTE` y luego `APLICADO` emite dos eventos con `sequence` 1 y 2. En los eventos 4 y 5, siempre `1`: cada devolución dispara un único intento de reembolso, sin reintento automático. En el evento 6, el `intentoNumero` del intento fallido; no consume la `sequence` del pago, así que los eventos 1 a 3 conservan la numeración de v1.2. El `aggregateId` del evento 6 es el `ordenId`. |
 
 ---
 
@@ -170,6 +192,10 @@ recibe dos `data` distintos, `pagos.ordenes` no usa esa clase base: despacha por
      enlace de reintento y el disyuntor no lo cuenta. Con `TOKEN_REQUERIDO` Pagos
      ni siquiera invoca a PayKlik.
    - Timeout, 5xx o excepción de red → `PagoPendiente` (con enlace de reintento).
+
+   Aparte del evento de resultado, cada llamada que termina en intento `FALLIDO`
+   emite un `IntentoPagoFallido` (evento 6), incluidas las que un reintento
+   automático supera. Es solo de auditoría y no cuenta como evento de resultado.
 2. **Un reembolso produce exactamente un evento de resultado**, con la misma
    lógica de desenlace que el cobro pero sin enlace de reintento ni estado
    `PENDIENTE`: aprobado → `ReembolsoAplicado`; rechazado, o sin respuesta útil
@@ -384,13 +410,53 @@ fallido y su resolución es manual, fuera de este contrato.
 }
 ```
 
+### 7.6 `IntentoPagoFallido`
+
+Routing key `pagos.intento.fallido`. Solo de auditoría. Se emite una vez por cada
+intento de cobro que termina `FALLIDO` (timeout, 5xx, red o circuito abierto),
+incluidos los intermedios que un reintento automático supera. Se encola en la
+misma transacción que el intento. No se emite para intentos `EXITOSO` ni
+`RECHAZADO`, ni en reembolsos (`ReembolsoFallido` ya cubre su único intento).
+
+| Campo de `data` | Tipo | Obligatorio | Notas |
+|---|---|---|---|
+| `ordenId` | string | sí | |
+| `clienteId` | string | sí | |
+| `canal` | string | sí | Enum `Canal`. |
+| `moneda` | string | sí | Enum `Moneda`. |
+| `monto` | string | sí | Decimal como cadena. |
+| `medioPago` | string | sí | Enum `MedioPago`. |
+| `intentoNumero` | integer | sí | Número del intento fallido dentro del pago. |
+| `codigoRespuesta` | string | sí | `"TIMEOUT"`, `"PROVEEDOR_5XX"`, `"RED"` o `"CIRCUITO_ABIERTO"`. |
+| `motivoFalla` | string | sí | Texto corto legible de la causa. |
+| `latenciaMs` | integer | sí | Duración de la llamada; cercana a cero con el circuito abierto. |
+| `seReintenta` | boolean | sí | `true` si Pagos reintenta el cobro a continuación; `false` si es el último intento, que además produce `PagoPendiente`. |
+| `ocurridoEn` | string | sí | ISO 8601 UTC. |
+
+```json
+{
+  "ordenId": "ORD-2026-000123",
+  "clienteId": "CLI-000045",
+  "canal": "WEB",
+  "moneda": "GTQ",
+  "monto": "1400.00",
+  "medioPago": "TARJETA",
+  "intentoNumero": 1,
+  "codigoRespuesta": "PROVEEDOR_5XX",
+  "motivoFalla": "PayKlik respondio 503",
+  "latenciaMs": 42,
+  "seReintenta": true,
+  "ocurridoEn": "2026-09-22T14:31:04.000Z"
+}
+```
+
 ---
 
 ## 8. Matriz de consumo
 
 | Consumidor | Dueño | HU | Eventos | Para qué |
 |---|---|---|---|---|
-| Auditoría | Julio | HU-006 | Los cinco, por binding `#` | Bitácora append-only indexada por `transactionId` (EV-30, EAC-03). |
+| Auditoría | Julio | HU-006 | Los seis, por binding `#` | Bitácora append-only indexada por `transactionId` (EV-30, EAC-03). Con el evento 6, cada intento de cobro fallido queda en la bitácora (EAC-01). |
 | Órdenes | Angel | CU-03, HU-014 | 1, 2, 3, 4, 5 | Avanzar la saga: `PAGO_APLICADO` con el evento 1; `PAGO_PENDIENTE` con el evento 3 (y emitir el enlace al cliente); tratar el rechazo con el evento 2. Con los eventos 4 y 5, cerrar la devolución (`MarcarReembolsoAplicado` / `MarcarReembolsoFallido`) sin cambiar el estado de la orden. |
 | Consulta de Estado | Jonathan | HU-010 | `pagos.pago.*` | Enriquecer la vista 360 con el estado del cobro. No materializa estado de Orden. |
 
