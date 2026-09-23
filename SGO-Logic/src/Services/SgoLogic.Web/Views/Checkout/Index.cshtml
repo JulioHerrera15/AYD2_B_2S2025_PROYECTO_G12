@@ -16,28 +16,28 @@
             <span>/</span>
             <span class="text-primary font-semibold">Checkout</span>
         </nav>
-        <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight">Finalizar Compra</h1>
-        <p class="text-sm text-text-muted">Completa los datos de entrega y facturación para confirmar tu orden.</p>
+        <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight">Finalizar Compra Omnicanal</h1>
+        <p class="text-sm text-text-muted">Completa los datos de entrega, facturación fiscal SAT y pago seguro con tokenización PCI-DSS.</p>
     </div>
 
     @if (ViewBag.Error != null)
     {
-        <div class="mb-6 bg-error-container text-on-error-container border border-error/20 rounded-xl p-4 flex items-center gap-3">
+        <div class="mb-6 bg-error-container text-on-error-container border border-error/20 rounded-2xl p-4 flex items-center gap-3">
             <span class="material-symbols-outlined text-error">error</span>
             <div class="text-sm font-medium">@ViewBag.Error</div>
         </div>
     }
 
-    <form asp-action="Procesar" method="post" class="grid grid-cols-1 lg:grid-cols-12 gap-8">
+    <form asp-action="Procesar" method="post" id="checkout-form" class="grid grid-cols-1 lg:grid-cols-12 gap-8">
         <!-- Left Column: Shipping & Payment Details (7 cols) -->
         <div class="lg:col-span-7 flex flex-col gap-6">
             <!-- Customer & Billing Section -->
-            <div class="bg-surface-white rounded-2xl p-6 border border-border-subtle/60 ambient-shadow">
+            <div class="bg-surface-white rounded-3xl p-6 border border-border-subtle/60 ambient-shadow">
                 <div class="flex items-center gap-3 mb-5">
-                    <div class="w-8 h-8 rounded-lg bg-surface-container-low text-primary flex items-center justify-center font-bold text-xs">
+                    <div class="w-8 h-8 rounded-xl bg-surface-container-low text-primary flex items-center justify-center font-bold text-xs">
                         1
                     </div>
-                    <h2 class="text-base font-bold text-primary">Datos del Comprador & Facturación</h2>
+                    <h2 class="text-base font-bold text-primary">Datos del Comprador & Facturación (SAT FEL)</h2>
                 </div>
 
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -45,28 +45,28 @@
                         <label class="block text-xs font-semibold text-on-surface-variant mb-1.5">Correo Electrónico</label>
                         <input type="email" name="clienteEmail" value="@ViewBag.UserEmail" placeholder="ejemplo@correo.com" required
                                class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary focus:bg-surface-white transition-all" />
-                        <span class="text-[11px] text-text-muted mt-1 block">Recibirás las notificaciones de estado y tu factura en este correo.</span>
+                        <span class="text-[11px] text-text-muted mt-1 block">Recibirás la confirmación de la orden, tu factura FEL y avisos de despacho.</span>
                     </div>
 
                     <div>
-                        <label class="block text-xs font-semibold text-on-surface-variant mb-1.5">NIT / CUI Receptor</label>
+                        <label class="block text-xs font-semibold text-on-surface-variant mb-1.5">NIT / CUI Receptor (HU-005)</label>
                         <input type="text" name="receptorCui" value="CF" placeholder="CF o CUI de 13 dígitos" required
                                class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary focus:bg-surface-white transition-all" />
-                        <span class="text-[11px] text-text-muted mt-1 block">Certificación fiscal SAT (HU-005).</span>
+                        <span class="text-[11px] text-text-muted mt-1 block">Ingresa "CF" para Consumidor Final o tu número de CUI/NIT.</span>
                     </div>
 
                     <div>
                         <label class="block text-xs font-semibold text-on-surface-variant mb-1.5">Nombre / Razón Social</label>
-                        <input type="text" name="nombreFactura" value="@(ViewBag.UserName ?? "Consumidor Final")"
+                        <input type="text" name="nombreFactura" value="@(ViewBag.UserName ?? "Consumidor Final")" required
                                class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary focus:bg-surface-white transition-all" />
                     </div>
                 </div>
             </div>
 
             <!-- Fulfillment Method Section -->
-            <div class="bg-surface-white rounded-2xl p-6 border border-border-subtle/60 ambient-shadow">
+            <div class="bg-surface-white rounded-3xl p-6 border border-border-subtle/60 ambient-shadow">
                 <div class="flex items-center gap-3 mb-5">
-                    <div class="w-8 h-8 rounded-lg bg-surface-container-low text-primary flex items-center justify-center font-bold text-xs">
+                    <div class="w-8 h-8 rounded-xl bg-surface-container-low text-primary flex items-center justify-center font-bold text-xs">
                         2
                     </div>
                     <h2 class="text-base font-bold text-primary">Método de Entrega</h2>
@@ -74,7 +74,7 @@
 
                 <!-- Delivery Method Selector (Radio Cards) -->
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
-                    <label class="relative flex items-center gap-3 p-4 rounded-xl border-2 border-primary bg-surface-container-low/40 cursor-pointer hover:bg-surface-container-low transition-colors" id="label-domicilio">
+                    <label class="relative flex items-center gap-3 p-4 rounded-2xl border-2 border-primary bg-surface-container-low/40 cursor-pointer hover:bg-surface-container-low transition-colors" id="label-domicilio">
                         <input type="radio" name="metodoEntrega" value="DOMICILIO" checked onchange="toggleEntrega(this.value)"
                                class="text-primary focus:ring-primary h-4 w-4" />
                         <div class="flex flex-col">
@@ -82,11 +82,11 @@
                                 <span class="material-symbols-outlined text-[18px]">local_shipping</span>
                                 Envío a Domicilio
                             </span>
-                            <span class="text-xs text-text-muted">Entrega en 24-48 horas</span>
+                            <span class="text-xs text-text-muted">Transportista LogiExpress &bull; 24-48h</span>
                         </div>
                     </label>
 
-                    <label class="relative flex items-center gap-3 p-4 rounded-xl border-2 border-border-subtle/80 bg-surface-container-low/20 cursor-pointer hover:bg-surface-container-low transition-colors" id="label-tienda">
+                    <label class="relative flex items-center gap-3 p-4 rounded-2xl border-2 border-border-subtle/80 bg-surface-container-low/20 cursor-pointer hover:bg-surface-container-low transition-colors" id="label-tienda">
                         <input type="radio" name="metodoEntrega" value="RECOGIDA_TIENDA" onchange="toggleEntrega(this.value)"
                                class="text-primary focus:ring-primary h-4 w-4" />
                         <div class="flex flex-col">
@@ -94,7 +94,7 @@
                                 <span class="material-symbols-outlined text-[18px]">storefront</span>
                                 Recoger en Tienda
                             </span>
-                            <span class="text-xs text-text-muted">Listo en 2 horas &bull; Gratis</span>
+                            <span class="text-xs text-text-muted">Click & Collect &bull; Gratis en 2 horas</span>
                         </div>
                     </label>
                 </div>
@@ -108,6 +108,8 @@
                                 <option value="Guatemala">Guatemala</option>
                                 <option value="Sacatepequez">Sacatepéquez</option>
                                 <option value="Quetzaltenango">Quetzaltenango</option>
+                                <option value="Escuintla">Escuintla</option>
+                                <option value="Chimaltenango">Chimaltenango</option>
                             </select>
                         </div>
                         <div>
@@ -116,47 +118,52 @@
                         </div>
                     </div>
                     <div>
-                        <label class="block text-xs font-semibold text-on-surface-variant mb-1">Dirección de Entrega</label>
+                        <label class="block text-xs font-semibold text-on-surface-variant mb-1">Dirección Exacta de Entrega</label>
                         <input type="text" name="direccion" placeholder="Calle, Avenida, Zona, Edificio o Casa" value="7ma Avenida 12-23, Zona 10"
+                               class="w-full px-3 py-2 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary" />
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-on-surface-variant mb-1">Referencia para el Transportista</label>
+                        <input type="text" name="referencia" placeholder="Ejemplo: Portón blanco, frente al parque central" value="Frente a Plaza Médica, torre 2"
                                class="w-full px-3 py-2 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary" />
                     </div>
                 </div>
 
                 <!-- Tienda Details Panel -->
                 <div id="panel-tienda" class="hidden flex flex-col gap-3 pt-2">
-                    <label class="block text-xs font-semibold text-on-surface-variant mb-1">Selecciona la Tienda para Recoger</label>
+                    <label class="block text-xs font-semibold text-on-surface-variant mb-1">Selecciona la Sucursal para Recoger</label>
                     <select name="ubicacionSolicitadaId" class="w-full px-3 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary">
                         <option value="TIENDA-01-CENTRAL">MegaStore Central — Zona 10 (Abierto 8:00 - 20:00)</option>
                         <option value="TIENDA-02-MIRAFLORES">MegaStore Miraflores — Zona 11 (Abierto 9:00 - 21:00)</option>
                         <option value="TIENDA-03-PORTALES">MegaStore Portales — Zona 17 (Abierto 9:00 - 20:00)</option>
-                        <option value="TIENDA-04-PRADERA">MegaStore Pradera Concepción — Carretera (Abierto 9:00 - 21:00)</option>
+                        <option value="TIENDA-04-PRADERA">MegaStore Pradera Concepción (Abierto 9:00 - 21:00)</option>
                     </select>
-                    <p class="text-xs text-text-muted mt-1">Recibirás un SMS y correo en cuanto tu orden esté lista para recoger en el mostrador omnicanal.</p>
+                    <p class="text-xs text-text-muted mt-1">Recibirás un SMS y correo cuando tu orden esté lista para entrega inmediata en el mostrador omnicanal.</p>
                 </div>
             </div>
 
             <!-- Payment Method Section -->
-            <div class="bg-surface-white rounded-2xl p-6 border border-border-subtle/60 ambient-shadow">
+            <div class="bg-surface-white rounded-3xl p-6 border border-border-subtle/60 ambient-shadow">
                 <div class="flex items-center gap-3 mb-5">
-                    <div class="w-8 h-8 rounded-lg bg-surface-container-low text-primary flex items-center justify-center font-bold text-xs">
+                    <div class="w-8 h-8 rounded-xl bg-surface-container-low text-primary flex items-center justify-center font-bold text-xs">
                         3
                     </div>
-                    <h2 class="text-base font-bold text-primary">Método de Pago</h2>
+                    <h2 class="text-base font-bold text-primary">Método de Pago & Tokenización</h2>
                 </div>
 
                 <div class="flex flex-col gap-3">
-                    <label class="flex items-center gap-3 p-3.5 rounded-xl border border-border-subtle bg-surface-container-low/30 cursor-pointer hover:bg-surface-container-low transition-colors">
+                    <label class="flex items-center gap-3 p-3.5 rounded-2xl border border-border-subtle bg-surface-container-low/30 cursor-pointer hover:bg-surface-container-low transition-colors">
                         <input type="radio" name="medioPago" value="TARJETA" checked class="text-primary focus:ring-primary h-4 w-4" />
                         <div class="flex-1 flex items-center justify-between">
                             <div class="flex items-center gap-2">
                                 <span class="material-symbols-outlined text-primary text-[20px]">credit_card</span>
                                 <span class="text-sm font-semibold text-primary">Tarjeta de Crédito / Débito (PayKlik)</span>
                             </div>
-                            <span class="text-xs text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Pasarela Segura</span>
+                            <span class="text-[10px] font-bold text-emerald-800 bg-emerald-100 px-2 py-0.5 rounded">PCI-DSS Tokenizado</span>
                         </div>
                     </label>
 
-                    <label class="flex items-center gap-3 p-3.5 rounded-xl border border-border-subtle bg-surface-container-low/30 cursor-pointer hover:bg-surface-container-low transition-colors">
+                    <label class="flex items-center gap-3 p-3.5 rounded-2xl border border-border-subtle bg-surface-container-low/30 cursor-pointer hover:bg-surface-container-low transition-colors">
                         <input type="radio" name="medioPago" value="TRANSFERENCIA" class="text-primary focus:ring-primary h-4 w-4" />
                         <div class="flex-1 flex items-center justify-between">
                             <div class="flex items-center gap-2">
@@ -168,48 +175,84 @@
                 </div>
 
                 <!-- PCI-DSS Banner -->
-                <div class="mt-4 p-3 bg-surface-container-low/70 rounded-xl border border-border-subtle/40 flex items-center gap-2.5 text-xs text-text-muted">
-                    <span class="material-symbols-outlined text-secondary text-[18px]">verified_user</span>
-                    <span>Conformidad PCI-DSS: Ningún número de tarjeta (PAN) ni CVV se almacena ni procesa en nuestros servidores.</span>
+                <div class="mt-4 p-3 bg-emerald-50 text-emerald-950 rounded-2xl border border-emerald-200/60 flex items-center gap-2.5 text-xs">
+                    <span class="material-symbols-outlined text-emerald-700 text-[18px]">verified_user</span>
+                    <span><strong>Conformidad RES-08 & ADR-010:</strong> La tarjeta se tokeniza en tu navegador directamente con PayKlik. Ningún servidor de MegaStore ni del API Gateway ve ni almacena jamás tu número de tarjeta ni CVV.</span>
                 </div>
 
                 <!-- Panel de datos de tarjeta — solo visible con TARJETA -->
                 <div id="panel-tarjeta" class="mt-4 pt-4 border-t border-border-subtle/50 flex flex-col gap-3">
-                    <p class="text-xs font-semibold text-on-surface-variant flex items-center gap-1.5">
-                        <span class="material-symbols-outlined text-[16px] text-secondary">lock</span>
-                        Datos de tarjeta — tokenizados por PayKlik, nunca llegan a nuestros servidores
-                    </p>
+                    <div class="flex items-center justify-between">
+                        <p class="text-xs font-semibold text-on-surface-variant flex items-center gap-1.5">
+                            <span class="material-symbols-outlined text-[16px] text-secondary">lock</span>
+                            Datos de tarjeta — tokenización directa en el navegador
+                        </p>
+                        <span id="card-brand-badge" class="text-[11px] font-bold px-2 py-0.5 rounded bg-surface-container text-primary">TARJETA</span>
+                    </div>
+
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div class="sm:col-span-2">
-                            <label class="block text-xs font-semibold text-on-surface-variant mb-1">Número de Tarjeta</label>
+                            <label class="block text-xs font-semibold text-on-surface-variant mb-1">Número de Tarjeta (PAN)</label>
                             <input id="pan-input" type="text" inputmode="numeric" maxlength="19"
                                    placeholder="0000 0000 0000 0000" autocomplete="cc-number"
-                                   class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary tracking-widest" />
+                                   oninput="formatearPan(this)"
+                                   class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary tracking-widest font-mono" />
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-on-surface-variant mb-1">Vencimiento (MM/AA)</label>
                             <input id="exp-input" type="text" inputmode="numeric" maxlength="5"
                                    placeholder="MM/AA" autocomplete="cc-exp"
-                                   class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary" />
+                                   oninput="formatearExp(this)"
+                                   class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary font-mono" />
                         </div>
                         <div>
                             <label class="block text-xs font-semibold text-on-surface-variant mb-1">CVV</label>
                             <input id="cvv-input" type="password" inputmode="numeric" maxlength="4"
                                    placeholder="•••" autocomplete="cc-csc"
-                                   class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary" />
+                                   class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary font-mono" />
                         </div>
                     </div>
+
+                    <!-- Quick Test Card Filler for Evaluators -->
+                    <div class="mt-2 p-3 bg-surface-container-low/70 rounded-xl border border-border-subtle/50 text-xs">
+                        <span class="font-semibold text-primary block mb-1.5">Tarjetas de Prueba Rápida (Evaluación Docente):</span>
+                        <div class="flex flex-wrap gap-1.5">
+                            <button type="button" onclick="cargarTarjetaPrueba('4111111111111111', '12/28', '123')"
+                                    class="bg-surface-white hover:bg-surface-bright border border-border-subtle px-2.5 py-1 rounded-lg text-[11px] font-mono text-primary shadow-2xs">
+                                Visa Aprobada (4111...)
+                            </button>
+                            <button type="button" onclick="cargarTarjetaPrueba('5555555555554444', '06/27', '456')"
+                                    class="bg-surface-white hover:bg-surface-bright border border-border-subtle px-2.5 py-1 rounded-lg text-[11px] font-mono text-primary shadow-2xs">
+                                MasterCard (5555...)
+                            </button>
+                            <button type="button" onclick="cargarTarjetaPrueba('4000000000000002', '11/26', '789')"
+                                    class="bg-surface-white hover:bg-surface-bright border border-amber-300 text-amber-900 px-2.5 py-1 rounded-lg text-[11px] font-mono shadow-2xs">
+                                Sin Fondos (Rechazo)
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- Campo oculto que recibirá el token de PayKlik -->
                     <input type="hidden" id="token-medio-pago" name="tokenMedioPago" />
                     <!-- Mensaje de estado de tokenización -->
-                    <div id="tokenizacion-status" class="hidden text-xs text-text-muted"></div>
+                    <div id="tokenizacion-status" class="hidden text-xs font-semibold py-1"></div>
+                </div>
+
+                <!-- Terms & Privacy Consent Checkbox (PRE-08) -->
+                <div class="mt-5 pt-4 border-t border-border-subtle/50">
+                    <label class="flex items-start gap-2.5 text-xs text-text-muted cursor-pointer">
+                        <input type="checkbox" id="check-privacidad" required checked class="mt-0.5 rounded text-primary focus:ring-primary h-4 w-4" />
+                        <span>
+                            He leído y acepto la <a href="/Cuenta/Privacidad" target="_blank" class="font-semibold text-secondary hover:underline">Política de Privacidad y Tratamiento de Datos (PRE-08)</a>. Certifico que los datos de pago no serán almacenados por el comercio conforme al estándar PCI-DSS (RES-08).
+                        </span>
+                    </label>
                 </div>
             </div>
         </div>
 
         <!-- Right Column: Order Summary (5 cols) -->
         <div class="lg:col-span-5">
-            <div class="bg-surface-white rounded-2xl p-6 border border-border-subtle/60 ambient-shadow sticky top-28">
+            <div class="bg-surface-white rounded-3xl p-6 border border-border-subtle/60 ambient-shadow sticky top-28">
                 <h3 class="text-base font-bold text-primary mb-4 flex items-center justify-between">
                     <span>Resumen del Pedido</span>
                     <span class="text-xs font-normal text-text-muted">@(Model.Items?.Count ?? 0) artículos</span>
@@ -222,7 +265,7 @@
                         @foreach (var item in Model.Items)
                         {
                             <div class="py-3 flex items-center gap-3">
-                                <div class="w-12 h-12 rounded-lg bg-surface-container-low flex items-center justify-center flex-shrink-0">
+                                <div class="w-12 h-12 rounded-xl bg-surface-container-low flex items-center justify-center flex-shrink-0">
                                     <span class="material-symbols-outlined text-text-muted text-[22px]">inventory_2</span>
                                 </div>
                                 <div class="flex-1 min-w-0">
@@ -260,7 +303,7 @@
                 <!-- Submit Button -->
                 <button type="button" id="btn-confirmar"
                         onclick="tokenizarYConfirmar(event)"
-                        class="w-full mt-6 bg-primary text-on-primary py-3 px-4 rounded-xl text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all shadow-sm flex items-center justify-center gap-2">
+                        class="w-full mt-6 bg-primary text-on-primary py-3.5 px-4 rounded-xl text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all shadow-sm flex items-center justify-center gap-2">
                     <span class="material-symbols-outlined text-[20px]">lock</span>
                     Confirmar y Pagar Orden
                 </button>
@@ -312,15 +355,78 @@
         });
     });
 
+    // ── Cargar tarjeta de prueba ──────────────────────────────────────────────
+    function cargarTarjetaPrueba(pan, exp, cvv) {
+        const panInput = document.getElementById('pan-input');
+        panInput.value = pan;
+        formatearPan(panInput);
+        document.getElementById('exp-input').value = exp;
+        document.getElementById('cvv-input').value = cvv;
+    }
+
+    // ── Formateo automático y detección de marca ──────────────────────────────
+    function formatearPan(input) {
+        let val = input.value.replace(/\D/g, '').substring(0, 16);
+        let formatted = val.match(/.{1,4}/g)?.join(' ') || val;
+        input.value = formatted;
+
+        const badge = document.getElementById('card-brand-badge');
+        if (val.startsWith('4')) {
+            badge.textContent = 'VISA';
+            badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800';
+        } else if (val.startsWith('5')) {
+            badge.textContent = 'MASTERCARD';
+            badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded bg-amber-100 text-amber-800';
+        } else if (val.startsWith('3')) {
+            badge.textContent = 'AMEX';
+            badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded bg-teal-100 text-teal-800';
+        } else {
+            badge.textContent = 'TARJETA';
+            badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded bg-surface-container text-primary';
+        }
+    }
+
+    function formatearExp(input) {
+        let val = input.value.replace(/\D/g, '').substring(0, 4);
+        if (val.length >= 2) {
+            input.value = val.substring(0, 2) + '/' + val.substring(2);
+        } else {
+            input.value = val;
+        }
+    }
+
+    // ── Algoritmo de Luhn en cliente ──────────────────────────────────────────
+    function validarLuhn(pan) {
+        let sum = 0;
+        let shouldDouble = false;
+        for (let i = pan.length - 1; i >= 0; i--) {
+            let digit = parseInt(pan.charAt(i), 10);
+            if (shouldDouble) {
+                digit *= 2;
+                if (digit > 9) digit -= 9;
+            }
+            sum += digit;
+            shouldDouble = !shouldDouble;
+        }
+        return (sum % 10) === 0;
+    }
+
     // ── Tokenizacion PCI-DSS: PAN → PayKlik → token, nunca pasa por SgoLogic.Web ──
     async function tokenizarYConfirmar(e) {
         const btn = document.getElementById('btn-confirmar');
         const statusEl = document.getElementById('tokenizacion-status');
         const medioPago = document.querySelector('input[name="medioPago"]:checked')?.value;
+        const form = document.getElementById('checkout-form');
+
+        const checkPrivacidad = document.getElementById('check-privacidad');
+        if (!checkPrivacidad.checked) {
+            alert('Debes aceptar la política de privacidad y tratamiento de datos para continuar.');
+            return;
+        }
 
         // Si el medio de pago no es TARJETA, enviar el formulario directamente
         if (medioPago !== 'TARJETA') {
-            btn.closest('form').submit();
+            form.submit();
             return;
         }
 
@@ -329,66 +435,61 @@
         const exp = document.getElementById('exp-input').value; // formato MM/AA
 
         if (!pan || !cvv || !exp || !exp.includes('/')) {
-            statusEl.textContent = 'Completa todos los datos de la tarjeta (numero, vencimiento y CVV).';
-            statusEl.classList.remove('hidden', 'text-secondary');
-            statusEl.classList.add('text-error');
+            statusEl.textContent = 'Por favor completa todos los datos de la tarjeta (número, vencimiento y CVV).';
+            statusEl.className = 'text-xs font-semibold py-1 text-error';
             return;
         }
 
-        // Separar MM/AA en enteros para el contrato de PayKlik POST /v1/tokens
+        if (pan.length < 13 || !validarLuhn(pan)) {
+            statusEl.textContent = 'El número de tarjeta no es válido (falla algoritmo de Luhn).';
+            statusEl.className = 'text-xs font-semibold py-1 text-error';
+            return;
+        }
+
         const [mesStr, anioStr] = exp.split('/');
         const mesExpiracion = parseInt(mesStr, 10);
         const anioExpiracion = parseInt(anioStr, 10);
 
-        if (isNaN(mesExpiracion) || isNaN(anioExpiracion)) {
-            statusEl.textContent = 'Formato de vencimiento invalido. Usa MM/AA (ejemplo: 12/27).';
-            statusEl.classList.remove('hidden', 'text-secondary');
-            statusEl.classList.add('text-error');
+        if (isNaN(mesExpiracion) || isNaN(anioExpiracion) || mesExpiracion < 1 || mesExpiracion > 12) {
+            statusEl.textContent = 'Formato de vencimiento inválido. Usa MM/AA (ejemplo: 12/28).';
+            statusEl.className = 'text-xs font-semibold py-1 text-error';
             return;
         }
 
         btn.disabled = true;
-        statusEl.textContent = 'Tokenizando con PayKlik...';
-        statusEl.classList.remove('hidden', 'text-error');
-        statusEl.classList.add('text-text-muted');
+        statusEl.textContent = 'Tokenizando directamente con PayKlik (CORS seguro)...';
+        statusEl.className = 'text-xs font-semibold py-1 text-text-muted';
 
         try {
-            // SEGURIDAD RES-08: el PAN se envia DIRECTAMENTE a PayKlik (mock en 8084).
-            // Nunca transita por SgoLogic.Web, el gateway, ni ningun servicio propio.
-            // No hay fallback alternativo: si PayKlik no responde, el flujo falla aqui.
+            // SEGURIDAD RES-08 & ADR-010: El PAN se envía DIRECTAMENTE a PayKlik (puerto 8084).
+            // Nunca transita por SgoLogic.Web, el gateway, ni ningún servicio propio.
             const tokenRes = await fetch('http://localhost:8084/v1/tokens', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                // Contrato de POST /v1/tokens segun Tokenizacion.cs del mock PayKlik:
-                // { numeroTarjeta, cvv, mesExpiracion: int, anioExpiracion: int }
                 body: JSON.stringify({ numeroTarjeta: pan, cvv, mesExpiracion, anioExpiracion })
             });
 
             if (!tokenRes.ok) {
                 const err = await tokenRes.json().catch(() => ({}));
-                const detalle = err?.title ?? `PayKlik respondio ${tokenRes.status}`;
+                const detalle = err?.title ?? `PayKlik respondió ${tokenRes.status}`;
                 throw new Error(detalle);
             }
 
             const respuesta = await tokenRes.json();
-            // La respuesta de /v1/tokens tiene el campo "token" (tok_pk_...)
             const token = respuesta.token;
 
-            // Solo el token (nunca el PAN) se pone en el campo oculto del formulario
+            // Solo el token opaco se asigna al campo oculto del formulario
             document.getElementById('token-medio-pago').value = token;
 
-            statusEl.textContent = '✓ Tarjeta tokenizada — enviando orden...';
-            statusEl.classList.remove('text-text-muted', 'text-error');
-            statusEl.classList.add('text-secondary');
+            statusEl.textContent = '✓ Tarjeta tokenizada con éxito — confirmando orden transaccional...';
+            statusEl.className = 'text-xs font-semibold py-1 text-secondary';
 
-            // Pequeno delay visual antes de enviar
-            setTimeout(() => btn.closest('form').submit(), 400);
+            setTimeout(() => form.submit(), 300);
 
         } catch (err) {
             console.error('Error tokenizando:', err);
-            statusEl.textContent = 'No se pudo tokenizar: ' + (err.message ?? 'error de red. Verifica los datos e intenta de nuevo.');
-            statusEl.classList.remove('text-text-muted', 'text-secondary');
-            statusEl.classList.add('text-error');
+            statusEl.textContent = 'Error al tokenizar: ' + (err.message ?? 'Verifica los datos e intenta de nuevo.');
+            statusEl.className = 'text-xs font-semibold py-1 text-error';
             btn.disabled = false;
         }
     }

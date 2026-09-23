@@ -3,7 +3,7 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - MegaStore Logística</title>
+    <title>@ViewData["Title"] - MegaStore Logística & Comercio Omnicanal</title>
     <!-- Preconnect and Preload Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -77,33 +77,8 @@
                         "xl": "0.75rem",
                         "full": "9999px"
                     },
-                    spacing: {
-                        "container-max": "1200px",
-                        "unit": "8px",
-                        "gutter": "24px",
-                        "margin-desktop": "40px",
-                        "margin-mobile": "20px"
-                    },
                     fontFamily: {
-                        sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "SF Pro Text", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"],
-                        "headline-sm": ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
-                        "label-sm": ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
-                        "body-lg": ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
-                        "display-lg-mobile": ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
-                        "body-md": ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
-                        "display-lg": ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
-                        "label-md": ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
-                        "headline-md": ["Inter", "-apple-system", "BlinkMacSystemFont", "sans-serif"]
-                    },
-                    fontSize: {
-                        "headline-sm": ["24px", { lineHeight: "1.3", fontWeight: "600" }],
-                        "label-sm": ["12px", { lineHeight: "1.4", fontWeight: "600" }],
-                        "body-lg": ["19px", { lineHeight: "1.5", fontWeight: "400" }],
-                        "display-lg-mobile": ["40px", { lineHeight: "1.1", letterSpacing: "-0.01em", fontWeight: "700" }],
-                        "body-md": ["17px", { lineHeight: "1.5", fontWeight: "400" }],
-                        "display-lg": ["56px", { lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "700" }],
-                        "label-md": ["14px", { lineHeight: "1.4", letterSpacing: "0.01em", fontWeight: "500" }],
-                        "headline-md": ["32px", { lineHeight: "1.2", letterSpacing: "-0.01em", fontWeight: "600" }]
+                        sans: ["Inter", "-apple-system", "BlinkMacSystemFont", "SF Pro Text", "Segoe UI", "Roboto", "Helvetica", "Arial", "sans-serif"]
                     }
                 }
             }
@@ -120,17 +95,6 @@
 
         .ambient-shadow {
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.04);
-        }
-
-        .glass-panel {
-            background: rgba(255, 255, 255, 0.85);
-            backdrop-filter: blur(20px);
-            border: 1px solid rgba(210, 210, 215, 0.5);
-        }
-
-        .search-ring:focus-within {
-            box-shadow: 0 0 0 2px #005cba;
-            background-color: #ffffff;
         }
 
         .material-symbols-outlined {
@@ -158,57 +122,61 @@
 </head>
 <body class="bg-background text-primary antialiased min-h-full flex flex-col font-sans">
     <!-- TopNavBar (Glassmorphism / Apple-Inspired Minimalist) -->
-    <header class="fixed top-0 left-0 right-0 z-50 bg-surface-white/80 backdrop-blur-xl border-b border-border-subtle shadow-sm">
-        <div class="max-w-container-max mx-auto px-4 md:px-margin-desktop h-16 flex items-center justify-between gap-4">
+    <header class="fixed top-0 left-0 right-0 z-50 bg-surface-white/85 backdrop-blur-xl border-b border-border-subtle shadow-sm">
+        <div class="max-w-[1240px] mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-4">
             <!-- Brand Logo -->
-            <a href="/" class="flex items-center gap-3 group">
-                <div class="w-9 h-9 rounded-lg bg-primary text-on-primary flex items-center justify-center font-bold text-sm shadow-sm group-hover:scale-105 transition-transform duration-200">
+            <a href="/" class="flex items-center gap-2.5 group flex-shrink-0">
+                <div class="w-9 h-9 rounded-xl bg-primary text-on-primary flex items-center justify-center font-bold text-sm shadow-sm group-hover:scale-105 transition-transform duration-200">
                     ML
                 </div>
                 <div class="flex flex-col">
-                    <span class="font-bold text-base md:text-lg tracking-tight text-primary leading-tight">MegaStore</span>
-                    <span class="text-[11px] font-semibold tracking-wider uppercase text-text-muted">Control Logístico</span>
+                    <span class="font-bold text-base tracking-tight text-primary leading-tight">MegaStore</span>
+                    <span class="text-[10px] font-semibold tracking-wider uppercase text-text-muted">SGO-Logic Omnicanal</span>
                 </div>
             </a>
 
             <!-- Navigation Links -->
-            <nav class="hidden lg:flex items-center gap-1">
-                <a href="/" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
-                    <span class="material-symbols-outlined text-[17px]">dashboard</span>
-                    <span>Dashboard</span>
+            <nav class="hidden xl:flex items-center gap-1">
+                <a href="/Catalogo" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[17px]">store</span>
+                    <span>Catálogo</span>
                 </a>
-                <a href="/Carrito" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                <a href="/Carrito" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
                     <span class="material-symbols-outlined text-[17px]">shopping_cart</span>
                     <span>Carrito</span>
                 </a>
-                <a href="/Checkout" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                <a href="/Checkout" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
                     <span class="material-symbols-outlined text-[17px]">credit_card</span>
                     <span>Checkout</span>
                 </a>
-                <a href="/Pos" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                <a href="/Estado" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[17px]">track_changes</span>
+                    <span>Rastreo</span>
+                </a>
+                <a href="/Pos" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
                     <span class="material-symbols-outlined text-[17px]">point_of_sale</span>
                     <span>OmniPOS</span>
                 </a>
-                <a href="/Vision360" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                <a href="/Vision360" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
                     <span class="material-symbols-outlined text-[17px]">support_agent</span>
                     <span>Visión 360</span>
                 </a>
-                <a href="/Despacho" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                <a href="/Despacho" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
                     <span class="material-symbols-outlined text-[17px]">local_shipping</span>
                     <span>Despacho</span>
                 </a>
-                <a href="/Estado" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
-                    <span class="material-symbols-outlined text-[17px]">track_changes</span>
-                    <span>Órdenes</span>
-                </a>
-                <a href="/Incidencias/Crear" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors duration-150 hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                <a href="/Incidencias" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
                     <span class="material-symbols-outlined text-[17px]">report_problem</span>
                     <span>Incidencias</span>
+                </a>
+                <a href="/Monitoreo" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-secondary hover:text-secondary/80 bg-secondary-fixed/50">
+                    <span class="material-symbols-outlined text-[17px]">dns</span>
+                    <span>Monitoreo</span>
                 </a>
             </nav>
 
             <!-- User Session / Auth Controls -->
-            <div class="flex items-center gap-3">
+            <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                 @{
                     var userName = Context.Request.Cookies["sgo_user_name"];
                     var userEmail = Context.Request.Cookies["sgo_user_email"];
@@ -216,75 +184,98 @@
 
                 @if (!string.IsNullOrWhiteSpace(userEmail))
                 {
-                    <div class="flex items-center gap-2.5 bg-surface-container-low border border-border-subtle/50 px-3 py-1.5 rounded-full">
-                        <div class="w-7 h-7 rounded-full bg-secondary text-white font-bold text-xs flex items-center justify-center shadow-sm">
-                            @((userName ?? userEmail).Substring(0, 1).ToUpper())
+                    <div class="relative group">
+                        <button type="button" class="flex items-center gap-2 bg-surface-container-low hover:bg-surface-container border border-border-subtle/70 px-3 py-1.5 rounded-full transition-colors">
+                            <div class="w-6 h-6 rounded-full bg-secondary text-white font-bold text-[11px] flex items-center justify-center shadow-sm">
+                                @((userName ?? userEmail).Substring(0, 1).ToUpper())
+                            </div>
+                            <span class="text-xs font-semibold text-primary max-w-[110px] truncate hidden sm:inline">
+                                @(userName ?? userEmail)
+                            </span>
+                            <span class="material-symbols-outlined text-[16px] text-text-muted">expand_more</span>
+                        </button>
+                        <div class="absolute right-0 mt-2 w-48 bg-surface-white rounded-2xl shadow-lg border border-border-subtle/80 py-2 hidden group-hover:block z-50">
+                            <a href="/Cuenta/Perfil" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                <span class="material-symbols-outlined text-[17px]">account_circle</span>
+                                Mi Perfil
+                            </a>
+                            <a href="/Cuenta/Ordenes" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                <span class="material-symbols-outlined text-[17px]">receipt_long</span>
+                                Mis Órdenes
+                            </a>
+                            <a href="/Cuenta/Privacidad" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                <span class="material-symbols-outlined text-[17px]">shield</span>
+                                Privacidad & Datos
+                            </a>
+                            <hr class="my-1 border-border-subtle/50" />
+                            <a href="/Auth/Logout" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-error hover:bg-error-container/30">
+                                <span class="material-symbols-outlined text-[17px]">logout</span>
+                                Cerrar Sesión
+                            </a>
                         </div>
-                        <span class="text-xs font-semibold text-primary max-w-[120px] truncate hidden sm:inline">
-                            @(userName ?? userEmail)
-                        </span>
                     </div>
-                    <a href="/Auth/Logout" class="text-xs font-medium text-text-muted hover:text-error transition-colors px-2 py-1">
-                        Salir
-                    </a>
                 }
                 else
                 {
-                    <a href="/Auth/Login" class="text-sm font-medium text-primary hover:text-secondary transition-colors px-3 py-1.5">
-                        Iniciar Sesión
+                    <a href="/Auth/Login" class="text-xs font-semibold text-primary hover:text-secondary transition-colors px-2.5 py-1.5">
+                        Ingresar
                     </a>
-                    <a href="/Auth/Registro" class="bg-primary text-on-primary rounded-full px-4 py-1.5 text-xs font-semibold hover:opacity-90 transition-all shadow-sm active:scale-95 duration-150">
-                        Crear Cuenta
+                    <a href="/Auth/Registro" class="bg-primary text-on-primary rounded-full px-3.5 py-1.5 text-xs font-semibold hover:opacity-90 transition-all shadow-sm active:scale-95 duration-150">
+                        Registrarse
                     </a>
                 }
             </div>
         </div>
 
         <!-- Mobile Navigation Sub-bar -->
-        <div class="lg:hidden flex items-center justify-around border-t border-border-subtle/60 py-2 px-2 bg-surface-white overflow-x-auto text-[11px]">
-            <a href="/" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
-                <span class="material-symbols-outlined text-[18px]">dashboard</span>
-                <span>Inicio</span>
+        <div class="xl:hidden flex items-center justify-around border-t border-border-subtle/60 py-2 px-2 bg-surface-white overflow-x-auto text-[11px] gap-1">
+            <a href="/Catalogo" class="flex flex-col items-center px-1.5 py-1 font-medium text-on-surface-variant hover:text-primary">
+                <span class="material-symbols-outlined text-[18px]">store</span>
+                <span>Tienda</span>
             </a>
-            <a href="/Carrito" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+            <a href="/Carrito" class="flex flex-col items-center px-1.5 py-1 font-medium text-on-surface-variant hover:text-primary">
                 <span class="material-symbols-outlined text-[18px]">shopping_cart</span>
                 <span>Carrito</span>
             </a>
-            <a href="/Checkout" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+            <a href="/Checkout" class="flex flex-col items-center px-1.5 py-1 font-medium text-on-surface-variant hover:text-primary">
                 <span class="material-symbols-outlined text-[18px]">credit_card</span>
-                <span>Checkout</span>
+                <span>Pagar</span>
             </a>
-            <a href="/Pos" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+            <a href="/Estado" class="flex flex-col items-center px-1.5 py-1 font-medium text-on-surface-variant hover:text-primary">
+                <span class="material-symbols-outlined text-[18px]">track_changes</span>
+                <span>Rastreo</span>
+            </a>
+            <a href="/Pos" class="flex flex-col items-center px-1.5 py-1 font-medium text-on-surface-variant hover:text-primary">
                 <span class="material-symbols-outlined text-[18px]">point_of_sale</span>
                 <span>POS</span>
             </a>
-            <a href="/Vision360" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+            <a href="/Vision360" class="flex flex-col items-center px-1.5 py-1 font-medium text-on-surface-variant hover:text-primary">
                 <span class="material-symbols-outlined text-[18px]">support_agent</span>
                 <span>360°</span>
             </a>
-            <a href="/Despacho" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+            <a href="/Despacho" class="flex flex-col items-center px-1.5 py-1 font-medium text-on-surface-variant hover:text-primary">
                 <span class="material-symbols-outlined text-[18px]">local_shipping</span>
                 <span>Despacho</span>
             </a>
-            <a href="/Estado" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
-                <span class="material-symbols-outlined text-[18px]">track_changes</span>
-                <span>Órdenes</span>
+            <a href="/Monitoreo" class="flex flex-col items-center px-1.5 py-1 font-medium text-secondary">
+                <span class="material-symbols-outlined text-[18px]">dns</span>
+                <span>Salud</span>
             </a>
         </div>
     </header>
 
     <!-- Main Content Canvas -->
-    <main class="flex-1 w-full max-w-container-max mx-auto px-4 md:px-margin-desktop pt-24 md:pt-28 pb-16">
+    <main class="flex-1 w-full max-w-[1240px] mx-auto px-4 sm:px-6 pt-24 md:pt-28 pb-16">
         @if (TempData["Exito"] != null)
         {
-            <div class="mb-6 bg-secondary-fixed text-on-secondary-fixed border border-secondary-container/40 rounded-xl p-4 flex items-center gap-3 ambient-shadow">
+            <div class="mb-6 bg-secondary-fixed text-on-secondary-fixed border border-secondary-container/40 rounded-2xl p-4 flex items-center gap-3 ambient-shadow">
                 <span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
                 <div class="font-medium text-sm">@TempData["Exito"]</div>
             </div>
         }
         @if (TempData["Error"] != null)
         {
-            <div class="mb-6 bg-error-container text-on-error-container border border-error/20 rounded-xl p-4 flex items-center gap-3 ambient-shadow">
+            <div class="mb-6 bg-error-container text-on-error-container border border-error/20 rounded-2xl p-4 flex items-center gap-3 ambient-shadow">
                 <span class="material-symbols-outlined text-error" style="font-variation-settings: 'FILL' 1;">error</span>
                 <div class="font-medium text-sm">@TempData["Error"]</div>
             </div>
@@ -294,18 +285,82 @@
     </main>
 
     <!-- Footer -->
-    <footer class="bg-surface-white border-t border-border-subtle py-8 text-center text-xs text-text-muted mt-auto">
-        <div class="max-w-container-max mx-auto px-4">
-            <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
-                <div class="flex items-center gap-2">
-                    <div class="w-5 h-5 rounded bg-primary text-on-primary flex items-center justify-center text-[10px] font-bold">
-                        ML
+    <footer class="bg-surface-white border-t border-border-subtle py-10 text-xs text-text-muted mt-auto">
+        <div class="max-w-[1240px] mx-auto px-4 sm:px-6">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+                <!-- Col 1: Brand -->
+                <div class="md:col-span-1">
+                    <div class="flex items-center gap-2 mb-3">
+                        <div class="w-6 h-6 rounded-lg bg-primary text-on-primary flex items-center justify-center text-xs font-bold">
+                            ML
+                        </div>
+                        <span class="font-bold text-sm text-primary">MegaStore SGO-Logic</span>
                     </div>
-                    <span class="font-semibold text-primary">MegaStore SGO-Logic</span>
-                    <span>&copy; 2026 — USAC AYD2 Sección B</span>
+                    <p class="text-[11px] leading-relaxed text-text-muted mb-3">
+                        Plataforma de comercio omnicanal y gestión de pedidos distribuidos (.NET 8, Redis, PostgreSQL y RabbitMQ).
+                    </p>
+                    <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-semibold">
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                        PCI-DSS & SAT FEL Certificado
+                    </span>
                 </div>
-                <div class="text-text-muted">
-                    Arquitectura de Microservicios: .NET 8 &bull; Redis &bull; RabbitMQ &bull; PostgreSQL
+
+                <!-- Col 2: Accesos Clientes -->
+                <div>
+                    <h4 class="font-bold text-primary mb-3 text-xs uppercase tracking-wider">Comercio & Cliente</h4>
+                    <ul class="space-y-2">
+                        <li><a href="/Catalogo" class="hover:text-primary transition-colors">Catálogo de Productos</a></li>
+                        <li><a href="/Carrito" class="hover:text-primary transition-colors">Carrito de Compras</a></li>
+                        <li><a href="/Checkout" class="hover:text-primary transition-colors">Finalizar Compra</a></li>
+                        <li><a href="/Estado" class="hover:text-primary transition-colors">Rastreo de Órdenes</a></li>
+                        <li><a href="/Cuenta/Privacidad" class="hover:text-primary transition-colors font-semibold text-secondary">Portal de Privacidad (PRE-08)</a></li>
+                    </ul>
+                </div>
+
+                <!-- Col 3: Operaciones Internas -->
+                <div>
+                    <h4 class="font-bold text-primary mb-3 text-xs uppercase tracking-wider">Operaciones & Tiendas</h4>
+                    <ul class="space-y-2">
+                        <li><a href="/Pos" class="hover:text-primary transition-colors">Terminal OmniPOS (Tiendas 1-32)</a></li>
+                        <li><a href="/Vision360" class="hover:text-primary transition-colors">Visión 360 Call Center</a></li>
+                        <li><a href="/Despacho" class="hover:text-primary transition-colors">Dashboard Logístico</a></li>
+                        <li><a href="/Incidencias" class="hover:text-primary transition-colors">Bandeja de Incidencias (HU-021)</a></li>
+                        <li><a href="/Monitoreo" class="hover:text-primary transition-colors">Centro de Monitoreo & ADRs</a></li>
+                    </ul>
+                </div>
+
+                <!-- Col 4: Seguridad & Privacidad -->
+                <div>
+                    <h4 class="font-bold text-primary mb-3 text-xs uppercase tracking-wider">Cumplimiento & Seguridad</h4>
+                    <ul class="space-y-2 text-[11px]">
+                        <li class="flex items-center gap-1.5 text-text-muted">
+                            <span class="material-symbols-outlined text-[15px] text-secondary">lock</span>
+                            <span>RES-08 / ADR-010: Cero PAN/CVV</span>
+                        </li>
+                        <li class="flex items-center gap-1.5 text-text-muted">
+                            <span class="material-symbols-outlined text-[15px] text-secondary">shield</span>
+                            <span>ADR-020: JWT en el Borde</span>
+                        </li>
+                        <li class="flex items-center gap-1.5 text-text-muted">
+                            <span class="material-symbols-outlined text-[15px] text-secondary">history_edu</span>
+                            <span>EAC-03: Bitácora Inmutable</span>
+                        </li>
+                        <li class="flex items-center gap-1.5 text-text-muted">
+                            <span class="material-symbols-outlined text-[15px] text-secondary">speed</span>
+                            <span>EAC-02: Respuesta sub-5s CQRS</span>
+                        </li>
+                    </ul>
+                </div>
+            </div>
+
+            <div class="pt-6 border-t border-border-subtle/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px]">
+                <div>
+                    &copy; 2026 MegaStore SGO-Logic &bull; Universidad de San Carlos de Guatemala (USAC) &bull; AYD2 Sección B
+                </div>
+                <div class="flex items-center gap-4">
+                    <a href="/Cuenta/Privacidad" class="hover:text-primary transition-colors">Aviso de Privacidad</a>
+                    <span>&bull;</span>
+                    <a href="/Monitoreo" class="hover:text-primary transition-colors">Topología & ADRs</a>
                 </div>
             </div>
         </div>

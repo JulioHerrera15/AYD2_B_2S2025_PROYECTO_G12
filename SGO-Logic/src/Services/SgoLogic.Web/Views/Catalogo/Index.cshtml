@@ -1,0 +1,164 @@
+@model List<SgoLogic.Web.Controllers.ProductoCatalogo>
+@{
+    ViewData["Title"] = "Catálogo Comercial Omnicanal";
+    var categoriaActual = ViewBag.Categoria as string ?? "TODOS";
+    var busquedaActual = ViewBag.Busqueda as string ?? "";
+}
+
+<div class="mb-8">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <div>
+            <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold mb-2">
+                <span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">storefront</span>
+                Catálogo Comercial MegaStore &bull; Existencias en Vivo
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight">Tienda & Catálogo de Productos</h1>
+            <p class="text-xs sm:text-sm text-text-muted">Consulta disponibilidad en tiempo real en nuestras 32 tiendas físicas y 2 Centros de Distribución.</p>
+        </div>
+
+        <!-- Store Selector Filter -->
+        <div class="flex items-center gap-2 bg-surface-white px-3.5 py-2 rounded-2xl border border-border-subtle/80 shadow-sm">
+            <span class="material-symbols-outlined text-secondary text-[20px]">location_on</span>
+            <div class="flex flex-col">
+                <span class="text-[10px] text-text-muted font-semibold uppercase tracking-wider">Sucursal Seleccionada</span>
+                <select id="sucursal-selector" class="text-xs font-bold text-primary bg-transparent border-none p-0 focus:ring-0 cursor-pointer" onchange="actualizarDisponibilidadTienda(this.value)">
+                    <option value="TIENDA-01-CENTRAL">MegaStore Central — Zona 10</option>
+                    <option value="TIENDA-02-MIRAFLORES">MegaStore Miraflores — Zona 11</option>
+                    <option value="TIENDA-03-PORTALES">MegaStore Portales — Zona 17</option>
+                    <option value="TIENDA-04-PRADERA">MegaStore Pradera Concepción</option>
+                    <option value="CD-CENTRAL">Centro de Distribución Central</option>
+                </select>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search & Category Filters -->
+    <div class="bg-surface-white rounded-2xl p-4 border border-border-subtle/70 ambient-shadow mb-6 flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        <!-- Categories Pills -->
+        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 text-xs font-medium">
+            <a href="/Catalogo" class="px-3.5 py-1.5 rounded-full transition-colors whitespace-nowrap @(categoriaActual == "TODOS" ? "bg-primary text-on-primary font-semibold" : "bg-surface-container-low text-on-surface-variant hover:bg-surface-variant")">
+                Todos
+            </a>
+            <a href="/Catalogo?categoria=Línea Blanca" class="px-3.5 py-1.5 rounded-full transition-colors whitespace-nowrap @(categoriaActual == "Línea Blanca" ? "bg-primary text-on-primary font-semibold" : "bg-surface-container-low text-on-surface-variant hover:bg-surface-variant")">
+                Línea Blanca
+            </a>
+            <a href="/Catalogo?categoria=Televisores" class="px-3.5 py-1.5 rounded-full transition-colors whitespace-nowrap @(categoriaActual == "Televisores" ? "bg-primary text-on-primary font-semibold" : "bg-surface-container-low text-on-surface-variant hover:bg-surface-variant")">
+                Televisores
+            </a>
+            <a href="/Catalogo?categoria=Audio" class="px-3.5 py-1.5 rounded-full transition-colors whitespace-nowrap @(categoriaActual == "Audio" ? "bg-primary text-on-primary font-semibold" : "bg-surface-container-low text-on-surface-variant hover:bg-surface-variant")">
+                Audio
+            </a>
+            <a href="/Catalogo?categoria=Informática" class="px-3.5 py-1.5 rounded-full transition-colors whitespace-nowrap @(categoriaActual == "Informática" ? "bg-primary text-on-primary font-semibold" : "bg-surface-container-low text-on-surface-variant hover:bg-surface-variant")">
+                Informática
+            </a>
+            <a href="/Catalogo?categoria=Climatización" class="px-3.5 py-1.5 rounded-full transition-colors whitespace-nowrap @(categoriaActual == "Climatización" ? "bg-primary text-on-primary font-semibold" : "bg-surface-container-low text-on-surface-variant hover:bg-surface-variant")">
+                Climatización
+            </a>
+            <a href="/Catalogo?categoria=Hogar Inteligente" class="px-3.5 py-1.5 rounded-full transition-colors whitespace-nowrap @(categoriaActual == "Hogar Inteligente" ? "bg-primary text-on-primary font-semibold" : "bg-surface-container-low text-on-surface-variant hover:bg-surface-variant")">
+                Smart Home
+            </a>
+        </div>
+
+        <!-- Search Bar -->
+        <form method="get" action="/Catalogo" class="relative flex-shrink-0 min-w-[260px]">
+            <input type="hidden" name="categoria" value="@categoriaActual" />
+            <span class="material-symbols-outlined absolute left-3 top-2.5 text-[18px] text-text-muted">search</span>
+            <input type="text" name="busqueda" value="@busquedaActual" placeholder="Buscar por nombre o SKU..."
+                   class="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-border-subtle bg-surface-container-low focus:outline-none focus:border-secondary focus:bg-surface-white transition-all" />
+        </form>
+    </div>
+
+    <!-- Product Grid -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        @foreach (var prod in Model)
+        {
+            <div class="bg-surface-white rounded-3xl p-5 border border-border-subtle/60 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md group">
+                <div>
+                    <!-- Product Card Top: Badge & Category -->
+                    <div class="flex items-center justify-between mb-4">
+                        <span class="px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-surface-container-low text-primary border border-border-subtle/50">
+                            @prod.Badge
+                        </span>
+                        <span class="text-[11px] font-mono text-text-muted">@prod.Sku</span>
+                    </div>
+
+                    <!-- Product Visual Frame -->
+                    <div class="w-full h-40 rounded-2xl bg-surface-container-low/70 flex items-center justify-center mb-4 group-hover:scale-[1.02] transition-transform duration-200">
+                        <span class="material-symbols-outlined text-[64px] text-primary/70">@prod.Icono</span>
+                    </div>
+
+                    <!-- Category & Title -->
+                    <div class="text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1">@prod.Categoria</div>
+                    <h3 class="text-sm font-bold text-primary leading-snug mb-2 line-clamp-2">@prod.Nombre</h3>
+                    <p class="text-[11px] text-text-muted leading-relaxed mb-4 line-clamp-3">@prod.DescripcionCorta</p>
+
+                    <!-- Real-Time Stock Pill -->
+                    <div class="mb-4 p-2 rounded-xl bg-surface-container-low border border-border-subtle/40 flex items-center justify-between text-[11px]">
+                        <span class="text-text-muted flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[15px] text-secondary">inventory</span>
+                            Stock en Sucursal:
+                        </span>
+                        <span id="stock-badge-@prod.Sku" class="font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
+                            Disponible
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Price & Add Action -->
+                <div class="pt-3 border-t border-border-subtle/50">
+                    <div class="flex items-baseline justify-between mb-3">
+                        <span class="text-xs text-text-muted">Precio con IVA</span>
+                        <div class="text-base font-bold text-primary">
+                            Q @prod.PrecioUnitario.ToString("N2")
+                        </div>
+                    </div>
+
+                    <form method="post" action="/Carrito/Agregar" class="flex items-center gap-2">
+                        <input type="hidden" name="sku" value="@prod.Sku" />
+                        <input type="hidden" name="descripcion" value="@prod.Nombre" />
+                        <input type="hidden" name="precioUnitario" value="@prod.PrecioUnitario" />
+                        <input type="number" name="cantidad" value="1" min="1" max="10"
+                               class="w-14 px-2 py-2 text-center text-xs font-semibold rounded-xl border border-border-subtle bg-surface-container-low focus:outline-none" />
+                        <button type="submit" class="flex-1 bg-primary text-on-primary hover:opacity-90 active:scale-95 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm">
+                            <span class="material-symbols-outlined text-[16px]">add_shopping_cart</span>
+                            <span>Agregar</span>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<script>
+    // Consultar stock en tiempo real desde inventario-api al cambiar de sucursal
+    async function actualizarDisponibilidadTienda(ubicacionId) {
+        const skus = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Select(m => m.Sku)));
+
+        for (const sku of skus) {
+            const el = document.getElementById(`stock-badge-${sku}`);
+            if (!el) continue;
+
+            try {
+                const res = await fetch(`/Catalogo/Stock?sku=${sku}`);
+                if (res.ok) {
+                    const data = await res.json();
+                    const existencia = data.find(e => e.ubicacionId === ubicacionId);
+                    if (existencia && existencia.cantidadDisponible > 0) {
+                        el.textContent = `${existencia.cantidadDisponible} en stock`;
+                        el.className = "font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md";
+                    } else if (existencia && existencia.cantidadDisponible <= 0) {
+                        el.textContent = "Agotado aquí";
+                        el.className = "font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md";
+                    } else {
+                        el.textContent = "Disponible";
+                        el.className = "font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md";
+                    }
+                }
+            } catch (err) {
+                console.error("Error consultando stock de " + sku, err);
+            }
+        }
+    }
+</script>

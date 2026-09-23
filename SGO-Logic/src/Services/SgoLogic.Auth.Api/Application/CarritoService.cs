@@ -127,11 +127,23 @@ public sealed class CarritoService : ICarritoService
     {
         // Migra guest:{sesionId} → cart:{clienteId}
         // Si cart:{clienteId} ya existe, mergea (la cuenta gana en duplicados de SKU)
-        var claveInvitado = PrefijoInvitado + sesionId;
-        var claveCuenta = PrefijoCuenta + clienteId;
+        var claveInvitado = sesionId.StartsWith(PrefijoInvitado) ? sesionId : PrefijoInvitado + sesionId;
+        var claveCuenta = clienteId.StartsWith(PrefijoCuenta) ? clienteId : PrefijoCuenta + clienteId;
 
         var jsonInvitado = await _redis.StringGetAsync(claveInvitado);
-        if (jsonInvitado.IsNullOrEmpty) return; // no hay carrito de invitado, nada que hacer
+        if (jsonInvitado.IsNullOrEmpty)
+        {
+            var claveInvitadoAlt = sesionId.StartsWith(PrefijoCuenta) ? sesionId : PrefijoCuenta + sesionId;
+            jsonInvitado = await _redis.StringGetAsync(claveInvitadoAlt);
+            if (!jsonInvitado.IsNullOrEmpty)
+            {
+                claveInvitado = claveInvitadoAlt;
+            }
+            else
+            {
+                return; // no hay carrito de invitado, nada que hacer
+            }
+        }
 
         var itemsInvitado = JsonSerializer.Deserialize<List<ItemCarritoDto>>(jsonInvitado.ToString()) ?? [];
 
