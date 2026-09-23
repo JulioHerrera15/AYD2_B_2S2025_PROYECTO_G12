@@ -172,145 +172,19 @@
     }
 </div>
 
-<!-- Demo Catalog Section -->
-<div class="mb-6">
-    <div class="flex items-center justify-between mb-4">
+<!-- Enlace a Catálogo Comercial -->
+<div class="mt-8 p-6 bg-surface-white rounded-3xl border border-border-subtle/60 ambient-shadow flex flex-col sm:flex-row items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center">
+            <span class="material-symbols-outlined text-[22px]">storefront</span>
+        </div>
         <div>
-            <h2 class="text-xl font-bold text-primary tracking-tight">
-                Catálogo de Demostración
-            </h2>
-            <p class="text-xs text-text-muted">
-                Agrega productos con cantidades personalizadas para probar la persistencia cross-servicio.
-            </p>
-        </div>
-        <span class="material-symbols-outlined text-text-muted">storefront</span>
-    </div>
-
-    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <!-- Item 1 -->
-        <div class="bg-surface-white rounded-2xl p-5 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/30 transition-all">
-            <div>
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded font-semibold">LAP-001</span>
-                    <span class="material-symbols-outlined text-[18px] text-text-muted">laptop_mac</span>
-                </div>
-                <h4 class="font-bold text-primary text-base mb-1">Laptop Dell XPS 15</h4>
-                <p class="text-xs text-text-muted mb-4">Core i7, 16GB RAM, 512GB SSD</p>
-                <div class="text-lg font-bold text-primary mb-4">Q. 12,500.00</div>
-            </div>
-            <form method="post" action="/Carrito/Agregar" class="space-y-3">
-                <input type="hidden" name="sku" value="LAP-001" />
-                <input type="hidden" name="descripcion" value="Laptop Dell XPS 15 Core i7 16GB" />
-                <input type="hidden" name="precioUnitario" value="12500.00" />
-                <div class="flex items-center justify-between gap-2 bg-surface-bright/60 p-1.5 rounded-xl border border-border-subtle/40">
-                    <span class="text-xs font-medium text-text-muted pl-1.5">Cantidad:</span>
-                    <div class="flex items-center gap-1">
-                        <button type="button" onclick="const input = this.parentNode.querySelector('input'); if(parseInt(input.value) > 1) input.value = parseInt(input.value) - 1;" class="w-7 h-7 rounded-lg bg-surface-white text-primary text-xs font-bold hover:bg-surface-container-low flex items-center justify-center transition-colors shadow-2xs">-</button>
-                        <input type="number" name="cantidad" value="1" min="1" max="99" class="w-10 text-center text-xs font-bold text-primary bg-transparent border-none p-0 focus:ring-0" />
-                        <button type="button" onclick="const input = this.parentNode.querySelector('input'); input.value = parseInt(input.value) + 1;" class="w-7 h-7 rounded-lg bg-surface-white text-primary text-xs font-bold hover:bg-surface-container-low flex items-center justify-center transition-colors shadow-2xs">+</button>
-                    </div>
-                </div>
-                <button type="submit" class="w-full bg-primary text-on-primary rounded-full py-2.5 px-4 text-xs font-semibold hover:opacity-90 transition-opacity active:scale-95 shadow-sm flex items-center justify-center gap-1.5">
-                    <span class="material-symbols-outlined text-[16px]">add_shopping_cart</span>
-                    Agregar al Carrito
-                </button>
-            </form>
-        </div>
-
-        <!-- Item 2 -->
-        <div class="bg-surface-white rounded-2xl p-5 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/30 transition-all">
-            <div>
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded font-semibold">MOU-002</span>
-                    <span class="material-symbols-outlined text-[18px] text-text-muted">mouse</span>
-                </div>
-                <h4 class="font-bold text-primary text-base mb-1">Mouse Logitech Master</h4>
-                <p class="text-xs text-text-muted mb-4">Inalámbrico MX Master 3S Ergonómico</p>
-                <div class="text-lg font-bold text-primary mb-4">Q. 450.00</div>
-            </div>
-            <form method="post" action="/Carrito/Agregar" class="space-y-3">
-                <input type="hidden" name="sku" value="MOU-002" />
-                <input type="hidden" name="descripcion" value="Mouse Inalámbrico Logitech MX Master 3S" />
-                <input type="hidden" name="precioUnitario" value="450.00" />
-                <div class="flex items-center justify-between gap-2 bg-surface-bright/60 p-1.5 rounded-xl border border-border-subtle/40">
-                    <span class="text-xs font-medium text-text-muted pl-1.5">Cantidad:</span>
-                    <div class="flex items-center gap-1">
-                        <button type="button" onclick="const input = this.parentNode.querySelector('input'); if(parseInt(input.value) > 1) input.value = parseInt(input.value) - 1;" class="w-7 h-7 rounded-lg bg-surface-white text-primary text-xs font-bold hover:bg-surface-container-low flex items-center justify-center transition-colors shadow-2xs">-</button>
-                        <input type="number" name="cantidad" value="1" min="1" max="99" class="w-10 text-center text-xs font-bold text-primary bg-transparent border-none p-0 focus:ring-0" />
-                        <button type="button" onclick="const input = this.parentNode.querySelector('input'); input.value = parseInt(input.value) + 1;" class="w-7 h-7 rounded-lg bg-surface-white text-primary text-xs font-bold hover:bg-surface-container-low flex items-center justify-center transition-colors shadow-2xs">+</button>
-                    </div>
-                </div>
-                <button type="submit" class="w-full bg-primary text-on-primary rounded-full py-2.5 px-4 text-xs font-semibold hover:opacity-90 transition-opacity active:scale-95 shadow-sm flex items-center justify-center gap-1.5">
-                    <span class="material-symbols-outlined text-[16px]">add_shopping_cart</span>
-                    Agregar al Carrito
-                </button>
-            </form>
-        </div>
-
-        <!-- Item 3 -->
-        <div class="bg-surface-white rounded-2xl p-5 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/30 transition-all">
-            <div>
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded font-semibold">TEC-003</span>
-                    <span class="material-symbols-outlined text-[18px] text-text-muted">keyboard</span>
-                </div>
-                <h4 class="font-bold text-primary text-base mb-1">Teclado Mecánico RGB</h4>
-                <p class="text-xs text-text-muted mb-4">Switches Brown táctiles retroiluminados</p>
-                <div class="text-lg font-bold text-primary mb-4">Q. 750.00</div>
-            </div>
-            <form method="post" action="/Carrito/Agregar" class="space-y-3">
-                <input type="hidden" name="sku" value="TEC-003" />
-                <input type="hidden" name="descripcion" value="Teclado Mecánico Switch Brown RGB" />
-                <input type="hidden" name="precioUnitario" value="750.00" />
-                <div class="flex items-center justify-between gap-2 bg-surface-bright/60 p-1.5 rounded-xl border border-border-subtle/40">
-                    <span class="text-xs font-medium text-text-muted pl-1.5">Cantidad:</span>
-                    <div class="flex items-center gap-1">
-                        <button type="button" onclick="const input = this.parentNode.querySelector('input'); if(parseInt(input.value) > 1) input.value = parseInt(input.value) - 1;" class="w-7 h-7 rounded-lg bg-surface-white text-primary text-xs font-bold hover:bg-surface-container-low flex items-center justify-center transition-colors shadow-2xs">-</button>
-                        <input type="number" name="cantidad" value="1" min="1" max="99" class="w-10 text-center text-xs font-bold text-primary bg-transparent border-none p-0 focus:ring-0" />
-                        <button type="button" onclick="const input = this.parentNode.querySelector('input'); input.value = parseInt(input.value) + 1;" class="w-7 h-7 rounded-lg bg-surface-white text-primary text-xs font-bold hover:bg-surface-container-low flex items-center justify-center transition-colors shadow-2xs">+</button>
-                    </div>
-                </div>
-                <button type="submit" class="w-full bg-primary text-on-primary rounded-full py-2.5 px-4 text-xs font-semibold hover:opacity-90 transition-opacity active:scale-95 shadow-sm flex items-center justify-center gap-1.5">
-                    <span class="material-symbols-outlined text-[16px]">add_shopping_cart</span>
-                    Agregar al Carrito
-                </button>
-            </form>
-        </div>
-
-        <!-- Item 4 -->
-        <div class="bg-surface-white rounded-2xl p-5 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/30 transition-all">
-            <div>
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded font-semibold">MON-004</span>
-                    <span class="material-symbols-outlined text-[18px] text-text-muted">tv</span>
-                </div>
-                <h4 class="font-bold text-primary text-base mb-1">Monitor UltraSharp 27"</h4>
-                <p class="text-xs text-text-muted mb-4">Resolución 4K IPS HDR Color Pro</p>
-                <div class="text-lg font-bold text-primary mb-4">Q. 3,800.00</div>
-            </div>
-            <form method="post" action="/Carrito/Agregar" class="space-y-3">
-                <input type="hidden" name="sku" value="MON-004" />
-                <input type="hidden" name="descripcion" value="Monitor UltraSharp 27 pulgadas 4K IPS" />
-                <input type="hidden" name="precioUnitario" value="3800.00" />
-                <div class="flex items-center justify-between gap-2 bg-surface-bright/60 p-1.5 rounded-xl border border-border-subtle/40">
-                    <span class="text-xs font-medium text-text-muted pl-1.5">Cantidad:</span>
-                    <div class="flex items-center gap-1">
-                        <button type="button" onclick="const input = this.parentNode.querySelector('input'); if(parseInt(input.value) > 1) input.value = parseInt(input.value) - 1;" class="w-7 h-7 rounded-lg bg-surface-white text-primary text-xs font-bold hover:bg-surface-container-low flex items-center justify-center transition-colors shadow-2xs">-</button>
-                        <input type="number" name="cantidad" value="1" min="1" max="99" class="w-10 text-center text-xs font-bold text-primary bg-transparent border-none p-0 focus:ring-0" />
-                        <button type="button" onclick="const input = this.parentNode.querySelector('input'); input.value = parseInt(input.value) + 1;" class="w-7 h-7 rounded-lg bg-surface-white text-primary text-xs font-bold hover:bg-surface-container-low flex items-center justify-center transition-colors shadow-2xs">+</button>
-                    </div>
-                </div>
-                <button type="submit" class="w-full bg-primary text-on-primary rounded-full py-2.5 px-4 text-xs font-semibold hover:opacity-90 transition-opacity active:scale-95 shadow-sm flex items-center justify-center gap-1.5">
-                    <span class="material-symbols-outlined text-[16px]">add_shopping_cart</span>
-                    Agregar al Carrito
-                </button>
-            </form>
+            <h3 class="text-sm font-bold text-primary">¿Deseas agregar más productos a tu compra?</h3>
+            <p class="text-xs text-text-muted">Explora nuestro catálogo con existencias en vivo sincronizadas con las 32 tiendas.</p>
         </div>
     </div>
-    <div class="text-center mt-6">
-        <a href="/Catalogo" class="inline-flex items-center gap-2 text-xs font-bold text-secondary bg-surface-white hover:bg-surface-bright border border-border-subtle px-6 py-2.5 rounded-full shadow-sm transition-all hover:scale-105 active:scale-95">
-            <span class="material-symbols-outlined text-[17px]">storefront</span>
-            Ver Catálogo Comercial Completo y Stock en Tiempo Real &rarr;
-        </a>
-    </div>
+    <a href="/Catalogo" class="inline-flex items-center gap-1.5 bg-primary text-on-primary text-xs font-semibold px-5 py-2.5 rounded-full hover:opacity-90 active:scale-95 transition-all shadow-sm">
+        <span>Explorar Catálogo</span>
+        <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+    </a>
 </div>

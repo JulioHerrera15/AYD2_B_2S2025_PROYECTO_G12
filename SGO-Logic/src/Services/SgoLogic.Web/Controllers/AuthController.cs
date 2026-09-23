@@ -56,6 +56,15 @@ public class AuthController : Controller
             Expires = result.ExpiraEn
         });
 
+        var userRole = email.Contains("admin", StringComparison.OrdinalIgnoreCase) ? "ADMIN"
+            : (email.EndsWith("@megastore.com", StringComparison.OrdinalIgnoreCase) ? "OPERADOR" : "CLIENTE");
+
+        Response.Cookies.Append("sgo_user_role", userRole, new CookieOptions
+        {
+            SameSite = SameSiteMode.Lax,
+            Expires = result.ExpiraEn
+        });
+
         // Si habia un carrito de invitado, asociarlo
         var guestId = Request.Cookies["sgo_guest_id"];
         if (!string.IsNullOrWhiteSpace(guestId))
@@ -146,6 +155,7 @@ public class AuthController : Controller
         Response.Cookies.Delete("sgo_jwt");
         Response.Cookies.Delete("sgo_user_email");
         Response.Cookies.Delete("sgo_user_name");
+        Response.Cookies.Delete("sgo_user_role");
         return RedirectToAction("Index", "Home");
     }
 }

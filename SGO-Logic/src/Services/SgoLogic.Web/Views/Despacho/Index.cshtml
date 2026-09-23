@@ -31,8 +31,8 @@
                 <span class="text-xs font-semibold">Despachos Totales</span>
                 <span class="material-symbols-outlined text-[20px]">package_2</span>
             </div>
-            <div class="text-2xl font-bold text-primary mb-1">@(Model?.TotalDespachos ?? 128)</div>
-            <span class="text-[11px] text-text-muted">&uarr; +8% hoy</span>
+            <div class="text-2xl font-bold text-primary mb-1">@(Model?.TotalDespachos ?? 0)</div>
+            <span class="text-[11px] text-text-muted">En cola de ubicación</span>
         </div>
 
         <div class="p-5 rounded-3xl bg-surface-white border border-border-subtle/60 ambient-shadow">
@@ -40,8 +40,8 @@
                 <span class="text-xs font-semibold">En Preparación</span>
                 <span class="material-symbols-outlined text-[20px]">pending_actions</span>
             </div>
-            <div class="text-2xl font-bold text-amber-600 mb-1">@(Model?.EnPreparacion ?? 14)</div>
-            <span class="text-[11px] text-text-muted">CD Central</span>
+            <div class="text-2xl font-bold text-amber-600 mb-1">@(Model?.EnPreparacion ?? 0)</div>
+            <span class="text-[11px] text-text-muted">Picking y embalaje</span>
         </div>
 
         <div class="p-5 rounded-3xl bg-surface-white border border-border-subtle/60 ambient-shadow">
@@ -49,17 +49,17 @@
                 <span class="text-xs font-semibold">En Tránsito (LogiExpress)</span>
                 <span class="material-symbols-outlined text-[20px]">local_shipping</span>
             </div>
-            <div class="text-2xl font-bold text-purple-600 mb-1">@(Model?.EnTransito ?? 42)</div>
-            <span class="text-[11px] text-text-muted">Tiempo medio: 1.4 días</span>
+            <div class="text-2xl font-bold text-purple-600 mb-1">@(Model?.EnTransito ?? 0)</div>
+            <span class="text-[11px] text-text-muted">Ruta de distribución</span>
         </div>
 
         <div class="p-5 rounded-3xl bg-surface-white border border-border-subtle/60 ambient-shadow">
             <div class="flex items-center justify-between text-green-600 mb-2">
-                <span class="text-xs font-semibold">Entregados Hoy</span>
+                <span class="text-xs font-semibold">Entregados / Listos</span>
                 <span class="material-symbols-outlined text-[20px]">check_circle</span>
             </div>
-            <div class="text-2xl font-bold text-green-600 mb-1">@(Model?.Entregados ?? 72)</div>
-            <span class="text-[11px] text-green-700 font-medium">98.6% a tiempo</span>
+            <div class="text-2xl font-bold text-green-600 mb-1">@(Model?.Entregados ?? 0)</div>
+            <span class="text-[11px] text-green-700 font-medium">Completados</span>
         </div>
     </div>
 

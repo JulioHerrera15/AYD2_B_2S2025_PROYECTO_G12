@@ -1,5 +1,8 @@
 @{
     ViewData["Title"] = "Centro de Control";
+    var isAuthenticated = !string.IsNullOrWhiteSpace(Context.Request.Cookies["sgo_jwt"]);
+    var userName = Context.Request.Cookies["sgo_user_name"];
+    var userEmail = Context.Request.Cookies["sgo_user_email"];
 }
 
 <!-- Hero Section -->
@@ -24,39 +27,64 @@
             <span class="material-symbols-outlined text-[18px]">shopping_cart</span>
             Ver Carrito
         </a>
-        <a href="/Pos" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
-            <span class="material-symbols-outlined text-[18px]">point_of_sale</span>
-            Terminal OmniPOS
+        <a href="/Estado" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
+            <span class="material-symbols-outlined text-[18px]">track_changes</span>
+            Rastrear Pedido
         </a>
-        <a href="/Monitoreo" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
-            <span class="material-symbols-outlined text-[18px]">hub</span>
-            Centro de Control
-        </a>
+        @if (isAuthenticated)
+        {
+            <a href="/Pos" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
+                <span class="material-symbols-outlined text-[18px]">point_of_sale</span>
+                Terminal OmniPOS
+            </a>
+            <a href="/Monitoreo" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
+                <span class="material-symbols-outlined text-[18px]">hub</span>
+                Centro de Monitoreo
+            </a>
+        }
+        else
+        {
+            <a href="/Auth/Login" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
+                <span class="material-symbols-outlined text-[18px]">login</span>
+                Iniciar Sesión
+            </a>
+            <a href="/Auth/Registro" class="inline-flex items-center gap-2 bg-surface-container-low text-secondary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
+                <span class="material-symbols-outlined text-[18px]">person_add</span>
+                Registrarse
+            </a>
+        }
     </div>
 </div>
 
-<!-- Bento Grid: Core 6 Capabilities -->
+<!-- Bento Grid: Core Commercial Capabilities -->
+<div class="mb-4 flex items-center justify-between pb-2 border-b border-border-subtle">
+    <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-text-muted">
+        <span class="material-symbols-outlined text-[18px] text-secondary">store</span>
+        Portal Comercial & Atención al Cliente
+    </div>
+</div>
+
 <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-    <!-- Card 1: Auth & Identity -->
+    <!-- Card 1: Catálogo Comercial -->
     <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
         <div>
             <div class="w-12 h-12 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center mb-5">
-                <span class="material-symbols-outlined text-[26px]">badge</span>
+                <span class="material-symbols-outlined text-[26px]">storefront</span>
             </div>
-            <h3 class="text-lg font-bold text-primary mb-2">Identidad & Acceso (HU-007)</h3>
+            <h3 class="text-lg font-bold text-primary mb-2">Catálogo Comercial Omnicanal</h3>
             <p class="text-xs text-text-muted leading-relaxed mb-6">
-                Registro con hash criptográfico BCrypt (costo 11), verificación por código numérico de 6 dígitos con expiración y emisión de tokens JWT simétricos.
+                Consulta de productos con existencias en vivo de las 32 tiendas físicas y 2 centros de distribución, optimizado sin bloqueos.
             </p>
         </div>
         <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
-            <a href="/Auth/Login" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
-                Iniciar sesión <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+            <a href="/Catalogo" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
+                Explorar catálogo <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
             </a>
-            <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Auth.Api :8088</span>
+            <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Inventario.Api :8094</span>
         </div>
     </div>
 
-    <!-- Card 2: Unified Cart -->
+    <!-- Card 2: Unified Cart in Redis -->
     <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
         <div>
             <div class="w-12 h-12 rounded-2xl bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center mb-5">
@@ -94,83 +122,45 @@
         </div>
     </div>
 
-    <!-- Card 4: OmniPOS Terminal -->
+    <!-- Card 4: Trazabilidad CQRS -->
     <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
         <div>
-            <div class="w-12 h-12 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center mb-5">
-                <span class="material-symbols-outlined text-[26px]">point_of_sale</span>
+            <div class="w-12 h-12 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center mb-5">
+                <span class="material-symbols-outlined text-[26px]">track_changes</span>
             </div>
-            <h3 class="text-lg font-bold text-primary mb-2">OmniPOS (Tienda Física)</h3>
+            <h3 class="text-lg font-bold text-primary mb-2">Rastreo & Estado CQRS (EAC-02)</h3>
             <p class="text-xs text-text-muted leading-relaxed mb-6">
-                Recuperación en mostrador de carritos iniciados en la web o app móvil mediante correo o NIT. Cobro en caja física (efectivo/tarjeta).
+                Consulta en caliente con actualización inmediata de eventos mediante broker RabbitMQ y respuestas por debajo de 5 segundos.
             </p>
         </div>
         <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
-            <a href="/Pos" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
-                Abrir Terminal <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+            <a href="/Estado" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
+                Rastrear orden <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
             </a>
-            <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Mockup carritoPOS</span>
+            <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">CQRS &bull; Redis</span>
         </div>
     </div>
 
-    <!-- Card 5: Visión 360 & Soporte -->
+    <!-- Card 5: Identidad & Acceso -->
     <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
         <div>
-            <div class="w-12 h-12 rounded-2xl bg-purple-100 text-purple-900 flex items-center justify-center mb-5">
-                <span class="material-symbols-outlined text-[26px]">support_agent</span>
+            <div class="w-12 h-12 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center mb-5">
+                <span class="material-symbols-outlined text-[26px]">badge</span>
             </div>
-            <h3 class="text-lg font-bold text-primary mb-2">Visión 360 del Cliente</h3>
+            <h3 class="text-lg font-bold text-primary mb-2">Identidad & Acceso (HU-007)</h3>
             <p class="text-xs text-text-muted leading-relaxed mb-6">
-                Historial completo de compras, métricas de cliente (LTV, pedidos), carritos en caliente, notificaciones enviadas y gestión de incidencias (HU-021).
+                Registro con hash criptográfico BCrypt (costo 11), verificación por código numérico de 6 dígitos con expiración y emisión de tokens JWT simétricos.
             </p>
         </div>
         <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
-            <a href="/Vision360" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
-                Atención 360° <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+            <a href="@(isAuthenticated ? "/Cuenta/Perfil" : "/Auth/Login")" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
+                @(isAuthenticated ? "Mi perfil" : "Iniciar sesión") <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
             </a>
-            <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Mockup vision360</span>
+            <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Auth.Api :8088</span>
         </div>
     </div>
 
-    <!-- Card 6: Despacho Logístico -->
-    <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
-        <div>
-            <div class="w-12 h-12 rounded-2xl bg-green-100 text-green-900 flex items-center justify-center mb-5">
-                <span class="material-symbols-outlined text-[26px]">local_shipping</span>
-            </div>
-            <h3 class="text-lg font-bold text-primary mb-2">Despacho & LogiExpress</h3>
-            <p class="text-xs text-text-muted leading-relaxed mb-6">
-                Centro de control de preparación en Centro de Distribución, guías de transporte con LogiExpress y entregas en tienda (Click & Collect).
-            </p>
-        </div>
-        <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
-            <a href="/Despacho" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
-                Control logístico <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
-            </a>
-            <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Despacho.Api :8097</span>
-        </div>
-    </div>
-
-    <!-- Card 7: Incidencias & Post-Venta -->
-    <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
-        <div>
-            <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-800 flex items-center justify-center mb-5">
-                <span class="material-symbols-outlined text-[26px]">gavel</span>
-            </div>
-            <h3 class="text-lg font-bold text-primary mb-2">Incidencias & Post-Venta</h3>
-            <p class="text-xs text-text-muted leading-relaxed mb-6">
-                Bandeja operativa para gestión de incidencias reportadas (HU-021), dictámenes de resolución y trazabilidad para auditoría.
-            </p>
-        </div>
-        <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
-            <a href="/Incidencias" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
-                Ver incidencias <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
-            </a>
-            <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">HU-021 SLA</span>
-        </div>
-    </div>
-
-    <!-- Card 8: Privacidad & Cumplimiento -->
+    <!-- Card 6: Privacidad & Cumplimiento -->
     <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
         <div>
             <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-800 flex items-center justify-center mb-5">
@@ -190,6 +180,114 @@
     </div>
 </div>
 
+@if (isAuthenticated)
+{
+    <!-- Bento Grid: Internal Staff & Operational Tools (Only visible when authenticated) -->
+    <div class="mb-4 flex items-center justify-between pb-2 border-b border-border-subtle">
+        <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-secondary">
+            <span class="material-symbols-outlined text-[18px]">admin_panel_settings</span>
+            Herramientas Operativas Internas (Personal & Administradores)
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+        <!-- Card: OmniPOS Terminal -->
+        <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
+            <div>
+                <div class="w-12 h-12 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center mb-5">
+                    <span class="material-symbols-outlined text-[26px]">point_of_sale</span>
+                </div>
+                <h3 class="text-lg font-bold text-primary mb-2">OmniPOS (Tienda Física)</h3>
+                <p class="text-xs text-text-muted leading-relaxed mb-6">
+                    Recuperación en mostrador de carritos iniciados en la web o app móvil mediante correo o NIT. Cobro presencial en caja física.
+                </p>
+            </div>
+            <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
+                <a href="/Pos" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
+                    Abrir Terminal POS <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                </a>
+                <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">POS Central</span>
+            </div>
+        </div>
+
+        <!-- Card: Visión 360 & Soporte -->
+        <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
+            <div>
+                <div class="w-12 h-12 rounded-2xl bg-purple-100 text-purple-900 flex items-center justify-center mb-5">
+                    <span class="material-symbols-outlined text-[26px]">support_agent</span>
+                </div>
+                <h3 class="text-lg font-bold text-primary mb-2">Visión 360 del Cliente</h3>
+                <p class="text-xs text-text-muted leading-relaxed mb-6">
+                    Historial completo de compras, métricas consolidadas (LTV, pedidos), carritos en caliente e incidencias post-venta (HU-021).
+                </p>
+            </div>
+            <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
+                <a href="/Vision360" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
+                    Atención 360° <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                </a>
+                <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Soporte 360</span>
+            </div>
+        </div>
+
+        <!-- Card: Despacho Logístico -->
+        <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
+            <div>
+                <div class="w-12 h-12 rounded-2xl bg-green-100 text-green-900 flex items-center justify-center mb-5">
+                    <span class="material-symbols-outlined text-[26px]">local_shipping</span>
+                </div>
+                <h3 class="text-lg font-bold text-primary mb-2">Despacho & LogiExpress</h3>
+                <p class="text-xs text-text-muted leading-relaxed mb-6">
+                    Centro de control de preparación en Centro de Distribución, guías de transporte con LogiExpress y entregas en tienda.
+                </p>
+            </div>
+            <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
+                <a href="/Despacho" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
+                    Control logístico <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                </a>
+                <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Despacho.Api :8097</span>
+            </div>
+        </div>
+
+        <!-- Card: Incidencias & Post-Venta -->
+        <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
+            <div>
+                <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-800 flex items-center justify-center mb-5">
+                    <span class="material-symbols-outlined text-[26px]">gavel</span>
+                </div>
+                <h3 class="text-lg font-bold text-primary mb-2">Incidencias & Post-Venta</h3>
+                <p class="text-xs text-text-muted leading-relaxed mb-6">
+                    Bandeja operativa para gestión de incidencias reportadas (HU-021), dictámenes de resolución y trazabilidad para auditoría.
+                </p>
+            </div>
+            <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
+                <a href="/Incidencias" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
+                    Ver incidencias <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                </a>
+                <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">HU-021 SLA</span>
+            </div>
+        </div>
+
+        <!-- Card: Monitoreo & Topología -->
+        <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
+            <div>
+                <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-800 flex items-center justify-center mb-5">
+                    <span class="material-symbols-outlined text-[26px]">hub</span>
+                </div>
+                <h3 class="text-lg font-bold text-primary mb-2">Centro de Control & ADRs</h3>
+                <p class="text-xs text-text-muted leading-relaxed mb-6">
+                    Inspección del estado de microservicios, autenticación en el borde con JWT (ADR-020) y observabilidad de arquitectura.
+                </p>
+            </div>
+            <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
+                <a href="/Monitoreo" class="text-xs font-semibold text-secondary hover:underline inline-flex items-center gap-1 transition-colors">
+                    Consola de Monitoreo <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                </a>
+                <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">ADR-020 Gateway</span>
+            </div>
+        </div>
+    </div>
+}
+
 <!-- Architecture Status Banner -->
 <div class="bg-surface-container-low rounded-3xl p-6 border border-border-subtle/60 flex flex-col md:flex-row items-center justify-between gap-4 ambient-shadow">
     <div class="flex items-center gap-3">
@@ -200,12 +298,12 @@
         </div>
     </div>
     <div class="flex flex-wrap items-center gap-2">
-        <a href="/Estado?ordenId=ORD-2026-000001" class="text-xs font-semibold text-primary bg-surface-white hover:bg-surface-bright px-3.5 py-2 rounded-xl border border-border-subtle shadow-sm transition-colors flex items-center gap-1.5">
+        <a href="/Estado" class="text-xs font-semibold text-primary bg-surface-white hover:bg-surface-bright px-3.5 py-2 rounded-xl border border-border-subtle shadow-sm transition-colors flex items-center gap-1.5">
             <span class="material-symbols-outlined text-[16px]">track_changes</span>
-            Orden Demo: ORD-2026-000001
+            Rastrear Pedido
         </a>
-        <a href="/Incidencias/Crear" class="text-xs font-semibold text-text-muted hover:text-primary px-3 py-2 transition-colors">
-            Reportar Incidencia &rarr;
+        <a href="/Cuenta/Privacidad" class="text-xs font-semibold text-text-muted hover:text-primary px-3 py-2 transition-colors">
+            Aviso de Privacidad &rarr;
         </a>
     </div>
 </div>

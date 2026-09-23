@@ -119,12 +119,12 @@
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-on-surface-variant mb-1">Dirección Exacta de Entrega</label>
-                        <input type="text" name="direccion" placeholder="Calle, Avenida, Zona, Edificio o Casa" value="7ma Avenida 12-23, Zona 10"
+                        <input type="text" name="direccion" placeholder="Calle, Avenida, Zona, Edificio o Casa" value="" required
                                class="w-full px-3 py-2 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary" />
                     </div>
                     <div>
                         <label class="block text-xs font-semibold text-on-surface-variant mb-1">Referencia para el Transportista</label>
-                        <input type="text" name="referencia" placeholder="Ejemplo: Portón blanco, frente al parque central" value="Frente a Plaza Médica, torre 2"
+                        <input type="text" name="referencia" placeholder="Ejemplo: Portón blanco, frente al parque central" value=""
                                class="w-full px-3 py-2 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary" />
                     </div>
                 </div>
@@ -213,24 +213,7 @@
                         </div>
                     </div>
 
-                    <!-- Quick Test Card Filler for Evaluators -->
-                    <div class="mt-2 p-3 bg-surface-container-low/70 rounded-xl border border-border-subtle/50 text-xs">
-                        <span class="font-semibold text-primary block mb-1.5">Tarjetas de Prueba Rápida (Evaluación Docente):</span>
-                        <div class="flex flex-wrap gap-1.5">
-                            <button type="button" onclick="cargarTarjetaPrueba('4111111111111111', '12/28', '123')"
-                                    class="bg-surface-white hover:bg-surface-bright border border-border-subtle px-2.5 py-1 rounded-lg text-[11px] font-mono text-primary shadow-2xs">
-                                Visa Aprobada (4111...)
-                            </button>
-                            <button type="button" onclick="cargarTarjetaPrueba('5555555555554444', '06/27', '456')"
-                                    class="bg-surface-white hover:bg-surface-bright border border-border-subtle px-2.5 py-1 rounded-lg text-[11px] font-mono text-primary shadow-2xs">
-                                MasterCard (5555...)
-                            </button>
-                            <button type="button" onclick="cargarTarjetaPrueba('4000000000000002', '11/26', '789')"
-                                    class="bg-surface-white hover:bg-surface-bright border border-amber-300 text-amber-900 px-2.5 py-1 rounded-lg text-[11px] font-mono shadow-2xs">
-                                Sin Fondos (Rechazo)
-                            </button>
-                        </div>
-                    </div>
+
 
                     <!-- Campo oculto que recibirá el token de PayKlik -->
                     <input type="hidden" id="token-medio-pago" name="tokenMedioPago" />
