@@ -22,6 +22,14 @@ public class IncidenciasController : Controller
             return RedirectToAction("Login", "Auth", new { returnUrl = "/Incidencias" });
         }
 
+        var userRole = Request.Cookies["sgo_user_role"];
+        var userEmail = Request.Cookies["sgo_user_email"];
+        if (!PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt))
+        {
+            TempData["Error"] = "Acceso denegado. La bandeja global de incidencias es de uso exclusivo para personal operativo.";
+            return RedirectToAction("Index", "Home");
+        }
+
         ViewBag.OrdenId = ordenId;
         ViewBag.Estado = estado ?? "TODOS";
 
@@ -80,6 +88,11 @@ public class IncidenciasController : Controller
         if (string.IsNullOrWhiteSpace(jwt))
         {
             return RedirectToAction("Login", "Auth", new { returnUrl = "/Incidencias" });
+        }
+
+        if (!PermisosHelper.EsPersonalAutorizado(Request.Cookies["sgo_user_role"], Request.Cookies["sgo_user_email"], jwt))
+        {
+            return Forbid();
         }
 
         if (id == Guid.Empty || string.IsNullOrWhiteSpace(resolucion))

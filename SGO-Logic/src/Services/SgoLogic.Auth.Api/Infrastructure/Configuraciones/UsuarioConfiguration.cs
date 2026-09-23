@@ -38,6 +38,11 @@ public sealed class UsuarioConfiguration : IEntityTypeConfiguration<Usuario>
             .HasColumnName("email_verificado")
             .HasDefaultValue(false);
 
+        builder.Property(u => u.Rol)
+            .HasColumnName("rol")
+            .HasMaxLength(50)
+            .HasDefaultValue("CLIENTE");
+
         builder.Property(u => u.CreadoEn)
             .HasColumnName("creado_en")
             .HasColumnType("timestamptz");

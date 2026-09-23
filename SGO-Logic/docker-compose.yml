@@ -158,6 +158,7 @@ services:
       Auth__JwtSecret: ${JWT_SECRET}
       Auth__JwtExpiracionMinutos: ${AUTH_JWT_EXPIRACION_MINUTOS}
       Auth__CarritoTtlSegundos: ${AUTH_CARRITO_TTL_SEGUNDOS}
+      Mensajeria__MockBaseUrl: http://mock-mensajeria:8080
     ports:
       - "8088:8080"
     depends_on:

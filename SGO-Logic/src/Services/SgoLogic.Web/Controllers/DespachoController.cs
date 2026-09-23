@@ -45,6 +45,14 @@ public class DespachoController : Controller
             return RedirectToAction("Login", "Auth", new { returnUrl = "/Despacho" });
         }
 
+        var userRole = Request.Cookies["sgo_user_role"];
+        var userEmail = Request.Cookies["sgo_user_email"];
+        if (!PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt))
+        {
+            TempData["Error"] = "Acceso denegado. El panel de despacho es exclusivo para personal de bodega y logística de MegaStore.";
+            return RedirectToAction("Index", "Home");
+        }
+
         var filtroNormalizado = string.IsNullOrWhiteSpace(filtro) ? "TODOS" : filtro.Trim().ToUpperInvariant();
         ViewBag.Filtro = filtroNormalizado;
 
@@ -96,6 +104,11 @@ public class DespachoController : Controller
         if (string.IsNullOrWhiteSpace(jwt))
         {
             return RedirectToAction("Login", "Auth", new { returnUrl = "/Despacho" });
+        }
+
+        if (!PermisosHelper.EsPersonalAutorizado(Request.Cookies["sgo_user_role"], Request.Cookies["sgo_user_email"], jwt))
+        {
+            return Forbid();
         }
 
         if (string.IsNullOrWhiteSpace(ordenId) || string.IsNullOrWhiteSpace(nuevoEstado))

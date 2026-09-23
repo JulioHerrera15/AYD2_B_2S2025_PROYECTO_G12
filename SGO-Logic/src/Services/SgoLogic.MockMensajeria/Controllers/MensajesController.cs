@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using Microsoft.AspNetCore.Mvc;
 
 namespace SgoLogic.MockMensajeria.Controllers;
@@ -6,6 +7,14 @@ public sealed record EnviarMensajeRequest(
     string Destinatario,
     string? Asunto,
     string Cuerpo);
+
+public sealed record MensajeGenericoRequest(
+    string? Destinatario,
+    string? Asunto,
+    string? Cuerpo,
+    string? ClienteId,
+    string? EstadoOrden,
+    string? OrdenId);
 
 public sealed record EnviarMensajeResponse(
     string MensajeId,
@@ -23,6 +32,7 @@ public sealed record EnviarMensajeResponse(
 [Route("api/mensajes")]
 public sealed class MensajesController : ControllerBase
 {
+    private static readonly ConcurrentQueue<object> _mensajesEnviados = new();
     private static bool? _forzarFallaOverride;
     private readonly bool _forzarFallaConfig;
     private readonly ILogger<MensajesController> _logger;
@@ -35,13 +45,33 @@ public sealed class MensajesController : ControllerBase
         _logger = logger;
     }
 
-    /// <summary>Permite activar o desactivar la falla forzada dinámicamente para pruebas de resiliencia.</summary>
+    /// <summary>Retorna los mensajes enviados registrados en memoria.</summary>
+    [HttpGet]
+    public IActionResult ObtenerMensajes()
+    {
+        return Ok(_mensajesEnviados.ToArray());
+    }
+
+    /// <summary>Permite activar o desactivar la falla forzada dinamicamente para pruebas de resiliencia.</summary>
     [HttpPost("config/falla")]
     public IActionResult ConfigurarFalla([FromQuery] bool activa)
     {
         _forzarFallaOverride = activa;
         _logger.LogWarning("MockMensajeria: ForzarFalla sobreescrito dinamicamente a {Activa}", activa);
         return Ok(new { forzarFalla = activa });
+    }
+
+    /// <summary>Endpoint generico para envio de notificaciones (compatible con pruebas y suites de integracion).</summary>
+    [HttpPost]
+    [ProducesResponseType<EnviarMensajeResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status500InternalServerError)]
+    public IActionResult EnviarGenerico([FromBody] MensajeGenericoRequest request)
+    {
+        var destinatario = request.Destinatario ?? request.ClienteId ?? "desconocido";
+        var asunto = request.Asunto ?? (request.OrdenId != null ? $"Orden {request.OrdenId}" : "Notificacion SGO");
+        var cuerpo = request.Cuerpo ?? (request.EstadoOrden != null ? $"Estado: {request.EstadoOrden}" : "(mensaje vacio)");
+
+        return Enviar("GENERAL", new EnviarMensajeRequest(destinatario, asunto, cuerpo));
     }
 
     /// <summary>Simula envio de SMS.</summary>
@@ -72,7 +102,7 @@ public sealed class MensajesController : ControllerBase
         if (ForzarFalla)
         {
             _logger.LogWarning(
-                "MOCK [{Canal}] — FALLA FORZADA para {Destinatario} | MensajeId: {Id}",
+                "MOCK [{Canal}] -- FALLA FORZADA para {Destinatario} | MensajeId: {Id}",
                 canal, request.Destinatario, mensajeId);
 
             return StatusCode(StatusCodes.Status500InternalServerError, new EnviarMensajeResponse(
@@ -83,8 +113,18 @@ public sealed class MensajesController : ControllerBase
         }
 
         _logger.LogInformation(
-            "MOCK [{Canal}] ENVIADO → {Destinatario} | Asunto: {Asunto} | Cuerpo: {Cuerpo} | MensajeId: {Id}",
+            "MOCK [{Canal}] ENVIADO -> {Destinatario} | Asunto: {Asunto} | Cuerpo: {Cuerpo} | MensajeId: {Id}",
             canal, request.Destinatario, request.Asunto ?? "(sin asunto)", request.Cuerpo, mensajeId);
+
+        _mensajesEnviados.Enqueue(new
+        {
+            MensajeId = mensajeId,
+            Canal = canal,
+            Destinatario = request.Destinatario,
+            Asunto = request.Asunto,
+            Cuerpo = request.Cuerpo,
+            Fecha = DateTime.UtcNow
+        });
 
         return Ok(new EnviarMensajeResponse(
             MensajeId: mensajeId,

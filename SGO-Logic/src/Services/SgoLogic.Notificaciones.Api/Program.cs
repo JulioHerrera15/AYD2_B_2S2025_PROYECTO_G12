@@ -32,8 +32,10 @@ builder.Services.AddHttpClient<IMockMensajeriaClient, MockMensajeriaClient>(http
 // ── Consumidores de eventos ───────────────────────────────────────────────────
 builder.Services.AddHostedService<NotificacionesOrdenesConsumidor>();
 // Consumidor separado para eventos de Despacho (HU-020 — listo-para-recoger)
-// Cola independiente para respetar la topología cerrada de notificaciones.ordenes
+// Cola independiente para respetar la topologia cerrada de notificaciones.ordenes
 builder.Services.AddHostedService<NotificacionesDespachoConsumidor>();
+// Consumidor separado para eventos de Pagos pendientes (enlace de reintento de cobro)
+builder.Services.AddHostedService<NotificacionesPagosConsumidor>();
 
 // ─────────────────────────────────────────────────────────────────────────────
 var app = builder.Build();

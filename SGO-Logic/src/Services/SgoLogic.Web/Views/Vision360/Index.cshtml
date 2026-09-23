@@ -96,7 +96,7 @@
                 <div class="p-4 rounded-2xl bg-surface-container-low/50 border border-border-subtle/40">
                     <span class="text-xs text-text-muted block mb-1">Latencia de Consulta</span>
                     <div class="text-xl font-bold text-primary">&lt; 15 ms</div>
-                    <span class="text-[11px] text-secondary font-medium">Cumple EAC-02 (&lt; 5s)</span>
+                    <span class="text-[11px] text-secondary font-medium">Respuesta Inmediata (&lt; 5s)</span>
                 </div>
             </div>
         </div>
@@ -110,10 +110,10 @@
                 Carrito Activo en Redis (@(carrito?.Items?.Count ?? 0))
             </button>
             <button onclick="showTab('tab-incidencias')" id="btn-tab-incidencias" class="px-4 py-2 rounded-xl text-on-surface-variant hover:bg-surface-container-low transition-all text-xs">
-                Incidencias HU-021 (@incidencias.Count)
+                Incidencias (@incidencias.Count)
             </button>
             <button onclick="showTab('tab-notificaciones')" id="btn-tab-notificaciones" class="px-4 py-2 rounded-xl text-on-surface-variant hover:bg-surface-container-low transition-all text-xs">
-                Notificaciones HU-015
+                Notificaciones
             </button>
         </div>
 
@@ -204,11 +204,11 @@
             }
         </div>
 
-        <!-- Tab 3: Incidents (HU-021) -->
+        <!-- Tab 3: Incidencias -->
         <div id="tab-incidencias" class="hidden space-y-4">
             <div class="bg-surface-white rounded-3xl p-6 border border-border-subtle/60 ambient-shadow">
                 <div class="flex items-center justify-between pb-4 border-b border-border-subtle/50 mb-4">
-                    <h3 class="text-sm font-bold text-primary">Incidencias y Reclamaciones de Servicio (HU-021)</h3>
+                    <h3 class="text-sm font-bold text-primary">Incidencias y Reclamaciones de Servicio</h3>
                     <a href="/Incidencias/Crear" class="text-xs bg-primary text-on-primary px-3 py-1.5 rounded-lg font-semibold hover:opacity-90">
                         + Nueva Incidencia
                     </a>
@@ -253,10 +253,10 @@
             </div>
         </div>
 
-        <!-- Tab 4: Omnichannel Notifications (HU-015) -->
+        <!-- Tab 4: Notificaciones Omnicanal -->
         <div id="tab-notificaciones" class="hidden space-y-4">
             <div class="bg-surface-white rounded-3xl p-6 border border-border-subtle/60 ambient-shadow">
-                <h3 class="text-sm font-bold text-primary mb-4">Registro de Notificaciones Entregadas (HU-015)</h3>
+                <h3 class="text-sm font-bold text-primary mb-4">Registro de Notificaciones Entregadas</h3>
                 @if (historial?.Ordenes != null && historial.Ordenes.Count > 0)
                 {
                     <div class="space-y-3 text-xs">

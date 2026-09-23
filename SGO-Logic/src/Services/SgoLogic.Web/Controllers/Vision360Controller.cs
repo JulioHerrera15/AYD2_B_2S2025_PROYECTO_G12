@@ -22,6 +22,14 @@ public class Vision360Controller : Controller
             return RedirectToAction("Login", "Auth", new { returnUrl = "/Vision360" });
         }
 
+        var userRole = Request.Cookies["sgo_user_role"];
+        var userEmail = Request.Cookies["sgo_user_email"];
+        if (!PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt))
+        {
+            TempData["Error"] = "Acceso denegado. La Visión 360° es exclusiva para agentes de atención y administradores de MegaStore.";
+            return RedirectToAction("Index", "Home");
+        }
+
         string? targetCliente = null;
 
         if (!string.IsNullOrWhiteSpace(clienteId))

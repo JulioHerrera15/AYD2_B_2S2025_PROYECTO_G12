@@ -27,7 +27,8 @@
                     <option value="TIENDA-02-MIRAFLORES">MegaStore Miraflores — Zona 11</option>
                     <option value="TIENDA-03-PORTALES">MegaStore Portales — Zona 17</option>
                     <option value="TIENDA-04-PRADERA">MegaStore Pradera Concepción</option>
-                    <option value="CD-CENTRAL">Centro de Distribución Central</option>
+                    <option value="CD-01">Centro de Distribución Central (CD-01)</option>
+                    <option value="CD-CENTRAL">Centro de Distribución Norte (CD-CENTRAL)</option>
                 </select>
             </div>
         </div>
@@ -99,8 +100,8 @@
                             <span class="material-symbols-outlined text-[15px] text-secondary">inventory</span>
                             Stock en Sucursal:
                         </span>
-                        <span id="stock-badge-@prod.Sku" class="font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md">
-                            Disponible
+                        <span id="stock-badge-@prod.Sku" class="font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                            Consultando...
                         </span>
                     </div>
                 </div>
@@ -145,15 +146,23 @@
                 if (res.ok) {
                     const data = await res.json();
                     const existencia = data.find(e => e.ubicacionId === ubicacionId);
-                    if (existencia && existencia.cantidadDisponible > 0) {
-                        el.textContent = `${existencia.cantidadDisponible} en stock`;
+                    const disponible = existencia ? (existencia.disponible ?? existencia.cantidadDisponible ?? 0) : 0;
+
+                    if (existencia && disponible > 0) {
+                        el.textContent = `${disponible} en stock`;
                         el.className = "font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md";
-                    } else if (existencia && existencia.cantidadDisponible <= 0) {
+                    } else if (existencia && disponible <= 0) {
                         el.textContent = "Agotado aquí";
                         el.className = "font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md";
                     } else {
-                        el.textContent = "Disponible";
-                        el.className = "font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md";
+                        const totalGlobal = data.reduce((acc, curr) => acc + (curr.disponible ?? curr.cantidadDisponible ?? 0), 0);
+                        if (totalGlobal > 0) {
+                            el.textContent = "En otra sucursal";
+                            el.className = "font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md";
+                        } else {
+                            el.textContent = "Sin existencias";
+                            el.className = "font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md";
+                        }
                     }
                 }
             } catch (err) {
@@ -161,4 +170,11 @@
             }
         }
     }
+
+    document.addEventListener("DOMContentLoaded", function () {
+        const selector = document.getElementById("sucursal-selector");
+        if (selector) {
+            actualizarDisponibilidadTienda(selector.value);
+        }
+    });
 </script>

@@ -16,12 +16,18 @@ public sealed class AuthService : IAuthService
     private readonly AuthDbContext _contexto;
     private readonly IJwtService _jwt;
     private readonly ILogger<AuthService> _logger;
+    private readonly IHttpClientFactory? _httpClientFactory;
 
-    public AuthService(AuthDbContext contexto, IJwtService jwt, ILogger<AuthService> logger)
+    public AuthService(
+        AuthDbContext contexto,
+        IJwtService jwt,
+        ILogger<AuthService> logger,
+        IHttpClientFactory? httpClientFactory = null)
     {
         _contexto = contexto;
         _jwt = jwt;
         _logger = logger;
+        _httpClientFactory = httpClientFactory;
     }
 
     public async Task<RegistroResponse> RegistrarAsync(RegistroRequest request, CancellationToken ct = default)
@@ -37,7 +43,7 @@ public sealed class AuthService : IAuthService
         if (existe)
             throw new InvalidOperationException("Ya existe una cuenta con ese correo.");
 
-        // Hashing seguro con BCrypt (work factor 12 — balance rendimiento/seguridad)
+        // Hashing seguro con BCrypt (work factor 12 -- balance rendimiento/seguridad)
         var hash = BCrypt.Net.BCrypt.HashPassword(request.Contrasena, workFactor: 12);
         var usuario = Usuario.Crear(emailNormalizado, hash, request.NombreCompleto);
 
@@ -50,10 +56,30 @@ public sealed class AuthService : IAuthService
         _contexto.CodigosVerificacion.Add(codigo);
         await _contexto.SaveChangesAsync(ct);
 
-        // TODO (produccion): enviar codigoPlano por correo al usuario
-        // Por ahora se loguea para poder probar en demo
+        // Enviar codigo por correo via MockMensajeria
+        if (_httpClientFactory != null)
+        {
+            try
+            {
+                var cliente = _httpClientFactory.CreateClient("Mensajeria");
+                var nombre = !string.IsNullOrWhiteSpace(request.NombreCompleto) ? request.NombreCompleto : emailNormalizado;
+                var payload = new
+                {
+                    Destinatario = emailNormalizado,
+                    Asunto = "Codigo de verificacion - MegaStore",
+                    Cuerpo = $"Hola {nombre}, tu codigo de verificacion para activar tu cuenta en MegaStore es: {codigoPlano}. Valido por 15 minutos."
+                };
+                await cliente.PostAsJsonAsync("/api/mensajes/email", payload, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Falla al enviar codigo de verificacion via mensajeria para {Email} - aislado", emailNormalizado);
+            }
+        }
+
+        // Se loguea para pruebas automatizadas y demo
         _logger.LogInformation(
-            "DEMO — Codigo de verificacion para {Email}: {Codigo}",
+            "DEMO -- Codigo de verificacion para {Email}: {Codigo}",
             emailNormalizado, codigoPlano);
 
         return new RegistroResponse(

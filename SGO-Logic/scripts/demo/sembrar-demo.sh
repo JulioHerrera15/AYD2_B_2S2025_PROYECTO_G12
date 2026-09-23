@@ -53,7 +53,7 @@ if [[ "$HTTP_CODE" != "200" ]]; then
   exit 1
 fi
 
-printf 'Cargando existencias de demo\n'
+printf 'Cargando existencias de demo y catalogo web\n'
 for existencia in \
   '{"sku":"SKU-DEMO-001","ubicacionId":"CD-CENTRAL","tipoUbicacion":"CENTRO_DISTRIBUCION","cantidadFisica":100}' \
   '{"sku":"SKU-DEMO-001","ubicacionId":"TIENDA-001","tipoUbicacion":"TIENDA","cantidadFisica":20}' \
@@ -67,4 +67,17 @@ for existencia in \
   printf '  OK %s\n' "$existencia"
 done
 
-printf 'Seed de demo completado. Usuario: %s | SKUs: SKU-DEMO-001..003\n' "$EMAIL"
+for sku in PROD-001 PROD-002 PROD-003 PROD-004 PROD-005 PROD-006 PROD-007 PROD-008; do
+  for cd in CD-01 CD-CENTRAL; do
+    request PUT "$BASE_URL/api/inventario/existencias" \
+      "{\"sku\":\"$sku\",\"ubicacionId\":\"$cd\",\"tipoUbicacion\":\"CENTRO_DISTRIBUCION\",\"cantidadFisica\":100}"
+    printf '  OK %s en %s\n' "$sku" "$cd"
+  done
+  for tienda in TIENDA-01-CENTRAL TIENDA-02-MIRAFLORES TIENDA-03-PORTALES TIENDA-04-PRADERA; do
+    request PUT "$BASE_URL/api/inventario/existencias" \
+      "{\"sku\":\"$sku\",\"ubicacionId\":\"$tienda\",\"tipoUbicacion\":\"TIENDA\",\"cantidadFisica\":50}"
+    printf '  OK %s en %s\n' "$sku" "$tienda"
+  done
+done
+
+printf 'Seed de demo completado. Usuario: %s | SKUs: SKU-DEMO-001..003 y PROD-001..008\n' "$EMAIL"

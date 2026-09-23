@@ -72,7 +72,7 @@
                         </div>
                         <div>
                             <h3 class="font-bold text-base text-primary">Seguridad y Autenticación en el Borde</h3>
-                            <p class="text-xs text-text-muted">Protección de credenciales y sesiones según ADR-020</p>
+                            <p class="text-xs text-text-muted">Protección avanzada de credenciales y sesiones con JWT criptográfico</p>
                         </div>
                     </div>
                     <span class="px-3 py-1 rounded-full text-xs font-bold @(hasJwt ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-amber-100 text-amber-800 border border-amber-300")">
@@ -84,7 +84,7 @@
                     <div class="p-4 rounded-2xl bg-surface-container-low/50 border border-border-subtle/40">
                         <div class="flex items-center gap-2 mb-1.5 text-primary font-semibold">
                             <span class="material-symbols-outlined text-[18px] text-secondary">verified_user</span>
-                            <span>Validación YARP en Gateway</span>
+                            <span>Validación Perimetral en Gateway</span>
                         </div>
                         <p class="text-text-muted text-[11px] leading-relaxed">
                             Tus peticiones hacia microservicios transaccionales viajan con cabecera <code class="bg-white px-1.5 py-0.5 rounded border border-border-subtle text-primary">Authorization: Bearer</code> firmada criptográficamente.
@@ -94,7 +94,7 @@
                     <div class="p-4 rounded-2xl bg-surface-container-low/50 border border-border-subtle/40">
                         <div class="flex items-center gap-2 mb-1.5 text-primary font-semibold">
                             <span class="material-symbols-outlined text-[18px] text-secondary">lock</span>
-                            <span>Cumplimiento PCI-DSS RES-08</span>
+                            <span>Cumplimiento y Aislamiento PCI-DSS</span>
                         </div>
                         <p class="text-text-muted text-[11px] leading-relaxed">
                             Tus números de tarjeta nunca tocan MegaStore; se tokenizan de forma aislada en la pasarela externa PayKlik mediante CORS directo.

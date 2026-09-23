@@ -44,6 +44,13 @@ builder.Services
 builder.Services.AddAuthorization();
 
 // ── Servicios de aplicacion ───────────────────────────────────────────────────
+var mockMensajeriaUrl = builder.Configuration["Mensajeria:MockBaseUrl"] ?? "http://mock-mensajeria:8080";
+builder.Services.AddHttpClient("Mensajeria", http =>
+{
+    http.BaseAddress = new Uri(mockMensajeriaUrl);
+    http.Timeout = TimeSpan.FromSeconds(5);
+});
+
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtService, JwtService>();
 builder.Services.AddScoped<ICarritoService, CarritoService>();
