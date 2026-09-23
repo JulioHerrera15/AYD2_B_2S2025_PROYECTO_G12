@@ -189,12 +189,97 @@ public sealed class GatewayClient
         }
     }
 
+    private static async Task<string> ParseProblemDetailsOrStringAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        try
+        {
+            var raw = await response.Content.ReadAsStringAsync(ct);
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return response.StatusCode switch
+                {
+                    System.Net.HttpStatusCode.Unauthorized => "Credenciales incorrectas o sesión no autorizada.",
+                    System.Net.HttpStatusCode.Forbidden => "No tienes permisos para realizar esta acción.",
+                    System.Net.HttpStatusCode.NotFound => "El recurso solicitado no fue encontrado.",
+                    System.Net.HttpStatusCode.Conflict => "Conflicto con un recurso existente.",
+                    System.Net.HttpStatusCode.BadRequest => "Solicitud inválida. Verifica los datos ingresados.",
+                    _ => $"Error en la operación (código {(int)response.StatusCode})."
+                };
+            }
+
+            var trimmed = raw.Trim();
+            if (trimmed.StartsWith("{") && trimmed.EndsWith("}"))
+            {
+                using var doc = JsonDocument.Parse(trimmed);
+                var root = doc.RootElement;
+
+                // 1. Si viene detail (RFC 7807 ProblemDetails standard)
+                if (root.TryGetProperty("detail", out var detailProp) && detailProp.ValueKind == JsonValueKind.String)
+                {
+                    var detail = detailProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(detail))
+                        return detail;
+                }
+
+                // 2. Si vienen errores de validación (HttpValidationProblemDetails)
+                if (root.TryGetProperty("errors", out var errorsProp) && errorsProp.ValueKind == JsonValueKind.Object)
+                {
+                    var errorList = new List<string>();
+                    foreach (var prop in errorsProp.EnumerateObject())
+                    {
+                        if (prop.Value.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var errItem in prop.Value.EnumerateArray())
+                            {
+                                var s = errItem.GetString();
+                                if (!string.IsNullOrWhiteSpace(s))
+                                    errorList.Add(s);
+                            }
+                        }
+                        else if (prop.Value.ValueKind == JsonValueKind.String)
+                        {
+                            var s = prop.Value.GetString();
+                            if (!string.IsNullOrWhiteSpace(s))
+                                errorList.Add(s);
+                        }
+                    }
+                    if (errorList.Count > 0)
+                        return string.Join(" ", errorList);
+                }
+
+                // 3. Si viene message
+                if (root.TryGetProperty("message", out var msgProp) && msgProp.ValueKind == JsonValueKind.String)
+                {
+                    var msg = msgProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(msg))
+                        return msg;
+                }
+
+                // 4. Si viene title
+                if (root.TryGetProperty("title", out var titleProp) && titleProp.ValueKind == JsonValueKind.String)
+                {
+                    var title = titleProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(title) && !title.Equals("One or more validation errors occurred.", StringComparison.OrdinalIgnoreCase))
+                        return title;
+                }
+            }
+
+            return trimmed;
+        }
+        catch
+        {
+            return response.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                ? "Credenciales incorrectas o sesión no autorizada."
+                : $"Error inesperado en la comunicación (código {(int)response.StatusCode}).";
+        }
+    }
+
     // ── Auth ───────────────────────────────────────────────────────────────────
     public async Task<(bool Exito, string? Error)> RegistrarAsync(RegistroModel model, CancellationToken ct = default)
     {
         var res = await _http.PostAsJsonAsync("/api/auth/registro", model, ct);
         if (res.IsSuccessStatusCode) return (true, null);
-        var err = await res.Content.ReadAsStringAsync(ct);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, err);
     }
 
@@ -202,7 +287,7 @@ public sealed class GatewayClient
     {
         var res = await _http.PostAsJsonAsync("/api/auth/verificar", model, ct);
         if (res.IsSuccessStatusCode) return (true, null);
-        var err = await res.Content.ReadAsStringAsync(ct);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, err);
     }
 
@@ -214,7 +299,7 @@ public sealed class GatewayClient
             var data = await res.Content.ReadFromJsonAsync<AuthResult>(JsonOptions, ct);
             return (true, data, null);
         }
-        var err = await res.Content.ReadAsStringAsync(ct);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, null, err);
     }
 
@@ -288,7 +373,7 @@ public sealed class GatewayClient
             var data = await res.Content.ReadFromJsonAsync<IncidenciaModel>(JsonOptions, ct);
             return (true, data, null);
         }
-        var err = await res.Content.ReadAsStringAsync(ct);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, null, err);
     }
 
@@ -302,7 +387,7 @@ public sealed class GatewayClient
             var orden = await res.Content.ReadFromJsonAsync<OrdenCreadaModel>(JsonOptions, ct);
             return (true, orden, null);
         }
-        var err = await res.Content.ReadAsStringAsync(ct);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, null, err);
     }
 
@@ -315,7 +400,7 @@ public sealed class GatewayClient
             var respuesta = await res.Content.ReadFromJsonAsync<ConfirmarOrdenResponse>(JsonOptions, ct);
             return (true, respuesta?.Orden, null);
         }
-        var err = await res.Content.ReadAsStringAsync(ct);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, null, err);
     }
 
@@ -347,7 +432,7 @@ public sealed class GatewayClient
         var payload = new { Estado = estado, Detalle = detalle, OcurridoEn = DateTime.UtcNow };
         var res = await _http.PostAsJsonAsync($"/api/despacho/{ordenId}/estados", payload, JsonOptions, ct);
         if (res.IsSuccessStatusCode) return (true, null);
-        var err = await res.Content.ReadAsStringAsync(ct);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, err);
     }
 
@@ -356,7 +441,7 @@ public sealed class GatewayClient
         SetAuthHeader();
         var res = await _http.PutAsJsonAsync($"/api/despacho/{ordenId}/metodo-entrega", new { MetodoEntrega = nuevoMetodo }, JsonOptions, ct);
         if (res.IsSuccessStatusCode) return (true, null);
-        var err = await res.Content.ReadAsStringAsync(ct);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, err);
     }
 
@@ -405,7 +490,7 @@ public sealed class GatewayClient
         var payload = new { Descripcion = descripcion, Estado = estado, Resolucion = resolucion };
         var res = await _http.PutAsJsonAsync($"/api/incidencias/{id}", payload, JsonOptions, ct);
         if (res.IsSuccessStatusCode) return (true, null);
-        var err = await res.Content.ReadAsStringAsync(ct);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, err);
     }
 }
