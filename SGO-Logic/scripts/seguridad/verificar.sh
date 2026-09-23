@@ -340,16 +340,27 @@ barrer_contenedor() {
   local base
   for base in $bases; do
     local archivo="${TMP_DIR}/barrido_${etiqueta_contenedor}_${base}.txt"
+    local crudo="${archivo}.crudo"
     if compose exec -T -e PGPASSWORD="$clave" "$contenedor" \
         psql -U "$usuario" -d "$base" -v ON_ERROR_STOP=1 -tA \
         -v patron1="%${PAN_PRUEBA}%" -v patron2="%${MARCADOR_CVV}%" -v patron3="%${MARCADOR_VENC}%" \
-        < "${DIR_SCRIPT}/barrido-columnas.sql" > "$archivo" 2>"${archivo}.err"; then
+        < "${DIR_SCRIPT}/barrido-columnas.sql" > "$crudo" 2>"${archivo}.err"; then
       rm -f "${archivo}.err"
+      # barrido-columnas.sql corre 3 "SET" y un "DO" antes del SELECT final;
+      # -tA no suprime la etiqueta de comando de sentencias que no son SELECT
+      # (el mismo motivo por el que antes "UPDATE 0"/"DELETE 0" aparecian
+      # como texto plano en Bloque 3), asi que psql imprime "SET"/"DO" como
+      # lineas propias. Sin filtrarlas, el interprete de abajo las toma como
+      # filas de resultado con esquema="SET"/"DO" y columnas vacias. Nos
+      # quedamos solo con lineas que de verdad tienen la forma
+      # "esquema|tabla|columna|numero|numero|numero" que produce el SELECT.
+      grep -E '^[^|]+\|[^|]+\|[^|]+\|-?[0-9]+\|-?[0-9]+\|-?[0-9]+$' "$crudo" > "$archivo"
+      rm -f "$crudo"
       RESULTADOS_BARRIDO_ARCHIVOS+=("${etiqueta_contenedor}|${base}|${archivo}")
     else
       echo "ADVERTENCIA: barrido de ${etiqueta_contenedor}/${base} fallo:" >&2
       sed 's/^/    /' "${archivo}.err" >&2
-      rm -f "${archivo}.err"
+      rm -f "${archivo}.err" "$crudo"
       return 1
     fi
   done
@@ -361,9 +372,21 @@ barrer_contenedor db-finanzas "$USUARIO_FINANZAS" "$CLAVE_FINANZAS" finanzas || 
 barrer_contenedor db-auditoria "$USUARIO_AUDITORIA_OWNER" "$CLAVE_AUDITORIA_OWNER" auditoria || { BARRIDO_OK=0; FALLAS_EJECUCION+=("barrido de db-auditoria"); }
 
 # --- 1.2 Interpretar el barrido ---------------------------------------------
+# El canario se inyecta a proposito en la descripcion de la linea de orden, y
+# esa descripcion viaja LEGITIMAMENTE a Facturacion (el documento fiscal
+# describe lo vendido), al outbox, a Despacho y a Auditoria: encontrar el
+# marcador ahi no es una violacion de RES-08, es la prueba de que el barrido
+# funciona (control positivo / mapa de propagacion). RES-08 exige que el
+# PAN/CVV no lleguen a Pagos ni a las columnas de datos de tarjeta -- lo
+# segundo ya lo cubre 1.3 (consulta_pan_shaped_pagos) buscando corridas de
+# digitos con forma de tarjeta en pagos.pago/intento_pago; lo primero se
+# verifica aqui: CUALQUIER aparicion del marcador dentro de la base sgo_pagos
+# (sin importar la tabla) SI es un hallazgo real, porque Pagos solo deberia
+# ver el token opaco, nunca el texto libre de la orden. Todo lo demas
+# (Facturacion, Despacho, Auditoria, outbox, ERP, etc.) es propagacion
+# esperada y se reporta como informativo.
 CONTROL_POSITIVO_ORDENES=0
 CONTROL_POSITIVO_AUDITORIA=0
-FUGA_EN_FINANZAS=0
 echo ""
 echo "Mapa de propagacion del marcador de prueba (informativo, no todo aqui es un hallazgo):"
 for entrada in "${RESULTADOS_BARRIDO_ARCHIVOS[@]}"; do
@@ -377,9 +400,10 @@ for entrada in "${RESULTADOS_BARRIDO_ARCHIVOS[@]}"; do
     if [ "$base" = "sgo_auditoria" ] && [ "$tabla" = "eventos_auditoria" ]; then
       CONTROL_POSITIVO_AUDITORIA=1
     fi
-    if [ "$base" = "sgo_pagos" ] || [ "$base" = "sgo_facturacion" ]; then
-      FUGA_EN_FINANZAS=1
-      HALLAZGOS_BLOQUEANTES+=("Marcador de prueba encontrado en ${base}.${esquema}.${tabla}.${columna} (PAN=${c1} CVV=${c2} VENC=${c3}) — el contexto de Pagos/Facturacion no deberia ver texto libre de la orden")
+    if [ "$base" = "sgo_pagos" ]; then
+      HALLAZGOS_BLOQUEANTES+=("Marcador de prueba (PAN/CVV/vencimiento) encontrado en el contexto de Pagos: ${base}.${esquema}.${tabla}.${columna} (PAN=${c1} CVV=${c2} VENC=${c3}) — Pagos solo deberia ver el token opaco, nunca el texto libre de la orden")
+    else
+      HALLAZGOS_INFORMATIVOS+=("Propagacion esperada del texto libre de la orden (no es un hallazgo de RES-08): ${base}.${esquema}.${tabla}.${columna} (PAN=${c1} CVV=${c2} VENC=${c3})")
     fi
   done < "$archivo"
 done
@@ -565,15 +589,34 @@ if [ "$LOGIN_OK" -eq 1 ]; then
   sleep 1
   CODIGO_VERIF=""
   # AuthService.cs loguea "...para {Email}: {Codigo}" con Serilog, que
-  # renderiza los parametros de tipo string entre comillas dobles en la
-  # salida de consola (verificado contra AuthService.cs:56): la linea real es
-  # 'Codigo de verificacion para "correo@x": "854492"', no sin comillas. El
-  # patron y el sed toleran la comilla en vez de asumir que no esta.
+  # renderiza los parametros de tipo string entre comillas dobles (verificado
+  # contra AuthService.cs:56). Como ademas ese mensaje viaja dentro de un
+  # campo JSON ("RenderedMessage":"...para \"correo@x\": \"854492\""), las
+  # comillas llegan escapadas con una barra invertida (\"), no sueltas. Un
+  # sed/grep con comillas literales se enreda al escapar la barra invertida
+  # dos veces (una para bash, otra para el regex), asi que se resuelve con
+  # python3 (ya es la convencion del script para JSON/regex, ver crear_jwt())
+  # con un regex que tolera \, ", ambas o ninguna alrededor del correo y del
+  # codigo, sin asumir que el codigo es lo ultimo en la linea.
   for _ in 1 2 3 4 5; do
-    CODIGO_VERIF=$(compose logs --no-color auth-api 2>/dev/null \
-      | grep -E "Codigo de verificacion para \"?${EMAIL_PRUEBA}\"?:" \
-      | tail -n1 \
-      | sed -n 's/.*: *"\{0,1\}\([0-9]\{4,8\}\)"\{0,1\}[[:space:]]*$/\1/p')
+    CODIGO_VERIF=$(compose logs --no-color auth-api 2>/dev/null | python3 -c '
+import re
+import sys
+
+Q = chr(34)
+email = sys.argv[1]
+patron = re.compile(
+    r"Codigo de verificacion para \\?" + Q + "?" +
+    re.escape(email) +
+    r"\\?" + Q + r"?:\s*\\?" + Q + r"?([0-9]{4,8})"
+)
+codigo = ""
+for linea in sys.stdin:
+    m = patron.search(linea)
+    if m:
+        codigo = m.group(1)
+print(codigo)
+' "$EMAIL_PRUEBA")
     [ -n "$CODIGO_VERIF" ] && break
     sleep 1
   done
