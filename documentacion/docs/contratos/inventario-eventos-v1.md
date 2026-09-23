@@ -82,6 +82,8 @@ Tres eventos. Ninguno más se publica bajo `inventario.*` en la v1.
 | 1 | `InventarioReservado` | `inventario.reserva.confirmada` | `Reserva` | La reserva se creó con éxito y su TTL está vigente. |
 | 2 | `ReservaInventarioRechazada` | `inventario.reserva.rechazada` | `Reserva` | No hay stock suficiente en ninguna ubicación elegible. No se crea reserva. |
 | 3 | `ReservaInventarioExpirada` | `inventario.reserva.expirada` | `Reserva` | El TTL de una reserva `ACTIVA` venció y sus unidades volvieron al disponible (HU-002, EV-23). |
+| 4 | `ReservaInventarioLiberada` | `inventario.reserva.liberada` | `Reserva` | La saga pidió liberar la reserva antes del TTL: cobro rechazado, sin respuesta, cancelación del cliente o timeout (HU-003). |
+| 5 | `StockReingresado` | `inventario.stock.reingresado` | `Devolucion` | Las unidades de una devolución volvieron al stock físico de una ubicación (HU-014). |
 
 **El conflicto de bloqueo optimista no produce evento.** Si al escribir la reserva
 la columna `version` de una existencia cambió (otra reserva concurrente ganó), la
@@ -98,7 +100,7 @@ escritura bajo pico.
 
 | Cola | Dueño | Binding | Origen |
 |---|---|---|---|
-| `inventario.ordenes` | Jose | `ordenes.reserva.solicitada` | `ordenes-eventos-v1`, evento 3 |
+| `inventario.ordenes` | Jose | `ordenes.reserva.solicitada`, `ordenes.reserva.liberacion-solicitada`, `ordenes.devolucion.registrada` | `ordenes-eventos-v1`, eventos 3, 4 y 11 |
 
 Cola quorum, durable, con dead-letter hacia `sgo.eventos.dlx` y
 `x-delivery-limit = 5` (envelope, sección 5). Consumo idempotente por `eventId`
