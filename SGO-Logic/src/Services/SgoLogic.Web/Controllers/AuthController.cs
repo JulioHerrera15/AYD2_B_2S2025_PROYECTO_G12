@@ -22,17 +22,38 @@ public class AuthController : Controller
     [HttpPost]
     public async Task<IActionResult> Login(string email, string contrasena, string? returnUrl = null)
     {
+        ViewBag.ReturnUrl = returnUrl;
+        ViewBag.Email = email;
+
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(contrasena))
+        {
+            ViewBag.Error = "Por favor ingresa tu correo electrónico y contraseña.";
+            return View();
+        }
+
         var (exito, result, error) = await _gateway.LoginAsync(new LoginModel(email, contrasena));
         if (!exito || result is null)
         {
             if (error != null && (error.Contains("no verificada", StringComparison.OrdinalIgnoreCase) || error.Contains("verificar", StringComparison.OrdinalIgnoreCase)))
             {
                 TempData["EmailVerificar"] = email;
-                TempData["Error"] = "Tu cuenta aun no esta verificada. Por favor ingresa el codigo de 6 digitos.";
+                TempData["Error"] = "Tu cuenta aún no está verificada. Por favor ingresa el código de 6 dígitos enviado a tu correo.";
                 return RedirectToAction("Verificar", new { email });
             }
 
-            ViewBag.Error = error ?? "Credenciales invalidas o correo no verificado.";
+            string mensajeAmigable;
+            if (string.IsNullOrWhiteSpace(error) ||
+                error.Contains("Credenciales incorrectas", StringComparison.OrdinalIgnoreCase) ||
+                error.Contains("No autorizado", StringComparison.OrdinalIgnoreCase))
+            {
+                mensajeAmigable = "Credenciales incorrectas. Por favor verifica tu correo y contraseña.";
+            }
+            else
+            {
+                mensajeAmigable = error;
+            }
+
+            ViewBag.Error = mensajeAmigable;
             return View();
         }
 
@@ -119,7 +140,14 @@ public class AuthController : Controller
         var (exito, error) = await _gateway.RegistrarAsync(new RegistroModel(email, contrasena, nombreFinal));
         if (!exito)
         {
-            ViewBag.Error = error ?? "Error al registrar la cuenta.";
+            string errorAmigable = error ?? "Error al registrar la cuenta.";
+            if (errorAmigable.Contains("Conflicto", StringComparison.OrdinalIgnoreCase) ||
+                errorAmigable.Contains("ya existe", StringComparison.OrdinalIgnoreCase) ||
+                errorAmigable.Contains("registrado", StringComparison.OrdinalIgnoreCase))
+            {
+                errorAmigable = "Ya existe una cuenta registrada con este correo electrónico.";
+            }
+            ViewBag.Error = errorAmigable;
             return View();
         }
 
@@ -141,11 +169,19 @@ public class AuthController : Controller
         if (!exito)
         {
             ViewBag.Email = email;
-            ViewBag.Error = error ?? "Codigo de verificacion incorrecto o expirado.";
+            string errorAmigable = error ?? "Código de verificación incorrecto o expirado.";
+            if (errorAmigable.Contains("incorrecto", StringComparison.OrdinalIgnoreCase) ||
+                errorAmigable.Contains("expirado", StringComparison.OrdinalIgnoreCase) ||
+                errorAmigable.Contains("inválido", StringComparison.OrdinalIgnoreCase) ||
+                errorAmigable.Contains("invalido", StringComparison.OrdinalIgnoreCase))
+            {
+                errorAmigable = "El código de verificación es incorrecto o ha expirado. Verifica el código de 6 dígitos recibido.";
+            }
+            ViewBag.Error = errorAmigable;
             return View();
         }
 
-        TempData["Exito"] = "Cuenta verificada exitosamente. Ya puedes iniciar sesion.";
+        TempData["Exito"] = "Cuenta verificada exitosamente. Ya puedes iniciar sesión.";
         return RedirectToAction("Login");
     }
 
