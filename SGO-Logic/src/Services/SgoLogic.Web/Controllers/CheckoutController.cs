@@ -36,7 +36,9 @@ public class CheckoutController : Controller
         string? direccion,
         string? departamento,
         string? municipio,
-        string medioPago)
+        string? referencia,
+        string medioPago,
+        string? tokenMedioPago)
     {
         var carrito = await _gateway.ObtenerCarritoAsync();
         if (carrito is null || carrito.Items is null || carrito.Items.Count == 0)
@@ -70,6 +72,26 @@ public class CheckoutController : Controller
             i.PrecioUnitario
         )).ToList();
 
+        DireccionEntregaModel? direccionModel = null;
+        if (metodoEntregaFinal == "DOMICILIO")
+        {
+            direccionModel = new DireccionEntregaModel(
+                Pais: "GT",
+                Departamento: string.IsNullOrWhiteSpace(departamento) ? "Guatemala" : departamento.Trim(),
+                Municipio: string.IsNullOrWhiteSpace(municipio) ? "Guatemala" : municipio.Trim(),
+                Direccion: string.IsNullOrWhiteSpace(direccion) ? "Ciudad de Guatemala" : direccion.Trim(),
+                Referencia: string.IsNullOrWhiteSpace(referencia) ? null : referencia.Trim()
+            );
+        }
+
+        // Regla PCI-DSS (RES-08 / ADR-010): Si es TARJETA, tokenMedioPago es obligatorio
+        if (medioPagoFinal == "TARJETA" && string.IsNullOrWhiteSpace(tokenMedioPago))
+        {
+            ViewBag.Error = "No se recibió el token de la tarjeta. Por favor verifique los datos del medio de pago.";
+            ViewBag.UserEmail = userEmail;
+            return View("Index", carrito);
+        }
+
         var crearModel = new CrearOrdenModel(
             ClienteId: userEmail,
             Canal: "WEB",
@@ -79,7 +101,9 @@ public class CheckoutController : Controller
             Impuestos: impuestos,
             Lineas: lineas,
             UbicacionSolicitadaId: metodoEntregaFinal == "RECOGIDA_TIENDA" ? (ubicacionSolicitadaId ?? "TIENDA-01-CENTRAL") : null,
-            ReceptorCui: cuiFinal
+            ReceptorCui: cuiFinal,
+            DireccionEntrega: direccionModel,
+            TokenMedioPago: medioPagoFinal == "TARJETA" ? tokenMedioPago : null
         );
 
         var (exitoCrear, ordenCreada, errorCrear) = await _gateway.CrearOrdenAsync(crearModel);

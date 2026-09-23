@@ -1,0 +1,288 @@
+@model List<SgoLogic.Web.Services.IncidenciaModel>
+@{
+    ViewData["Title"] = "Gestión de Incidencias Post-Venta";
+    var estadoFiltro = ViewBag.Estado as string ?? "TODOS";
+    var ordenIdFiltro = ViewBag.OrdenId as string ?? "";
+    var totalAbiertas = Model?.Count(i => i.Estado == "ABIERTA") ?? 0;
+    var totalInvestigacion = Model?.Count(i => i.Estado == "EN_INVESTIGACION") ?? 0;
+    var totalResueltas = Model?.Count(i => i.Estado == "RESUELTA") ?? 0;
+}
+
+<div class="w-full max-w-container-max mx-auto flex flex-col gap-8">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-border-subtle">
+        <div>
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold mb-2">
+                <span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">support_agent</span>
+                SLA y Calidad &bull; HU-021 Atención al Cliente
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight">Centro de Incidencias Operativas</h1>
+            <p class="text-xs sm:text-sm text-text-muted">Supervisión, trazabilidad y resolución de anomalías reportadas en pedidos omnicanal.</p>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <a href="/Incidencias/Crear" class="bg-primary text-on-primary px-5 py-2.5 rounded-xl text-xs font-semibold hover:opacity-90 active:scale-95 transition-all shadow-sm flex items-center gap-2">
+                <span class="material-symbols-outlined text-[16px]">add_alert</span>
+                Reportar Nueva Incidencia
+            </a>
+        </div>
+    </div>
+
+    <!-- Alert Notifications -->
+    @if (TempData["Exito"] != null)
+    {
+        <div class="bg-emerald-50 text-emerald-800 border border-emerald-200 p-4 rounded-2xl flex items-center justify-between gap-3 text-sm font-medium ambient-shadow">
+            <div class="flex items-center gap-2.5">
+                <span class="material-symbols-outlined text-emerald-600 text-[20px]">check_circle</span>
+                <span>@TempData["Exito"]</span>
+            </div>
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="bg-error-container text-on-error-container border border-error/20 p-4 rounded-2xl flex items-center justify-between gap-3 text-sm font-medium ambient-shadow">
+            <div class="flex items-center gap-2.5">
+                <span class="material-symbols-outlined text-error text-[20px]">error</span>
+                <span>@TempData["Error"]</span>
+            </div>
+        </div>
+    }
+
+    <!-- 4 KPI Cards -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div class="p-5 rounded-3xl bg-surface-white border border-border-subtle/60 ambient-shadow">
+            <div class="flex items-center justify-between text-text-muted mb-2">
+                <span class="text-xs font-semibold">Total Registradas</span>
+                <span class="material-symbols-outlined text-[20px]">folder</span>
+            </div>
+            <div class="text-2xl font-bold text-primary mb-1">@(Model?.Count ?? 0)</div>
+            <span class="text-[11px] text-text-muted">Historial completo</span>
+        </div>
+
+        <div class="p-5 rounded-3xl bg-surface-white border border-border-subtle/60 ambient-shadow">
+            <div class="flex items-center justify-between text-amber-600 mb-2">
+                <span class="text-xs font-semibold">Abiertas</span>
+                <span class="material-symbols-outlined text-[20px]">error_outline</span>
+            </div>
+            <div class="text-2xl font-bold text-amber-600 mb-1">@totalAbiertas</div>
+            <span class="text-[11px] text-amber-700 font-medium">Requieren atención</span>
+        </div>
+
+        <div class="p-5 rounded-3xl bg-surface-white border border-border-subtle/60 ambient-shadow">
+            <div class="flex items-center justify-between text-blue-600 mb-2">
+                <span class="text-xs font-semibold">En Investigación</span>
+                <span class="material-symbols-outlined text-[20px]">manage_search</span>
+            </div>
+            <div class="text-2xl font-bold text-blue-600 mb-1">@totalInvestigacion</div>
+            <span class="text-[11px] text-blue-700 font-medium">Revisión en bodega</span>
+        </div>
+
+        <div class="p-5 rounded-3xl bg-surface-white border border-border-subtle/60 ambient-shadow">
+            <div class="flex items-center justify-between text-green-600 mb-2">
+                <span class="text-xs font-semibold">Resueltas</span>
+                <span class="material-symbols-outlined text-[20px]">task_alt</span>
+            </div>
+            <div class="text-2xl font-bold text-green-600 mb-1">@totalResueltas</div>
+            <span class="text-[11px] text-green-700 font-medium">SLA conforme</span>
+        </div>
+    </div>
+
+    <!-- Search & Filters -->
+    <div class="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-4">
+        <!-- Filter Tabs -->
+        <div class="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0">
+            <a href="/Incidencias?estado=TODOS@(string.IsNullOrWhiteSpace(ordenIdFiltro) ? "" : "&ordenId=" + ordenIdFiltro)"
+               class="px-4 py-2 rounded-full text-xs font-semibold transition-all @(estadoFiltro == "TODOS" ? "bg-primary text-on-primary shadow-sm" : "bg-surface-white border border-border-subtle text-text-muted hover:text-primary")">
+                Todas (@(Model?.Count ?? 0))
+            </a>
+            <a href="/Incidencias?estado=ABIERTA@(string.IsNullOrWhiteSpace(ordenIdFiltro) ? "" : "&ordenId=" + ordenIdFiltro)"
+               class="px-4 py-2 rounded-full text-xs font-semibold transition-all @(estadoFiltro == "ABIERTA" ? "bg-amber-600 text-white shadow-sm" : "bg-surface-white border border-border-subtle text-text-muted hover:text-primary")">
+                Abiertas (@totalAbiertas)
+            </a>
+            <a href="/Incidencias?estado=EN_INVESTIGACION@(string.IsNullOrWhiteSpace(ordenIdFiltro) ? "" : "&ordenId=" + ordenIdFiltro)"
+               class="px-4 py-2 rounded-full text-xs font-semibold transition-all @(estadoFiltro == "EN_INVESTIGACION" ? "bg-blue-600 text-white shadow-sm" : "bg-surface-white border border-border-subtle text-text-muted hover:text-primary")">
+                En Investigación (@totalInvestigacion)
+            </a>
+            <a href="/Incidencias?estado=RESUELTA@(string.IsNullOrWhiteSpace(ordenIdFiltro) ? "" : "&ordenId=" + ordenIdFiltro)"
+               class="px-4 py-2 rounded-full text-xs font-semibold transition-all @(estadoFiltro == "RESUELTA" ? "bg-green-600 text-white shadow-sm" : "bg-surface-white border border-border-subtle text-text-muted hover:text-primary")">
+                Resueltas (@totalResueltas)
+            </a>
+        </div>
+
+        <!-- Filter by OrdenId -->
+        <form method="get" action="/Incidencias" class="flex items-center gap-2">
+            <input type="hidden" name="estado" value="@estadoFiltro" />
+            <div class="relative flex items-center bg-surface-white rounded-xl border border-border-subtle focus-within:border-secondary p-1 pl-3 ambient-shadow">
+                <span class="material-symbols-outlined text-text-muted text-[18px]">search</span>
+                <input type="text" name="ordenId" value="@ordenIdFiltro" placeholder="Filtrar por Orden ID..."
+                       class="px-2 py-1.5 text-xs bg-transparent border-none outline-none text-primary placeholder:text-text-muted w-44 sm:w-56" />
+                @if (!string.IsNullOrWhiteSpace(ordenIdFiltro))
+                {
+                    <a href="/Incidencias?estado=@estadoFiltro" class="text-text-muted hover:text-primary mr-2 text-xs">
+                        <span class="material-symbols-outlined text-[16px]">close</span>
+                    </a>
+                }
+            </div>
+            <button type="submit" class="bg-surface-container-low text-primary px-4 py-2 rounded-xl text-xs font-semibold hover:bg-surface-variant transition-colors border border-border-subtle/60">
+                Filtrar
+            </button>
+        </form>
+    </div>
+
+    <!-- Incidents Table Card -->
+    <div class="bg-surface-white rounded-3xl border border-border-subtle/60 overflow-hidden ambient-shadow">
+        @if (Model != null && Model.Count > 0)
+        {
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead>
+                        <tr class="bg-surface-container-low/60 text-text-muted uppercase tracking-wider font-semibold border-b border-border-subtle/70">
+                            <th class="py-4 px-6">ID Incidencia</th>
+                            <th class="py-4 px-6">Orden Asociada</th>
+                            <th class="py-4 px-6">Descripción</th>
+                            <th class="py-4 px-6">Estado</th>
+                            <th class="py-4 px-6">Fecha Reporte</th>
+                            <th class="py-4 px-6 text-right">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border-subtle/50">
+                        @foreach (var inc in Model)
+                        {
+                            var badgeClass = inc.Estado switch
+                            {
+                                "ABIERTA" => "bg-amber-100 text-amber-800 border-amber-300",
+                                "EN_INVESTIGACION" => "bg-blue-100 text-blue-800 border-blue-300",
+                                "RESUELTA" => "bg-green-100 text-green-800 border-green-300",
+                                "CERRADA" => "bg-slate-100 text-slate-800 border-slate-300",
+                                _ => "bg-surface-container-low text-text-muted border-border-subtle"
+                            };
+
+                            <tr class="hover:bg-surface-container-low/30 transition-colors">
+                                <td class="py-4 px-6 font-mono text-[11px] text-text-muted">
+                                    @inc.Id.ToString().Substring(0, 8)...
+                                </td>
+                                <td class="py-4 px-6">
+                                    <a href="/Estado?ordenId=@inc.OrdenId" class="font-semibold text-secondary hover:underline flex items-center gap-1">
+                                        <span>@inc.OrdenId</span>
+                                        <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+                                    </a>
+                                </td>
+                                <td class="py-4 px-6 max-w-xs">
+                                    <p class="font-medium text-primary line-clamp-2">@inc.Descripcion</p>
+                                    @if (!string.IsNullOrWhiteSpace(inc.Resolucion))
+                                    {
+                                        <p class="text-[11px] text-green-700 mt-1 bg-green-50 rounded p-1 border border-green-200">
+                                            <strong>Resolución:</strong> @inc.Resolucion
+                                        </p>
+                                    }
+                                </td>
+                                <td class="py-4 px-6">
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border @badgeClass">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+                                        @inc.Estado
+                                    </span>
+                                </td>
+                                <td class="py-4 px-6 text-text-muted">
+                                    @inc.CreadaEn.ToString("dd/MM/yyyy HH:mm")
+                                </td>
+                                <td class="py-4 px-6 text-right">
+                                    <button type="button" 
+                                            onclick="abrirModalResolucion('@inc.Id', '@inc.OrdenId', '@inc.Estado', '@Html.Raw(inc.Resolucion?.Replace("'", "\\'"))')"
+                                            class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-surface-container-low hover:bg-surface-variant text-primary text-xs font-semibold border border-border-subtle/60 transition-all">
+                                        <span class="material-symbols-outlined text-[15px]">edit_note</span>
+                                        Gestionar
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="p-12 text-center">
+                <div class="w-16 h-16 rounded-full bg-surface-container-low text-text-muted flex items-center justify-center mx-auto mb-4">
+                    <span class="material-symbols-outlined text-[32px]">check_circle</span>
+                </div>
+                <h3 class="text-base font-bold text-primary mb-1">No hay incidencias registradas</h3>
+                <p class="text-xs text-text-muted max-w-md mx-auto mb-6">
+                    Todas las órdenes operan con normalidad o no coinciden con los filtros aplicados.
+                </p>
+                <a href="/Incidencias/Crear" class="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-full text-xs font-semibold hover:opacity-90 transition-opacity">
+                    <span class="material-symbols-outlined text-[16px]">add</span>
+                    Registrar Incidencia
+                </a>
+            </div>
+        }
+    </div>
+</div>
+
+<!-- Modal para Gestionar / Resolver Incidencia -->
+<div id="modalResolucion" class="fixed inset-0 z-50 hidden bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-surface-white rounded-3xl max-w-lg w-full p-6 md:p-8 ambient-shadow border border-border-subtle">
+        <div class="flex items-center justify-between pb-4 mb-4 border-b border-border-subtle">
+            <div class="flex items-center gap-2.5">
+                <div class="w-9 h-9 rounded-xl bg-surface-container-low text-primary flex items-center justify-center">
+                    <span class="material-symbols-outlined text-[20px]">gavel</span>
+                </div>
+                <div>
+                    <h3 class="font-bold text-base text-primary">Gestionar Incidencia</h3>
+                    <p id="modalSubtitulo" class="text-xs text-text-muted"></p>
+                </div>
+            </div>
+            <button type="button" onclick="cerrarModalResolucion()" class="text-text-muted hover:text-primary">
+                <span class="material-symbols-outlined text-[20px]">close</span>
+            </button>
+        </div>
+
+        <form method="post" action="/Incidencias/Resolver" class="space-y-4">
+            <input type="hidden" id="modalIncidenciaId" name="id" />
+
+            <div>
+                <label for="modalNuevoEstado" class="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-1.5">
+                    Nuevo Estado
+                </label>
+                <select id="modalNuevoEstado" name="nuevoEstado" class="w-full bg-surface-container-low border border-border-subtle/70 rounded-xl px-4 py-2.5 text-xs font-semibold text-primary focus:bg-surface-white focus:ring-2 focus:ring-secondary focus:border-transparent transition-all">
+                    <option value="EN_INVESTIGACION">EN INVESTIGACIÓN (En proceso de análisis)</option>
+                    <option value="RESUELTA" selected>RESUELTA (Solución aplicada satisfactoriamente)</option>
+                    <option value="CERRADA">CERRADA (Caso concluido)</option>
+                </select>
+            </div>
+
+            <div>
+                <label for="modalTextoResolucion" class="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-1.5">
+                    Dictamen de Resolución
+                </label>
+                <textarea id="modalTextoResolucion" name="resolucion" rows="4" required
+                          placeholder="Describa la acción correctiva aplicada (ej: reenvío autorizado, reintegro tramitado, comprobante validado)..."
+                          class="w-full bg-surface-container-low border border-border-subtle/70 rounded-xl p-3 text-xs font-medium text-primary focus:bg-surface-white focus:ring-2 focus:ring-secondary focus:border-transparent transition-all placeholder:text-text-muted"></textarea>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 pt-4 border-t border-border-subtle">
+                <button type="button" onclick="cerrarModalResolucion()" class="px-4 py-2 rounded-xl text-xs font-semibold text-text-muted hover:bg-surface-container-low transition-colors">
+                    Cancelar
+                </button>
+                <button type="submit" class="bg-primary text-on-primary px-5 py-2 rounded-xl text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-[16px]">save</span>
+                    Guardar Resolución
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function abrirModalResolucion(id, ordenId, estadoActual, resolucionActual) {
+        document.getElementById('modalIncidenciaId').value = id;
+        document.getElementById('modalSubtitulo').textContent = 'Orden ' + ordenId + ' · Estado actual: ' + estadoActual;
+        document.getElementById('modalNuevoEstado').value = (estadoActual === 'ABIERTA') ? 'RESUELTA' : estadoActual;
+        document.getElementById('modalTextoResolucion').value = resolucionActual || '';
+        document.getElementById('modalResolucion').classList.remove('hidden');
+    }
+
+    function cerrarModalResolucion() {
+        document.getElementById('modalResolucion').classList.add('hidden');
+    }
+</script>

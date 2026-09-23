@@ -96,10 +96,10 @@ seccion "BLOQUE 0: Health-check de servicios propios"
 for svc_entry in "Gateway|${GW}" "Auth|${AUTH}" "ConsultaEstado|${ESTADO}" "Notificaciones|${NOTIF}" "MockMensajeria|${MOCK}"; do
   svc_name="${svc_entry%%|*}"
   svc_url="${svc_entry#*|}"
-  r=$(do_req GET "${svc_url}/healthz")
+  r=$(do_req GET "${svc_url}/health/live")
   code=$(get_code "$r")
   if [ "$code" = "200" ]; then
-    resultado "Health $svc_name" "$code" "200"
+    resultado "Health $svc_name (/health/live)" "$code" "200"
   else
     r2=$(do_req GET "${svc_url}/health")
     code2=$(get_code "$r2")
@@ -238,7 +238,10 @@ resultado "HU-010 Sembrar inventario" "$code" "200"
 
 log "  3.2 Crear orden via Gateway"
 CLIENTE_ESTADO="cliente-suite-$(date +%s)"
-orden_body="{\"clienteId\":\"${CLIENTE_ESTADO}\",\"canal\":\"WEB\",\"metodoEntrega\":\"DOMICILIO\",\"moneda\":\"GTQ\",\"medioPago\":\"TARJETA\",\"impuestos\":12.0,\"lineas\":[{\"sku\":\"${SKU_ESTADO}\",\"descripcion\":\"Suite test\",\"cantidad\":1,\"precioUnitario\":100.0}]}"
+token_resp=$(curl -s -X POST "http://localhost:8084/v1/tokens" -H "Content-Type: application/json" -d '{"numeroTarjeta":"4111111111111111","mesExpiracion":12,"anioExpiracion":2028,"cvv":"123"}')
+TOKEN_PK=$(echo "$token_resp" | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null)
+[ -z "$TOKEN_PK" ] && TOKEN_PK="tok_pk_suite_test_12345"
+orden_body="{\"clienteId\":\"${CLIENTE_ESTADO}\",\"canal\":\"WEB\",\"metodoEntrega\":\"DOMICILIO\",\"moneda\":\"GTQ\",\"medioPago\":\"TARJETA\",\"tokenMedioPago\":\"${TOKEN_PK}\",\"impuestos\":12.0,\"lineas\":[{\"sku\":\"${SKU_ESTADO}\",\"descripcion\":\"Suite test\",\"cantidad\":1,\"precioUnitario\":100.0}]}"
 r=$(do_req POST "$GW/api/ordenes" "$orden_body")
 code=$(get_code "$r"); body=$(get_body "$r")
 resultado "HU-010 Crear orden via GW => 201" "$code" "201" "$body" "id"

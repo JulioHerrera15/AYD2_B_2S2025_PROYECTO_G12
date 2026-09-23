@@ -1,46 +1,50 @@
 @model SgoLogic.Web.Services.OrdenEstadoModel?
-
 @{
-    ViewData["Title"] = "Consulta de Estado";
+    ViewData["Title"] = "Consulta de Estado & Rastreo de Órdenes";
+    var despacho = ViewBag.Despacho as SgoLogic.Web.Services.DespachoOrdenModel;
 }
 
 <!-- Header -->
 <div class="mb-8">
+    <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold mb-2">
+        <span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">track_changes</span>
+        Modelo de Lectura CQRS en Redis &bull; Respuesta Sub-5s (EAC-02)
+    </div>
     <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight mb-2">
-        Consulta de Estado y Trazabilidad
+        Rastreo y Consulta de Estado de Órdenes
     </h1>
-    <p class="text-sm text-text-muted max-w-2xl">
-        Seguimiento en tiempo real de órdenes con modelo de lectura CQRS, regla de estado autoritativo por eventos e histórico de incidencias.
+    <p class="text-xs sm:text-sm text-text-muted max-w-2xl">
+        Seguimiento en tiempo real del ciclo de vida de la orden, orquestación de la saga transaccional, certificación fiscal SAT FEL, despacho y trazabilidad de incidencias.
     </p>
 </div>
 
 <!-- Search Input Card -->
-<div class="bg-surface-white rounded-2xl ambient-shadow border border-border-subtle/50 p-5 md:p-6 mb-8">
+<div class="bg-surface-white rounded-3xl ambient-shadow border border-border-subtle/50 p-5 md:p-6 mb-8">
     <form method="get" action="/Estado" class="relative max-w-2xl">
         <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-text-muted text-[22px]">search</span>
-        <input type="text" 
-               name="ordenId" 
-               class="w-full bg-surface-container-low border-none rounded-full py-3.5 pl-12 pr-32 focus:bg-surface-white focus:ring-2 focus:ring-secondary text-sm font-medium text-primary placeholder:text-text-muted transition-all" 
-               placeholder="Ingrese ID de la orden (ej: ORD-2026-001 o UUID)..." 
-               value="@ViewBag.OrdenId" 
+        <input type="text"
+               name="ordenId"
+               id="input-orden-id"
+               class="w-full bg-surface-container-low border-none rounded-2xl py-3.5 pl-12 pr-32 focus:bg-surface-white focus:ring-2 focus:ring-secondary text-sm font-medium text-primary placeholder:text-text-muted transition-all font-mono"
+               placeholder="Ingrese ID o Correlativo (ej: ORD-2026-000001)..."
+               value="@ViewBag.OrdenId"
                required />
-        <button type="submit" 
-                class="absolute right-2 top-1/2 -translate-y-1/2 bg-primary text-on-primary px-5 py-2 rounded-full text-xs font-semibold hover:opacity-90 transition-opacity active:scale-95 shadow-sm">
+        <button type="submit"
+                class="absolute right-2 top-1/2 -translate-y-1/2 bg-primary text-on-primary px-5 py-2 rounded-xl text-xs font-semibold hover:opacity-90 transition-opacity active:scale-95 shadow-sm">
             Consultar
         </button>
     </form>
     <div class="mt-3 flex flex-wrap items-center gap-2 pt-2">
-        <span class="text-xs text-text-muted font-medium">Órdenes de prueba activas:</span>
-        <a href="/Estado?ordenId=ORD-2026-001" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-surface-container-low hover:bg-secondary-fixed text-primary transition-colors border border-border-subtle/40">ORD-2026-001 (CONFIRMADA)</a>
-        <a href="/Estado?ordenId=ORD-8950" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-surface-container-low hover:bg-secondary-fixed text-primary transition-colors border border-border-subtle/40">ORD-8950 (CREADA)</a>
-        <a href="/Estado?ordenId=ORD-8951" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-surface-container-low hover:bg-secondary-fixed text-primary transition-colors border border-border-subtle/40">ORD-8951 (CANCELADA)</a>
-        <a href="/Estado?ordenId=ORD-8952" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-surface-container-low hover:bg-secondary-fixed text-primary transition-colors border border-border-subtle/40">ORD-8952 (ENTREGADA)</a>
+        <span class="text-xs text-text-muted font-medium">Órdenes sugeridas:</span>
+        <a href="/Estado?ordenId=ORD-2026-000001" class="px-2.5 py-1 rounded-xl text-xs font-semibold bg-surface-container-low hover:bg-secondary-fixed text-primary transition-colors border border-border-subtle/40 font-mono">ORD-2026-000001</a>
+        <a href="/Estado?ordenId=ORD-2026-000002" class="px-2.5 py-1 rounded-xl text-xs font-semibold bg-surface-container-low hover:bg-secondary-fixed text-primary transition-colors border border-border-subtle/40 font-mono">ORD-2026-000002</a>
+        <a href="/Estado?ordenId=ORD-2026-000003" class="px-2.5 py-1 rounded-xl text-xs font-semibold bg-surface-container-low hover:bg-secondary-fixed text-primary transition-colors border border-border-subtle/40 font-mono">ORD-2026-000003</a>
     </div>
 </div>
 
 @if (ViewBag.Error != null)
 {
-    <div class="mb-8 bg-error-container text-on-error-container border border-error/20 rounded-xl p-4 flex items-center gap-3 ambient-shadow">
+    <div class="mb-8 bg-error-container text-on-error-container border border-error/20 rounded-2xl p-4 flex items-center gap-3 ambient-shadow">
         <span class="material-symbols-outlined text-error" style="font-variation-settings: 'FILL' 1;">error</span>
         <div class="text-sm font-medium">@ViewBag.Error</div>
     </div>
@@ -48,139 +52,212 @@
 
 @if (Model != null)
 {
-    <!-- Order Card -->
-    <div class="bg-surface-white rounded-2xl ambient-shadow border border-border-subtle/50 p-6 md:p-8 mb-8">
+    <!-- Main Order Details Card -->
+    <div class="bg-surface-white rounded-3xl ambient-shadow border border-border-subtle/50 p-6 md:p-8 mb-8" id="orden-container" data-orden-id="@Model.OrdenId" data-estado="@Model.Estado">
         <!-- Card Header -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 mb-6 border-b border-border-subtle/60 gap-4">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-surface-container-low text-primary flex items-center justify-center font-bold">
-                    <span class="material-symbols-outlined text-[24px]">inventory_2</span>
+            <div class="flex items-center gap-3.5">
+                <div class="w-12 h-12 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center font-bold">
+                    <span class="material-symbols-outlined text-[28px]">inventory_2</span>
                 </div>
                 <div>
-                    <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Orden de Compra</span>
-                    <h2 class="text-xl font-bold text-primary tracking-tight">@Model.OrdenId</h2>
+                    <div class="flex items-center gap-2">
+                        <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Orden de Compra</span>
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="Sincronización reactiva activa"></span>
+                        <span class="text-[10px] text-text-muted font-mono" id="sync-status">Sincronizado</span>
+                    </div>
+                    <h2 class="text-xl sm:text-2xl font-bold text-primary tracking-tight font-mono">@(Model.NumeroOrden ?? Model.OrdenId)</h2>
                 </div>
             </div>
 
             @{
                 var (badgeBg, badgeText, badgeIcon) = Model.Estado switch
                 {
-                    "CREADA" => ("bg-secondary-fixed text-on-secondary-fixed", "CREADA", "hourglass_top"),
-                    "CONFIRMADA" or "CONFIRMADA_PENDIENTE_FISCAL" => ("bg-secondary-fixed text-on-secondary-fixed", Model.Estado, "check_circle"),
-                    "ENTREGADA" => ("bg-emerald-100 text-emerald-800", "ENTREGADA", "task_alt"),
-                    "CANCELADA" or "RECHAZADA" => ("bg-error-container text-error", Model.Estado, "cancel"),
-                    _ => ("bg-surface-container-high text-on-surface-variant", Model.Estado ?? "DESCONOCIDO", "help")
+                    "CREADA" => ("bg-blue-100 text-blue-800 border-blue-200", "CREADA", "hourglass_top"),
+                    "COBRO_SOLICITADO" or "PAGO_PENDIENTE" => ("bg-amber-100 text-amber-800 border-amber-200", Model.Estado, "pending"),
+                    "PAGO_APLICADO" or "CONFIRMADA" or "CONFIRMADA_PENDIENTE_FISCAL" => ("bg-secondary-fixed text-on-secondary-fixed border-secondary-container/50", Model.Estado, "verified"),
+                    "DESPACHO_SOLICITADO" or "EN_PREPARACION" => ("bg-purple-100 text-purple-800 border-purple-200", Model.Estado, "inventory"),
+                    "EN_TRANSITO" => ("bg-indigo-100 text-indigo-800 border-indigo-200", "EN TRÁNSITO", "local_shipping"),
+                    "LISTA_PARA_RECOGER" => ("bg-emerald-100 text-emerald-800 border-emerald-200", "LISTA PARA RECOGER", "storefront"),
+                    "ENTREGADA" => ("bg-emerald-100 text-emerald-800 border-emerald-200", "ENTREGADA", "task_alt"),
+                    "CANCELADA" or "RECHAZADA" => ("bg-error-container text-error border-error/30", Model.Estado, "cancel"),
+                    _ => ("bg-surface-container-high text-on-surface-variant border-border-subtle", Model.Estado ?? "DESCONOCIDO", "help")
                 };
             }
 
-            <span class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-bold @badgeBg self-start sm:self-auto">
-                <span class="material-symbols-outlined text-[15px]">@badgeIcon</span>
-                @badgeText
+            <span id="badge-estado-principal" class="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full text-xs font-bold border @badgeBg self-start sm:self-auto shadow-2xs">
+                <span class="material-symbols-outlined text-[16px]">@badgeIcon</span>
+                <span id="badge-estado-texto">@badgeText</span>
             </span>
         </div>
 
-        @if (!string.IsNullOrWhiteSpace(Model.MotivoUltimoCambio))
+        <!-- Saga Visual Stepper -->
+        <div class="mb-8 p-5 bg-surface-container-low/40 rounded-2xl border border-border-subtle/50">
+            <span class="text-xs font-bold uppercase tracking-wider text-text-muted block mb-4">Progreso de la Saga Transaccional:</span>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <!-- Step 1: Creada / Cobro -->
+                <div class="p-3 rounded-xl bg-surface-white border border-border-subtle/70 flex items-center gap-2.5">
+                    <span class="w-6 h-6 rounded-full bg-emerald-500 text-white font-bold text-[11px] flex items-center justify-center flex-shrink-0">✓</span>
+                    <div>
+                        <div class="font-bold text-primary">1. Creada & Cobro</div>
+                        <div class="text-[11px] text-text-muted">PayKlik Tokenizado</div>
+                    </div>
+                </div>
+
+                <!-- Step 2: Confirmación Fiscal -->
+                @{
+                    var step2Done = Model.Estado != "CREADA" && Model.Estado != "COBRO_SOLICITADO" && Model.Estado != "PAGO_PENDIENTE";
+                }
+                <div class="p-3 rounded-xl bg-surface-white border border-border-subtle/70 flex items-center gap-2.5">
+                    <span class="w-6 h-6 rounded-full @(step2Done ? "bg-emerald-500 text-white" : "bg-surface-container text-text-muted") font-bold text-[11px] flex items-center justify-center flex-shrink-0">
+                        @(step2Done ? "✓" : "2")
+                    </span>
+                    <div>
+                        <div class="font-bold text-primary">2. Certificación Fiscal</div>
+                        <div class="text-[11px] text-text-muted">SAT FEL (DTE)</div>
+                    </div>
+                </div>
+
+                <!-- Step 3: Preparación / Despacho -->
+                @{
+                    var step3Done = Model.Estado == "EN_PREPARACION" || Model.Estado == "EN_TRANSITO" || Model.Estado == "LISTA_PARA_RECOGER" || Model.Estado == "ENTREGADA";
+                }
+                <div class="p-3 rounded-xl bg-surface-white border border-border-subtle/70 flex items-center gap-2.5">
+                    <span class="w-6 h-6 rounded-full @(step3Done ? "bg-emerald-500 text-white" : "bg-surface-container text-text-muted") font-bold text-[11px] flex items-center justify-center flex-shrink-0">
+                        @(step3Done ? "✓" : "3")
+                    </span>
+                    <div>
+                        <div class="font-bold text-primary">3. Preparación</div>
+                        <div class="text-[11px] text-text-muted">Bodega / Tienda</div>
+                    </div>
+                </div>
+
+                <!-- Step 4: Entrega Final -->
+                @{
+                    var step4Done = Model.Estado == "ENTREGADA";
+                }
+                <div class="p-3 rounded-xl bg-surface-white border border-border-subtle/70 flex items-center gap-2.5">
+                    <span class="w-6 h-6 rounded-full @(step4Done ? "bg-emerald-500 text-white" : "bg-surface-container text-text-muted") font-bold text-[11px] flex items-center justify-center flex-shrink-0">
+                        @(step4Done ? "✓" : "4")
+                    </span>
+                    <div>
+                        <div class="font-bold text-primary">4. Entrega</div>
+                        <div class="text-[11px] text-text-muted">@(Model.MetodoEntrega == "RECOGIDA_TIENDA" ? "Mostrador Tienda" : "LogiExpress")</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Alerta Fiscal Banner (ADR-015) si aplica -->
+        @if (Model.Estado == "CONFIRMADA_PENDIENTE_FISCAL")
         {
-            <div class="mb-6 @(Model.Estado == "RECHAZADA" || Model.Estado == "CANCELADA" ? "bg-error-container/60 border-error/40 text-on-error-container" : "bg-secondary-fixed/40 border-secondary/30 text-on-secondary-fixed") border rounded-2xl p-4 flex items-start gap-3.5 ambient-shadow">
-                <span class="material-symbols-outlined @(Model.Estado == "RECHAZADA" || Model.Estado == "CANCELADA" ? "text-error" : "text-secondary") text-[24px] mt-0.5" style="font-variation-settings: 'FILL' 1;">
-                    @(Model.Estado == "RECHAZADA" ? "cancel" : Model.Estado == "CANCELADA" ? "block" : "info")
-                </span>
-                <div>
-                    <div class="text-xs font-bold uppercase tracking-wider mb-1">
-                        @(Model.Estado == "RECHAZADA" ? "Motivo del Rechazo de la Orden" : Model.Estado == "CANCELADA" ? "Motivo de la Cancelación" : "Detalle del Estado")
-                    </div>
-                    <div class="text-sm font-semibold">
-                        @Model.MotivoUltimoCambio
-                    </div>
+            <div class="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-3">
+                <span class="material-symbols-outlined text-amber-700 text-[22px]">info</span>
+                <div class="text-xs">
+                    <strong>Certificación Tributaria Asíncrona (ADR-011 / ADR-015):</strong> Tu orden está confirmada y asegurada para entrega. El documento tributario se encuentra en proceso de firma digital ante la SAT por canal desacoplado.
                 </div>
             </div>
         }
 
-        <!-- Details Grid -->
-        <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6 mb-8">
-            <div>
-                <span class="text-xs text-text-muted block mb-1 font-medium">Correlativo</span>
-                <span class="text-sm font-semibold text-primary">@(Model.NumeroOrden ?? "N/A")</span>
-            </div>
-            <div>
-                <span class="text-xs text-text-muted block mb-1 font-medium">Canal</span>
-                <span class="text-sm font-semibold text-primary">@(Model.Canal ?? "ONLINE")</span>
-            </div>
-            <div>
-                <span class="text-xs text-text-muted block mb-1 font-medium">Método de Entrega</span>
-                <span class="text-sm font-semibold text-primary">@(Model.MetodoEntrega ?? "STANDARD")</span>
-            </div>
-            <div>
-                <span class="text-xs text-text-muted block mb-1 font-medium">Monto Total</span>
-                <span class="text-lg font-bold text-primary tracking-tight">
-                    @(Model.Moneda ?? "GTQ") @(Model.Total?.ToString("N2") ?? "0.00")
-                </span>
-            </div>
-            <div>
-                <span class="text-xs text-text-muted block mb-1 font-medium">ID de Pago</span>
-                <span class="text-xs font-mono bg-surface-container-low px-2 py-1 rounded text-primary block truncate">
-                    @(Model.PagoId ?? "Pendiente")
-                </span>
-            </div>
-            <div>
-                <span class="text-xs text-text-muted block mb-1 font-medium">Certificación Fiscal (SAT)</span>
-                <span class="text-xs font-mono bg-surface-container-low px-2 py-1 rounded text-primary block truncate">
-                    @(Model.DocumentoFiscalId ?? "Pendiente")
-                </span>
-            </div>
-            <div>
-                <span class="text-xs text-text-muted block mb-1 font-medium">Fecha de Creación</span>
-                <span class="text-sm text-primary font-medium">
-                    @(Model.CreadaEn?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "N/A")
-                </span>
-            </div>
-            <div>
-                <span class="text-xs text-text-muted block mb-1 font-medium">Última Actualización</span>
-                <span class="text-sm text-primary font-medium">
-                    @(Model.ActualizadaEn?.ToLocalTime().ToString("dd/MM/yyyy HH:mm") ?? "N/A")
-                </span>
-            </div>
-            @if (!string.IsNullOrWhiteSpace(Model.MotivoUltimoCambio))
-            {
-                <div class="col-span-2 sm:col-span-3 lg:col-span-4 bg-surface-container-low/50 p-3 rounded-xl border border-border-subtle/50">
-                    <span class="text-xs text-text-muted block mb-0.5 font-medium">Motivo / Causa del Estado Actual</span>
-                    <span class="text-sm font-bold @(Model.Estado == "RECHAZADA" ? "text-error" : "text-primary")">
-                        @Model.MotivoUltimoCambio
-                    </span>
+        <!-- Order Information 4-Card Grid -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <!-- Card 1: Financiero -->
+            <div class="p-5 rounded-2xl bg-surface-container-low/40 border border-border-subtle/60">
+                <div class="flex items-center gap-2 text-xs font-bold text-primary uppercase tracking-wider mb-3">
+                    <span class="material-symbols-outlined text-secondary text-[18px]">payments</span>
+                    Datos de Pago
                 </div>
-            }
+                <div class="space-y-2 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-text-muted">Monto Total:</span>
+                        <span class="font-bold text-primary text-sm">@(Model.Moneda ?? "GTQ") @(Model.Total?.ToString("N2") ?? "0.00")</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-text-muted">Canal de Venta:</span>
+                        <span class="font-semibold text-primary">@(Model.Canal ?? "ONLINE")</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-text-muted">ID Transacción Pago:</span>
+                        <span class="font-mono text-primary truncate max-w-[140px]">@(Model.PagoId ?? "Procesado")</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 2: Fiscal FEL -->
+            <div class="p-5 rounded-2xl bg-surface-container-low/40 border border-border-subtle/60">
+                <div class="flex items-center gap-2 text-xs font-bold text-primary uppercase tracking-wider mb-3">
+                    <span class="material-symbols-outlined text-secondary text-[18px]">receipt_long</span>
+                    Facturación SAT FEL
+                </div>
+                <div class="space-y-2 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-text-muted">DTE Documento:</span>
+                        <span class="font-mono font-bold text-primary">@(Model.DocumentoFiscalId ?? "Generando...")</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-text-muted">Régimen:</span>
+                        <span class="font-semibold text-primary">Factura Electrónica (FEL)</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-text-muted">IVA 12% Incluido:</span>
+                        <span class="font-semibold text-emerald-700">Certificado</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Card 3: Despacho -->
+            <div class="p-5 rounded-2xl bg-surface-container-low/40 border border-border-subtle/60">
+                <div class="flex items-center gap-2 text-xs font-bold text-primary uppercase tracking-wider mb-3">
+                    <span class="material-symbols-outlined text-secondary text-[18px]">local_shipping</span>
+                    Logística & Despacho
+                </div>
+                <div class="space-y-2 text-xs">
+                    <div class="flex justify-between">
+                        <span class="text-text-muted">Método:</span>
+                        <span class="font-bold text-primary">@(Model.MetodoEntrega ?? "DOMICILIO")</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-text-muted">Transportista:</span>
+                        <span class="font-semibold text-primary">@(despacho?.Transportista ?? (Model.MetodoEntrega == "RECOGIDA_TIENDA" ? "Flota Interna" : "LogiExpress"))</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-text-muted">Guía de Envío:</span>
+                        <span class="font-mono text-secondary font-bold">@(despacho?.GuiaId ?? "Asignando...")</span>
+                    </div>
+                </div>
+            </div>
         </div>
 
-        <!-- Incidents List -->
+        <!-- Incidents List Section (HU-021) -->
         <div class="pt-6 border-t border-border-subtle/60">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
                 <div class="flex items-center gap-2 font-bold text-primary text-base">
                     <span class="material-symbols-outlined text-text-muted">report_problem</span>
-                    <span>Incidencias Registradas (HU-021)</span>
+                    <span>Incidencias Operativas Vinculadas (HU-021)</span>
                 </div>
-                <a href="/Incidencias/Crear?ordenId=@Model.OrdenId" 
-                   class="inline-flex items-center gap-1.5 bg-surface-container-low hover:bg-surface-variant text-primary px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors self-start sm:self-auto border border-border-subtle/50">
-                    <span class="material-symbols-outlined text-[15px]">add</span>
-                    Levantar Incidencia
+                <a href="/Incidencias/Crear?ordenId=@Model.OrdenId"
+                   class="inline-flex items-center gap-1.5 bg-surface-container-low hover:bg-surface-variant text-primary px-4 py-2 rounded-xl text-xs font-semibold transition-colors border border-border-subtle/50 shadow-2xs">
+                    <span class="material-symbols-outlined text-[16px]">add</span>
+                    Levantar Nueva Incidencia
                 </a>
             </div>
 
             @if (Model.Incidencias == null || !Model.Incidencias.Any())
             {
-                <div class="bg-surface-bright/50 rounded-xl p-5 text-center text-xs text-text-muted border border-border-subtle/40">
-                    No se registran incidencias operativas para esta orden.
+                <div class="bg-surface-bright/50 rounded-2xl p-5 text-center text-xs text-text-muted border border-border-subtle/40">
+                    No se registran incidencias ni reclamos sobre esta orden. El pedido cursa normalmente.
                 </div>
             }
             else
             {
-                <div class="overflow-x-auto rounded-xl border border-border-subtle/50">
+                <div class="overflow-x-auto rounded-2xl border border-border-subtle/50">
                     <table class="w-full text-left border-collapse">
                         <thead>
                             <tr class="bg-surface-bright/60 border-b border-border-subtle text-xs text-text-muted uppercase font-semibold">
                                 <th class="py-3 px-4">Fecha</th>
-                                <th class="py-3 px-4">Descripción del Problema</th>
+                                <th class="py-3 px-4">Descripción del Reclamo</th>
                                 <th class="py-3 px-4">Estado</th>
-                                <th class="py-3 px-4">Resolución</th>
+                                <th class="py-3 px-4">Resolución de Soporte</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-border-subtle/50">
@@ -190,27 +267,25 @@
                                     <td class="py-3.5 px-4 text-xs text-text-muted whitespace-nowrap">
                                         @inc.CreadaEn.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
                                     </td>
-                                    <td class="py-3.5 px-4 font-medium text-primary">
+                                    <td class="py-3.5 px-4 font-medium text-primary text-xs">
                                         @inc.Descripcion
                                     </td>
                                     <td class="py-3.5 px-4 whitespace-nowrap">
                                         @if (inc.Estado == "ABIERTA")
                                         {
                                             <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-error-container text-error text-[11px] font-bold">
-                                                <span class="material-symbols-outlined text-[13px]">pending</span>
                                                 ABIERTA
                                             </span>
                                         }
                                         else
                                         {
-                                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-[11px] font-bold">
-                                                <span class="material-symbols-outlined text-[13px]">check</span>
+                                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">
                                                 RESUELTA
                                             </span>
                                         }
                                     </td>
                                     <td class="py-3.5 px-4 text-xs text-text-muted">
-                                        @(inc.Resolucion ?? "En revisión por equipo de soporte")
+                                        @(inc.Resolucion ?? "En investigación por el equipo de postventa")
                                     </td>
                                 </tr>
                             }
@@ -221,3 +296,34 @@
         </div>
     </div>
 }
+
+<script>
+    // ── Auto-refresco reactivo vía AJAX cada 2.5s mientras la orden esté activa ──
+    const container = document.getElementById('orden-container');
+    if (container) {
+        const ordenId = container.getAttribute('data-orden-id');
+        let estadoActual = container.getAttribute('data-estado');
+        const syncStatus = document.getElementById('sync-status');
+
+        const terminalStates = ['ENTREGADA', 'CANCELADA', 'RECHAZADA'];
+
+        if (!terminalStates.includes(estadoActual)) {
+            const interval = setInterval(async () => {
+                try {
+                    const res = await fetch(`/Estado/Api/${ordenId}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        const orden = data.orden;
+                        if (orden && orden.estado !== estadoActual) {
+                            syncStatus.textContent = 'Actualizando...';
+                            // Si el estado cambió, recargar suavemente la vista para redibujar el stepper completo
+                            window.location.reload();
+                        }
+                    }
+                } catch (err) {
+                    console.log('Error en polling:', err);
+                }
+            }, 2500);
+        }
+    }
+</script>

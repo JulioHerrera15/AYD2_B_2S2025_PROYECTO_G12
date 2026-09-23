@@ -22,6 +22,37 @@ public sealed class IncidenciasController : ControllerBase
         _contexto = contexto;
     }
 
+    /// <summary>Lista incidencias, opcionalmente filtradas por OrdenId o Estado.</summary>
+    [HttpGet]
+    [ProducesResponseType<List<IncidenciaDto>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> Listar(
+        [FromQuery] string? ordenId,
+        [FromQuery] string? estado,
+        CancellationToken ct)
+    {
+        var query = _contexto.Incidencias.AsNoTracking().AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(ordenId))
+            query = query.Where(i => i.OrdenId == ordenId.Trim());
+
+        if (!string.IsNullOrWhiteSpace(estado))
+            query = query.Where(i => i.Estado == estado.Trim().ToUpperInvariant());
+
+        var items = await query
+            .OrderByDescending(i => i.CreadaEn)
+            .Take(100)
+            .Select(i => new IncidenciaDto(
+                i.Id,
+                i.Estado,
+                i.Descripcion,
+                i.Resolucion,
+                i.CreadaEn,
+                i.ActualizadaEn))
+            .ToListAsync(ct);
+
+        return Ok(items);
+    }
+
     /// <summary>Crea una incidencia para una orden.</summary>
     [HttpPost]
     [ProducesResponseType<IncidenciaDto>(StatusCodes.Status201Created)]
