@@ -15,6 +15,13 @@ public class CheckoutController : Controller
     [HttpGet]
     public async Task<IActionResult> Index()
     {
+        var jwt = Request.Cookies["sgo_jwt"];
+        if (string.IsNullOrWhiteSpace(jwt))
+        {
+            TempData["Error"] = "Por favor inicia sesión o regístrate para proceder al checkout y completar tu compra de forma segura.";
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Checkout" });
+        }
+
         var carrito = await _gateway.ObtenerCarritoAsync();
         if (carrito is null || carrito.Items is null || carrito.Items.Count == 0)
         {
@@ -40,6 +47,12 @@ public class CheckoutController : Controller
         string medioPago,
         string? tokenMedioPago)
     {
+        var jwt = Request.Cookies["sgo_jwt"];
+        if (string.IsNullOrWhiteSpace(jwt))
+        {
+            TempData["Error"] = "Sesión expirada. Inicia sesión nuevamente para procesar tu compra.";
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Checkout" });
+        }
         var carrito = await _gateway.ObtenerCarritoAsync();
         if (carrito is null || carrito.Items is null || carrito.Items.Count == 0)
         {
