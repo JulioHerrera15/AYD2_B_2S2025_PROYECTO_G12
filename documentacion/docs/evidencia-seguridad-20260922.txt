@@ -1,0 +1,60 @@
+=====================================================================
+ SGO-Logic — Pruebas de seguridad del MVP                             
+=====================================================================
+
+--- Bloque 1: RES-08 (no persistencia de PAN/CVV) ---
+PAN de prueba (Visa de prueba estandar, no real) usado para tokenizar Y como canario de texto libre: 4111111111111111
+Tarjeta tokenizada contra PayKlik: token=tok_pk_64924024e238e458265944c9 ultimosCuatro=1111 marca=VISA
+POST /api/ordenes con TARJETA y sin tokenMedioPago -> 400 (se espera 400)
+Orden canario ORD-2026-000009 llego a CONFIRMADA_PENDIENTE_FISCAL. Esperando 5s a que Auditoria drene el evento...
+
+Mapa de propagacion del marcador de prueba (informativo, no todo aqui es un hallazgo):
+  operacional/sgo_ordenes: ordenes.linea_orden.descripcion -> PAN=4 CVV=4 VENC=4
+  operacional/sgo_ordenes: public.outbox_messages.payload -> PAN=16 CVV=16 VENC=16
+  operacional/sgo_despacho: despacho.linea_despacho.descripcion -> PAN=4 CVV=4 VENC=4
+  operacional/sgo_despacho: public.outbox_messages.payload -> PAN=8 CVV=8 VENC=8
+  finanzas/sgo_facturacion: facturacion.documento_fiscal.xml_generado -> PAN=4 CVV=4 VENC=4
+  finanzas/sgo_facturacion: facturacion.documento_fiscal_linea.descripcion -> PAN=4 CVV=4 VENC=4
+  auditoria/sgo_auditoria: public.eventos_auditoria.payload -> PAN=24 CVV=24 VENC=24
+
+Intento de pago de la orden canario (token|ultimos_cuatro|marca|estado): tok_pk_64924024e238e458265944c9|1111|VISA|EXITOSO
+ordenes.orden.token_medio_pago quedo en NULL tras el cobro, como documenta Orden.TomarTokenMedioPago().
+Lineas de log con el marcador de prueba: 0
+
+--- Bloque 2: validacion de JWT ---
+POST /api/carrito/asociar sin token           -> 401 (se espera 401)
+POST /api/carrito/asociar token malformado     -> 401 (se espera 401)
+POST /api/carrito/asociar token expirado       -> 401 (se espera 401)
+POST /api/carrito/asociar token de otra clave  -> 401 (se espera 401)
+POST /api/carrito/asociar token valido real    -> 204 (se espera != 401)
+
+Hallazgo a reportar (no se corrige aqui): exposicion del resto de las rutas
+sin exigir ningun token, vía el API Gateway.
+  GET /api/pagos/ordenes/orden-inexistente-segsweep-1790122759 sin token -> 404 (no es 401/403: la ruta no exige autenticacion)
+  GET /api/facturacion/documentos/orden-inexistente-segsweep-1790122759 sin token -> 404 (no es 401/403: la ruta no exige autenticacion)
+  GET /api/inventario/existencias sin token -> 200 (no es 401/403: la ruta no exige autenticacion)
+  POST /api/ordenes sin token -> 400 (no es 401/403: la ruta no exige autenticacion)
+
+--- Bloque 3: permisos de Auditoria (reutilizando PermisosInmutabilidadTests) ---
+UPDATE con usuario restringido (auditoria_app) -> bloqueado por permisos (42501), como se esperaba.
+DELETE con usuario restringido (auditoria_app) -> bloqueado por permisos (42501), como se esperaba.
+UPDATE con usuario dueno (sgo_admin) -> bloqueado por el trigger (P0001), como se esperaba.
+
+=====================================================================
+ RESUMEN                                                              
+=====================================================================
+
+Hallazgos informativos (no bloquean el dictamen, ya conocidos y fuera de alcance para corregir aqui):
+  - Propagacion esperada del texto libre de la orden (no es un hallazgo de RES-08): sgo_ordenes.ordenes.linea_orden.descripcion (PAN=4 CVV=4 VENC=4)
+  - Propagacion esperada del texto libre de la orden (no es un hallazgo de RES-08): sgo_ordenes.public.outbox_messages.payload (PAN=16 CVV=16 VENC=16)
+  - Propagacion esperada del texto libre de la orden (no es un hallazgo de RES-08): sgo_despacho.despacho.linea_despacho.descripcion (PAN=4 CVV=4 VENC=4)
+  - Propagacion esperada del texto libre de la orden (no es un hallazgo de RES-08): sgo_despacho.public.outbox_messages.payload (PAN=8 CVV=8 VENC=8)
+  - Propagacion esperada del texto libre de la orden (no es un hallazgo de RES-08): sgo_facturacion.facturacion.documento_fiscal.xml_generado (PAN=4 CVV=4 VENC=4)
+  - Propagacion esperada del texto libre de la orden (no es un hallazgo de RES-08): sgo_facturacion.facturacion.documento_fiscal_linea.descripcion (PAN=4 CVV=4 VENC=4)
+  - Propagacion esperada del texto libre de la orden (no es un hallazgo de RES-08): sgo_auditoria.public.eventos_auditoria.payload (PAN=24 CVV=24 VENC=24)
+  - GET /api/pagos/ordenes/orden-inexistente-segsweep-1790122759 respondio 404 sin ningun token (esperado dado el hallazgo confirmado; no es un chequeo bloqueante)
+  - GET /api/facturacion/documentos/orden-inexistente-segsweep-1790122759 respondio 404 sin ningun token (esperado dado el hallazgo confirmado; no es un chequeo bloqueante)
+  - GET /api/inventario/existencias respondio 200 sin ningun token (esperado dado el hallazgo confirmado; no es un chequeo bloqueante)
+  - POST /api/ordenes respondio 400 sin ningun token (esperado dado el hallazgo confirmado; no es un chequeo bloqueante)
+
+RESULTADO=APROBADO: sin PAN/CVV/vencimiento persistido ni logueado, JWT valida correctamente en el unico endpoint protegido, y los permisos de Auditoria siguen bloqueando UPDATE/DELETE (incluso al dueno).

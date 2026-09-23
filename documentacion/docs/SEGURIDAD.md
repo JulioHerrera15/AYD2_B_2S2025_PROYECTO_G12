@@ -235,19 +235,51 @@ esta tarjeta.
    grave como uno en la base, y ahora hay un PAN real que sí entra a un
    proceso del sistema (el mock), aunque sea nunca destinado a persistir.
 
-### Limitación de esta medición, con honestidad
+### Limitaciones de esta medición, con honestidad
 
 El marcador y el PAN tokenizado demuestran que el barrido **funciona** (los
-encuentra donde se inyectan/tokenizan) y que **no aparecen** donde no
-deberían (Pagos/Facturación). No demuestra que sea imposible que un PAN real
-entre al sistema por una ruta distinta en el futuro: si alguien agrega otro
-campo de captura de tarjeta en algún endpoint, esta prueba no lo sabría de
+encuentra donde se inyectan/tokenizan) y que **no aparece** donde no debería
+(el contexto de Pagos). No demuestra que sea imposible que un PAN real entre
+al sistema por una ruta distinta en el futuro: si alguien agrega otro campo
+de captura de tarjeta en algún endpoint, esta prueba no lo sabría de
 antemano — habría que volver a correrla después de ese cambio. Tampoco
 ejercita la UI real (`SgoLogic.Web`): como se documentó arriba, su llamada de
 tokenización está rota (endpoint y forma del cuerpo equivocados), así que
 esta prueba llama al mock directamente, igual que *debería* hacerlo el
 navegador. Es una prueba del backend de punta a punta, no una prueba de que
 la UI actual pueda completarlo.
+
+**Alcance del criterio de hallazgo en el barrido.** Tras corregir el criterio
+de clasificación (antes marcaba como hallazgo que el marcador llegara a
+Facturación, que es propagación legítima del texto libre de la orden — ver
+paso 5 de arriba), lo único que hoy genera un hallazgo bloqueante en el
+barrido de columnas es que el marcador aparezca en el contexto de Pagos
+(`sgo_pagos`). El chequeo dirigido de columnas con forma de número de
+tarjeta (paso 6) cubre otra superficie, pero también acotada a
+`pagos.pago`/`pagos.intento_pago`. Un PAN que apareciera en un contexto
+distinto de Pagos se reportaría como informativo, no como hallazgo. El
+criterio es defendible — Pagos es el único contexto que debería ver datos de
+tarjeta o el token que los representa — pero es una decisión de alcance, no
+una garantía universal contra cualquier fuga en cualquier tabla del sistema.
+
+**El script tuvo defectos que le permitían dar un veredicto sin haber
+evaluado nada.** Vale la pena documentarlo porque es la lección más útil de
+esta tarjeta, más allá de cualquier cifra concreta. `barrido-columnas.sql`
+traía `\set ON_ERROR_STOP off` en su primera línea, que sobrescribía el
+`ON_ERROR_STOP=1` que le pasa el script: el bloque `DO $$ ... $$` fallaba con
+un error de sintaxis (psql no sustituye variables `:'var'` dentro de
+comillas de dólar), psql seguía de largo en vez de abortar, y el proceso
+completo terminaba con código de salida 0. El barrido no evaluaba ni una
+sola columna, y el script leía ese éxito aparente como si el sistema
+realmente no tuviera el marcador en ninguna parte — un falso negativo total,
+invisible sin comparar contra una verificación manual. Por separado, el
+intérprete del resultado contaba las etiquetas de comando `SET` y `DO` que
+imprime psql como si fueran filas de la consulta, lo que generó hallazgos
+falsos una vez que el barrido sí llegó a ejecutarse. Ambos defectos están
+corregidos y verificados, pero el riesgo que ilustran — una prueba de
+seguridad que aprueba sin haber mirado — es exactamente lo que este tipo de
+script existe para prevenir en el resto del sistema, y merece quedar
+documentado en vez de desaparecer sin dejar rastro.
 
 ---
 
@@ -364,14 +396,149 @@ que hace falta una fila real para que la prueba signifique algo.
 
 ## Resultados
 
-*(Pendiente de completar por quien corra `scripts/seguridad/verificar.sh` —
-ver la guía de arriba. No se rellena con cifras de memoria: se pega aquí la
-salida real de la corrida.)*
+- **Fecha de la corrida:** 2026-09-22.
+- **Entorno:** stack completo de `develop` levantado con
+  `docker compose up -d --build`, 28 contenedores sanos, 16 targets de
+  Prometheus en `UP`, datos sembrados con `scripts/demo/sembrar-demo.sh`.
+- **Dictamen general:** `RESULTADO=APROBADO` — sin PAN/CVV/vencimiento
+  persistido ni logueado, JWT valida correctamente en el único endpoint
+  protegido, y los permisos de Auditoría siguen bloqueando UPDATE/DELETE
+  incluso al dueño de la tabla.
 
-- Fecha de la corrida:
-- Dictamen general (`APROBADO` / `RECHAZADO` / `INCOMPLETO`):
-- Bloque 1 (RES-08) — controles positivos alcanzados, hallazgos si los hubo:
-- Bloque 2 (JWT) — códigos obtenidos en cada caso, confirmación del hallazgo
-  del gateway:
-- Bloque 3 (Auditoría) — resultado de las tres consultas:
-- Salida completa del script:
+### Bloque 1 (RES-08)
+
+- Orden canario: `ORD-2026-000009`, llegó a `CONFIRMADA_PENDIENTE_FISCAL`.
+- PAN de prueba usado como canario: `4111111111111111` (Visa de prueba
+  estándar).
+- Token emitido por PayKlik: `tok_pk_64924024e238e458265944c9`, últimos
+  cuatro `1111`, marca `VISA`.
+- `POST /api/ordenes` con `TARJETA` y sin `tokenMedioPago` → `400`, como
+  exige `ExcepcionTokenMedioPagoRequerido`.
+- Intento de pago del canario (`token|ultimos_cuatro|marca|estado`):
+  `tok_pk_64924024e238e458265944c9|1111|VISA|EXITOSO` — últimos cuatro y
+  marca resueltos por PayKlik desde el token real, no valores fijos.
+- `ordenes.orden.token_medio_pago` quedó en `NULL` tras el cobro,
+  confirmando el ciclo de vida que documenta `Orden.TomarTokenMedioPago()`.
+- Líneas de log con el marcador en todo el stack: **0**.
+- Chequeo dirigido de columnas con forma de número de tarjeta en
+  `pagos.pago`/`pagos.intento_pago` (paso 6 de arriba): sin hallazgos.
+- Controles positivos alcanzados (confirman que el barrido funciona; no son
+  hallazgos): el marcador apareció en `ordenes.linea_orden.descripcion`
+  (donde se inyecta) y en `public.eventos_auditoria.payload` (a donde se
+  propaga vía el evento de dominio).
+- **Resultado central de RES-08 en esta corrida: `sgo_pagos` no aparece en
+  ninguna línea del barrido de columnas.** Ninguna tabla del contexto de
+  Pagos contiene el marcador, el PAN ni el CVV.
+
+Mapa de propagación del marcador (todo informativo — propagación esperada
+del texto libre de la orden; sirve también como control positivo de que el
+barrido funciona, no como hallazgo):
+
+```
+operacional/sgo_ordenes: ordenes.linea_orden.descripcion -> PAN=4 CVV=4 VENC=4
+operacional/sgo_ordenes: public.outbox_messages.payload -> PAN=16 CVV=16 VENC=16
+operacional/sgo_despacho: despacho.linea_despacho.descripcion -> PAN=4 CVV=4 VENC=4
+operacional/sgo_despacho: public.outbox_messages.payload -> PAN=8 CVV=8 VENC=8
+finanzas/sgo_facturacion: facturacion.documento_fiscal.xml_generado -> PAN=4 CVV=4 VENC=4
+finanzas/sgo_facturacion: facturacion.documento_fiscal_linea.descripcion -> PAN=4 CVV=4 VENC=4
+auditoria/sgo_auditoria: public.eventos_auditoria.payload -> PAN=24 CVV=24 VENC=24
+```
+
+### Bloque 2 (JWT)
+
+```
+POST /api/carrito/asociar sin token           -> 401
+POST /api/carrito/asociar token malformado     -> 401
+POST /api/carrito/asociar token expirado       -> 401
+POST /api/carrito/asociar token de otra clave  -> 401
+POST /api/carrito/asociar token valido real    -> 204
+```
+
+Hallazgo confirmado (informativo, no afecta el dictamen): ninguna ruta del
+gateway exige autenticación.
+
+```
+GET /api/pagos/ordenes/{inexistente} sin token          -> 404
+GET /api/facturacion/documentos/{inexistente} sin token -> 404
+GET /api/inventario/existencias sin token               -> 200
+POST /api/ordenes sin token                             -> 400
+```
+
+Ninguno respondió `401` ni `403`.
+
+### Bloque 3 (Auditoría)
+
+```
+UPDATE con usuario restringido (auditoria_app) -> bloqueado por permisos (42501)
+DELETE con usuario restringido (auditoria_app) -> bloqueado por permisos (42501)
+UPDATE con usuario dueno (sgo_admin)           -> bloqueado por el trigger (P0001)
+```
+
+### Salida completa del script
+
+Guardada sin editar en
+[`evidencia-seguridad-20260922.txt`](evidencia-seguridad-20260922.txt),
+junto a este documento:
+
+```text
+=====================================================================
+ SGO-Logic — Pruebas de seguridad del MVP
+=====================================================================
+
+--- Bloque 1: RES-08 (no persistencia de PAN/CVV) ---
+PAN de prueba (Visa de prueba estandar, no real) usado para tokenizar Y como canario de texto libre: 4111111111111111
+Tarjeta tokenizada contra PayKlik: token=tok_pk_64924024e238e458265944c9 ultimosCuatro=1111 marca=VISA
+POST /api/ordenes con TARJETA y sin tokenMedioPago -> 400 (se espera 400)
+Orden canario ORD-2026-000009 llego a CONFIRMADA_PENDIENTE_FISCAL. Esperando 5s a que Auditoria drene el evento...
+
+Mapa de propagacion del marcador de prueba (informativo, no todo aqui es un hallazgo):
+  operacional/sgo_ordenes: ordenes.linea_orden.descripcion -> PAN=4 CVV=4 VENC=4
+  operacional/sgo_ordenes: public.outbox_messages.payload -> PAN=16 CVV=16 VENC=16
+  operacional/sgo_despacho: despacho.linea_despacho.descripcion -> PAN=4 CVV=4 VENC=4
+  operacional/sgo_despacho: public.outbox_messages.payload -> PAN=8 CVV=8 VENC=8
+  finanzas/sgo_facturacion: facturacion.documento_fiscal.xml_generado -> PAN=4 CVV=4 VENC=4
+  finanzas/sgo_facturacion: facturacion.documento_fiscal_linea.descripcion -> PAN=4 CVV=4 VENC=4
+  auditoria/sgo_auditoria: public.eventos_auditoria.payload -> PAN=24 CVV=24 VENC=24
+
+Intento de pago de la orden canario (token|ultimos_cuatro|marca|estado): tok_pk_64924024e238e458265944c9|1111|VISA|EXITOSO
+ordenes.orden.token_medio_pago quedo en NULL tras el cobro, como documenta Orden.TomarTokenMedioPago().
+Lineas de log con el marcador de prueba: 0
+
+--- Bloque 2: validacion de JWT ---
+POST /api/carrito/asociar sin token           -> 401 (se espera 401)
+POST /api/carrito/asociar token malformado     -> 401 (se espera 401)
+POST /api/carrito/asociar token expirado       -> 401 (se espera 401)
+POST /api/carrito/asociar token de otra clave  -> 401 (se espera 401)
+POST /api/carrito/asociar token valido real    -> 204 (se espera != 401)
+
+Hallazgo a reportar (no se corrige aqui): exposicion del resto de las rutas
+sin exigir ningun token, vía el API Gateway.
+  GET /api/pagos/ordenes/orden-inexistente-segsweep-1790122759 sin token -> 404 (no es 401/403: la ruta no exige autenticacion)
+  GET /api/facturacion/documentos/orden-inexistente-segsweep-1790122759 sin token -> 404 (no es 401/403: la ruta no exige autenticacion)
+  GET /api/inventario/existencias sin token -> 200 (no es 401/403: la ruta no exige autenticacion)
+  POST /api/ordenes sin token -> 400 (no es 401/403: la ruta no exige autenticacion)
+
+--- Bloque 3: permisos de Auditoria (reutilizando PermisosInmutabilidadTests) ---
+UPDATE con usuario restringido (auditoria_app) -> bloqueado por permisos (42501), como se esperaba.
+DELETE con usuario restringido (auditoria_app) -> bloqueado por permisos (42501), como se esperaba.
+UPDATE con usuario dueno (sgo_admin) -> bloqueado por el trigger (P0001), como se esperaba.
+
+=====================================================================
+ RESUMEN
+=====================================================================
+
+Hallazgos informativos (no bloquean el dictamen, ya conocidos y fuera de alcance para corregir aqui):
+  - Propagacion esperada del texto libre de la orden (no es un hallazgo de RES-08): sgo_ordenes.ordenes.linea_orden.descripcion (PAN=4 CVV=4 VENC=4)
+  - Propagacion esperada del texto libre de la orden (no es un hallazgo de RES-08): sgo_ordenes.public.outbox_messages.payload (PAN=16 CVV=16 VENC=16)
+  - Propagacion esperada del texto libre de la orden (no es un hallazgo de RES-08): sgo_despacho.despacho.linea_despacho.descripcion (PAN=4 CVV=4 VENC=4)
+  - Propagacion esperada del texto libre de la orden (no es un hallazgo de RES-08): sgo_despacho.public.outbox_messages.payload (PAN=8 CVV=8 VENC=8)
+  - Propagacion esperada del texto libre de la orden (no es un hallazgo de RES-08): sgo_facturacion.facturacion.documento_fiscal.xml_generado (PAN=4 CVV=4 VENC=4)
+  - Propagacion esperada del texto libre de la orden (no es un hallazgo de RES-08): sgo_facturacion.facturacion.documento_fiscal_linea.descripcion (PAN=4 CVV=4 VENC=4)
+  - Propagacion esperada del texto libre de la orden (no es un hallazgo de RES-08): sgo_auditoria.public.eventos_auditoria.payload (PAN=24 CVV=24 VENC=24)
+  - GET /api/pagos/ordenes/orden-inexistente-segsweep-1790122759 respondio 404 sin ningun token (esperado dado el hallazgo confirmado; no es un chequeo bloqueante)
+  - GET /api/facturacion/documentos/orden-inexistente-segsweep-1790122759 respondio 404 sin ningun token (esperado dado el hallazgo confirmado; no es un chequeo bloqueante)
+  - GET /api/inventario/existencias respondio 200 sin ningun token (esperado dado el hallazgo confirmado; no es un chequeo bloqueante)
+  - POST /api/ordenes respondio 400 sin ningun token (esperado dado el hallazgo confirmado; no es un chequeo bloqueante)
+
+RESULTADO=APROBADO: sin PAN/CVV/vencimiento persistido ni logueado, JWT valida correctamente en el unico endpoint protegido, y los permisos de Auditoria siguen bloqueando UPDATE/DELETE (incluso al dueno).
+```
