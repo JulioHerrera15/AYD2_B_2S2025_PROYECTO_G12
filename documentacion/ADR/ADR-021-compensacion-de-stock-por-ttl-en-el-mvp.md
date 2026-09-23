@@ -1,6 +1,6 @@
 # ADR-021: En el MVP la compensación de stock ocurre por expiración del TTL de la reserva
 
-**Estado:** Aceptada
+**Estado:** Reemplazada por ADR-022
 **Responsable:** Angel Martinez (202300410)
 **Fecha:** 2026-09-22
 
