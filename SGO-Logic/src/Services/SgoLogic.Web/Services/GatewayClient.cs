@@ -52,6 +52,13 @@ public sealed record CrearIncidenciaModel(string OrdenId, string Descripcion);
 // ── Modelos de Órdenes y Checkout ───────────────────────────────────────────
 public sealed record LineaCrearOrdenModel(string Sku, string Descripcion, int Cantidad, decimal PrecioUnitario);
 
+public sealed record DireccionEntregaModel(
+    [property: JsonPropertyName("pais")] string Pais,
+    [property: JsonPropertyName("departamento")] string Departamento,
+    [property: JsonPropertyName("municipio")] string Municipio,
+    [property: JsonPropertyName("direccion")] string Direccion,
+    [property: JsonPropertyName("referencia")] string? Referencia = null);
+
 public sealed record CrearOrdenModel(
     string ClienteId,
     string Canal,
@@ -61,7 +68,9 @@ public sealed record CrearOrdenModel(
     decimal Impuestos,
     List<LineaCrearOrdenModel> Lineas,
     string? UbicacionSolicitadaId = null,
-    string? ReceptorCui = null);
+    string? ReceptorCui = null,
+    DireccionEntregaModel? DireccionEntrega = null,
+    string? TokenMedioPago = null);
 
 public sealed record OrdenCreadaModel(
     string Id,
@@ -102,6 +111,39 @@ public sealed record DespachoOrdenModel(
     string? Transportista,
     string? UbicacionOrigenId,
     DateTime? ActualizadoEn);
+
+public sealed record DespachoPreparacionDto(
+    string DespachoId,
+    string OrdenId,
+    string UbicacionOrigenId,
+    string MetodoEntrega,
+    string Estado,
+    string? GuiaId,
+    DateTime? CreadoEn);
+
+// ── Modelos de Inventario ───────────────────────────────────────────────────
+public sealed record ExistenciaSkuDto(
+    string Sku,
+    string UbicacionId,
+    int CantidadFisica,
+    int CantidadReservada,
+    int CantidadDisponible,
+    DateTime UltimaActualizacion);
+
+public sealed record UbicacionResumenDto(
+    string UbicacionId,
+    string TipoUbicacion,
+    int TotalSkus,
+    int CantidadFisicaTotal,
+    int CantidadReservadaTotal,
+    int CantidadDisponibleTotal);
+
+public sealed record ExistenciaUbicacionDto(
+    string UbicacionId,
+    string Sku,
+    int CantidadFisica,
+    int CantidadReservada,
+    int CantidadDisponible);
 
 public sealed class GatewayClient
 {
@@ -288,5 +330,82 @@ public sealed class GatewayClient
         var res = await _http.GetAsync($"/api/despacho/{ordenId}", ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<DespachoOrdenModel>(JsonOptions, ct);
+    }
+
+    public async Task<List<DespachoPreparacionDto>?> ObtenerColaPreparacionAsync(string ubicacionId, string? estado = null, CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var url = $"/api/despacho/ubicaciones/{ubicacionId}/preparacion" + (!string.IsNullOrWhiteSpace(estado) ? $"?estado={estado}" : "");
+        var res = await _http.GetAsync(url, ct);
+        if (!res.IsSuccessStatusCode) return null;
+        return await res.Content.ReadFromJsonAsync<List<DespachoPreparacionDto>>(JsonOptions, ct);
+    }
+
+    public async Task<(bool Exito, string? Error)> ActualizarEstadoDespachoAsync(string ordenId, string estado, string? detalle = null, CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var payload = new { Estado = estado, Detalle = detalle, OcurridoEn = DateTime.UtcNow };
+        var res = await _http.PostAsJsonAsync($"/api/despacho/{ordenId}/estados", payload, JsonOptions, ct);
+        if (res.IsSuccessStatusCode) return (true, null);
+        var err = await res.Content.ReadAsStringAsync(ct);
+        return (false, err);
+    }
+
+    public async Task<(bool Exito, string? Error)> ReasignarMetodoEntregaDespachoAsync(string ordenId, string nuevoMetodo, CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var res = await _http.PutAsJsonAsync($"/api/despacho/{ordenId}/metodo-entrega", new { MetodoEntrega = nuevoMetodo }, JsonOptions, ct);
+        if (res.IsSuccessStatusCode) return (true, null);
+        var err = await res.Content.ReadAsStringAsync(ct);
+        return (false, err);
+    }
+
+    // ── Inventario ─────────────────────────────────────────────────────────────
+    public async Task<List<ExistenciaSkuDto>?> ObtenerExistenciasSkuAsync(string sku, CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var res = await _http.GetAsync($"/api/inventario/existencias/{sku}", ct);
+        if (!res.IsSuccessStatusCode) return null;
+        return await res.Content.ReadFromJsonAsync<List<ExistenciaSkuDto>>(JsonOptions, ct);
+    }
+
+    public async Task<List<UbicacionResumenDto>?> ObtenerUbicacionesInventarioAsync(CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var res = await _http.GetAsync("/api/inventario/ubicaciones", ct);
+        if (!res.IsSuccessStatusCode) return null;
+        return await res.Content.ReadFromJsonAsync<List<UbicacionResumenDto>>(JsonOptions, ct);
+    }
+
+    public async Task<List<ExistenciaUbicacionDto>?> ObtenerExistenciasPorUbicacionAsync(string ubicacionId, CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var res = await _http.GetAsync($"/api/inventario/ubicaciones/{ubicacionId}/existencias", ct);
+        if (!res.IsSuccessStatusCode) return null;
+        return await res.Content.ReadFromJsonAsync<List<ExistenciaUbicacionDto>>(JsonOptions, ct);
+    }
+
+    // ── Incidencias (Listar / Resolver) ────────────────────────────────────────
+    public async Task<List<IncidenciaModel>?> ListarIncidenciasAsync(string? ordenId = null, string? estado = null, CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var query = new List<string>();
+        if (!string.IsNullOrWhiteSpace(ordenId)) query.Add($"ordenId={Uri.EscapeDataString(ordenId)}");
+        if (!string.IsNullOrWhiteSpace(estado)) query.Add($"estado={Uri.EscapeDataString(estado)}");
+        var url = "/api/incidencias" + (query.Count > 0 ? "?" + string.Join("&", query) : "");
+
+        var res = await _http.GetAsync(url, ct);
+        if (!res.IsSuccessStatusCode) return null;
+        return await res.Content.ReadFromJsonAsync<List<IncidenciaModel>>(JsonOptions, ct);
+    }
+
+    public async Task<(bool Exito, string? Error)> ActualizarIncidenciaAsync(Guid id, string? descripcion, string? estado, string? resolucion, CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var payload = new { Descripcion = descripcion, Estado = estado, Resolucion = resolucion };
+        var res = await _http.PutAsJsonAsync($"/api/incidencias/{id}", payload, JsonOptions, ct);
+        if (res.IsSuccessStatusCode) return (true, null);
+        var err = await res.Content.ReadAsStringAsync(ct);
+        return (false, err);
     }
 }
