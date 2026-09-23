@@ -217,7 +217,11 @@ public sealed class ServicioCobro
             // Sin respuesta util: fallo tecnico del proveedor o circuito abierto.
             intento.MarcarFallido(codigoFalla, motivoFalla, latenciaMs, ocurridoEn);
 
+            // EAC-01: cada intento fallido se audita, tambien los intermedios que el
+            // reintento supera. Va por el mismo outbox y en la misma transaccion que
+            // el intento; no cambia el evento de resultado del cobro.
             var puedeReintentar = !circuitoAbierto && numeroLlamada < maxLlamadas;
+            EncolarIntentoPagoFallido(pago, intento, codigoFalla, motivoFalla, latenciaMs, puedeReintentar, ocurridoEn);
             if (puedeReintentar)
             {
                 var espera = CalcularBackoff(numeroLlamada, _payklikOpciones.BackoffBaseMs);
@@ -300,6 +304,38 @@ public sealed class ServicioCobro
                 IntentoNumero: intento.IntentoNumero,
                 Estado: EstadoPago.RECHAZADO,
                 CodigoRespuesta: codigoRespuesta,
+                OcurridoEn: ocurridoEn));
+
+    // Solo para auditoria. Agregado IntentoPago con sequence = numero de intento:
+    // no toca pago.Secuencia, que siguen usando PagoAplicado, PagoRechazado y
+    // PagoPendiente.
+    private void EncolarIntentoPagoFallido(
+        Pago pago,
+        IntentoPago intento,
+        string codigoRespuesta,
+        string motivoFalla,
+        int latenciaMs,
+        bool seReintenta,
+        DateTime ocurridoEn) =>
+        _outbox.Encolar(
+            IntentoPagoFallido.EventType,
+            IntentoPagoFallido.AggregateType,
+            pago.OrdenId,
+            intento.IntentoNumero,
+            TopologiaMensajeria.ExchangeEventos,
+            IntentoPagoFallido.RoutingKey,
+            new IntentoPagoFallidoData(
+                OrdenId: pago.OrdenId,
+                ClienteId: pago.ClienteId,
+                Canal: pago.Canal,
+                Moneda: pago.Moneda,
+                Monto: pago.Monto,
+                MedioPago: pago.MedioPago,
+                IntentoNumero: intento.IntentoNumero,
+                CodigoRespuesta: codigoRespuesta,
+                MotivoFalla: motivoFalla,
+                LatenciaMs: latenciaMs,
+                SeReintenta: seReintenta,
                 OcurridoEn: ocurridoEn));
 
     private void EncolarPagoPendiente(

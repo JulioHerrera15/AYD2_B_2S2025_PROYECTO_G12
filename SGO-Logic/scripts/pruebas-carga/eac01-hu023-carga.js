@@ -5,9 +5,9 @@
 //
 //   k6 run -e ORDENES_POR_MINUTO=80 scripts/pruebas-carga/eac01-hu023-carga.js
 //
-// Las URLs por defecto son las del host: ordenes 8083, inventario 8094 y el admin
-// de PayKlik 8084. Cada una se puede cambiar con -e ORDENES_URL, -e INVENTARIO_URL
-// y -e PAYKLIK_ADMIN_URL.
+// Las URLs por defecto son las del host: ordenes 8083, inventario 8094 y PayKlik
+// 8084 (admin y tokenizacion). Cada una se puede cambiar con -e ORDENES_URL,
+// -e INVENTARIO_URL y -e PAYKLIK_ADMIN_URL.
 //
 // Con k6 en contenedor, "localhost" es el propio contenedor: hay que apuntar al
 // host con host.docker.internal (Docker Desktop) o unirlo a la red del compose y
@@ -46,6 +46,7 @@
 // ---------------------------------------------------------------------------
 // La saga ya integra Inventario (consumidor de eventos en Ordenes):
 //
+//   0) POST /v1/tokens de PayKlik            -> token de la tarjeta (en setup)
 //   1) POST /api/ordenes                    -> CREADA
 //   2) POST /api/ordenes/{id}/confirmar     -> RESERVA_SOLICITADA
 //   3) Saga avanza sola:
@@ -78,10 +79,22 @@
 // Los tres cambios de modo se agendan como escenarios propios de k6 con
 // startTime exacto, para que quede clara la marca de tiempo de cada
 // transicion en el resumen de la corrida.
+//
+// ---------------------------------------------------------------------------
+// Tokenizacion de la tarjeta (ADR-010, DDA 14.3.1)
+// ---------------------------------------------------------------------------
+// Una orden con TARJETA exige tokenMedioPago, y el token lo emite PayKlik al
+// navegador (POST /v1/tokens). En modo CAIDO PayKlik tampoco tokeniza, asi que
+// si cada VU tokenizara en linea, durante la caida no se crearia ninguna orden y
+// la prueba no ejercitaria el cobro fallido. Por eso setup() emite todos los
+// tokens de la corrida con PayKlik en NORMAL, antes de la caida: modela clientes
+// que ya tokenizaron cuando el proveedor cae. Cada iteracion usa un token
+// distinto (son de un solo uso) y su vigencia (900 s) cubre toda la corrida.
 
 import http from 'k6/http';
 import { check } from 'k6';
-import { Counter } from 'k6/metrics';
+import exec from 'k6/execution';
+import { Counter, Trend } from 'k6/metrics';
 
 // Puertos publicados en el host por docker-compose.yml (ordenes-api 8083,
 // inventario-api 8094, payklik-mock 8084). Es lo que k6 ve al correr fuera de
@@ -111,7 +124,9 @@ const ORDENES_TOTALES = ORDENES_POR_MINUTO * Math.ceil(DURACION_TOTAL_SEG / 60);
 const INVENTARIO_POR_ORDEN = Number(__ENV.INVENTARIO_POR_ORDEN || 5);
 const STOCK_TOTAL = ORDENES_TOTALES * INVENTARIO_POR_ORDEN;
 
-const TASA_POR_SEGUNDO = Math.max(1, Math.round(ORDENES_POR_MINUTO / 60));
+// La tasa se expresa por minuto (timeUnit 1m) para que ORDENES_POR_MINUTO se
+// cumpla tal cual: redondearla a ordenes por segundo convertia 80/min en 60/min.
+const TASA_POR_MINUTO = Math.max(1, ORDENES_POR_MINUTO);
 const RAMPA_INICIAL_SEG = Math.min(30, CALENTAMIENTO_SEG);
 const RESTO_CALENTAMIENTO_SEG = Math.max(1, CALENTAMIENTO_SEG - RAMPA_INICIAL_SEG);
 
@@ -120,8 +135,14 @@ const JSON_HEADERS = { headers: { 'Content-Type': 'application/json' } };
 const ordenesCreadas = new Counter('sgo_ordenes_creadas');
 const ordenesConCobroSolicitado = new Counter('sgo_ordenes_cobro_solicitado');
 const fallosSincronos = new Counter('sgo_fallos_sincronos');
+// Latencia de las peticiones sincronas de la orden (crear y confirmar), sin la
+// tokenizacion de setup(): es la que se reporta como p95 y p99 de EAC-01.
+const latenciaOrden = new Trend('sgo_latencia_orden_ms', true);
 
 export const options = {
+  // setup() tokeniza una tarjeta por orden (ORDENES_TOTALES llamadas a PayKlik).
+  setupTimeout: '180s',
+  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],
   scenarios: {
     // Fase unica de carga: la tasa no cambia entre calentamiento, caida y
     // recuperacion (solo cambia el modo de PayKlik, via los escenarios de
@@ -131,14 +152,14 @@ export const options = {
       executor: 'ramping-arrival-rate',
       exec: 'flujoOrden',
       startRate: 0,
-      timeUnit: '1s',
+      timeUnit: '1m',
       preAllocatedVUs: 20,
       maxVUs: 60,
       stages: [
-        { target: TASA_POR_SEGUNDO, duration: `${RAMPA_INICIAL_SEG}s` },
-        { target: TASA_POR_SEGUNDO, duration: `${RESTO_CALENTAMIENTO_SEG}s` },
-        { target: TASA_POR_SEGUNDO, duration: `${CAIDA_SEG}s` },
-        { target: TASA_POR_SEGUNDO, duration: `${RECUPERACION_SEG}s` },
+        { target: TASA_POR_MINUTO, duration: `${RAMPA_INICIAL_SEG}s` },
+        { target: TASA_POR_MINUTO, duration: `${RESTO_CALENTAMIENTO_SEG}s` },
+        { target: TASA_POR_MINUTO, duration: `${CAIDA_SEG}s` },
+        { target: TASA_POR_MINUTO, duration: `${RECUPERACION_SEG}s` },
       ],
     },
     // Los tres cambios de modo del mock, agendados con startTime absoluto
@@ -185,14 +206,39 @@ function sembrarExistencias() {
   console.log(`[eac01-hu023] existencias sembradas: SKU-CARGA-EAC01 x${STOCK_TOTAL} en CD-01`);
 }
 
+// Tarjeta de prueba (Luhn valido). Solo viaja de k6 a PayKlik, como desde el
+// navegador; Ordenes y Pagos reciben unicamente el token.
+function tokenizarTarjetas(cantidad) {
+  const body = JSON.stringify({
+    numeroTarjeta: '4111111111111111',
+    cvv: '123',
+    mesExpiracion: 12,
+    anioExpiracion: new Date().getFullYear() + 3,
+  });
+  const tokens = [];
+  for (let i = 0; i < cantidad; i++) {
+    const res = http.post(`${PAYKLIK_ADMIN_URL}/v1/tokens`, body, {
+      ...JSON_HEADERS,
+      tags: { paso: 'tokenizar' },
+    });
+    if (res.status !== 201) {
+      throw new Error(`Tokenizacion fallo con status ${res.status}: ${res.body}`);
+    }
+    tokens.push(JSON.parse(res.body).token);
+  }
+  console.log(`[eac01-hu023] ${tokens.length} tarjetas tokenizadas contra PayKlik antes de la caida`);
+  return tokens;
+}
+
 export function setup() {
   sembrarExistencias();
+  const tokens = tokenizarTarjetas(ORDENES_TOTALES);
   console.log(
-    `[eac01-hu023] arrancando: ${TASA_POR_SEGUNDO} ordenes/seg (~${ORDENES_POR_MINUTO}/min), ` +
+    `[eac01-hu023] arrancando: ${TASA_POR_MINUTO} ordenes/min, ` +
     `calentamiento=${CALENTAMIENTO_SEG}s caida=${CAIDA_SEG}s recuperacion=${RECUPERACION_SEG}s, ` +
     `stock=${STOCK_TOTAL} unidades, prefijo=${PREFIJO_CLIENTE}`
   );
-  return { inicio: Date.now() };
+  return { inicio: Date.now(), tokens };
 }
 
 export function ponerModoPayKlik() {
@@ -209,8 +255,16 @@ export function ponerModoPayKlik() {
   console.log(`[eac01-hu023] t=${segundoTranscurrido}s PayKlik admin/modo -> ${modo} (status ${res.status})`);
 }
 
-export function flujoOrden() {
+export function flujoOrden(data) {
   const clienteId = `${PREFIJO_CLIENTE}-${__VU}-${__ITER}`;
+
+  // Un token distinto por iteracion del escenario: son de un solo uso.
+  const tokenMedioPago = data.tokens[exec.scenario.iterationInTest];
+  if (!tokenMedioPago) {
+    console.error(`[eac01-hu023] sin token para la iteracion ${exec.scenario.iterationInTest}`);
+    fallosSincronos.add(1);
+    return;
+  }
 
   const crearBody = JSON.stringify({
     clienteId,
@@ -218,6 +272,7 @@ export function flujoOrden() {
     metodoEntrega: 'DOMICILIO',
     moneda: 'GTQ',
     medioPago: 'TARJETA',
+    tokenMedioPago,
     impuestos: 12.0,
     lineas: [
       {
@@ -234,6 +289,7 @@ export function flujoOrden() {
     tags: { paso: 'crear' },
   });
 
+  latenciaOrden.add(resCrear.timings.duration, { paso: 'crear' });
   if (!check(resCrear, { 'orden creada (201)': (r) => r.status === 201 })) {
     fallosSincronos.add(1);
     return;
@@ -247,6 +303,7 @@ export function flujoOrden() {
     JSON.stringify({ motivo: 'confirmacion automatica - prueba de carga EAC-01/HU-023' }),
     { ...JSON_HEADERS, tags: { paso: 'confirmar' } }
   );
+  latenciaOrden.add(resConfirmar.timings.duration, { paso: 'confirmar' });
   if (!check(resConfirmar, { 'orden confirmada (200)': (r) => r.status === 200 })) {
     fallosSincronos.add(1);
     return;
