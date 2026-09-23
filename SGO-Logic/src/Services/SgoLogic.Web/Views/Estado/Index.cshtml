@@ -1,43 +1,24 @@
 @model SgoLogic.Web.Services.OrdenEstadoModel?
 @{
-    ViewData["Title"] = "Consulta de Estado & Rastreo de Órdenes";
+    ViewData["Title"] = "Mis Pedidos & Rastreo de Guías";
     var despacho = ViewBag.Despacho as SgoLogic.Web.Services.DespachoOrdenModel;
+    var isAuthenticated = (bool)(ViewBag.IsAuthenticated ?? false);
+    var userEmail = ViewBag.UserEmail as string;
+    var historial = ViewBag.HistorialDespachos as List<SgoLogic.Web.Controllers.OrdenConDespachoItem>;
 }
 
 <!-- Header -->
 <div class="mb-8">
     <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold mb-2">
-        <span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">track_changes</span>
-        Modelo de Lectura CQRS en Redis &bull; Respuesta Sub-5s (EAC-02)
+        <span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">shield</span>
+        Privacidad Garantizada &bull; Trazabilidad Segura por Usuario
     </div>
     <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight mb-2">
-        Rastreo y Consulta de Estado de Órdenes
+        Mis Pedidos y Guías de Envío
     </h1>
     <p class="text-xs sm:text-sm text-text-muted max-w-2xl">
-        Seguimiento en tiempo real del ciclo de vida de la orden, orquestación de la saga transaccional, certificación fiscal SAT FEL, despacho y trazabilidad de incidencias.
+        Consulta el estado en tiempo real de tus compras, asignación de guías de despacho LogiExpress, certificación fiscal SAT FEL y seguimiento logístico.
     </p>
-</div>
-
-<!-- Search Input Card -->
-<div class="bg-surface-white rounded-3xl ambient-shadow border border-border-subtle/50 p-5 md:p-6 mb-8">
-    <form method="get" action="/Estado" class="relative max-w-2xl">
-        <span class="material-symbols-outlined absolute left-4 top-1/2 -translate-y-1/2 text-text-muted text-[22px]">search</span>
-        <input type="text"
-               name="ordenId"
-               id="input-orden-id"
-               class="w-full bg-surface-container-low border-none rounded-2xl py-3.5 pl-12 pr-32 focus:bg-surface-white focus:ring-2 focus:ring-secondary text-sm font-medium text-primary placeholder:text-text-muted transition-all font-mono"
-               placeholder="Ingrese ID o Correlativo (ej: ORD-2026-000001)..."
-               value="@ViewBag.OrdenId"
-               required />
-        <button type="submit"
-                class="absolute right-2 top-1/2 -translate-y-1/2 bg-primary text-on-primary px-5 py-2 rounded-xl text-xs font-semibold hover:opacity-90 transition-opacity active:scale-95 shadow-sm">
-            Consultar
-        </button>
-    </form>
-    <div class="mt-3 flex items-center gap-2 pt-2 text-xs text-text-muted">
-        <span class="material-symbols-outlined text-[16px] text-secondary">info</span>
-        <span>Ingresa el número o código de orden generado al finalizar tu compra para rastrear su estado en vivo.</span>
-    </div>
 </div>
 
 @if (ViewBag.Error != null)
@@ -48,10 +29,183 @@
     </div>
 }
 
-@if (Model != null)
+@if (!isAuthenticated)
 {
-    <!-- Main Order Details Card -->
-    <div class="bg-surface-white rounded-3xl ambient-shadow border border-border-subtle/50 p-6 md:p-8 mb-8" id="orden-container" data-orden-id="@Model.OrdenId" data-estado="@Model.Estado">
+    <!-- Pantalla de Privacidad para Usuarios No Autenticados (Sin buscador arbitrario) -->
+    <div class="bg-surface-white rounded-3xl ambient-shadow border border-border-subtle/50 p-8 md:p-12 text-center max-w-2xl mx-auto">
+        <div class="w-16 h-16 rounded-2xl bg-secondary-fixed/50 text-secondary flex items-center justify-center mx-auto mb-5 shadow-sm">
+            <span class="material-symbols-outlined text-[34px]">lock</span>
+        </div>
+        <h2 class="text-xl sm:text-2xl font-bold text-primary mb-3">
+            Protección de Privacidad de Envíos
+        </h2>
+        <p class="text-xs sm:text-sm text-text-muted mb-6 leading-relaxed">
+            Por estrictas políticas de protección de datos y privacidad de MegaStore, el rastreo de guías de envío y estados de compra es exclusivo para el titular de la cuenta. Inicia sesión para ver tu lista de pedidos y guías asociadas.
+        </p>
+        <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <a href="/Auth/Login?returnUrl=/Estado"
+               class="w-full sm:w-auto bg-primary text-on-primary px-6 py-3 rounded-2xl text-xs sm:text-sm font-bold hover:opacity-90 transition-opacity active:scale-95 shadow-md flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined text-[18px]">login</span>
+                Iniciar Sesión
+            </a>
+            <a href="/Auth/Registro"
+               class="w-full sm:w-auto bg-surface-container-low hover:bg-surface-container text-primary px-6 py-3 rounded-2xl text-xs sm:text-sm font-semibold transition-colors border border-border-subtle/60 flex items-center justify-center gap-2">
+                <span class="material-symbols-outlined text-[18px]">person_add</span>
+                Crear Cuenta
+            </a>
+        </div>
+    </div>
+}
+else if (Model == null)
+{
+    <!-- Listado Seguro de Pedidos y Guías del Usuario Autenticado -->
+    <div class="bg-surface-white rounded-3xl ambient-shadow border border-border-subtle/50 p-6 md:p-8">
+        <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-5 mb-6 border-b border-border-subtle/60 gap-3">
+            <div>
+                <h2 class="text-lg sm:text-xl font-bold text-primary">Tus Compras y Envíos Registrados</h2>
+                <p class="text-xs text-text-muted">Mostrando pedidos vinculados a <strong class="text-primary">@userEmail</strong></p>
+            </div>
+            <div class="flex items-center gap-2">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                <span class="text-xs text-text-muted font-medium">Sincronización en vivo</span>
+            </div>
+        </div>
+
+        @if (historial == null || !historial.Any())
+        {
+            <div class="py-12 text-center">
+                <div class="w-14 h-14 rounded-2xl bg-surface-container text-text-muted flex items-center justify-center mx-auto mb-4">
+                    <span class="material-symbols-outlined text-[30px]">local_mall</span>
+                </div>
+                <h3 class="text-base font-bold text-primary mb-1">No tienes pedidos registrados</h3>
+                <p class="text-xs text-text-muted max-w-sm mx-auto mb-5">
+                    Aún no has realizado ninguna compra con esta cuenta. Explora nuestro catálogo y realiza tu primer pedido.
+                </p>
+                <a href="/Catalogo" class="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-xl text-xs font-bold hover:opacity-90 transition-opacity">
+                    <span class="material-symbols-outlined text-[16px]">shopping_bag</span>
+                    Ir al Catálogo
+                </a>
+            </div>
+        }
+        else
+        {
+            <div class="overflow-x-auto rounded-2xl border border-border-subtle/60">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-surface-bright/80 border-b border-border-subtle text-text-muted uppercase font-semibold text-[11px] tracking-wider">
+                            <th class="py-3.5 px-4">Orden</th>
+                            <th class="py-3.5 px-4">Fecha</th>
+                            <th class="py-3.5 px-4">Estado del Pedido</th>
+                            <th class="py-3.5 px-4">Guía de Despacho</th>
+                            <th class="py-3.5 px-4">Estado Envío</th>
+                            <th class="py-3.5 px-4 text-right">Total</th>
+                            <th class="py-3.5 px-4 text-center">Acción</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border-subtle/40">
+                        @foreach (var item in historial)
+                        {
+                            var ord = item.Orden;
+                            var desp = item.Despacho;
+                            var badgeClass = ord.Estado switch
+                            {
+                                "CREADA" => "bg-blue-100 text-blue-800",
+                                "COBRO_SOLICITADO" or "PAGO_PENDIENTE" => "bg-amber-100 text-amber-800",
+                                "PAGO_APLICADO" or "CONFIRMADA" => "bg-secondary-fixed text-on-secondary-fixed",
+                                "DESPACHO_SOLICITADO" or "EN_PREPARACION" => "bg-purple-100 text-purple-800",
+                                "EN_TRANSITO" => "bg-indigo-100 text-indigo-800",
+                                "LISTA_PARA_RECOGER" or "ENTREGADA" => "bg-emerald-100 text-emerald-800",
+                                "CANCELADA" or "RECHAZADA" => "bg-error-container text-error",
+                                _ => "bg-surface-container text-text-muted"
+                            };
+
+                            <tr class="hover:bg-surface-container-low/40 transition-colors">
+                                <td class="py-4 px-4 font-mono font-bold text-primary">
+                                    @(ord.NumeroOrden ?? ord.OrdenId)
+                                </td>
+                                <td class="py-4 px-4 text-text-muted">
+                                    @ord.ActualizadaEn.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                </td>
+                                <td class="py-4 px-4">
+                                    <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold @badgeClass">
+                                        @ord.Estado
+                                    </span>
+                                </td>
+                                <td class="py-4 px-4">
+                                    @if (desp != null && !string.IsNullOrWhiteSpace(desp.GuiaId))
+                                    {
+                                        if (!string.IsNullOrWhiteSpace(desp.TrackingUrl))
+                                        {
+                                            <a href="@desp.TrackingUrl" target="_blank" rel="noopener noreferrer" class="font-mono text-secondary font-bold hover:underline inline-flex items-center gap-1">
+                                                @desp.GuiaId
+                                                <span class="material-symbols-outlined text-[13px]">open_in_new</span>
+                                            </a>
+                                        }
+                                        else
+                                        {
+                                            <span class="font-mono text-secondary font-bold">@desp.GuiaId</span>
+                                        }
+                                    }
+                                    else if (desp?.MetodoEntrega == "RECOGIDA_TIENDA")
+                                    {
+                                        <span class="text-emerald-700 font-semibold">Recogida en Tienda</span>
+                                    }
+                                    else if (ord.Estado == "CANCELADA" || ord.Estado == "RECHAZADA")
+                                    {
+                                        <span class="text-text-muted font-medium">No aplica</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-amber-600 font-medium">Asignando guía...</span>
+                                    }
+                                </td>
+                                <td class="py-4 px-4">
+                                    <span class="font-semibold text-primary">
+                                        @if (ord.Estado == "CANCELADA" || ord.Estado == "RECHAZADA")
+                                        {
+                                            <span class="text-text-muted">CANCELADO</span>
+                                        }
+                                        else
+                                        {
+                                            @(desp?.Estado ?? (ord.Estado == "DESPACHO_SOLICITADO" ? "SOLICITADO" : "EN COLA"))
+                                        }
+                                    </span>
+                                </td>
+                                <td class="py-4 px-4 text-right font-bold text-primary">
+                                    Q @ord.Total.ToString("F2")
+                                </td>
+                                <td class="py-4 px-4 text-center">
+                                    <a href="/Estado?ordenId=@ord.OrdenId"
+                                       class="inline-flex items-center gap-1 bg-surface-container-low hover:bg-primary hover:text-on-primary text-primary px-3 py-1.5 rounded-xl font-semibold transition-all shadow-2xs">
+                                        <span>Rastrear</span>
+                                        <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+                                    </a>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+}
+else
+{
+    <!-- Detalle Completo de la Orden Seleccionada -->
+    <div class="mb-4">
+        <a href="/Estado" class="inline-flex items-center gap-1.5 text-xs font-semibold text-secondary hover:underline">
+            <span class="material-symbols-outlined text-[16px]">arrow_back</span>
+            Volver a mis compras y guías
+        </a>
+    </div>
+
+    <div class="bg-surface-white rounded-3xl ambient-shadow border border-border-subtle/50 p-6 md:p-8 mb-8"
+         id="orden-container"
+         data-orden-id="@Model.OrdenId"
+         data-estado="@Model.Estado"
+         data-despacho-estado="@(despacho?.Estado ?? "")"
+         data-despacho-guia="@(despacho?.GuiaId ?? "")">
+
         <!-- Card Header -->
         <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-6 mb-6 border-b border-border-subtle/60 gap-4">
             <div class="flex items-center gap-3.5">
@@ -61,7 +215,7 @@
                 <div>
                     <div class="flex items-center gap-2">
                         <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Orden de Compra</span>
-                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="Sincronización reactiva activa"></span>
+                        <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" title="Sincronizacion reactiva activa"></span>
                         <span class="text-[10px] text-text-muted font-mono" id="sync-status">Sincronizado</span>
                     </div>
                     <h2 class="text-xl sm:text-2xl font-bold text-primary tracking-tight font-mono">@(Model.NumeroOrden ?? Model.OrdenId)</h2>
@@ -75,7 +229,7 @@
                     "COBRO_SOLICITADO" or "PAGO_PENDIENTE" => ("bg-amber-100 text-amber-800 border-amber-200", Model.Estado, "pending"),
                     "PAGO_APLICADO" or "CONFIRMADA" or "CONFIRMADA_PENDIENTE_FISCAL" => ("bg-secondary-fixed text-on-secondary-fixed border-secondary-container/50", Model.Estado, "verified"),
                     "DESPACHO_SOLICITADO" or "EN_PREPARACION" => ("bg-purple-100 text-purple-800 border-purple-200", Model.Estado, "inventory"),
-                    "EN_TRANSITO" => ("bg-indigo-100 text-indigo-800 border-indigo-200", "EN TRÁNSITO", "local_shipping"),
+                    "EN_TRANSITO" => ("bg-indigo-100 text-indigo-800 border-indigo-200", "EN TRANSITO", "local_shipping"),
                     "LISTA_PARA_RECOGER" => ("bg-emerald-100 text-emerald-800 border-emerald-200", "LISTA PARA RECOGER", "storefront"),
                     "ENTREGADA" => ("bg-emerald-100 text-emerald-800 border-emerald-200", "ENTREGADA", "task_alt"),
                     "CANCELADA" or "RECHAZADA" => ("bg-error-container text-error border-error/30", Model.Estado, "cancel"),
@@ -89,99 +243,171 @@
             </span>
         </div>
 
+        @{
+            var isCancelledOrRejected = Model.Estado == "CANCELADA" || Model.Estado == "RECHAZADA";
+        }
+
+        @if (isCancelledOrRejected)
+        {
+            <div class="mb-6 p-4 rounded-2xl bg-red-50 border border-red-200 text-red-950 flex items-start gap-3">
+                <span class="material-symbols-outlined text-red-600 text-[24px] flex-shrink-0 mt-0.5">error</span>
+                <div class="flex-1">
+                    <h3 class="font-bold text-sm text-red-900">
+                        @(Model.Estado == "RECHAZADA" ? "Orden Rechazada" : "Orden Cancelada")
+                    </h3>
+                    <p class="text-xs text-red-800 mt-1 leading-relaxed">
+                        Motivo: <strong>@(string.IsNullOrWhiteSpace(Model.MotivoUltimoCambio) ? "No fue posible procesar la orden con los datos o inventario provistos." : Model.MotivoUltimoCambio)</strong>
+                    </p>
+                    <p class="text-[11px] text-red-700/90 mt-1.5">
+                        Los procesos de facturación electrónica y despacho han sido anulados automáticamente. Ningún cobro definitivo fue aplicado.
+                    </p>
+                </div>
+            </div>
+        }
+
         <!-- Saga Visual Stepper -->
         <div class="mb-8 p-5 bg-surface-container-low/40 rounded-2xl border border-border-subtle/50">
             <span class="text-xs font-bold uppercase tracking-wider text-text-muted block mb-4">Progreso de la Saga Transaccional:</span>
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                 <!-- Step 1: Creada / Cobro -->
                 <div class="p-3 rounded-xl bg-surface-white border border-border-subtle/70 flex items-center gap-2.5">
-                    <span class="w-6 h-6 rounded-full bg-emerald-500 text-white font-bold text-[11px] flex items-center justify-center flex-shrink-0">✓</span>
-                    <div>
-                        <div class="font-bold text-primary">1. Creada & Cobro</div>
-                        <div class="text-[11px] text-text-muted">PayKlik Tokenizado</div>
-                    </div>
+                    @if (isCancelledOrRejected)
+                    {
+                        <span class="w-6 h-6 rounded-full bg-red-500 text-white font-bold text-[11px] flex items-center justify-center flex-shrink-0">
+                            <span class="material-symbols-outlined text-[14px]">close</span>
+                        </span>
+                        <div>
+                            <div class="font-bold text-red-900">1. Transacción</div>
+                            <div class="text-[11px] text-red-700 truncate max-w-[130px]" title="@(Model.MotivoUltimoCambio ?? "Rechazada")">@(Model.MotivoUltimoCambio ?? "Rechazada")</div>
+                        </div>
+                    }
+                    else
+                    {
+                        <span class="w-6 h-6 rounded-full bg-emerald-500 text-white font-bold text-[11px] flex items-center justify-center flex-shrink-0">
+                            <span class="material-symbols-outlined text-[14px]">check</span>
+                        </span>
+                        <div>
+                            <div class="font-bold text-primary">1. Creada & Cobro</div>
+                            <div class="text-[11px] text-text-muted">PayKlik Tokenizado</div>
+                        </div>
+                    }
                 </div>
 
                 <!-- Step 2: Confirmación Fiscal -->
                 @{
-                    var step2Done = Model.Estado != "CREADA" && Model.Estado != "COBRO_SOLICITADO" && Model.Estado != "PAGO_PENDIENTE";
+                    var step2Done = !isCancelledOrRejected && Model.DocumentoFiscalId != null;
+                    var step2Pending = !isCancelledOrRejected && (Model.Estado == "CONFIRMADA" || Model.Estado == "PAGO_APLICADO" || Model.Estado == "CONFIRMADA_PENDIENTE_FISCAL");
                 }
                 <div class="p-3 rounded-xl bg-surface-white border border-border-subtle/70 flex items-center gap-2.5">
                     <span class="w-6 h-6 rounded-full @(step2Done ? "bg-emerald-500 text-white" : "bg-surface-container text-text-muted") font-bold text-[11px] flex items-center justify-center flex-shrink-0">
-                        @(step2Done ? "✓" : "2")
+                        @if (step2Done)
+                        {
+                            <span class="material-symbols-outlined text-[14px]">check</span>
+                        }
+                        else if (isCancelledOrRejected)
+                        {
+                            <span>-</span>
+                        }
+                        else
+                        {
+                            <span>2</span>
+                        }
                     </span>
                     <div>
-                        <div class="font-bold text-primary">2. Certificación Fiscal</div>
-                        <div class="text-[11px] text-text-muted">SAT FEL (DTE)</div>
+                        <div class="font-bold @(isCancelledOrRejected ? "text-text-muted" : "text-primary")">2. Certificación Fiscal</div>
+                        <div class="text-[11px] text-text-muted">@(isCancelledOrRejected ? "No Aplica" : (step2Done ? "SAT FEL (DTE)" : (step2Pending ? "En Certificación" : "Pendiente")))</div>
                     </div>
                 </div>
 
                 <!-- Step 3: Preparación / Despacho -->
                 @{
-                    var step3Done = Model.Estado == "EN_PREPARACION" || Model.Estado == "EN_TRANSITO" || Model.Estado == "LISTA_PARA_RECOGER" || Model.Estado == "ENTREGADA";
+                    var step3Done = !isCancelledOrRejected && (Model.Estado == "EN_PREPARACION" || Model.Estado == "EN_TRANSITO" || Model.Estado == "LISTA_PARA_RECOGER" || Model.Estado == "ENTREGADA");
+                    var step3Pending = !isCancelledOrRejected && Model.Estado == "DESPACHO_SOLICITADO";
                 }
                 <div class="p-3 rounded-xl bg-surface-white border border-border-subtle/70 flex items-center gap-2.5">
                     <span class="w-6 h-6 rounded-full @(step3Done ? "bg-emerald-500 text-white" : "bg-surface-container text-text-muted") font-bold text-[11px] flex items-center justify-center flex-shrink-0">
-                        @(step3Done ? "✓" : "3")
+                        @if (step3Done)
+                        {
+                            <span class="material-symbols-outlined text-[14px]">check</span>
+                        }
+                        else if (isCancelledOrRejected)
+                        {
+                            <span>-</span>
+                        }
+                        else
+                        {
+                            <span>3</span>
+                        }
                     </span>
                     <div>
-                        <div class="font-bold text-primary">3. Preparación</div>
-                        <div class="text-[11px] text-text-muted">Bodega / Tienda</div>
+                        <div class="font-bold @(isCancelledOrRejected ? "text-text-muted" : "text-primary")">3. Preparación</div>
+                        <div class="text-[11px] text-text-muted">@(isCancelledOrRejected ? "No Aplica" : (step3Done ? "Preparado" : (step3Pending ? "Asignando Logística" : "Pendiente")))</div>
                     </div>
                 </div>
 
                 <!-- Step 4: Entrega Final -->
                 @{
-                    var step4Done = Model.Estado == "ENTREGADA";
+                    var step4Done = !isCancelledOrRejected && Model.Estado == "ENTREGADA";
                 }
                 <div class="p-3 rounded-xl bg-surface-white border border-border-subtle/70 flex items-center gap-2.5">
                     <span class="w-6 h-6 rounded-full @(step4Done ? "bg-emerald-500 text-white" : "bg-surface-container text-text-muted") font-bold text-[11px] flex items-center justify-center flex-shrink-0">
-                        @(step4Done ? "✓" : "4")
+                        @if (step4Done)
+                        {
+                            <span class="material-symbols-outlined text-[14px]">check</span>
+                        }
+                        else if (isCancelledOrRejected)
+                        {
+                            <span>-</span>
+                        }
+                        else
+                        {
+                            <span>4</span>
+                        }
                     </span>
                     <div>
-                        <div class="font-bold text-primary">4. Entrega</div>
-                        <div class="text-[11px] text-text-muted">@(Model.MetodoEntrega == "RECOGIDA_TIENDA" ? "Mostrador Tienda" : "LogiExpress")</div>
+                        <div class="font-bold @(isCancelledOrRejected ? "text-text-muted" : "text-primary")">4. Entrega</div>
+                        <div class="text-[11px] text-text-muted">@(isCancelledOrRejected ? "No Aplica" : (Model.MetodoEntrega == "RECOGIDA_TIENDA" ? "Mostrador Tienda" : "LogiExpress"))</div>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Alerta Fiscal Banner (ADR-015) si aplica -->
-        @if (Model.Estado == "CONFIRMADA_PENDIENTE_FISCAL")
-        {
-            <div class="mb-6 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 flex items-start gap-3">
-                <span class="material-symbols-outlined text-amber-700 text-[22px]">info</span>
-                <div class="text-xs">
-                    <strong>Certificación Tributaria Asíncrona (ADR-011 / ADR-015):</strong> Tu orden está confirmada y asegurada para entrega. El documento tributario se encuentra en proceso de firma digital ante la SAT por canal desacoplado.
-                </div>
-            </div>
-        }
-
-        <!-- Order Information 4-Card Grid -->
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <!-- Card 1: Financiero -->
+        <!-- 3-Column Info Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <!-- Card 1: Montos & Pago -->
             <div class="p-5 rounded-2xl bg-surface-container-low/40 border border-border-subtle/60">
                 <div class="flex items-center gap-2 text-xs font-bold text-primary uppercase tracking-wider mb-3">
                     <span class="material-symbols-outlined text-secondary text-[18px]">payments</span>
-                    Datos de Pago
+                    Pago & Transacción
                 </div>
                 <div class="space-y-2 text-xs">
                     <div class="flex justify-between">
-                        <span class="text-text-muted">Monto Total:</span>
-                        <span class="font-bold text-primary text-sm">@(Model.Moneda ?? "GTQ") @(Model.Total?.ToString("N2") ?? "0.00")</span>
+                        <span class="text-text-muted">Total:</span>
+                        <span class="font-bold text-primary">@(Model.Moneda ?? "GTQ") @(Model.Total?.ToString("F2") ?? "0.00")</span>
                     </div>
                     <div class="flex justify-between">
-                        <span class="text-text-muted">Canal de Venta:</span>
-                        <span class="font-semibold text-primary">@(Model.Canal ?? "ONLINE")</span>
+                        <span class="text-text-muted">Canal:</span>
+                        <span class="font-semibold text-primary">@(Model.Canal ?? "WEB")</span>
                     </div>
                     <div class="flex justify-between">
-                        <span class="text-text-muted">ID Transacción Pago:</span>
-                        <span class="font-mono text-primary truncate max-w-[140px]">@(Model.PagoId ?? "Procesado")</span>
+                        <span class="text-text-muted">ID Transacción:</span>
+                        @if (!string.IsNullOrWhiteSpace(Model.PagoId))
+                        {
+                            <span class="font-mono text-secondary font-bold">@Model.PagoId</span>
+                        }
+                        else if (isCancelledOrRejected)
+                        {
+                            <span class="font-mono text-text-muted font-semibold">No Aplicado</span>
+                        }
+                        else
+                        {
+                            <span class="font-mono text-amber-600 font-medium">En Proceso</span>
+                        }
                     </div>
                 </div>
             </div>
 
-            <!-- Card 2: Fiscal FEL -->
+            <!-- Card 2: Fiscal SAT FEL -->
             <div class="p-5 rounded-2xl bg-surface-container-low/40 border border-border-subtle/60">
                 <div class="flex items-center gap-2 text-xs font-bold text-primary uppercase tracking-wider mb-3">
                     <span class="material-symbols-outlined text-secondary text-[18px]">receipt_long</span>
@@ -189,21 +415,50 @@
                 </div>
                 <div class="space-y-2 text-xs">
                     <div class="flex justify-between">
-                        <span class="text-text-muted">DTE Documento:</span>
-                        <span class="font-mono font-bold text-primary">@(Model.DocumentoFiscalId ?? "Generando...")</span>
+                        <span class="text-text-muted">Certificación:</span>
+                        @if (isCancelledOrRejected)
+                        {
+                            <span class="font-bold text-text-muted">No Emitido</span>
+                        }
+                        else if (Model.DocumentoFiscalId != null)
+                        {
+                            <span class="font-bold text-primary">Certificado FEL</span>
+                        }
+                        else
+                        {
+                            <span class="font-bold text-amber-700">En Proceso</span>
+                        }
                     </div>
                     <div class="flex justify-between">
-                        <span class="text-text-muted">Régimen:</span>
-                        <span class="font-semibold text-primary">Factura Electrónica (FEL)</span>
+                        <span class="text-text-muted">DTE No.:</span>
+                        @if (isCancelledOrRejected)
+                        {
+                            <span class="font-mono text-text-muted">No Aplica</span>
+                        }
+                        else
+                        {
+                            <span class="font-mono text-secondary font-bold truncate max-w-[150px]">@(Model.DocumentoFiscalId ?? "Pendiente")</span>
+                        }
                     </div>
                     <div class="flex justify-between">
                         <span class="text-text-muted">IVA 12% Incluido:</span>
-                        <span class="font-semibold text-emerald-700">Certificado</span>
+                        @if (isCancelledOrRejected)
+                        {
+                            <span class="font-semibold text-text-muted">No Aplicado</span>
+                        }
+                        else if (Model.DocumentoFiscalId != null)
+                        {
+                            <span class="font-semibold text-emerald-700">Certificado</span>
+                        }
+                        else
+                        {
+                            <span class="font-semibold text-amber-700">En Trámite</span>
+                        }
                     </div>
                 </div>
             </div>
 
-            <!-- Card 3: Despacho -->
+            <!-- Card 3: Despacho Logístico -->
             <div class="p-5 rounded-2xl bg-surface-container-low/40 border border-border-subtle/60">
                 <div class="flex items-center gap-2 text-xs font-bold text-primary uppercase tracking-wider mb-3">
                     <span class="material-symbols-outlined text-secondary text-[18px]">local_shipping</span>
@@ -216,22 +471,65 @@
                     </div>
                     <div class="flex justify-between">
                         <span class="text-text-muted">Transportista:</span>
-                        <span class="font-semibold text-primary">@(despacho?.Transportista ?? (Model.MetodoEntrega == "RECOGIDA_TIENDA" ? "Flota Interna" : "LogiExpress"))</span>
+                        @if (isCancelledOrRejected)
+                        {
+                            <span class="font-semibold text-text-muted">No Aplica</span>
+                        }
+                        else
+                        {
+                            <span class="font-semibold text-primary">@(despacho?.Transportista ?? (Model.MetodoEntrega == "RECOGIDA_TIENDA" ? "Flota Interna" : "LogiExpress"))</span>
+                        }
                     </div>
                     <div class="flex justify-between">
                         <span class="text-text-muted">Guía de Envío:</span>
-                        <span class="font-mono text-secondary font-bold">@(despacho?.GuiaId ?? "Asignando...")</span>
+                        @if (isCancelledOrRejected)
+                        {
+                            <span class="font-mono text-text-muted font-semibold">No Asignada</span>
+                        }
+                        else if (Model.MetodoEntrega == "RECOGIDA_TIENDA")
+                        {
+                            <span class="font-semibold text-emerald-700">Recogida en Tienda</span>
+                        }
+                        else if (!string.IsNullOrWhiteSpace(despacho?.GuiaId))
+                        {
+                            if (!string.IsNullOrWhiteSpace(despacho?.TrackingUrl))
+                            {
+                                <a href="@despacho?.TrackingUrl" target="_blank" rel="noopener noreferrer" class="font-mono text-secondary font-bold hover:underline inline-flex items-center gap-1">
+                                    @(despacho?.GuiaId)
+                                    <span class="material-symbols-outlined text-[13px]">open_in_new</span>
+                                </a>
+                            }
+                            else
+                            {
+                                <span class="font-mono text-secondary font-bold">@(despacho?.GuiaId)</span>
+                            }
+                        }
+                        else
+                        {
+                            <span class="font-mono text-amber-600 font-medium">Asignando guía...</span>
+                        }
+                    </div>
+                    <div class="flex justify-between pt-1 border-t border-border-subtle/40">
+                        <span class="text-text-muted">Estado del Envío:</span>
+                        @if (isCancelledOrRejected)
+                        {
+                            <span class="font-bold text-text-muted">CANCELADO</span>
+                        }
+                        else
+                        {
+                            <span class="font-bold text-primary">@(despacho?.Estado ?? (Model.Estado == "DESPACHO_SOLICITADO" ? "SOLICITADO" : "EN COLA"))</span>
+                        }
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Incidents List Section (HU-021) -->
+        <!-- Incidencias del Pedido -->
         <div class="pt-6 border-t border-border-subtle/60">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between mb-4 gap-2">
                 <div class="flex items-center gap-2 font-bold text-primary text-base">
                     <span class="material-symbols-outlined text-text-muted">report_problem</span>
-                    <span>Incidencias Operativas Vinculadas (HU-021)</span>
+                    <span>Incidencias del Pedido</span>
                 </div>
                 <a href="/Incidencias/Crear?ordenId=@Model.OrdenId"
                    class="inline-flex items-center gap-1.5 bg-surface-container-low hover:bg-surface-variant text-primary px-4 py-2 rounded-xl text-xs font-semibold transition-colors border border-border-subtle/50 shadow-2xs">
@@ -249,9 +547,9 @@
             else
             {
                 <div class="overflow-x-auto rounded-2xl border border-border-subtle/50">
-                    <table class="w-full text-left border-collapse">
+                    <table class="w-full text-left border-collapse text-xs">
                         <thead>
-                            <tr class="bg-surface-bright/60 border-b border-border-subtle text-xs text-text-muted uppercase font-semibold">
+                            <tr class="bg-surface-bright/60 border-b border-border-subtle text-text-muted uppercase font-semibold">
                                 <th class="py-3 px-4">Fecha</th>
                                 <th class="py-3 px-4">Descripción del Reclamo</th>
                                 <th class="py-3 px-4">Estado</th>
@@ -261,30 +559,15 @@
                         <tbody class="divide-y divide-border-subtle/50">
                             @foreach (var inc in Model.Incidencias)
                             {
-                                <tr class="hover:bg-surface-bright/30 transition-colors text-sm">
-                                    <td class="py-3.5 px-4 text-xs text-text-muted whitespace-nowrap">
-                                        @inc.CreadaEn.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                <tr>
+                                    <td class="py-3 px-4 text-text-muted whitespace-nowrap">@inc.CreadaEn.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td class="py-3 px-4 text-primary font-medium">@inc.Descripcion</td>
+                                    <td class="py-3 px-4">
+                                        <span class="px-2.5 py-1 rounded-full text-[11px] font-bold @(inc.Estado == "RESUELTA" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">
+                                            @inc.Estado
+                                        </span>
                                     </td>
-                                    <td class="py-3.5 px-4 font-medium text-primary text-xs">
-                                        @inc.Descripcion
-                                    </td>
-                                    <td class="py-3.5 px-4 whitespace-nowrap">
-                                        @if (inc.Estado == "ABIERTA")
-                                        {
-                                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-error-container text-error text-[11px] font-bold">
-                                                ABIERTA
-                                            </span>
-                                        }
-                                        else
-                                        {
-                                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold">
-                                                RESUELTA
-                                            </span>
-                                        }
-                                    </td>
-                                    <td class="py-3.5 px-4 text-xs text-text-muted">
-                                        @(inc.Resolucion ?? "En investigación por el equipo de postventa")
-                                    </td>
+                                    <td class="py-3 px-4 text-text-muted">@(inc.Resolucion ?? "En revision por operador logistico")</td>
                                 </tr>
                             }
                         </tbody>
@@ -296,11 +579,12 @@
 }
 
 <script>
-    // ── Auto-refresco reactivo vía AJAX cada 2.5s mientras la orden esté activa ──
     const container = document.getElementById('orden-container');
     if (container) {
         const ordenId = container.getAttribute('data-orden-id');
         let estadoActual = container.getAttribute('data-estado');
+        let despachoEstadoActual = container.getAttribute('data-despacho-estado') || '';
+        let despachoGuiaActual = container.getAttribute('data-despacho-guia') || '';
         const syncStatus = document.getElementById('sync-status');
 
         const terminalStates = ['ENTREGADA', 'CANCELADA', 'RECHAZADA'];
@@ -312,14 +596,19 @@
                     if (res.ok) {
                         const data = await res.json();
                         const orden = data.orden;
-                        if (orden && orden.estado !== estadoActual) {
-                            syncStatus.textContent = 'Actualizando...';
-                            // Si el estado cambió, recargar suavemente la vista para redibujar el stepper completo
+                        const desp = data.despacho;
+
+                        const ordenCambio = orden && orden.estado !== estadoActual;
+                        const despachoEstadoCambio = desp && desp.estado && desp.estado !== despachoEstadoActual;
+                        const despachoGuiaCambio = desp && desp.guiaId && desp.guiaId !== despachoGuiaActual;
+
+                        if (ordenCambio || despachoEstadoCambio || despachoGuiaCambio) {
+                            if (syncStatus) syncStatus.textContent = 'Actualizando...';
                             window.location.reload();
                         }
                     }
                 } catch (err) {
-                    console.log('Error en polling:', err);
+                    console.log('Polling sync error:', err);
                 }
             }, 2500);
         }

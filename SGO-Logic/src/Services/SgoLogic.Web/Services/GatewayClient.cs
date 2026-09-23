@@ -8,7 +8,13 @@ namespace SgoLogic.Web.Services;
 public sealed record RegistroModel(string Email, string Contrasena, string NombreCompleto);
 public sealed record VerificarModel(string Email, string Codigo);
 public sealed record LoginModel(string Email, string Contrasena);
-public sealed record AuthResult(string Token, Guid UsuarioId, string Email, string NombreCompleto, DateTime ExpiraEn);
+public sealed record AuthResult(
+    string Token,
+    Guid UsuarioId,
+    string Email,
+    string NombreCompleto,
+    DateTime ExpiraEn,
+    [property: JsonPropertyName("rol")] string? Rol = "CLIENTE");
 
 public sealed record ItemCarritoModel(
     [property: JsonPropertyName("sku")] string Sku,
@@ -45,7 +51,8 @@ public sealed record OrdenEstadoModel(
     DateTime? CreadaEn,
     DateTime? ActualizadaEn,
     List<IncidenciaModel>? Incidencias,
-    string? MotivoUltimoCambio = null);
+    string? MotivoUltimoCambio = null,
+    string? ClienteId = null);
 
 public sealed record CrearIncidenciaModel(string OrdenId, string Descripcion);
 
@@ -102,7 +109,7 @@ public sealed record HistorialClienteModel(
 
 // ── Modelos de Despacho ─────────────────────────────────────────────────────
 public sealed record DespachoOrdenModel(
-    string DespachoId,
+    [property: JsonPropertyName("id")] string? DespachoId,
     string OrdenId,
     string Estado,
     string MetodoEntrega,
@@ -110,7 +117,9 @@ public sealed record DespachoOrdenModel(
     string? TrackingUrl,
     string? Transportista,
     string? UbicacionOrigenId,
-    DateTime? ActualizadoEn);
+    [property: JsonPropertyName("creadoEn")] DateTime? CreadoEn = null,
+    [property: JsonPropertyName("entregadoEn")] DateTime? EntregadoEn = null,
+    [property: JsonPropertyName("detalleEstado")] string? DetalleEstado = null);
 
 public sealed record DespachoPreparacionDto(
     string DespachoId,
@@ -127,23 +136,34 @@ public sealed record ExistenciaSkuDto(
     string UbicacionId,
     int CantidadFisica,
     int CantidadReservada,
-    int CantidadDisponible,
-    DateTime UltimaActualizacion);
+    [property: JsonPropertyName("disponible")] int Disponible,
+    string? TipoUbicacion = null,
+    int Version = 0)
+{
+    [JsonPropertyName("cantidadDisponible")]
+    public int CantidadDisponible => Disponible;
+}
 
 public sealed record UbicacionResumenDto(
     string UbicacionId,
     string TipoUbicacion,
-    int TotalSkus,
-    int CantidadFisicaTotal,
-    int CantidadReservadaTotal,
-    int CantidadDisponibleTotal);
+    [property: JsonPropertyName("cantidadDeSkus")] int TotalSkus,
+    [property: JsonPropertyName("cantidadTotalFisica")] int CantidadFisicaTotal,
+    [property: JsonPropertyName("cantidadTotalReservada")] int CantidadReservadaTotal,
+    [property: JsonPropertyName("totalDisponible")] int CantidadDisponibleTotal);
 
 public sealed record ExistenciaUbicacionDto(
-    string UbicacionId,
     string Sku,
+    string UbicacionId,
     int CantidadFisica,
     int CantidadReservada,
-    int CantidadDisponible);
+    [property: JsonPropertyName("disponible")] int Disponible,
+    string? TipoUbicacion = null,
+    int Version = 0)
+{
+    [JsonPropertyName("cantidadDisponible")]
+    public int CantidadDisponible => Disponible;
+}
 
 public sealed class GatewayClient
 {

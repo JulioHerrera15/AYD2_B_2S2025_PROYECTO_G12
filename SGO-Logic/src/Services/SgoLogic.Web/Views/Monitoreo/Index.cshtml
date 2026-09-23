@@ -18,7 +18,7 @@
                 Topología Distribuida &bull; Observabilidad Integral
             </div>
             <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight">Centro de Control & Monitoreo del Sistema</h1>
-            <p class="text-xs sm:text-sm text-text-muted">Supervisión en vivo de microservicios, autenticación en el borde (ADR-020) y gobernanza de arquitectura distribuida.</p>
+            <p class="text-xs sm:text-sm text-text-muted">Supervisión en vivo de microservicios, autenticación perimetral y gobernanza de arquitectura distribuida.</p>
         </div>
 
         <div class="flex items-center gap-3">
@@ -29,7 +29,7 @@
         </div>
     </div>
 
-    <!-- ADR-020 Border Authentication Inspector Card -->
+    <!-- Border Authentication Inspector Card -->
     <div class="bg-surface-white rounded-3xl p-6 sm:p-8 border border-border-subtle/60 ambient-shadow">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-6 border-b border-border-subtle">
             <div class="flex items-center gap-3">
@@ -37,7 +37,7 @@
                     <span class="material-symbols-outlined text-[22px]">vpn_key</span>
                 </div>
                 <div>
-                    <h2 class="text-base font-bold text-primary">Autenticación en el Borde (ADR-020)</h2>
+                    <h2 class="text-base font-bold text-primary">Autenticación Perimetral Centralizada</h2>
                     <p class="text-xs text-text-muted">Inspección de tokens Bearer validados en el YARP API Gateway</p>
                 </div>
             </div>
@@ -139,7 +139,7 @@
         </div>
     </div>
 
-    <!-- Directrices de Seguridad, Resiliencia y Auditoría (ADR-006, ADR-020, EAC-03) -->
+    <!-- Directrices de Seguridad, Resiliencia y Auditoría -->
     <div class="bg-surface-white rounded-3xl p-6 sm:p-8 border border-border-subtle/60 ambient-shadow">
         <div class="flex items-center gap-3 pb-4 mb-6 border-b border-border-subtle">
             <div class="w-10 h-10 rounded-xl bg-surface-container-low text-primary flex items-center justify-center font-bold">
@@ -147,7 +147,7 @@
             </div>
             <div>
                 <h2 class="text-base font-bold text-primary">Políticas de Arquitectura, Resiliencia y Gobernanza</h2>
-                <p class="text-xs text-text-muted">Cumplimiento estricto de Architecture Decision Records y estándares de auditoría corporativa</p>
+                <p class="text-xs text-text-muted">Cumplimiento estricto de estándares corporativos, resiliencia y auditoría inmutable</p>
             </div>
         </div>
 
@@ -156,7 +156,7 @@
                 <div>
                     <div class="flex items-center gap-2 mb-3 text-secondary">
                         <span class="material-symbols-outlined text-[20px]">shield_person</span>
-                        <h3 class="font-bold text-sm text-primary">Autenticación en el Borde (ADR-020)</h3>
+                        <h3 class="font-bold text-sm text-primary">Autenticación Perimetral Segura</h3>
                     </div>
                     <p class="text-xs text-text-muted leading-relaxed mb-4">
                         El API Gateway valida firmas JWT HMAC-SHA256 en rutas protegidas. Si el token expira o es inválido, rechaza la solicitud antes de sobrecargar la red interna.
@@ -171,7 +171,7 @@
                 <div>
                     <div class="flex items-center gap-2 mb-3 text-secondary">
                         <span class="material-symbols-outlined text-[20px]">lock_reset</span>
-                        <h3 class="font-bold text-sm text-primary">Bitácora Inmutable (ADR-006 / EAC-03)</h3>
+                        <h3 class="font-bold text-sm text-primary">Bitácora Inmutable de Auditoría</h3>
                     </div>
                     <p class="text-xs text-text-muted leading-relaxed mb-4">
                         Registro transaccional append-only en PostgreSQL. Los eventos de dominio, pagos y cancelaciones disparan triggers inmutables sin posibilidad de eliminación.
@@ -186,7 +186,7 @@
                 <div>
                     <div class="flex items-center gap-2 mb-3 text-secondary">
                         <span class="material-symbols-outlined text-[20px]">schema</span>
-                        <h3 class="font-bold text-sm text-primary">Event-Driven Saga (ADR-002, 004)</h3>
+                        <h3 class="font-bold text-sm text-primary">Orquestación Asíncrona (Sagas)</h3>
                     </div>
                     <p class="text-xs text-text-muted leading-relaxed mb-4">
                         Orquestación asíncrona mediante RabbitMQ Topic Exchange (<code class="bg-surface-container-low px-1 rounded">sgo.ordenes</code>). Materialización reactiva en Redis y PostgreSQL con latencia P100 &lt; 5s.

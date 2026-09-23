@@ -77,8 +77,9 @@ public class AuthController : Controller
             Expires = result.ExpiraEn
         });
 
-        var userRole = email.Contains("admin", StringComparison.OrdinalIgnoreCase) ? "ADMIN"
-            : (email.EndsWith("@megastore.com", StringComparison.OrdinalIgnoreCase) ? "OPERADOR" : "CLIENTE");
+        var userRole = !string.IsNullOrWhiteSpace(result.Rol)
+            ? result.Rol
+            : PermisosHelper.ObtenerRolDesdeJwt(result.Token);
 
         Response.Cookies.Append("sgo_user_role", userRole, new CookieOptions
         {

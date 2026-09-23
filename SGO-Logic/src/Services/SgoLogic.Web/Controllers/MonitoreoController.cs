@@ -32,6 +32,14 @@ public class MonitoreoController : Controller
             return RedirectToAction("Login", "Auth", new { returnUrl = "/Monitoreo" });
         }
 
+        var userRole = Request.Cookies["sgo_user_role"];
+        var userEmail = Request.Cookies["sgo_user_email"];
+        if (!PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwtToken))
+        {
+            TempData["Error"] = "Acceso denegado. La consola de monitoreo requiere credenciales administrativas de MegaStore.";
+            return RedirectToAction("Index", "Home");
+        }
+
         string? jwtSubject = null;
         string? jwtEmail = null;
         DateTime? jwtExp = null;

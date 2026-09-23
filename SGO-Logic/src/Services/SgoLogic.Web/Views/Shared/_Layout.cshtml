@@ -118,6 +118,11 @@
         .material-symbols-outlined.fill {
             font-variation-settings: 'FILL' 1;
         }
+
+        .dropdown-container:hover > .dropdown-menu,
+        .dropdown-container.is-open > .dropdown-menu {
+            display: block;
+        }
     </style>
 </head>
 <body class="bg-background text-primary antialiased min-h-full flex flex-col font-sans">
@@ -141,6 +146,7 @@
                 var userName = Context.Request.Cookies["sgo_user_name"];
                 var userEmail = Context.Request.Cookies["sgo_user_email"];
                 var userRole = Context.Request.Cookies["sgo_user_role"] ?? "CLIENTE";
+                var isStaff = PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt);
             }
 
             <!-- Navigation Links -->
@@ -158,39 +164,41 @@
                     <span>Rastreo</span>
                 </a>
 
-                @if (isAuthenticated)
+                @if (isStaff)
                 {
-                    <!-- Dropdown for Internal / Operational Tools (Only authenticated staff/users) -->
-                    <div class="relative group">
-                        <button type="button" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-secondary bg-secondary-fixed/30 border border-secondary-container/30">
+                    <!-- Dropdown for Internal / Operational Tools (Only authorized staff/admin) -->
+                    <div class="relative dropdown-container">
+                        <button type="button" class="dropdown-trigger flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-secondary bg-secondary-fixed/30 border border-secondary-container/30">
                             <span class="material-symbols-outlined text-[17px]">admin_panel_settings</span>
                             <span>Operaciones</span>
                             <span class="material-symbols-outlined text-[15px]">expand_more</span>
                         </button>
-                        <div class="absolute left-0 mt-1 w-56 bg-surface-white rounded-2xl shadow-xl border border-border-subtle/80 py-2 hidden group-hover:block z-50 animate-fadeIn">
-                            <div class="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-text-muted border-b border-border-subtle/40 mb-1">
-                                Herramientas Operativas
+                        <div class="dropdown-menu absolute left-0 pt-1.5 w-56 hidden z-50 animate-fadeIn">
+                            <div class="bg-surface-white rounded-2xl shadow-xl border border-border-subtle/80 py-2">
+                                <div class="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-text-muted border-b border-border-subtle/40 mb-1">
+                                    Herramientas Operativas
+                                </div>
+                                <a href="/Pos" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                    <span class="material-symbols-outlined text-[17px] text-secondary">point_of_sale</span>
+                                    Terminal OmniPOS (Caja)
+                                </a>
+                                <a href="/Vision360" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                    <span class="material-symbols-outlined text-[17px] text-secondary">support_agent</span>
+                                    Visión 360 del Cliente
+                                </a>
+                                <a href="/Despacho" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                    <span class="material-symbols-outlined text-[17px] text-secondary">local_shipping</span>
+                                    Control de Despacho
+                                </a>
+                                <a href="/Incidencias" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                    <span class="material-symbols-outlined text-[17px] text-secondary">gavel</span>
+                                    Gestión de Incidencias
+                                </a>
+                                <a href="/Monitoreo" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                    <span class="material-symbols-outlined text-[17px] text-secondary">hub</span>
+                                    Topología & Monitoreo
+                                </a>
                             </div>
-                            <a href="/Pos" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
-                                <span class="material-symbols-outlined text-[17px] text-secondary">point_of_sale</span>
-                                Terminal OmniPOS (Caja)
-                            </a>
-                            <a href="/Vision360" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
-                                <span class="material-symbols-outlined text-[17px] text-secondary">support_agent</span>
-                                Visión 360 del Cliente
-                            </a>
-                            <a href="/Despacho" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
-                                <span class="material-symbols-outlined text-[17px] text-secondary">local_shipping</span>
-                                Control de Despacho
-                            </a>
-                            <a href="/Incidencias" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
-                                <span class="material-symbols-outlined text-[17px] text-secondary">gavel</span>
-                                Gestión de Incidencias
-                            </a>
-                            <a href="/Monitoreo" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
-                                <span class="material-symbols-outlined text-[17px] text-secondary">hub</span>
-                                Topología & Monitoreo
-                            </a>
                         </div>
                     </div>
                 }
@@ -200,8 +208,8 @@
             <div class="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                 @if (isAuthenticated)
                 {
-                    <div class="relative group">
-                        <button type="button" class="flex items-center gap-2 bg-surface-container-low hover:bg-surface-container border border-border-subtle/70 px-3 py-1.5 rounded-full transition-colors">
+                    <div class="relative dropdown-container">
+                        <button type="button" class="dropdown-trigger flex items-center gap-2 bg-surface-container-low hover:bg-surface-container border border-border-subtle/70 px-3 py-1.5 rounded-full transition-colors">
                             <div class="w-6 h-6 rounded-full bg-secondary text-white font-bold text-[11px] flex items-center justify-center shadow-sm">
                                 @((userName ?? userEmail ?? "U").Substring(0, 1).ToUpper())
                             </div>
@@ -210,28 +218,30 @@
                             </span>
                             <span class="material-symbols-outlined text-[16px] text-text-muted">expand_more</span>
                         </button>
-                        <div class="absolute right-0 mt-2 w-48 bg-surface-white rounded-2xl shadow-xl border border-border-subtle/80 py-2 hidden group-hover:block z-50">
-                            <div class="px-4 py-2 border-b border-border-subtle/40 mb-1">
-                                <span class="text-[11px] font-bold text-primary block truncate">@(userName ?? "Usuario")</span>
-                                <span class="text-[10px] text-text-muted block truncate font-mono">@userEmail</span>
+                        <div class="dropdown-menu absolute right-0 pt-1.5 w-48 hidden z-50">
+                            <div class="bg-surface-white rounded-2xl shadow-xl border border-border-subtle/80 py-2">
+                                <div class="px-4 py-2 border-b border-border-subtle/40 mb-1">
+                                    <span class="text-[11px] font-bold text-primary block truncate">@(userName ?? "Usuario")</span>
+                                    <span class="text-[10px] text-text-muted block truncate font-mono">@userEmail</span>
+                                </div>
+                                <a href="/Cuenta/Perfil" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                    <span class="material-symbols-outlined text-[17px]">account_circle</span>
+                                    Mi Perfil
+                                </a>
+                                <a href="/Cuenta/Ordenes" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                    <span class="material-symbols-outlined text-[17px]">receipt_long</span>
+                                    Mis Órdenes
+                                </a>
+                                <a href="/Cuenta/Privacidad" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                    <span class="material-symbols-outlined text-[17px]">shield</span>
+                                    Privacidad & Datos
+                                </a>
+                                <hr class="my-1 border-border-subtle/50" />
+                                <a href="/Auth/Logout" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-error hover:bg-error-container/30">
+                                    <span class="material-symbols-outlined text-[17px]">logout</span>
+                                    Cerrar Sesión
+                                </a>
                             </div>
-                            <a href="/Cuenta/Perfil" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
-                                <span class="material-symbols-outlined text-[17px]">account_circle</span>
-                                Mi Perfil
-                            </a>
-                            <a href="/Cuenta/Ordenes" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
-                                <span class="material-symbols-outlined text-[17px]">receipt_long</span>
-                                Mis Órdenes
-                            </a>
-                            <a href="/Cuenta/Privacidad" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
-                                <span class="material-symbols-outlined text-[17px]">shield</span>
-                                Privacidad & Datos
-                            </a>
-                            <hr class="my-1 border-border-subtle/50" />
-                            <a href="/Auth/Logout" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-error hover:bg-error-container/30">
-                                <span class="material-symbols-outlined text-[17px]">logout</span>
-                                Cerrar Sesión
-                            </a>
                         </div>
                     </div>
                 }
@@ -261,11 +271,18 @@
                 <span class="material-symbols-outlined text-[18px]">track_changes</span>
                 <span>Rastreo</span>
             </a>
-            @if (isAuthenticated)
+            @if (isStaff)
             {
                 <a href="/Pos" class="flex flex-col items-center px-2 py-1 font-medium text-secondary">
                     <span class="material-symbols-outlined text-[18px]">admin_panel_settings</span>
                     <span>Operaciones</span>
+                </a>
+            }
+            else if (isAuthenticated)
+            {
+                <a href="/Cuenta/Ordenes" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[18px]">receipt_long</span>
+                    <span>Pedidos</span>
                 </a>
             }
             else
@@ -301,7 +318,7 @@
     <!-- Footer -->
     <footer class="bg-surface-white border-t border-border-subtle py-10 text-xs text-text-muted mt-auto">
         <div class="max-w-[1240px] mx-auto px-4 sm:px-6">
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 mb-8">
                 <!-- Col 1: Brand -->
                 <div class="md:col-span-1">
                     <div class="flex items-center gap-2 mb-3">
@@ -327,12 +344,12 @@
                         <li><a href="/Carrito" class="hover:text-primary transition-colors">Carrito de Compras</a></li>
                         <li><a href="/Checkout" class="hover:text-primary transition-colors">Finalizar Compra</a></li>
                         <li><a href="/Estado" class="hover:text-primary transition-colors">Rastreo de Órdenes</a></li>
-                        <li><a href="/Cuenta/Privacidad" class="hover:text-primary transition-colors font-semibold text-secondary">Portal de Privacidad (PRE-08)</a></li>
+                        <li><a href="/Cuenta/Privacidad" class="hover:text-primary transition-colors font-semibold text-secondary">Portal de Privacidad</a></li>
                     </ul>
                 </div>
 
-                <!-- Col 3: Operaciones Internas (Solo personal autenticado) -->
-                @if (isAuthenticated)
+                <!-- Col 3: Operaciones Internas o Mi Cuenta -->
+                @if (isStaff)
                 {
                     <div>
                         <h4 class="font-bold text-primary mb-3 text-xs uppercase tracking-wider">Operaciones & Tiendas</h4>
@@ -340,8 +357,20 @@
                             <li><a href="/Pos" class="hover:text-primary transition-colors">Terminal OmniPOS (Tiendas 1-32)</a></li>
                             <li><a href="/Vision360" class="hover:text-primary transition-colors">Visión 360 Call Center</a></li>
                             <li><a href="/Despacho" class="hover:text-primary transition-colors">Dashboard Logístico</a></li>
-                            <li><a href="/Incidencias" class="hover:text-primary transition-colors">Bandeja de Incidencias (HU-021)</a></li>
+                            <li><a href="/Incidencias" class="hover:text-primary transition-colors">Bandeja de Incidencias</a></li>
                             <li><a href="/Monitoreo" class="hover:text-primary transition-colors">Centro de Monitoreo & ADRs</a></li>
+                        </ul>
+                    </div>
+                }
+                else if (isAuthenticated)
+                {
+                    <div>
+                        <h4 class="font-bold text-primary mb-3 text-xs uppercase tracking-wider">Mi Cuenta</h4>
+                        <ul class="space-y-2">
+                            <li><a href="/Cuenta/Perfil" class="hover:text-primary transition-colors">Mi Perfil</a></li>
+                            <li><a href="/Cuenta/Ordenes" class="hover:text-primary transition-colors">Mis Pedidos</a></li>
+                            <li><a href="/Estado" class="hover:text-primary transition-colors">Rastrear Pedido</a></li>
+                            <li><a href="/Cuenta/Privacidad" class="hover:text-primary transition-colors">Privacidad & Datos</a></li>
                         </ul>
                     </div>
                 }
@@ -357,45 +386,47 @@
                         </ul>
                     </div>
                 }
-
-                <!-- Col 4: Seguridad & Privacidad -->
-                <div>
-                    <h4 class="font-bold text-primary mb-3 text-xs uppercase tracking-wider">Cumplimiento & Seguridad</h4>
-                    <ul class="space-y-2 text-[11px]">
-                        <li class="flex items-center gap-1.5 text-text-muted">
-                            <span class="material-symbols-outlined text-[15px] text-secondary">lock</span>
-                            <span>RES-08 / ADR-010: Cero PAN/CVV</span>
-                        </li>
-                        <li class="flex items-center gap-1.5 text-text-muted">
-                            <span class="material-symbols-outlined text-[15px] text-secondary">shield</span>
-                            <span>ADR-020: JWT en el Borde</span>
-                        </li>
-                        <li class="flex items-center gap-1.5 text-text-muted">
-                            <span class="material-symbols-outlined text-[15px] text-secondary">history_edu</span>
-                            <span>EAC-03: Bitácora Inmutable</span>
-                        </li>
-                        <li class="flex items-center gap-1.5 text-text-muted">
-                            <span class="material-symbols-outlined text-[15px] text-secondary">speed</span>
-                            <span>EAC-02: Respuesta sub-5s CQRS</span>
-                        </li>
-                    </ul>
-                </div>
             </div>
 
             <div class="pt-6 border-t border-border-subtle/50 flex flex-col sm:flex-row items-center justify-between gap-3 text-[11px]">
                 <div>
-                    &copy; 2026 MegaStore SGO-Logic &bull; Universidad de San Carlos de Guatemala (USAC) &bull; AYD2 Sección B
+                    &copy; 2026 MegaStore Inc. &bull; Plataforma Omnicanal de Comercio Electrónico & Logística Integral
                 </div>
                 <div class="flex items-center gap-4">
                     <a href="/Cuenta/Privacidad" class="hover:text-primary transition-colors">Aviso de Privacidad</a>
-                    @if (isAuthenticated)
+                    @if (isStaff)
                     {
                         <span>&bull;</span>
-                        <a href="/Monitoreo" class="hover:text-primary transition-colors">Topología & ADRs</a>
+                        <a href="/Monitoreo" class="hover:text-primary transition-colors">Centro de Monitoreo</a>
                     }
                 </div>
             </div>
         </div>
     </footer>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            var containers = document.querySelectorAll('.dropdown-container');
+            containers.forEach(function(container) {
+                var trigger = container.querySelector('.dropdown-trigger');
+                if (trigger) {
+                    trigger.addEventListener('click', function(e) {
+                        e.stopPropagation();
+                        var isOpen = container.classList.contains('is-open');
+                        containers.forEach(function(c) { c.classList.remove('is-open'); });
+                        if (!isOpen) {
+                            container.classList.add('is-open');
+                        }
+                    });
+                }
+            });
+
+            document.addEventListener('click', function(e) {
+                if (!e.target.closest('.dropdown-container')) {
+                    containers.forEach(function(c) { c.classList.remove('is-open'); });
+                }
+            });
+        });
+    </script>
 </body>
 </html>

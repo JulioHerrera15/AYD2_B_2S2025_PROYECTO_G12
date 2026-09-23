@@ -22,6 +22,14 @@ public class PosController : Controller
             return RedirectToAction("Login", "Auth", new { returnUrl = "/Pos" });
         }
 
+        var userRole = Request.Cookies["sgo_user_role"];
+        var userEmail = Request.Cookies["sgo_user_email"];
+        if (!PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt))
+        {
+            TempData["Error"] = "Acceso denegado. El terminal OmniPOS es exclusivo para personal administrativo y cajeros de MegaStore.";
+            return RedirectToAction("Index", "Home");
+        }
+
         ViewBag.Busqueda = busqueda;
         CarritoModel? carrito = null;
 
@@ -75,6 +83,11 @@ public class PosController : Controller
             return RedirectToAction("Login", "Auth", new { returnUrl = "/Pos" });
         }
 
+        if (!PermisosHelper.EsPersonalAutorizado(Request.Cookies["sgo_user_role"], Request.Cookies["sgo_user_email"], jwt))
+        {
+            return Forbid();
+        }
+
         var carrito = await _gateway.ObtenerCarritoPorIdAsync(clienteId) ?? await _gateway.ObtenerCarritoAsync();
         if (carrito is null || carrito.Items is null || carrito.Items.Count == 0)
         {
@@ -125,6 +138,11 @@ public class PosController : Controller
         if (string.IsNullOrWhiteSpace(jwt))
         {
             return RedirectToAction("Login", "Auth", new { returnUrl = "/Pos" });
+        }
+
+        if (!PermisosHelper.EsPersonalAutorizado(Request.Cookies["sgo_user_role"], Request.Cookies["sgo_user_email"], jwt))
+        {
+            return Forbid();
         }
 
         TempData["Exito"] = $"Enlace de pago omnicanal enviado por SMS y WhatsApp al cliente {clienteId}.";

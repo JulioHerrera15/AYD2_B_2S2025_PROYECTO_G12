@@ -1,8 +1,11 @@
+@using SgoLogic.Web.Services
 @{
     ViewData["Title"] = "Centro de Control";
     var isAuthenticated = !string.IsNullOrWhiteSpace(Context.Request.Cookies["sgo_jwt"]);
     var userName = Context.Request.Cookies["sgo_user_name"];
     var userEmail = Context.Request.Cookies["sgo_user_email"];
+    var userRole = Context.Request.Cookies["sgo_user_role"] ?? "CLIENTE";
+    var isStaff = PermisosHelper.EsPersonalAutorizado(userRole, userEmail, Context.Request.Cookies["sgo_jwt"]);
 }
 
 <!-- Hero Section -->
@@ -15,7 +18,7 @@
         Centro de Control Logístico y Comercio Omnicanal
     </h1>
     <p class="text-base sm:text-lg text-text-muted max-w-3xl leading-relaxed mb-8">
-        Plataforma distribuida de alto rendimiento (.NET 8, Redis, PostgreSQL y RabbitMQ) que integra identidad unificada, sincronización cross-canal de carritos, recuperación en POS, despacho con transportistas y trazabilidad CQRS con respuesta garantizada bajo 5 segundos (EAC-02).
+        Plataforma distribuida de alto rendimiento (.NET 8, Redis, PostgreSQL y RabbitMQ) que integra identidad unificada, sincronización cross-canal de carritos, recuperación en POS, despacho con transportistas y trazabilidad CQRS con respuesta garantizada.
     </p>
 
     <div class="flex flex-wrap items-center gap-3">
@@ -31,7 +34,7 @@
             <span class="material-symbols-outlined text-[18px]">track_changes</span>
             Rastrear Pedido
         </a>
-        @if (isAuthenticated)
+        @if (isStaff)
         {
             <a href="/Pos" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
                 <span class="material-symbols-outlined text-[18px]">point_of_sale</span>
@@ -40,6 +43,17 @@
             <a href="/Monitoreo" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
                 <span class="material-symbols-outlined text-[18px]">hub</span>
                 Centro de Monitoreo
+            </a>
+        }
+        else if (isAuthenticated)
+        {
+            <a href="/Cuenta/Ordenes" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
+                <span class="material-symbols-outlined text-[18px]">receipt_long</span>
+                Mis Pedidos
+            </a>
+            <a href="/Cuenta/Perfil" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
+                <span class="material-symbols-outlined text-[18px]">account_circle</span>
+                Mi Perfil
             </a>
         }
         else
@@ -80,7 +94,7 @@
             <a href="/Catalogo" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
                 Explorar catálogo <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
             </a>
-            <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Inventario.Api :8094</span>
+            <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Stock en Tiempo Real</span>
         </div>
     </div>
 
@@ -90,16 +104,16 @@
             <div class="w-12 h-12 rounded-2xl bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center mb-5">
                 <span class="material-symbols-outlined text-[26px]">shopping_bag</span>
             </div>
-            <h3 class="text-lg font-bold text-primary mb-2">Carrito Unificado (HU-007)</h3>
+            <h3 class="text-lg font-bold text-primary mb-2">Carrito Unificado</h3>
             <p class="text-xs text-text-muted leading-relaxed mb-6">
-                Memoria distribuida en Redis con TTL de 72 horas. Sincronización cross-canal y fusión automática de carritos de invitado al autenticarse.
+                Sincronización multidispositivo en tiempo real con guardado automático y recuperación fluida al iniciar sesión.
             </p>
         </div>
         <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
             <a href="/Carrito" class="text-xs font-semibold text-secondary hover:underline inline-flex items-center gap-1 transition-colors">
                 Ver carrito <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
             </a>
-            <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Redis :6379</span>
+            <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Persistencia Cloud</span>
         </div>
     </div>
 
@@ -111,14 +125,14 @@
             </div>
             <h3 class="text-lg font-bold text-primary mb-2">Checkout & Órdenes</h3>
             <p class="text-xs text-text-muted leading-relaxed mb-6">
-                Entrega a domicilio o Click & Collect en tiendas físicas, facturación fiscal SAT con CUI/CF y confirmación directa disparando la saga.
+                Entrega a domicilio o Click & Collect en tiendas físicas, facturación fiscal SAT FEL y confirmación inmediata con pasarela tokenizada.
             </p>
         </div>
         <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
             <a href="/Checkout" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
                 Ir a pagar <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
             </a>
-            <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Ordenes.Api :8083</span>
+            <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Pago Seguro PayKlik</span>
         </div>
     </div>
 
@@ -128,16 +142,16 @@
             <div class="w-12 h-12 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center mb-5">
                 <span class="material-symbols-outlined text-[26px]">track_changes</span>
             </div>
-            <h3 class="text-lg font-bold text-primary mb-2">Rastreo & Estado CQRS (EAC-02)</h3>
+            <h3 class="text-lg font-bold text-primary mb-2">Rastreo & Estado de Pedidos</h3>
             <p class="text-xs text-text-muted leading-relaxed mb-6">
-                Consulta en caliente con actualización inmediata de eventos mediante broker RabbitMQ y respuestas por debajo de 5 segundos.
+                Consulta en caliente con actualización inmediata de eventos logísticos, número de guía y confirmación de entrega.
             </p>
         </div>
         <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
             <a href="/Estado" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
                 Rastrear orden <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
             </a>
-            <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">CQRS &bull; Redis</span>
+            <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Trazabilidad en Vivo</span>
         </div>
     </div>
 
@@ -147,16 +161,16 @@
             <div class="w-12 h-12 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center mb-5">
                 <span class="material-symbols-outlined text-[26px]">badge</span>
             </div>
-            <h3 class="text-lg font-bold text-primary mb-2">Identidad & Acceso (HU-007)</h3>
+            <h3 class="text-lg font-bold text-primary mb-2">Identidad & Acceso Seguro</h3>
             <p class="text-xs text-text-muted leading-relaxed mb-6">
-                Registro con hash criptográfico BCrypt (costo 11), verificación por código numérico de 6 dígitos con expiración y emisión de tokens JWT simétricos.
+                Protección de credenciales con hash criptográfico BCrypt, verificación segura en dos pasos mediante código numérico y tokens de sesión protegidos.
             </p>
         </div>
         <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
             <a href="@(isAuthenticated ? "/Cuenta/Perfil" : "/Auth/Login")" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
                 @(isAuthenticated ? "Mi perfil" : "Iniciar sesión") <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
             </a>
-            <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Auth.Api :8088</span>
+            <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Identidad Cifrada</span>
         </div>
     </div>
 
@@ -166,23 +180,23 @@
             <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-800 flex items-center justify-center mb-5">
                 <span class="material-symbols-outlined text-[26px]">shield_person</span>
             </div>
-            <h3 class="text-lg font-bold text-primary mb-2">Privacidad & Datos (PRE-08)</h3>
+            <h3 class="text-lg font-bold text-primary mb-2">Privacidad & Datos</h3>
             <p class="text-xs text-text-muted leading-relaxed mb-6">
-                Centro de derechos ARCO, descarga estructurada de datos (JSON), política de derecho al olvido (EV-25) y aislamiento PCI-DSS (RES-08).
+                Centro de derechos ARCO, descarga estructurada de datos (JSON), política de derecho al olvido y resguardo de datos personales.
             </p>
         </div>
         <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
             <a href="/Cuenta/Privacidad" class="text-xs font-semibold text-secondary hover:underline inline-flex items-center gap-1 transition-colors">
                 Gestionar privacidad <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
             </a>
-            <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">PCI / ARCO</span>
+            <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Protección de Datos</span>
         </div>
     </div>
 </div>
 
-@if (isAuthenticated)
+@if (isStaff)
 {
-    <!-- Bento Grid: Internal Staff & Operational Tools (Only visible when authenticated) -->
+    <!-- Bento Grid: Internal Staff & Operational Tools (Only visible to authorized staff/admin) -->
     <div class="mb-4 flex items-center justify-between pb-2 border-b border-border-subtle">
         <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-secondary">
             <span class="material-symbols-outlined text-[18px]">admin_panel_settings</span>
@@ -218,7 +232,7 @@
                 </div>
                 <h3 class="text-lg font-bold text-primary mb-2">Visión 360 del Cliente</h3>
                 <p class="text-xs text-text-muted leading-relaxed mb-6">
-                    Historial completo de compras, métricas consolidadas (LTV, pedidos), carritos en caliente e incidencias post-venta (HU-021).
+                    Historial completo de compras, métricas consolidadas (LTV, pedidos), carritos en caliente e incidencias post-venta.
                 </p>
             </div>
             <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
@@ -244,7 +258,7 @@
                 <a href="/Despacho" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
                     Control logístico <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
                 </a>
-                <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Despacho.Api :8097</span>
+                <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Bodega & Logística</span>
             </div>
         </div>
 
@@ -256,14 +270,14 @@
                 </div>
                 <h3 class="text-lg font-bold text-primary mb-2">Incidencias & Post-Venta</h3>
                 <p class="text-xs text-text-muted leading-relaxed mb-6">
-                    Bandeja operativa para gestión de incidencias reportadas (HU-021), dictámenes de resolución y trazabilidad para auditoría.
+                    Bandeja operativa para gestión de incidencias reportadas, dictámenes de resolución y trazabilidad para auditoría.
                 </p>
             </div>
             <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
                 <a href="/Incidencias" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
                     Ver incidencias <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
                 </a>
-                <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">HU-021 SLA</span>
+                <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Atención Post-Venta</span>
             </div>
         </div>
 
@@ -273,16 +287,16 @@
                 <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-800 flex items-center justify-center mb-5">
                     <span class="material-symbols-outlined text-[26px]">hub</span>
                 </div>
-                <h3 class="text-lg font-bold text-primary mb-2">Centro de Control & ADRs</h3>
+                <h3 class="text-lg font-bold text-primary mb-2">Consola de Control del Ecosistema</h3>
                 <p class="text-xs text-text-muted leading-relaxed mb-6">
-                    Inspección del estado de microservicios, autenticación en el borde con JWT (ADR-020) y observabilidad de arquitectura.
+                    Supervisión de salud de microservicios, autenticación centralizada en el borde y telemetría operativa.
                 </p>
             </div>
             <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
                 <a href="/Monitoreo" class="text-xs font-semibold text-secondary hover:underline inline-flex items-center gap-1 transition-colors">
                     Consola de Monitoreo <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
                 </a>
-                <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">ADR-020 Gateway</span>
+                <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Monitoreo Activo</span>
             </div>
         </div>
     </div>
@@ -293,8 +307,8 @@
     <div class="flex items-center gap-3">
         <div class="w-3.5 h-3.5 rounded-full bg-green-500 animate-pulse flex-shrink-0"></div>
         <div>
-            <div class="text-sm font-bold text-primary">Microservicios y Broker Operativos</div>
-            <div class="text-xs text-text-muted">ApiGateway enrutando en http://localhost:8080 hacia todos los clusters (.NET 8 &bull; YARP &bull; RabbitMQ &bull; Redis)</div>
+            <div class="text-sm font-bold text-primary">Ecosistema y Servicios Omnicanal Operativos</div>
+            <div class="text-xs text-text-muted">Infraestructura de alta disponibilidad con procesamiento transaccional en tiempo real.</div>
         </div>
     </div>
     <div class="flex flex-wrap items-center gap-2">

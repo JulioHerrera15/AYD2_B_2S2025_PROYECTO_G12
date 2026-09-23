@@ -31,7 +31,8 @@ public sealed record LoginResponse(
     string UsuarioId,
     string Email,
     string NombreCompleto,
-    DateTime ExpiraEn);
+    DateTime ExpiraEn,
+    string Rol = "CLIENTE");
 
 // ── Carrito ───────────────────────────────────────────────────────────────────
 
