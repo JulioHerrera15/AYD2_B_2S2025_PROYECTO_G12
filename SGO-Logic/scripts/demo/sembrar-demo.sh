@@ -20,7 +20,14 @@ USUARIOS_DEMO=(
   "cliente2@sgo.local|Carlos Ramirez"
   "cliente3@sgo.local|Maria Guzman"
   "cliente4@sgo.local|Luis Morales"
+  "operador1@sgo.local|Operador de Bodega"
+  "operador2@sgo.local|Operador de Despacho"
 )
+
+# Servicio de Postgres donde vive la base de identidad, para el paso que asigna
+# los roles reales (ver asignar_roles).
+DB_SERVICIO="${DB_SERVICIO:-db-operacional}"
+DB_USUARIO="${POSTGRES_USER:-sgo_admin}"
 
 request() {
   local method="$1"
@@ -44,6 +51,21 @@ require_success() {
     printf 'ERROR %s: %s\n' "$HTTP_CODE" "$HTTP_BODY" >&2
     exit 1
   fi
+}
+
+# El registro siempre deja rol CLIENTE y no hay endpoint que lo cambie, asi que
+# los roles se asignan directo en la base por prefijo de correo. Solo corre desde
+# el host: dentro del contenedor de seed no hay cliente de Postgres.
+asignar_roles() {
+  if ! command -v docker >/dev/null 2>&1; then
+    printf 'Sin docker en el PATH: los roles quedan en CLIENTE (asignalos a mano en auth.usuarios).\n'
+    return 0
+  fi
+
+  docker compose exec -T "$DB_SERVICIO" psql -U "$DB_USUARIO" -d sgo_auth -v ON_ERROR_STOP=1 <<'SQL'
+UPDATE auth.usuarios SET rol = 'ADMIN'    WHERE email LIKE 'admin%@sgo.local';
+UPDATE auth.usuarios SET rol = 'OPERADOR' WHERE email LIKE 'operador%@sgo.local';
+SQL
 }
 
 # Lee de la cola del mock de mensajeria el ultimo codigo enviado a un correo.
@@ -106,6 +128,9 @@ if (( fallidos > 0 )); then
   printf '\n%d usuario(s) sin verificar. Revisa el mock de mensajeria o usa DEMO_VERIFICATION_CODE.\n' "$fallidos"
   printf 'Ejemplo: docker compose logs auth-api | grep -i codigo\n\n'
 fi
+
+printf 'Asignando roles ADMIN y OPERADOR\n'
+asignar_roles
 
 printf 'Cargando existencias de demo y catalogo web\n'
 for existencia in \
