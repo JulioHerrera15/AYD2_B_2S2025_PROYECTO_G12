@@ -75,7 +75,7 @@ public class PosController : Controller
     }
 
     [HttpPost]
-    public async Task<IActionResult> Cobrar(string clienteId, string medioPago)
+    public async Task<IActionResult> Cobrar(string clienteId, string medioPago, string? tiendaId, string? tokenMedioPago)
     {
         var jwt = Request.Cookies["sgo_jwt"];
         if (string.IsNullOrWhiteSpace(jwt))
@@ -105,17 +105,26 @@ public class PosController : Controller
 
         var operatoremail = Request.Cookies["sgo_user_email"] ?? "operador.tienda@megastore.com";
         var clienteFinal = string.IsNullOrWhiteSpace(clienteId) ? operatoremail : clienteId.Trim();
+        var tiendaSeleccionada = string.IsNullOrWhiteSpace(tiendaId) ? "TIENDA-01-CENTRAL" : tiendaId.Trim();
+
+        var medioPagoNormalizado = "BILLETERA_DIGITAL";
+        if (string.Equals(medioPago, "TARJETA", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(medioPago, "TARJETA_CREDITO_DEBITO", StringComparison.OrdinalIgnoreCase))
+        {
+            medioPagoNormalizado = !string.IsNullOrWhiteSpace(tokenMedioPago) ? "TARJETA" : "BILLETERA_DIGITAL";
+        }
 
         var crearModel = new CrearOrdenModel(
             ClienteId: clienteFinal,
             Canal: "TIENDA",
             MetodoEntrega: "RECOGIDA_TIENDA",
             Moneda: "GTQ",
-            MedioPago: string.Equals(medioPago, "TRANSFERENCIA", StringComparison.OrdinalIgnoreCase) ? "TRANSFERENCIA" : "TARJETA",
+            MedioPago: medioPagoNormalizado,
             Impuestos: Math.Round(total * 0.12m / 1.12m, 2),
             Lineas: lineas,
-            UbicacionSolicitadaId: "TIENDA-01-CENTRAL",
-            ReceptorCui: "CF"
+            UbicacionSolicitadaId: tiendaSeleccionada,
+            ReceptorCui: "CF",
+            TokenMedioPago: medioPagoNormalizado == "TARJETA" ? tokenMedioPago : null
         );
 
         var (exitoCrear, ordenCreada, errorCrear) = await _gateway.CrearOrdenAsync(crearModel);
