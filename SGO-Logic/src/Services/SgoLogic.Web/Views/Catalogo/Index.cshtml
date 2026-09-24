@@ -74,7 +74,7 @@
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         @foreach (var prod in Model)
         {
-            <div class="bg-surface-white rounded-3xl p-5 border border-border-subtle/60 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md group">
+            <div class="bg-surface-white rounded-3xl p-5 border border-border-subtle/60 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md group" data-sku="@prod.Sku">
                 <div>
                     <!-- Product Card Top: Badge & Category -->
                     <div class="flex items-center justify-between mb-4">
@@ -100,7 +100,7 @@
                             <span class="material-symbols-outlined text-[15px] text-secondary">inventory</span>
                             Stock en Sucursal:
                         </span>
-                        <span id="stock-badge-@prod.Sku" class="font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md">
+                        <span id="stock-badge-@prod.Sku" class="font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md" data-stock="loading">
                             Consultando...
                         </span>
                     </div>
@@ -115,13 +115,13 @@
                         </div>
                     </div>
 
-                    <form method="post" action="/Carrito/Agregar" class="flex items-center gap-2">
+                    <form method="post" action="/Carrito/Agregar" class="flex items-center gap-2" data-stock-form="@prod.Sku">
                         <input type="hidden" name="sku" value="@prod.Sku" />
                         <input type="hidden" name="descripcion" value="@prod.Nombre" />
                         <input type="hidden" name="precioUnitario" value="@prod.PrecioUnitario" />
                         <input type="number" name="cantidad" value="1" min="1" max="10"
                                class="w-14 px-2 py-2 text-center text-xs font-semibold rounded-xl border border-border-subtle bg-surface-container-low focus:outline-none" />
-                        <button type="submit" class="flex-1 bg-primary text-on-primary hover:opacity-90 active:scale-95 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm">
+                        <button type="submit" class="flex-1 bg-primary text-on-primary hover:opacity-90 active:scale-95 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm" disabled>
                             <span class="material-symbols-outlined text-[16px]">add_shopping_cart</span>
                             <span>Agregar</span>
                         </button>
@@ -130,51 +130,195 @@
             </div>
         }
     </div>
+
+    <!-- Global Stock Refresh Controls -->
+    <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 p-4 bg-surface-white rounded-2xl border border-border-subtle/60 ambient-shadow">
+        <div class="flex items-center gap-3 text-xs text-text-muted">
+            <span class="material-symbols-outlined text-secondary text-[18px]">sync</span>
+            <span>Los stocks se consultan en tiempo real desde <strong>inventario-api</strong> vía API Gateway.</span>
+            <span id="stock-global-status" class="text-xs text-emerald-700 ml-2 hidden">Actualizado</span>
+        </div>
+        <div class="flex items-center gap-2">
+            <button id="btn-refrescar-todo" type="button" class="inline-flex items-center gap-1.5 bg-surface-container-low text-primary px-4 py-2 rounded-xl text-xs font-semibold hover:bg-surface-variant transition-colors border border-border-subtle/60">
+                <span class="material-symbols-outlined text-[16px]">refresh</span>
+                <span>Refrescar Todos</span>
+            </button>
+            <label class="inline-flex items-center gap-1.5 text-xs font-medium text-text-muted cursor-pointer">
+                <input type="checkbox" id="chk-auto-refresh" class="rounded border-border-subtle text-secondary focus:ring-secondary" />
+                Auto-refresh (30s)
+            </label>
+        </div>
+    </div>
 </div>
 
 <script>
+    // Helper: normaliza claves a camelCase para robustez ante variaciones de serialización
+    function normalizeKeys(obj) {
+        if (!obj || typeof obj !== 'object') return obj;
+        if (Array.isArray(obj)) return obj.map(normalizeKeys);
+        const out = {};
+        for (const [k, v] of Object.entries(obj)) {
+            const nk = k.charAt(0).toLowerCase() + k.slice(1);
+            out[nk] = normalizeKeys(v);
+        }
+        return out;
+    }
+
+    // Obtener stock disponible para una ubicación (maneja camelCase y PascalCase)
+    function getDisponible(existencia) {
+        if (!existencia) return 0;
+        return existencia.disponible ?? existencia.cantidadDisponible ?? existencia.Disponible ?? existencia.CantidadDisponible ?? 0;
+    }
+
+    function getUbicacionId(existencia) {
+        if (!existencia) return '';
+        return existencia.ubicacionId ?? existencia.UbicacionId ?? '';
+    }
+
     // Consultar stock en tiempo real desde inventario-api al cambiar de sucursal
     async function actualizarDisponibilidadTienda(ubicacionId) {
         const skus = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Select(m => m.Sku)));
+        let anyError = false;
 
         for (const sku of skus) {
             const el = document.getElementById(`stock-badge-${sku}`);
+            const form = document.querySelector(`form[data-stock-form="${sku}"]`);
+            const btn = form?.querySelector('button[type="submit"]');
+            const qtyInput = form?.querySelector('input[name="cantidad"]');
             if (!el) continue;
 
             try {
-                const res = await fetch(`/Catalogo/Stock?sku=${sku}`);
+                // Cache-busting: timestamp único por petición para evitar cache de navegador/gateway
+                const cacheBust = Date.now();
+                const res = await fetch(`/Catalogo/Stock?sku=${encodeURIComponent(sku)}&_=${cacheBust}`, {
+                    headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' }
+                });
                 if (res.ok) {
-                    const data = await res.json();
-                    const existencia = data.find(e => e.ubicacionId === ubicacionId);
-                    const disponible = existencia ? (existencia.disponible ?? existencia.cantidadDisponible ?? 0) : 0;
+                    let data = await res.json();
+                    data = normalizeKeys(data);
+
+                    const existencia = data.find(e => getUbicacionId(e) === ubicacionId);
+                    const disponible = getDisponible(existencia);
 
                     if (existencia && disponible > 0) {
                         el.textContent = `${disponible} en stock`;
                         el.className = "font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md";
+                        el.dataset.stock = 'available';
+                        if (btn) {
+                            btn.disabled = false;
+                            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                            if (qtyInput) qtyInput.max = Math.min(10, disponible);
+                        }
                     } else if (existencia && disponible <= 0) {
                         el.textContent = "Agotado aquí";
                         el.className = "font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md";
+                        el.dataset.stock = 'out';
+                        if (btn) {
+                            btn.disabled = true;
+                            btn.classList.add('opacity-50', 'cursor-not-allowed');
+                        }
                     } else {
-                        const totalGlobal = data.reduce((acc, curr) => acc + (curr.disponible ?? curr.cantidadDisponible ?? 0), 0);
+                        const totalGlobal = data.reduce((acc, curr) => acc + getDisponible(curr), 0);
                         if (totalGlobal > 0) {
                             el.textContent = "En otra sucursal";
                             el.className = "font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md";
+                            el.dataset.stock = 'other';
+                            if (btn) {
+                                btn.disabled = true;
+                                btn.classList.add('opacity-50', 'cursor-not-allowed');
+                            }
                         } else {
                             el.textContent = "Sin existencias";
                             el.className = "font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md";
+                            el.dataset.stock = 'none';
+                            if (btn) {
+                                btn.disabled = true;
+                                btn.classList.add('opacity-50', 'cursor-not-allowed');
+                            }
                         }
                     }
+                } else {
+                    anyError = true;
+                    el.textContent = "Error al consultar";
+                    el.className = "font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md";
+                    el.dataset.stock = 'error';
                 }
             } catch (err) {
+                anyError = true;
                 console.error("Error consultando stock de " + sku, err);
+                el.textContent = "Error de red";
+                el.className = "font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md";
+                el.dataset.stock = 'error';
             }
         }
+
+        const statusEl = document.getElementById('stock-global-status');
+        if (statusEl) {
+            statusEl.textContent = anyError ? 'Algunas consultas fallaron' : 'Actualizado';
+            statusEl.className = anyError ? 'text-xs text-amber-700' : 'text-xs text-emerald-700';
+        }
+    }
+
+    let autoRefreshInterval = null;
+
+    function iniciarAutoRefresh(ubicacionId) {
+        if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+        autoRefreshInterval = setInterval(() => actualizarDisponibilidadTienda(ubicacionId), 30000);
+    }
+
+    function detenerAutoRefresh() {
+        if (autoRefreshInterval) clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
     }
 
     document.addEventListener("DOMContentLoaded", function () {
         const selector = document.getElementById("sucursal-selector");
+        const btnRefrescar = document.getElementById("btn-refrescar-todo");
+        const chkAuto = document.getElementById("chk-auto-refresh");
+
         if (selector) {
             actualizarDisponibilidadTienda(selector.value);
+
+            selector.addEventListener("change", function () {
+                actualizarDisponibilidadTienda(this.value);
+                if (chkAuto?.checked) {
+                    iniciarAutoRefresh(this.value);
+                }
+            });
         }
+
+        if (btnRefrescar) {
+            btnRefrescar.addEventListener("click", function () {
+                const ubicacionId = selector?.value || "TIENDA-01-CENTRAL";
+                this.disabled = true;
+                this.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Actualizando...</span>';
+                actualizarDisponibilidadTienda(ubicacionId).finally(() => {
+                    this.disabled = false;
+                    this.innerHTML = '<span class="material-symbols-outlined text-[16px]">refresh</span><span>Refrescar Todos</span>';
+                });
+            });
+        }
+
+        if (chkAuto) {
+            chkAuto.addEventListener("change", function () {
+                const ubicacionId = selector?.value || "TIENDA-01-CENTRAL";
+                if (this.checked) {
+                    iniciarAutoRefresh(ubicacionId);
+                } else {
+                    detenerAutoRefresh();
+                }
+            });
+        }
+
+        // Limpiar intervalo al salir de la página
+        window.addEventListener('beforeunload', detenerAutoRefresh);
+
+        // Page Visibility API: refrescar al volver a la pestaña (ej. tras compra)
+        document.addEventListener('visibilitychange', function () {
+            if (!document.hidden && selector) {
+                console.log('[Stock] Pestaña visible, refrescando stock...');
+                actualizarDisponibilidadTienda(selector.value);
+            }
+        });
     });
 </script>

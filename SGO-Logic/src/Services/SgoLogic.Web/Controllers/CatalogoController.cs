@@ -91,6 +91,7 @@ public class CatalogoController : Controller
     }
 
     [HttpGet]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public async Task<IActionResult> Stock(string sku)
     {
         if (string.IsNullOrWhiteSpace(sku))
