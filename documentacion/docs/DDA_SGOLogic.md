@@ -729,9 +729,7 @@ Vista de alto nivel de la arquitectura completa. **Notación:** no es UML; es un
 
 ## 11.3 Diagrama de componentes
 
-Desglosa los componentes internos, sus relaciones e interfaces.
-
-**Nota de la Fase 2.** El archivo de imagen de este diagrama (`documentacion/img/Diagrama de Componentes.png`) no está versionado en el repositorio: no existe en `documentacion/img/` ni en el historial de git, por lo que no se enlaza. Mientras se incorpora, los componentes del MVP y sus relaciones se describen en las secciones 14.2 y 14.7.
+![Diagrama de Componentes](../img/Diagrama%20de%20Componentes.png)
 
 ## 11.4 Diagramas de despliegue
 
