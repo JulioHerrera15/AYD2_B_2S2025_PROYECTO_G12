@@ -116,7 +116,7 @@ public class CheckoutController : Controller
         // Regla PCI-DSS (RES-08 / ADR-010): Si es TARJETA, tokenMedioPago es obligatorio
         if (medioPagoFinal == "TARJETA" && string.IsNullOrWhiteSpace(tokenMedioPago))
         {
-            ViewBag.Error = "No se recibió el token de la tarjeta. Por favor verifique los datos del medio de pago.";
+            ViewBag.Error = "Valida tu tarjeta antes de confirmar el pedido.";
             ViewBag.UserEmail = userEmail;
             return View("Index", carrito);
         }
@@ -138,15 +138,24 @@ public class CheckoutController : Controller
         var (exitoCrear, ordenCreada, errorCrear) = await _gateway.CrearOrdenAsync(crearModel);
         if (!exitoCrear || ordenCreada is null)
         {
-            ViewBag.Error = $"No se pudo crear la orden: {errorCrear}";
+            ViewBag.Error = $"No pudimos registrar tu pedido: {errorCrear}";
             ViewBag.UserEmail = userEmail;
             return View("Index", carrito);
         }
 
-        // Confirmar la orden para disparar la saga transaccional
-        var (exitoConfirmar, ordenConfirmada, errorConfirmar) = await _gateway.ConfirmarOrdenAsync(
+        // Confirmar la orden dispara la saga. La confirmacion solo deja la orden en
+        // RESERVA_SOLICITADA: el resultado del cobro llega despues por eventos, asi
+        // que Exito consulta el estado real en lugar de asumir que se cobro.
+        // El endpoint es idempotente, por eso se reintenta una vez ante un fallo.
+        var (exitoConfirmar, ordenConfirmada, _) = await _gateway.ConfirmarOrdenAsync(
             ordenCreada.Id,
-            "Checkout completado exitosamente desde la tienda web");
+            "Checkout completado desde la tienda web");
+        if (!exitoConfirmar)
+        {
+            (exitoConfirmar, ordenConfirmada, _) = await _gateway.ConfirmarOrdenAsync(
+                ordenCreada.Id,
+                "Checkout completado desde la tienda web (reintento)");
+        }
 
         var ordenFinal = ordenConfirmada ?? ordenCreada;
 
@@ -154,16 +163,18 @@ public class CheckoutController : Controller
         {
             ordenId = ordenFinal.Id,
             numeroOrden = ordenFinal.NumeroOrden,
-            total = ordenFinal.Total
+            total = ordenFinal.Total,
+            confirmada = exitoConfirmar
         });
     }
 
     [HttpGet]
-    public IActionResult Exito(string ordenId, string? numeroOrden, decimal? total)
+    public IActionResult Exito(string ordenId, string? numeroOrden, decimal? total, bool confirmada = true)
     {
         ViewBag.OrdenId = ordenId;
         ViewBag.NumeroOrden = numeroOrden ?? ordenId;
         ViewBag.Total = total ?? 0m;
+        ViewBag.Confirmada = confirmada;
         return View();
     }
 }
