@@ -1,0 +1,134 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sgo-consulta-estado-api
+  namespace: sgo-logic
+  labels:
+    app.kubernetes.io/name: sgo-consulta-estado-api
+    app.kubernetes.io/part-of: sgo-logic
+    app.kubernetes.io/component: query-service
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sgo-consulta-estado-api
+  template:
+    metadata:
+      labels:
+        app: sgo-consulta-estado-api
+    spec:
+      containers:
+        - name: consulta-estado-api
+          image: ghcr.io/julioherrera15/sgo-consulta-estado-api:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: ASPNETCORE_ENVIRONMENT
+              value: "Production"
+            - name: ASPNETCORE_URLS
+              value: "http://+:8080"
+            - name: ConnectionStrings__Postgres
+              valueFrom:
+                secretKeyRef:
+                  name: sgo-secrets
+                  key: postgres-consulta-estado
+            - name: ConnectionStrings__Redis
+              valueFrom:
+                secretKeyRef:
+                  name: sgo-secrets
+                  key: redis-connection
+            - name: ConnectionStrings__RabbitMq
+              valueFrom:
+                secretKeyRef:
+                  name: sgo-secrets
+                  key: rabbitmq-connection
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sgo-consulta-estado-service
+  namespace: sgo-logic
+  labels:
+    app.kubernetes.io/name: sgo-consulta-estado-service
+    app.kubernetes.io/part-of: sgo-logic
+spec:
+  type: ClusterIP
+  selector:
+    app: sgo-consulta-estado-api
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: sgo-consulta-estado-hpa
+  namespace: sgo-logic
+  labels:
+    app.kubernetes.io/name: sgo-consulta-estado-hpa
+    app.kubernetes.io/part-of: sgo-logic
+    app.kubernetes.io/component: autoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: sgo-consulta-estado-api
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0
+      select: Max
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 15
+        - type: Pods
+          value: 4
+          periodSeconds: 15
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      select: Min
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 60

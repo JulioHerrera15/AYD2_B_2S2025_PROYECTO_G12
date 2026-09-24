@@ -1,0 +1,60 @@
+@SgoLogic.Inventario.Api_HostAddress = http://localhost:5256
+
+### Cargar existencia de un SKU en un centro de distribucion
+PUT {{SgoLogic.Inventario.Api_HostAddress}}/api/inventario/existencias
+Content-Type: application/json
+
+{
+  "sku": "SKU-LB-00871",
+  "ubicacionId": "CD-01",
+  "tipoUbicacion": "CENTRO_DISTRIBUCION",
+  "cantidadFisica": 25
+}
+
+### Cargar la misma existencia tambien en una tienda
+PUT {{SgoLogic.Inventario.Api_HostAddress}}/api/inventario/existencias
+Content-Type: application/json
+
+{
+  "sku": "SKU-LB-00871",
+  "ubicacionId": "TDA-014",
+  "tipoUbicacion": "TIENDA",
+  "cantidadFisica": 3
+}
+
+### Consultar existencias del SKU en todas sus ubicaciones
+GET {{SgoLogic.Inventario.Api_HostAddress}}/api/inventario/existencias/SKU-LB-00871
+Accept: application/json
+
+### Reservar inventario para una orden (CU-01, emite InventarioReservado).
+# 201 con la reserva; repetir la misma orden devuelve 200 con la reserva ya hecha.
+POST {{SgoLogic.Inventario.Api_HostAddress}}/api/inventario/reservas
+Content-Type: application/json
+
+{
+  "ordenId": "ORD-2026-000123",
+  "metodoEntrega": "DOMICILIO",
+  "ubicacionPreferidaId": null,
+  "ttlReservaSegundos": 900,
+  "lineas": [
+    { "sku": "SKU-LB-00871", "cantidad": 1 }
+  ]
+}
+
+### Reservar mas unidades de las disponibles (409 stock_insuficiente, emite ReservaInventarioRechazada)
+POST {{SgoLogic.Inventario.Api_HostAddress}}/api/inventario/reservas
+Content-Type: application/json
+
+{
+  "ordenId": "ORD-2026-000999",
+  "metodoEntrega": "DOMICILIO",
+  "ubicacionPreferidaId": null,
+  "ttlReservaSegundos": 900,
+  "lineas": [
+    { "sku": "SKU-LB-00871", "cantidad": 9999 }
+  ]
+}
+
+### Consultar la reserva de una orden
+GET {{SgoLogic.Inventario.Api_HostAddress}}/api/inventario/reservas/ORD-2026-000123
+Accept: application/json

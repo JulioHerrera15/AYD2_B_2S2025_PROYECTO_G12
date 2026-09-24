@@ -1,0 +1,144 @@
+@{
+    ViewData["Title"] = "Mi Perfil - MegaStore";
+    var userName = ViewBag.UserName as string ?? "Usuario MegaStore";
+    var userEmail = ViewBag.UserEmail as string ?? "usuario@megastore.com";
+    var hasJwt = (bool)(ViewBag.HasJwt ?? false);
+    var initial = userEmail.Length > 0 ? userEmail.Substring(0, 1).ToUpper() : "U";
+}
+
+<div class="w-full max-w-container-max mx-auto flex flex-col gap-8">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-border-subtle">
+        <div>
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold mb-2">
+                <span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">account_circle</span>
+                Gestión de Cuenta &bull; Identidad Unificada
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight">Mi Perfil Omnicanal</h1>
+            <p class="text-xs sm:text-sm text-text-muted">Administra tu información personal, credenciales seguras y preferencias de entrega.</p>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <a href="/Cuenta/Ordenes" class="bg-surface-white text-primary border border-border-subtle px-4 py-2 rounded-xl text-xs font-semibold hover:bg-surface-container-low transition-colors flex items-center gap-1.5 shadow-sm">
+                <span class="material-symbols-outlined text-[16px]">receipt_long</span>
+                Mis Pedidos
+            </a>
+            <a href="/Auth/Logout" class="bg-error-container text-error px-4 py-2 rounded-xl text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[16px]">logout</span>
+                Cerrar Sesión
+            </a>
+        </div>
+    </div>
+
+    <!-- Profile Bento Box -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <!-- User Identity Card -->
+        <div class="md:col-span-1 bg-surface-white rounded-3xl p-6 sm:p-8 border border-border-subtle/60 ambient-shadow flex flex-col items-center text-center">
+            <div class="w-24 h-24 rounded-3xl bg-secondary text-white font-bold text-4xl flex items-center justify-center shadow-lg mb-4 ring-4 ring-secondary/20">
+                @initial
+            </div>
+            <h2 class="text-xl font-bold text-primary mb-1">@userName</h2>
+            <p class="text-xs text-text-muted font-mono mb-4">@userEmail</p>
+
+            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 mb-6">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                Cuenta Verificada (2FA Activo)
+            </span>
+
+            <div class="w-full pt-6 border-t border-border-subtle space-y-3 text-left text-xs">
+                <div class="flex justify-between items-center text-text-muted">
+                    <span>Nivel de Membresía:</span>
+                    <strong class="text-primary font-semibold">Cliente Club Oro</strong>
+                </div>
+                <div class="flex justify-between items-center text-text-muted">
+                    <span>NIT Facturación:</span>
+                    <strong class="text-primary font-mono">CF / Consumidor Final</strong>
+                </div>
+                <div class="flex justify-between items-center text-text-muted">
+                    <span>Canal Primario:</span>
+                    <strong class="text-primary">Portal Web & Mobile</strong>
+                </div>
+            </div>
+        </div>
+
+        <!-- Security & Privacy Status -->
+        <div class="md:col-span-2 space-y-6">
+            <!-- Security Card -->
+            <div class="bg-surface-white rounded-3xl p-6 sm:p-8 border border-border-subtle/60 ambient-shadow">
+                <div class="flex items-center justify-between pb-4 mb-4 border-b border-border-subtle">
+                    <div class="flex items-center gap-2.5">
+                        <div class="w-10 h-10 rounded-xl bg-surface-container-low text-primary flex items-center justify-center">
+                            <span class="material-symbols-outlined text-[22px]">security</span>
+                        </div>
+                        <div>
+                            <h3 class="font-bold text-base text-primary">Seguridad de la Cuenta y Sesión</h3>
+                            <p class="text-xs text-text-muted">Protección avanzada de credenciales y navegación segura</p>
+                        </div>
+                    </div>
+                    <span class="px-3 py-1 rounded-full text-xs font-bold @(hasJwt ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-amber-100 text-amber-800 border border-amber-300")">
+                        @(hasJwt ? "Sesión Verificada" : "Sesión Anónima")
+                    </span>
+                </div>
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    <div class="p-4 rounded-2xl bg-surface-container-low/50 border border-border-subtle/40">
+                        <div class="flex items-center gap-2 mb-1.5 text-primary font-semibold">
+                            <span class="material-symbols-outlined text-[18px] text-secondary">verified_user</span>
+                            <span>Conexión Cifrada y Segura</span>
+                        </div>
+                        <p class="text-text-muted text-[11px] leading-relaxed">
+                            Tus compras y consultas viajan protegidas con cifrado SSL/TLS de alta seguridad hacia nuestros servidores.
+                        </p>
+                    </div>
+
+                    <div class="p-4 rounded-2xl bg-surface-container-low/50 border border-border-subtle/40">
+                        <div class="flex items-center gap-2 mb-1.5 text-primary font-semibold">
+                            <span class="material-symbols-outlined text-[18px] text-secondary">lock</span>
+                            <span>Protección de Pagos Certificada</span>
+                        </div>
+                        <p class="text-text-muted text-[11px] leading-relaxed">
+                            Tus datos de tarjeta se procesan directamente en la pasarela de pagos bajo estándar PCI-DSS; nunca se almacenan en MegaStore.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-border-subtle flex items-center justify-between">
+                    <span class="text-xs text-text-muted">¿Deseas gestionar el tratamiento de tus datos personales?</span>
+                    <a href="/Cuenta/Privacidad" class="inline-flex items-center gap-1.5 text-xs font-semibold text-secondary hover:underline">
+                        <span>Ir al Centro de Privacidad</span>
+                        <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+                    </a>
+                </div>
+            </div>
+
+            <!-- Quick Action Links -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <a href="/Cuenta/Ordenes" class="group bg-surface-white p-6 rounded-3xl border border-border-subtle/60 ambient-shadow hover:border-secondary transition-all flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-2xl bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center group-hover:scale-105 transition-transform">
+                            <span class="material-symbols-outlined text-[24px]">shopping_bag</span>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-sm text-primary group-hover:text-secondary transition-colors">Mis Pedidos</h4>
+                            <p class="text-xs text-text-muted">Revisa compras previas y facturas DTE</p>
+                        </div>
+                    </div>
+                    <span class="material-symbols-outlined text-text-muted group-hover:text-secondary group-hover:translate-x-1 transition-all">chevron_right</span>
+                </a>
+
+                <a href="/Carrito" class="group bg-surface-white p-6 rounded-3xl border border-border-subtle/60 ambient-shadow hover:border-secondary transition-all flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <div class="w-12 h-12 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center group-hover:scale-105 transition-transform">
+                            <span class="material-symbols-outlined text-[24px]">shopping_cart</span>
+                        </div>
+                        <div>
+                            <h4 class="font-bold text-sm text-primary group-hover:text-secondary transition-colors">Carrito Actual</h4>
+                            <p class="text-xs text-text-muted">Continúa con tu compra en curso</p>
+                        </div>
+                    </div>
+                    <span class="material-symbols-outlined text-text-muted group-hover:text-secondary group-hover:translate-x-1 transition-all">chevron_right</span>
+                </a>
+            </div>
+        </div>
+    </div>
+</div>

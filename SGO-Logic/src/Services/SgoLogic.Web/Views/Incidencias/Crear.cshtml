@@ -1,0 +1,68 @@
+@{
+    ViewData["Title"] = "Reportar Incidencia";
+}
+
+<div class="max-w-xl mx-auto">
+    <!-- Back Button -->
+    <a href="/Estado" class="inline-flex items-center gap-1.5 text-xs font-semibold text-text-muted hover:text-primary mb-6 transition-colors">
+        <span class="material-symbols-outlined text-[16px]">arrow_back</span>
+        Volver a Consulta de Órdenes
+    </a>
+
+    <div class="bg-surface-white rounded-2xl ambient-shadow border border-border-subtle/50 p-6 md:p-8">
+        <div class="flex items-center gap-3 mb-6 pb-4 border-b border-border-subtle/60">
+            <div class="w-10 h-10 rounded-xl bg-error-container text-error flex items-center justify-center font-bold">
+                <span class="material-symbols-outlined text-[24px]">report_problem</span>
+            </div>
+            <div>
+                <h1 class="text-xl font-bold text-primary tracking-tight">Reportar Incidencia</h1>
+                <p class="text-xs text-text-muted">Registro formal para auditoría y resolución operativa</p>
+            </div>
+        </div>
+
+        @if (ViewBag.Error != null)
+        {
+            <div class="mb-6 bg-error-container text-on-error-container border border-error/20 rounded-xl p-3.5 flex items-center gap-2.5 text-sm">
+                <span class="material-symbols-outlined text-error text-[18px]">error</span>
+                <span>@ViewBag.Error</span>
+            </div>
+        }
+
+        <form method="post" action="/Incidencias/Crear" class="space-y-5">
+            <div>
+                <label for="ordenId" class="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-1.5">
+                    Identificador de Orden (OrdenId)
+                </label>
+                <input type="text" 
+                       id="ordenId" 
+                       name="ordenId" 
+                       class="w-full bg-surface-container-low border border-border-subtle/70 rounded-xl px-4 py-3 text-sm font-medium text-primary focus:bg-surface-white focus:ring-2 focus:ring-secondary focus:border-transparent transition-all placeholder:text-text-muted" 
+                       value="@ViewBag.OrdenId" 
+                       required 
+                       placeholder="Ej: ORD-2026-001 o UUID..." />
+            </div>
+
+            <div>
+                <label for="descripcion" class="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-1.5">
+                    Descripción Detallada del Problema
+                </label>
+                <textarea id="descripcion" 
+                          name="descripcion" 
+                          rows="4" 
+                          class="w-full bg-surface-container-low border border-border-subtle/70 rounded-xl px-4 py-3 text-sm font-medium text-primary focus:bg-surface-white focus:ring-2 focus:ring-secondary focus:border-transparent transition-all placeholder:text-text-muted" 
+                          required 
+                          placeholder="Indique el motivo, daño físico, error en despacho o anomalía observada..."></textarea>
+            </div>
+
+            <div class="flex items-center justify-end gap-3 pt-4 border-t border-border-subtle/60">
+                <a href="/Estado" class="px-5 py-2.5 rounded-full text-xs font-semibold text-text-muted hover:bg-surface-container-low transition-colors">
+                    Cancelar
+                </a>
+                <button type="submit" class="bg-primary text-on-primary px-6 py-2.5 rounded-full text-xs font-semibold hover:opacity-90 transition-opacity active:scale-95 shadow-sm inline-flex items-center gap-1.5">
+                    <span class="material-symbols-outlined text-[16px]">send</span>
+                    Registrar Incidencia
+                </button>
+            </div>
+        </form>
+    </div>
+</div>

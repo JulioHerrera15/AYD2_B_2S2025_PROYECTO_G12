@@ -1,0 +1,137 @@
+@model SgoLogic.Web.Services.HistorialClienteModel?
+@{
+    ViewData["Title"] = "Historial de Pedidos - MegaStore";
+    var userEmail = ViewBag.UserEmail as string ?? "usuario@megastore.com";
+    var totalRegistros = Model?.TotalRegistros ?? Model?.Ordenes?.Count ?? 0;
+}
+
+<div class="w-full max-w-container-max mx-auto flex flex-col gap-8">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-border-subtle">
+        <div>
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold mb-2">
+                <span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">receipt_long</span>
+                Historial de Compras &bull; Registro Transaccional
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight">Mis Pedidos</h1>
+            <p class="text-xs sm:text-sm text-text-muted">Consulta el estado en vivo, número de guía LogiExpress y facturas electrónicas SAT de tus compras.</p>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <a href="/Catalogo" class="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-semibold hover:opacity-90 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm">
+                <span class="material-symbols-outlined text-[16px]">storefront</span>
+                Seguir Comprando
+            </a>
+        </div>
+    </div>
+
+    <!-- Stats Bar -->
+    <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        <div class="p-4 rounded-2xl bg-surface-white border border-border-subtle/60 ambient-shadow">
+            <span class="text-xs text-text-muted block mb-1">Total de Pedidos</span>
+            <div class="text-xl font-bold text-primary">@totalRegistros</div>
+        </div>
+        <div class="p-4 rounded-2xl bg-surface-white border border-border-subtle/60 ambient-shadow">
+            <span class="text-xs text-text-muted block mb-1">Garantía SAT FEL</span>
+            <div class="text-xl font-bold text-green-700">100% Legal</div>
+        </div>
+        <div class="p-4 rounded-2xl bg-surface-white border border-border-subtle/60 ambient-shadow">
+            <span class="text-xs text-text-muted block mb-1">Rastreo LogiExpress</span>
+            <div class="text-xl font-bold text-purple-700">En Tiempo Real</div>
+        </div>
+        <div class="p-4 rounded-2xl bg-surface-white border border-border-subtle/60 ambient-shadow">
+            <span class="text-xs text-text-muted block mb-1">Sincronización</span>
+            <div class="text-xl font-bold text-secondary">Inmediata</div>
+        </div>
+    </div>
+
+    <!-- Orders List Card -->
+    <div class="bg-surface-white rounded-3xl border border-border-subtle/60 overflow-hidden ambient-shadow">
+        @if (Model?.Ordenes != null && Model.Ordenes.Count > 0)
+        {
+            <div class="overflow-x-auto">
+                <table class="w-full text-left text-xs border-collapse">
+                    <thead>
+                        <tr class="bg-surface-container-low/60 text-text-muted uppercase tracking-wider font-semibold border-b border-border-subtle/70">
+                            <th class="py-4 px-6">No. Orden / Correlativo</th>
+                            <th class="py-4 px-6">ID Interno</th>
+                            <th class="py-4 px-6">Última Actualización</th>
+                            <th class="py-4 px-6">Estado</th>
+                            <th class="py-4 px-6">Total</th>
+                            <th class="py-4 px-6 text-right">Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-border-subtle/50">
+                        @foreach (var orden in Model.Ordenes)
+                        {
+                            var badgeClass = orden.Estado switch
+                            {
+                                "CREACION_SOLICITADA" => "bg-blue-100 text-blue-800 border-blue-300",
+                                "RESERVADA" => "bg-amber-100 text-amber-800 border-amber-300",
+                                "PAGADA" => "bg-emerald-100 text-emerald-800 border-emerald-300",
+                                "FACTURADA" => "bg-teal-100 text-teal-800 border-teal-300",
+                                "EN_PREPARACION" => "bg-indigo-100 text-indigo-800 border-indigo-300",
+                                "EN_TRANSITO" => "bg-purple-100 text-purple-800 border-purple-300",
+                                "LISTA_PARA_RECOGER" => "bg-sky-100 text-sky-800 border-sky-300",
+                                "ENTREGADA" => "bg-green-100 text-green-800 border-green-300",
+                                "CANCELADA" => "bg-rose-100 text-rose-800 border-rose-300",
+                                _ => "bg-surface-container-low text-text-muted border-border-subtle"
+                            };
+
+                            <tr class="hover:bg-surface-container-low/30 transition-colors">
+                                <td class="py-4 px-6 font-bold text-primary text-sm">
+                                    @(string.IsNullOrWhiteSpace(orden.NumeroOrden) ? "PENDIENTE" : orden.NumeroOrden)
+                                </td>
+                                <td class="py-4 px-6 font-mono text-[11px] text-text-muted">
+                                    @orden.OrdenId
+                                </td>
+                                <td class="py-4 px-6 text-text-muted">
+                                    @orden.ActualizadaEn.ToString("dd/MM/yyyy HH:mm")
+                                </td>
+                                <td class="py-4 px-6">
+                                    <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border @badgeClass">
+                                        <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
+                                        @orden.Estado
+                                    </span>
+                                </td>
+                                <td class="py-4 px-6 font-bold text-primary text-sm">
+                                    Q @orden.Total.ToString("N2")
+                                </td>
+                                <td class="py-4 px-6 text-right">
+                                    <div class="inline-flex items-center gap-2">
+                                        <a href="/Estado?ordenId=@orden.OrdenId"
+                                           class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-surface-container-low hover:bg-surface-variant text-primary text-xs font-semibold border border-border-subtle/60 transition-all">
+                                            <span class="material-symbols-outlined text-[15px]">timeline</span>
+                                            Seguimiento
+                                        </a>
+                                        <a href="/Incidencias/Crear?ordenId=@orden.OrdenId"
+                                           title="Reportar problema"
+                                           class="p-1.5 rounded-xl text-text-muted hover:text-error hover:bg-error-container/20 transition-all">
+                                            <span class="material-symbols-outlined text-[18px]">report_problem</span>
+                                        </a>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        else
+        {
+            <div class="p-12 text-center">
+                <div class="w-16 h-16 rounded-full bg-surface-container-low text-text-muted flex items-center justify-center mx-auto mb-4">
+                    <span class="material-symbols-outlined text-[32px]">shopping_bag</span>
+                </div>
+                <h3 class="text-base font-bold text-primary mb-1">Aún no tienes pedidos registrados</h3>
+                <p class="text-xs text-text-muted max-w-md mx-auto mb-6">
+                    Explora nuestro catálogo omnicanal y realiza tu primera compra con entrega a domicilio o retiro en tienda.
+                </p>
+                <a href="/Catalogo" class="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-full text-xs font-semibold hover:opacity-90 transition-opacity">
+                    <span class="material-symbols-outlined text-[16px]">storefront</span>
+                    Explorar Catálogo
+                </a>
+            </div>
+        }
+    </div>
+</div>

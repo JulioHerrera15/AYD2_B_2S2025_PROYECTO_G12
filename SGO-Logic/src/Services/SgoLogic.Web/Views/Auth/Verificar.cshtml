@@ -1,0 +1,91 @@
+@{
+    ViewData["Title"] = "Verificar Cuenta";
+}
+
+<div class="max-w-md mx-auto py-6">
+    <div class="bg-surface-white rounded-3xl ambient-shadow border border-border-subtle/50 p-8">
+        <div class="text-center mb-8">
+            <div class="w-12 h-12 rounded-2xl bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center mx-auto mb-3 shadow-sm">
+                <span class="material-symbols-outlined text-[26px]">mark_email_read</span>
+            </div>
+            <h1 class="text-2xl font-bold text-primary tracking-tight">Verificación de Correo</h1>
+            <p class="text-xs text-text-muted mt-1 leading-relaxed">
+                Ingresa el código OTP de 6 dígitos generado para activar tu cuenta.
+            </p>
+        </div>
+
+        @if (TempData["Exito"] != null)
+        {
+            <div class="mb-6 bg-emerald-50 text-emerald-800 border border-emerald-200 rounded-xl p-3.5 flex items-center gap-2.5 text-xs font-medium">
+                <span class="material-symbols-outlined text-emerald-600 text-[18px]">check_circle</span>
+                <span>@TempData["Exito"]</span>
+            </div>
+        }
+
+        @if (ViewBag.Error != null || TempData["Error"] != null)
+        {
+            <div class="mb-6 bg-error-container text-on-error-container border border-error/20 rounded-xl p-3.5 flex items-center gap-2.5 text-xs font-medium">
+                <span class="material-symbols-outlined text-error text-[18px]">error</span>
+                <span>@(ViewBag.Error ?? TempData["Error"])</span>
+            </div>
+        }
+
+        <form method="post" action="/Auth/Verificar" class="space-y-4">
+            <div>
+                <label for="email" class="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-1.5">
+                    Correo Registrado
+                </label>
+                <input type="email" 
+                       id="email" 
+                       name="email" 
+                       class="w-full bg-surface-container-low border border-border-subtle/70 rounded-xl px-4 py-3 text-sm font-medium text-text-muted cursor-not-allowed" 
+                       value="@ViewBag.Email" 
+                       required 
+                       readonly />
+            </div>
+
+            <div>
+                <label for="codigo" class="block text-xs font-semibold uppercase tracking-wider text-text-muted mb-1.5 text-center">
+                    Código de 6 Dígitos
+                </label>
+                <input type="text" 
+                       id="codigo" 
+                       name="codigo" 
+                       class="w-full bg-surface-container-low border-2 border-border-subtle rounded-2xl py-4 text-center text-2xl font-bold font-mono tracking-[0.5em] text-primary focus:bg-surface-white focus:border-secondary focus:ring-4 focus:ring-secondary/10 transition-all placeholder:text-text-muted/40" 
+                       required 
+                       maxlength="6" 
+                       pattern="[0-9]{6}" 
+                       placeholder="000000" 
+                       autofocus />
+                <p class="text-[11px] text-text-muted text-center mt-2">
+                    Ingresa el código OTP de 6 dígitos enviado a tu correo.
+                </p>
+            </div>
+
+            <div class="pt-2">
+                <button type="submit" 
+                        class="w-full bg-secondary text-white rounded-full py-3 text-xs font-semibold hover:opacity-90 transition-opacity active:scale-95 shadow-sm flex items-center justify-center gap-1.5">
+                    <span class="material-symbols-outlined text-[16px]">verified</span>
+                    Validar y Activar Cuenta
+                </button>
+            </div>
+        </form>
+
+        <div class="mt-4 pt-3 text-center">
+            <form method="post" action="/Auth/ReenviarCodigo" class="inline">
+                <input type="hidden" name="email" value="@ViewBag.Email" />
+                <button type="submit" class="text-xs font-semibold text-secondary hover:underline inline-flex items-center gap-1 cursor-pointer">
+                    <span class="material-symbols-outlined text-[15px]">send</span>
+                    No recibiste el codigo? Reenviar codigo
+                </button>
+            </form>
+        </div>
+
+        <div class="mt-6 pt-6 border-t border-border-subtle/60 text-center text-xs text-text-muted">
+            <a href="/Auth/Login" class="font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
+                <span class="material-symbols-outlined text-[14px]">arrow_back</span>
+                Regresar al inicio de sesión
+            </a>
+        </div>
+    </div>
+</div>

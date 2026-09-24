@@ -1,0 +1,190 @@
+@model SgoLogic.Web.Services.CarritoModel?
+
+@{
+    ViewData["Title"] = "Carrito de Compras";
+    var userEmail = Context.Request.Cookies["sgo_user_email"];
+}
+
+<!-- Header Title -->
+<div class="mb-8 flex flex-col sm:flex-row sm:items-end justify-between gap-4">
+    <div>
+        <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight mb-1">
+            Carrito de Compras
+        </h1>
+        <p class="text-sm text-text-muted">
+            Gestión de artículos en tiempo real con persistencia en Redis y sincronización automática tras autenticación.
+        </p>
+    </div>
+    <div class="flex items-center gap-3 self-start sm:self-auto">
+        @if (Model != null && !string.IsNullOrWhiteSpace(Model.CarritoId))
+        {
+            <div class="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-container-low text-on-surface-variant text-xs font-mono border border-border-subtle/60">
+                <span class="w-2 h-2 rounded-full bg-secondary"></span>
+                ID: @Model.CarritoId
+            </div>
+        }
+        @if (Model?.Items != null && Model.Items.Any())
+        {
+            <a href="/Checkout" class="inline-flex items-center gap-2 bg-secondary text-on-secondary px-5 py-2 rounded-full font-bold text-xs shadow-md hover:bg-secondary/90 transition-all active:scale-95">
+                <span>Ir al Checkout</span>
+                <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
+            </a>
+        }
+    </div>
+</div>
+
+@if (string.IsNullOrWhiteSpace(userEmail))
+{
+    <div class="mb-8 bg-secondary-fixed/50 border border-secondary-container/40 text-on-secondary-fixed rounded-2xl p-4 flex items-center gap-3 ambient-shadow">
+        <span class="material-symbols-outlined text-secondary text-[22px]" style="font-variation-settings: 'FILL' 1;">info</span>
+        <div class="text-sm">
+            <strong>Modo Invitado:</strong> Estás navegando con un carrito temporal. Al <a href="/Auth/Login" class="font-bold underline hover:opacity-80">iniciar sesión</a>, tus artículos se migrarán automáticamente a tu cuenta.
+        </div>
+    </div>
+}
+
+<!-- Cart Table Card -->
+<div class="bg-surface-white rounded-2xl ambient-shadow border border-border-subtle/50 overflow-hidden mb-12">
+    <div class="px-6 py-4 border-b border-border-subtle/60 flex items-center justify-between">
+        <div class="flex items-center gap-2 font-semibold text-primary text-base">
+            <span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">shopping_bag</span>
+            <span>Artículos Seleccionados</span>
+        </div>
+        @if (Model?.Items != null && Model.Items.Any())
+        {
+            <span class="text-xs text-text-muted font-medium">
+                @Model.Items.Count @(Model.Items.Count == 1 ? "ítem" : "ítems")
+            </span>
+        }
+    </div>
+
+    @if (Model == null || Model.Items == null || !Model.Items.Any())
+    {
+        <div class="py-16 px-6 text-center">
+            <div class="w-16 h-16 rounded-full bg-surface-container-low text-text-muted flex items-center justify-center mx-auto mb-4">
+                <span class="material-symbols-outlined text-[32px]">remove_shopping_cart</span>
+            </div>
+            <h3 class="text-base font-semibold text-primary mb-1">Tu carrito está vacío</h3>
+            <p class="text-sm text-text-muted max-w-sm mx-auto mb-6">
+                Selecciona productos del catálogo rápido para agregarlos al carrito unificado en Redis.
+            </p>
+        </div>
+    }
+    else
+    {
+        <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+                <thead>
+                    <tr class="border-b border-border-subtle bg-surface-bright/50">
+                        <th class="py-3.5 px-6 text-xs text-text-muted uppercase tracking-wider font-semibold">SKU</th>
+                        <th class="py-3.5 px-6 text-xs text-text-muted uppercase tracking-wider font-semibold">Descripción</th>
+                        <th class="py-3.5 px-6 text-xs text-text-muted uppercase tracking-wider font-semibold text-center">Cantidad</th>
+                        <th class="py-3.5 px-6 text-xs text-text-muted uppercase tracking-wider font-semibold text-right">Precio Unitario</th>
+                        <th class="py-3.5 px-6 text-xs text-text-muted uppercase tracking-wider font-semibold text-right">Subtotal</th>
+                        <th class="py-3.5 px-6 text-xs text-text-muted uppercase tracking-wider font-semibold text-right">Acción</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-border-subtle/50">
+                    @foreach (var item in Model.Items)
+                    {
+                        <tr class="hover:bg-surface-bright/30 transition-colors">
+                            <td class="py-4 px-6">
+                                <span class="bg-surface-container-low text-primary px-2.5 py-1 rounded font-mono text-xs font-semibold">
+                                    @item.Sku
+                                </span>
+                            </td>
+                            <td class="py-4 px-6 text-sm font-medium text-primary">
+                                @item.Descripcion
+                            </td>
+                            <td class="py-4 px-6 text-center">
+                                <div class="inline-flex items-center gap-1.5 bg-surface-container-low rounded-xl p-1 border border-border-subtle/70">
+                                    <form method="post" action="/Carrito/Decrementar" class="inline m-0">
+                                        <input type="hidden" name="sku" value="@item.Sku" />
+                                        <input type="hidden" name="cantidadActual" value="@item.Cantidad" />
+                                        <button type="submit" title="Disminuir cantidad" class="w-7 h-7 rounded-lg bg-surface-white hover:bg-surface-bright text-primary font-bold flex items-center justify-center transition-colors shadow-2xs">
+                                            <span class="material-symbols-outlined text-[15px]">remove</span>
+                                        </button>
+                                    </form>
+                                    <form method="post" action="/Carrito/ActualizarCantidad" class="inline m-0">
+                                        <input type="hidden" name="sku" value="@item.Sku" />
+                                        <input type="number" name="cantidad" value="@item.Cantidad" min="1" max="99" 
+                                               onchange="this.form.submit()" 
+                                               class="w-12 text-center text-xs font-bold text-primary bg-transparent border-none p-0 focus:ring-0" />
+                                    </form>
+                                    <form method="post" action="/Carrito/Incrementar" class="inline m-0">
+                                        <input type="hidden" name="sku" value="@item.Sku" />
+                                        <input type="hidden" name="cantidadActual" value="@item.Cantidad" />
+                                        <button type="submit" title="Aumentar cantidad" class="w-7 h-7 rounded-lg bg-surface-white hover:bg-surface-bright text-primary font-bold flex items-center justify-center transition-colors shadow-2xs">
+                                            <span class="material-symbols-outlined text-[15px]">add</span>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                            <td class="py-4 px-6 text-sm text-right text-text-muted font-medium">
+                                Q. @item.PrecioUnitario.ToString("N2")
+                            </td>
+                            <td class="py-4 px-6 text-sm text-right font-bold text-primary">
+                                Q. @item.Subtotal.ToString("N2")
+                            </td>
+                            <td class="py-4 px-6 text-right">
+                                <form method="post" action="/Carrito/Eliminar" class="inline">
+                                    <input type="hidden" name="sku" value="@item.Sku" />
+                                    <button type="submit" class="inline-flex items-center gap-1 text-error hover:bg-error-container/60 px-3 py-1 rounded-full text-xs font-medium transition-colors">
+                                        <span class="material-symbols-outlined text-[14px]">delete</span>
+                                        Eliminar
+                                    </button>
+                                </form>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+                <tfoot>
+                    <tr class="border-t-2 border-border-subtle bg-surface-bright/40">
+                        <td colspan="4" class="py-5 px-6 text-right font-semibold text-sm text-primary">
+                            Total General (Redis Cached):
+                        </td>
+                        <td colspan="2" class="py-5 px-6 text-left">
+                            <span class="text-2xl font-bold text-primary tracking-tight">
+                                Q. @Model.Total.ToString("N2")
+                            </span>
+                        </td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+
+        <!-- Checkout Action Bar -->
+        <div class="p-6 bg-surface-bright/70 border-t border-border-subtle/80 flex flex-col sm:flex-row items-center justify-between gap-4">
+            <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined text-secondary text-[24px]">verified_user</span>
+                <div class="text-xs text-text-muted">
+                    <span class="font-semibold text-primary block">Transacción segura omnicanal</span>
+                    Tus artículos se preservan automáticamente al cambiar de dispositivo o canal.
+                </div>
+            </div>
+            <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
+                <a href="/Checkout" id="btn-proceder-checkout" class="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 bg-primary text-on-primary px-8 py-3.5 rounded-full font-bold text-sm shadow-md hover:opacity-95 transition-all active:scale-95">
+                    <span>Proceder al Checkout</span>
+                    <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
+                </a>
+            </div>
+        </div>
+    }
+</div>
+
+<!-- Enlace a Catálogo Comercial -->
+<div class="mt-8 p-6 bg-surface-white rounded-3xl border border-border-subtle/60 ambient-shadow flex flex-col sm:flex-row items-center justify-between gap-4">
+    <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center">
+            <span class="material-symbols-outlined text-[22px]">storefront</span>
+        </div>
+        <div>
+            <h3 class="text-sm font-bold text-primary">¿Deseas agregar más productos a tu compra?</h3>
+            <p class="text-xs text-text-muted">Explora nuestro catálogo con existencias en vivo sincronizadas con las 32 tiendas.</p>
+        </div>
+    </div>
+    <a href="/Catalogo" class="inline-flex items-center gap-1.5 bg-primary text-on-primary text-xs font-semibold px-5 py-2.5 rounded-full hover:opacity-90 active:scale-95 transition-all shadow-sm">
+        <span>Explorar Catálogo</span>
+        <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+    </a>
+</div>

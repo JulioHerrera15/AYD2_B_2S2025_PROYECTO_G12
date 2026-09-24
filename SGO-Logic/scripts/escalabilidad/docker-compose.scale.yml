@@ -1,0 +1,62 @@
+# Override de Docker Compose para demostrar escalado horizontal independiente
+# de los servicios del Backbone que ya soportan multiples replicas:
+# ordenes-api y auditoria-worker (HU-025 / EAC-04) y consulta-estado-api
+# (HU-024 / EAC-02, consolidado aqui).
+#
+# Sin este archivo, `--scale` falla con conflicto de puerto de host: el mismo
+# puerto fijo (8083, 8091, 8093) no se puede publicar dos veces. `ports: !reset
+# []` quita ese mapeo fijo SOLO cuando este archivo se fusiona con `-f`.
+#
+# docker-compose.yml NO se toca: los puertos fijos siguen disponibles para
+# pruebas directas de una sola instancia (por ejemplo
+# scripts/pruebas/suite-completa-202300353.sh y camino-feliz.ps1, que llaman a
+# http://localhost:8083 sin pasar por el API Gateway). El trafico entre
+# servicios nunca dependio de esos puertos de host: el API Gateway (YARP) y el
+# consumo de RabbitMQ siempre usaron el nombre de servicio en la red de
+# Docker, que ya resuelve a todas las replicas activas.
+#
+# Uso:
+#   docker compose -f docker-compose.yml -f scripts/escalabilidad/docker-compose.scale.yml \
+#     up -d --scale ordenes-api=3 --scale auditoria-worker=3
+#
+#   docker compose -f docker-compose.yml -f scripts/escalabilidad/docker-compose.scale.yml \
+#     up -d --scale consulta-estado-api=3 --no-recreate   # HU-024 / EAC-02
+#
+# Antes vivia como scripts/pruebas-carga/docker-compose.scale-consulta.yml
+# (HU-024, solo consulta-estado-api); se consolida aqui para no mantener dos
+# archivos casi identicos. scripts/pruebas-carga/eac02-hu024-escalar.sh ya
+# apunta a esta ruta.
+
+services:
+  ordenes-api:
+    ports: !reset []
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  auditoria-worker:
+    ports: !reset []
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M
+
+  consulta-estado-api:
+    ports: !reset []
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.25'
+          memory: 256M

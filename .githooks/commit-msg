@@ -1,0 +1,9 @@
+#!/bin/sh
+patron='^[0-9]{9}: .+'
+
+if ! grep -qE "$patron" "$1"; then
+  echo "Mensaje de commit invalido."
+  echo "Formato requerido: #carnet: mensaje"
+  echo "Ejemplo: #202300850: agregar health checks"
+  exit 1
+fi

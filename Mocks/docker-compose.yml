@@ -1,0 +1,46 @@
+version: "3.8"
+
+# Uso:
+#   docker compose up --build
+#   docker compose up -d --build     (en segundo plano)
+#   docker compose down              (detener y limpiar)
+#
+# Mock ERP AS/400 en http://localhost:4100
+# Mock POS (32) en http://localhost:4101
+#
+# Puertos de host 4100/4101 (no 4000/4001) a proposito: mock-erp y mock-pos
+# del compose principal (SGO-Logic/docker-compose.yml) ya publican 4000/4001
+# para los mismos dos mocks. Con puertos de host distintos, este compose se
+# puede levantar para desarrollar/probar los mocks de forma aislada
+# (test-cliente.sh, test-integracion.sh) sin chocar con el compose principal
+# si ambos estan arriba a la vez. El puerto interno del contenedor no
+# cambia (sigue siendo 4000/4001, ver PORT en environment de cada servicio).
+
+services:
+  mock-erp:
+    build: ./mock-erp
+    container_name: sgo-mock-erp-standalone
+    ports:
+      - "4100:4000"
+    environment:
+      - PORT=4000
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+
+  mock-pos:
+    build: ./mock-pos
+    container_name: sgo-mock-pos-standalone
+    ports:
+      - "4101:4001"
+    environment:
+      - PORT=4001
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4001/"]
+      interval: 10s
+      timeout: 3s
+      retries: 3

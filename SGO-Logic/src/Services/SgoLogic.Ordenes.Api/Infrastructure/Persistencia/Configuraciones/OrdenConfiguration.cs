@@ -1,0 +1,201 @@
+using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using SgoLogic.Ordenes.Api.Domain;
+
+namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Configuraciones;
+
+public sealed class OrdenConfiguration : IEntityTypeConfiguration<Orden>
+{
+    public void Configure(EntityTypeBuilder<Orden> builder)
+    {
+        builder.ToTable("orden");
+
+        builder.HasKey(orden => orden.Id);
+
+        builder.Property(orden => orden.Id)
+            .HasColumnName("id")
+            .HasMaxLength(64)
+            .IsRequired();
+
+        builder.Property(orden => orden.NumeroOrden)
+            .HasColumnName("numero_orden")
+            .HasMaxLength(40)
+            .IsRequired();
+
+        builder.HasIndex(orden => orden.NumeroOrden)
+            .IsUnique()
+            .HasDatabaseName("ix_orden_numero_orden");
+
+        builder.Property(orden => orden.ClienteId)
+            .HasColumnName("cliente_id")
+            .HasMaxLength(64)
+            .IsRequired();
+
+        builder.Property(orden => orden.Canal)
+            .HasColumnName("canal")
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired();
+
+        builder.Property(orden => orden.MetodoEntrega)
+            .HasColumnName("metodo_entrega")
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired();
+
+        builder.Property(orden => orden.UbicacionSolicitadaId)
+            .HasColumnName("ubicacion_solicitada_id")
+            .HasMaxLength(64);
+
+        // Direccion de entrega a domicilio: dependiente opcional en la misma tabla.
+        // Si todas sus columnas son null, EF deja la navegacion en null.
+        builder.OwnsOne(orden => orden.DireccionEntrega, direccion =>
+        {
+            direccion.Property(d => d.Pais)
+                .HasColumnName("direccion_entrega_pais")
+                .HasConversion<string>()
+                .HasMaxLength(10);
+
+            direccion.Property(d => d.Departamento)
+                .HasColumnName("direccion_entrega_departamento")
+                .HasMaxLength(100);
+
+            direccion.Property(d => d.Municipio)
+                .HasColumnName("direccion_entrega_municipio")
+                .HasMaxLength(100);
+
+            direccion.Property(d => d.Direccion)
+                .HasColumnName("direccion_entrega_direccion")
+                .HasMaxLength(300);
+
+            direccion.Property(d => d.Referencia)
+                .HasColumnName("direccion_entrega_referencia")
+                .HasMaxLength(300);
+        });
+
+        builder.Property(orden => orden.Moneda)
+            .HasColumnName("moneda")
+            .HasConversion<string>()
+            .HasMaxLength(10)
+            .IsRequired();
+
+        builder.Property(orden => orden.MedioPago)
+            .HasColumnName("medio_pago")
+            .HasConversion<string>()
+            .HasMaxLength(30)
+            .IsRequired();
+
+        builder.Property(orden => orden.Impuestos)
+            .HasColumnName("impuestos")
+            .HasPrecision(18, 2)
+            .IsRequired();
+
+        builder.Property(orden => orden.Estado)
+            .HasColumnName("estado")
+            .HasConversion<string>()
+            .HasMaxLength(40)
+            .IsRequired();
+
+        // El dominio no expone una propiedad llamada Version. Su rol de contador
+        // entero que se incrementa en cada transicion lo cumple Orden.Secuencia,
+        // que aqui se mapea a la columna version y se marca como token de
+        // concurrencia para el bloqueo optimista (ADR del DDA).
+        builder.Property(orden => orden.Secuencia)
+            .HasColumnName("version")
+            .IsConcurrencyToken()
+            .IsRequired();
+
+        builder.Property(orden => orden.CreadaEn)
+            .HasColumnName("creada_en")
+            .HasColumnType("timestamp with time zone")
+            .HasConversion<ConvertidorFechaUtc>()
+            .IsRequired();
+
+        builder.HasMany(orden => orden.Lineas)
+            .WithOne()
+            .HasForeignKey("OrdenId")
+            .HasConstraintName("fk_linea_orden_orden")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Metadata
+            .FindNavigation(nameof(Orden.Lineas))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
+
+        builder.HasMany(orden => orden.Transiciones)
+            .WithOne()
+            .HasForeignKey(transicion => transicion.OrdenId)
+            .HasConstraintName("fk_transicion_orden_orden")
+            .OnDelete(DeleteBehavior.Cascade);
+
+        builder.Metadata
+            .FindNavigation(nameof(Orden.Transiciones))!
+            .SetPropertyAccessMode(PropertyAccessMode.Field);
+
+        builder.Property(orden => orden.ReceptorCui)
+            .HasColumnName("receptor_cui")
+            .HasMaxLength(64)
+            .IsRequired()
+            .HasDefaultValue("CF");
+
+        // Token opaco de la tarjeta (ADR-010): nullable y transitorio. Se escribe al
+        // crear la orden y se pone en NULL al emitir CobroSolicitado. Nunca guarda
+        // numero de tarjeta, CVV ni vencimiento: esos no entran a SGO-Logic.
+        builder.Property(orden => orden.TokenMedioPago)
+            .HasColumnName("token_medio_pago")
+            .HasMaxLength(Orden.LongitudMaximaTokenMedioPago);
+
+        builder.Property(orden => orden.PagoId)
+            .HasColumnName("pago_id")
+            .HasMaxLength(128);
+
+        builder.Property(orden => orden.ReservaId)
+            .HasColumnName("reserva_id")
+            .HasMaxLength(128);
+
+        builder.Property(orden => orden.UbicacionReservaId)
+            .HasColumnName("ubicacion_reserva_id")
+            .HasMaxLength(64);
+
+        builder.Property(orden => orden.DocumentoFiscalId)
+            .HasColumnName("documento_fiscal_id")
+            .HasMaxLength(128);
+
+        builder.Property(orden => orden.DocumentoFiscalSerie)
+            .HasColumnName("documento_fiscal_serie")
+            .HasMaxLength(20);
+
+        builder.Property(orden => orden.DocumentoFiscalNumero)
+            .HasColumnName("documento_fiscal_numero")
+            .HasMaxLength(20);
+
+        builder.Property(orden => orden.DocumentoFiscalNumeroAutorizacion)
+            .HasColumnName("documento_fiscal_numero_autorizacion")
+            .HasMaxLength(128);
+
+        builder.Property(orden => orden.DocumentoFiscalFolio)
+            .HasColumnName("documento_fiscal_folio")
+            .HasMaxLength(128);
+
+        builder.Property(orden => orden.DocumentoFiscalCertificadoEn)
+            .HasColumnName("documento_fiscal_certificado_en")
+            .HasColumnType("timestamp with time zone")
+            .HasConversion<ConvertidorFechaUtc>();
+
+        builder.Property(orden => orden.AlertaFiscal)
+            .HasColumnName("alerta_fiscal")
+            .IsRequired();
+
+        builder.Property(orden => orden.AlertaFiscalMotivo)
+            .HasColumnName("alerta_fiscal_motivo")
+            .HasMaxLength(500);
+
+        builder.Property(orden => orden.AlertaFiscalEn)
+            .HasColumnName("alerta_fiscal_en")
+            .HasColumnType("timestamp with time zone")
+            .HasConversion<ConvertidorFechaUtc>();
+
+        builder.Ignore(orden => orden.Subtotal);
+        builder.Ignore(orden => orden.Total);
+        builder.Ignore(orden => orden.EsTerminal);
+    }
+}

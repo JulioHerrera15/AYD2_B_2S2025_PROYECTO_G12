@@ -1,0 +1,188 @@
+{
+  "uid": "sgo-mensajeria-resiliencia",
+  "title": "SGO-Logic - Mensajeria y resiliencia",
+  "tags": ["sgo-logic"],
+  "timezone": "browser",
+  "editable": false,
+  "schemaVersion": 39,
+  "version": 1,
+  "refresh": "5s",
+  "time": { "from": "now-15m", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Outbox pendientes por servicio",
+      "description": "Filas en estado Pendiente en la tabla outbox de cada servicio (outbox_pendientes). Panel clave de EAC-01: al caer PayKlik o RabbitMQ debe crecer sin perder mensajes, y al recuperarse debe drenar de vuelta a cero.",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 0 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "outbox_pendientes",
+          "legendFormat": "{{servicio}}",
+          "refId": "A"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": { "drawStyle": "line", "lineWidth": 2, "fillOpacity": 15, "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["last", "max"] },
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Eventos de outbox publicados y fallidos por servicio",
+      "description": "Tasa de mensajes de outbox confirmados por el broker (outbox_publicados_total) frente a los que agotaron reintentos y fueron a la DLX (outbox_fallidos_total).",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 9 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "sum(rate(outbox_publicados_total[1m])) by (servicio)",
+          "legendFormat": "publicados/s {{servicio}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "sum(rate(outbox_fallidos_total[1m])) by (servicio)",
+          "legendFormat": "fallidos/s {{servicio}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5, "spanNulls": true }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": "/fallidos.*/" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "red" } }]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Latencia de publicacion del outbox (p50, p95)",
+      "description": "Segundos entre que la fila de outbox se crea y se publica confirmada (outbox_latencia_publicacion_segundos), por servicio.",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 18 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "histogram_quantile(0.50, sum(rate(outbox_latencia_publicacion_segundos_bucket[1m])) by (le, servicio))",
+          "legendFormat": "p50 {{servicio}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "histogram_quantile(0.95, sum(rate(outbox_latencia_publicacion_segundos_bucket[1m])) by (le, servicio))",
+          "legendFormat": "p95 {{servicio}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5, "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Mensajes consumidos y duplicados descartados por servicio",
+      "description": "Tasa de mensajes procesados exitosamente por un EventConsumerBase (mensajes_consumidos_total) frente a los descartados por eventId ya procesado (mensajes_duplicados_total), evidencia de idempotencia.",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 27 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "sum(rate(mensajes_consumidos_total[1m])) by (servicio)",
+          "legendFormat": "consumidos/s {{servicio}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "sum(rate(mensajes_duplicados_total[1m])) by (servicio)",
+          "legendFormat": "duplicados/s {{servicio}}",
+          "refId": "B"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5, "spanNulls": true }
+        },
+        "overrides": [
+          {
+            "matcher": { "id": "byRegexp", "options": "/duplicados.*/" },
+            "properties": [{ "id": "color", "value": { "mode": "fixed", "fixedColor": "yellow" } }]
+          }
+        ]
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Reparto de carga entre instancias (HU-025 / EAC-04)",
+      "description": "Peticiones HTTP atendidas por ordenes-api, eventos publicados desde su outbox y mensajes consumidos por auditoria-worker, desglosados por instancia (etiqueta instance = ip:puerto de cada replica) y no solo por servicio. Al escalar con docker compose --scale, cada linea es una replica distinta: evidencia de que el trabajo se reparte y ninguna instancia queda ociosa ni duplica.",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 36 },
+      "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "sum(rate(http_requests_received_total{servicio=\"ordenes-api\"}[30s])) by (instance)",
+          "legendFormat": "peticiones/s ordenes-api {{instance}}",
+          "refId": "A"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "sum(rate(outbox_publicados_total{servicio=\"ordenes-api\"}[30s])) by (instance)",
+          "legendFormat": "outbox publicados/s ordenes-api {{instance}}",
+          "refId": "B"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "prometheus-sgo" },
+          "expr": "sum(rate(mensajes_consumidos_total{servicio=\"auditoria-worker\"}[30s])) by (instance)",
+          "legendFormat": "consumidos/s auditoria-worker {{instance}}",
+          "refId": "C"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": { "drawStyle": "line", "lineWidth": 1, "fillOpacity": 5, "spanNulls": true }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": { "displayMode": "table", "placement": "bottom", "calcs": ["mean", "max"] },
+        "tooltip": { "mode": "multi" }
+      }
+    }
+  ]
+}

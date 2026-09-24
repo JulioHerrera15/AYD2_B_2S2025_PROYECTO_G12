@@ -1,0 +1,73 @@
+# Configuracion de scrape de Prometheus para SGO-Logic.
+#
+# Un job por cada servicio que usa AddSgoDefaults()/UseSgoDefaults() (expone
+# /metrics via prometheus-net). Los mocks standalone payklik-mock y sat-mock
+# NO usan BuildingBlocks y no exponen /metrics, por eso no aparecen aqui.
+# mock-mensajeria si usa AddSgoDefaults() y si expone /metrics.
+#
+# Intervalo corto (5s) porque la demo dura minutos, no dias: con un intervalo
+# largo los picos de outbox_pendientes durante la caida de PayKlik/RabbitMQ
+# no se alcanzan a ver.
+#
+# ordenes-api, auditoria-worker y consulta-estado-api son los tres servicios
+# que hoy se escalan con `docker compose --scale` (HU-025/EAC-04 y
+# HU-024/EAC-02, ver scripts/escalabilidad/docker-compose.scale.yml). Un
+# target estatico por nombre de servicio solo raspa UNA replica: Prometheus
+# resuelve el nombre a una sola direccion al armar el target. dns_sd_configs
+# en cambio consulta el DNS (el embebido de Docker en 127.0.0.11, que ya usa
+# este contenedor por defecto) y da de alta un target por cada registro A
+# devuelto, uno por cada replica activa de ese servicio. Sin --scale sigue
+# resolviendo a una sola IP, asi que el comportamiento normal no cambia.
+#
+# La etiqueta "instance" (direccion ip:puerto de cada target) ya distingue
+# cada replica sola. "servicio" se repone via relabel_configs a partir de
+# __meta_dns_name (el nombre consultado) solo para los targets de DNS SD: el
+# regex '(.+)' no matchea cuando esa meta-etiqueta no existe (targets
+# estaticos), asi que no pisa la etiqueta "servicio" que ya traen definida.
+
+global:
+  scrape_interval: 5s
+  evaluation_interval: 5s
+
+scrape_configs:
+  - job_name: sgo-logic
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["sample-api:8080"]
+        labels: { servicio: sample-api }
+      - targets: ["sample-worker:8080"]
+        labels: { servicio: sample-worker }
+      - targets: ["auth-api:8080"]
+        labels: { servicio: auth-api }
+      - targets: ["inventario-api:8080"]
+        labels: { servicio: inventario-api }
+      - targets: ["pagos-api:8080"]
+        labels: { servicio: pagos-api }
+      - targets: ["facturacion-api:8080"]
+        labels: { servicio: facturacion-api }
+      - targets: ["notificaciones-api:8080"]
+        labels: { servicio: notificaciones-api }
+      - targets: ["mock-mensajeria:8080"]
+        labels: { servicio: mock-mensajeria }
+      - targets: ["api-gateway:8080"]
+        labels: { servicio: api-gateway }
+      - targets: ["web:8080"]
+        labels: { servicio: web }
+      - targets: ["despacho-api:8080"]
+        labels: { servicio: despacho-api }
+      - targets: ["integracion-pos-worker:8080"]
+        labels: { servicio: integracion-pos-worker }
+      - targets: ["integracion-erp-worker:8080"]
+        labels: { servicio: integracion-erp-worker }
+    dns_sd_configs:
+      - names:
+          - ordenes-api
+          - auditoria-worker
+          - consulta-estado-api
+        type: A
+        port: 8080
+        refresh_interval: 5s
+    relabel_configs:
+      - source_labels: [__meta_dns_name]
+        regex: '(.+)'
+        target_label: servicio

@@ -1,0 +1,282 @@
+@{
+    ViewData["Title"] = "Centro de Privacidad y Protección de Datos - MegaStore";
+    var userEmail = ViewBag.UserEmail as string ?? "usuario@megastore.com";
+    var isAuthenticated = ViewBag.IsAuthenticated as bool? ?? false;
+    var consentMarketing = ViewBag.ConsentMarketing as bool? ?? true;
+    var consentTelemetry = ViewBag.ConsentTelemetry as bool? ?? true;
+    var folioSupresion = ViewBag.SolicitudSupresionFolio as string;
+}
+
+<div class="w-full max-w-container-max mx-auto flex flex-col gap-8">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-border-subtle">
+        <div>
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold mb-2">
+                <span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">shield_person</span>
+                Marco de Privacidad y Cumplimiento Regulatorio
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight">Centro de Privacidad y Protección de Datos</h1>
+            <p class="text-xs sm:text-sm text-text-muted">Garantizamos el tratamiento confidencial de tu información bajo estándares PCI-DSS, SAT FEL y normativas ARCO.</p>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                Cumplimiento PCI-DSS & ISO 27001
+            </span>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(folioSupresion))
+    {
+        <div class="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-900 text-xs flex items-center justify-between gap-4 ambient-shadow">
+            <div class="flex items-center gap-3">
+                <span class="material-symbols-outlined text-amber-700 text-[24px]">assignment_late</span>
+                <div>
+                    <span class="font-bold block text-sm">Solicitud de Supresión y Derecho al Olvido en Trámite</span>
+                    <span>Folio asignado: <code class="font-mono font-bold bg-amber-150 px-1.5 py-0.5 rounded">@folioSupresion</code> &bull; En evaluación de resguardo y retención fiscal SAT.</span>
+                </div>
+            </div>
+            <span class="px-2.5 py-1 rounded-full bg-amber-200 text-amber-800 font-semibold text-[11px] shrink-0">
+                En Proceso (72 hrs)
+            </span>
+        </div>
+    }
+
+    <!-- 4 Security Standard Badges -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div class="p-5 rounded-3xl bg-surface-white border border-border-subtle/60 ambient-shadow">
+            <div class="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center mb-3">
+                <span class="material-symbols-outlined text-[22px]">credit_card_off</span>
+            </div>
+            <h4 class="font-bold text-sm text-primary mb-1">Aislamiento PCI-DSS</h4>
+            <p class="text-xs text-text-muted leading-relaxed">
+                Cero almacenamiento de tarjetas. Tokenización aislada y directa en la pasarela PayKlik desde tu navegador.
+            </p>
+        </div>
+
+        <div class="p-5 rounded-3xl bg-surface-white border border-border-subtle/60 ambient-shadow">
+            <div class="w-10 h-10 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center mb-3">
+                <span class="material-symbols-outlined text-[22px]">verified</span>
+            </div>
+            <h4 class="font-bold text-sm text-primary mb-1">SAT FEL Inmutable</h4>
+            <p class="text-xs text-text-muted leading-relaxed">
+                Documentos Tributarios Electrónicos (DTE) con firma digital y resguardo fiscal de 5 años por ley.
+            </p>
+        </div>
+
+        <div class="p-5 rounded-3xl bg-surface-white border border-border-subtle/60 ambient-shadow">
+            <div class="w-10 h-10 rounded-2xl bg-purple-50 text-purple-700 flex items-center justify-center mb-3">
+                <span class="material-symbols-outlined text-[22px]">lock</span>
+            </div>
+            <h4 class="font-bold text-sm text-primary mb-1">Cifrado de Extremo a Extremo</h4>
+            <p class="text-xs text-text-muted leading-relaxed">
+                Tránsito protegido mediante TLS 1.3 y datos protegidos con cifrado avanzado en reposo para máxima confidencialidad.
+            </p>
+        </div>
+
+        <div class="p-5 rounded-3xl bg-surface-white border border-border-subtle/60 ambient-shadow">
+            <div class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center mb-3">
+                <span class="material-symbols-outlined text-[22px]">history_edu</span>
+            </div>
+            <h4 class="font-bold text-sm text-primary mb-1">Registro Transaccional Inmutable</h4>
+            <p class="text-xs text-text-muted leading-relaxed">
+                Historial protegido con sello de tiempo verificable para el respaldo legal y garantía de cada una de tus compras.
+            </p>
+        </div>
+    </div>
+
+    <!-- Main Content Grid -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <!-- Rights ARCO Portal (2 cols) -->
+        <div class="lg:col-span-2 space-y-6">
+            <div class="bg-surface-white rounded-3xl p-6 sm:p-8 border border-border-subtle/60 ambient-shadow">
+                <div class="flex items-center gap-3 pb-4 mb-6 border-b border-border-subtle">
+                    <div class="w-10 h-10 rounded-xl bg-surface-container-low text-primary flex items-center justify-center font-bold">
+                        <span class="material-symbols-outlined text-[22px]">assignment_turned_in</span>
+                    </div>
+                    <div>
+                        <h2 class="text-lg font-bold text-primary tracking-tight">Ejercicio de Derechos ARCO</h2>
+                        <p class="text-xs text-text-muted">Acceso, Rectificación, Cancelación y Oposición sobre tus datos personales</p>
+                    </div>
+                </div>
+
+                <div class="space-y-5">
+                    <!-- Acceso / Portabilidad -->
+                    <div class="p-4 rounded-2xl bg-surface-container-low/50 border border-border-subtle/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="material-symbols-outlined text-secondary text-[18px]">download</span>
+                                <h4 class="font-bold text-sm text-primary">Derecho de Acceso y Portabilidad</h4>
+                            </div>
+                            <p class="text-xs text-text-muted">
+                                Descarga en tiempo real una copia estructurada en formato JSON con tus datos de perfil, historial de órdenes registradas y estado de carrito.
+                            </p>
+                        </div>
+                        @if (isAuthenticated)
+                        {
+                            <a href="/Cuenta/DescargarDatos" class="shrink-0 bg-surface-white text-primary border border-border-subtle hover:bg-surface-container-low px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm flex items-center gap-1.5 self-start sm:self-auto">
+                                <span class="material-symbols-outlined text-[16px]">file_download</span>
+                                Descargar Datos (JSON)
+                            </a>
+                        }
+                        else
+                        {
+                            <a href="/Auth/Login?returnUrl=/Cuenta/Privacidad" class="shrink-0 bg-surface-white text-primary border border-border-subtle hover:bg-surface-container-low px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm flex items-center gap-1.5 self-start sm:self-auto">
+                                <span class="material-symbols-outlined text-[16px]">login</span>
+                                Iniciar Sesión para Descargar
+                            </a>
+                        }
+                    </div>
+
+                    <!-- Rectificación -->
+                    <div class="p-4 rounded-2xl bg-surface-container-low/50 border border-border-subtle/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="material-symbols-outlined text-secondary text-[18px]">edit</span>
+                                <h4 class="font-bold text-sm text-primary">Derecho de Rectificación</h4>
+                            </div>
+                            <p class="text-xs text-text-muted">
+                                Actualiza tus nombres, datos de facturación SAT (NIT) o direcciones de entrega en cualquier momento.
+                            </p>
+                        </div>
+                        <a href="/Cuenta/Perfil" class="shrink-0 bg-surface-white text-primary border border-border-subtle hover:bg-surface-container-low px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm flex items-center gap-1.5 self-start sm:self-auto">
+                            <span class="material-symbols-outlined text-[16px]">manage_accounts</span>
+                            Actualizar Perfil
+                        </a>
+                    </div>
+
+                    <!-- Cancelación / Olvido -->
+                    <div class="p-4 rounded-2xl bg-surface-container-low/50 border border-border-subtle/40 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                        <div>
+                            <div class="flex items-center gap-2 mb-1">
+                                <span class="material-symbols-outlined text-error text-[18px]">delete_forever</span>
+                                <h4 class="font-bold text-sm text-primary">Derecho de Cancelación / Supresión</h4>
+                            </div>
+                            <p class="text-xs text-text-muted">
+                                Anonimización de tu cuenta y supresión de datos promocionales. Por disposición legal (Código Tributario SAT), las facturas emitidas y trazas de auditoría inmutables se conservan por 5 años.
+                            </p>
+                        </div>
+                        @if (isAuthenticated)
+                        {
+                            <form method="post" action="/Cuenta/SolicitarSupresion" onsubmit="return confirm('¿Confirmas tu solicitud formal de supresión de cuenta y derecho al olvido? Conforme a las leyes tributarias de SAT, las facturas DTE y trazas de auditoría se conservan durante 5 años.');" class="shrink-0 self-start sm:self-auto">
+                                <button type="submit" class="bg-error-container text-error hover:bg-error/20 px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm flex items-center gap-1.5">
+                                    <span class="material-symbols-outlined text-[16px]">person_off</span>
+                                    Solicitar Supresión
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            <a href="/Auth/Login?returnUrl=/Cuenta/Privacidad" class="shrink-0 bg-surface-white text-text-muted border border-border-subtle hover:bg-surface-container-low px-4 py-2 rounded-xl text-xs font-semibold transition-all shadow-sm flex items-center gap-1.5 self-start sm:self-auto">
+                                <span class="material-symbols-outlined text-[16px]">login</span>
+                                Iniciar Sesión
+                            </a>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preferences & Consents Form -->
+            <div class="bg-surface-white rounded-3xl p-6 sm:p-8 border border-border-subtle/60 ambient-shadow">
+                <h3 class="text-base font-bold text-primary mb-1">Gestión de Consentimientos y Notificaciones</h3>
+                <p class="text-xs text-text-muted mb-6">Configura tus autorizaciones para el envío de comunicaciones y telemetría de servicio.</p>
+
+                <form method="post" action="/Cuenta/GuardarConsentimientos" class="space-y-4">
+                    <label class="flex items-start justify-between gap-4 p-3 rounded-2xl hover:bg-surface-container-low/50 transition-colors cursor-pointer">
+                        <div class="flex items-start gap-3">
+                            <span class="material-symbols-outlined text-secondary text-[20px] mt-0.5">local_shipping</span>
+                            <div>
+                                <span class="text-xs font-bold text-primary block">Notificaciones Transaccionales (LogiExpress y SAT)</span>
+                                <span class="text-[11px] text-text-muted">Avisos obligatorios de confirmación de compra, número de guía y emisión de DTE fiscal.</span>
+                            </div>
+                        </div>
+                        <input type="checkbox" checked disabled class="mt-1 w-4 h-4 text-secondary rounded border-border-subtle cursor-not-allowed" />
+                    </label>
+
+                    <label class="flex items-start justify-between gap-4 p-3 rounded-2xl hover:bg-surface-container-low/50 transition-colors cursor-pointer">
+                        <div class="flex items-start gap-3">
+                            <span class="material-symbols-outlined text-text-muted text-[20px] mt-0.5">mail</span>
+                            <div>
+                                <span class="text-xs font-bold text-primary block">Boletines Promocionales y Descuentos Exclusivos</span>
+                                <span class="text-[11px] text-text-muted">Comunicaciones de lanzamientos, ofertas en categorías favoritas y novedades de MegaStore.</span>
+                            </div>
+                        </div>
+                        <input type="checkbox" name="consentMarketing" value="true" @(consentMarketing ? "checked" : "") class="mt-1 w-4 h-4 text-secondary rounded border-border-subtle focus:ring-secondary cursor-pointer" />
+                    </label>
+
+                    <label class="flex items-start justify-between gap-4 p-3 rounded-2xl hover:bg-surface-container-low/50 transition-colors cursor-pointer">
+                        <div class="flex items-start gap-3">
+                            <span class="material-symbols-outlined text-text-muted text-[20px] mt-0.5">analytics</span>
+                            <div>
+                                <span class="text-xs font-bold text-primary block">Telemetría y Métricas de Rendimiento Web</span>
+                                <span class="text-[11px] text-text-muted">Registro anónimo de métricas de carga para garantizar una navegación rápida y fluida en la tienda.</span>
+                            </div>
+                        </div>
+                        <input type="checkbox" name="consentTelemetry" value="true" @(consentTelemetry ? "checked" : "") class="mt-1 w-4 h-4 text-secondary rounded border-border-subtle focus:ring-secondary cursor-pointer" />
+                    </label>
+
+                    <div class="mt-6 pt-4 border-t border-border-subtle flex justify-end">
+                        <button type="submit" class="bg-primary text-on-primary px-5 py-2.5 rounded-xl text-xs font-semibold hover:opacity-90 transition-opacity flex items-center gap-1.5">
+                            <span class="material-symbols-outlined text-[16px]">save</span>
+                            Guardar Preferencias
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Security & PCI-DSS Consumer Explainer (1 col) -->
+        <div class="space-y-6">
+            <!-- PCI-DSS Consumer Explainer -->
+            <div class="bg-surface-white rounded-3xl p-6 sm:p-8 border border-border-subtle/60 ambient-shadow">
+                <div class="w-12 h-12 rounded-2xl bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center mb-4">
+                    <span class="material-symbols-outlined text-[24px]">verified_user</span>
+                </div>
+                <h3 class="font-bold text-base text-primary mb-2">Protección Financiera Certificada</h3>
+                <p class="text-xs text-text-muted leading-relaxed mb-4">
+                    Para resguardar tu seguridad financiera, este portal opera bajo rigurosos protocolos internacionales de protección al comprador:
+                </p>
+
+                <div class="space-y-3 text-xs">
+                    <div class="flex items-start gap-2.5">
+                        <span class="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>
+                        <p class="text-text-muted">Tus datos de tarjeta se procesan en formularios cifrados mediante conexión segura TLS 1.3.</p>
+                    </div>
+                    <div class="flex items-start gap-2.5">
+                        <span class="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>
+                        <p class="text-text-muted">La transacción se valida directamente con la pasarela de pagos certificada sin intermediarios no autorizados.</p>
+                    </div>
+                    <div class="flex items-start gap-2.5">
+                        <span class="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">3</span>
+                        <p class="text-text-muted">MegaStore nunca almacena números de tarjeta ni códigos CVV en sus servidores locales.</p>
+                    </div>
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-border-subtle">
+                    <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-medium flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[16px] text-emerald-600">lock</span>
+                        <span>Transacciones 100% Protegidas y Tokenizadas</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inmutable Audit & Tax Explainer -->
+            <div class="bg-surface-white rounded-3xl p-6 sm:p-8 border border-border-subtle/60 ambient-shadow">
+                <div class="w-12 h-12 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center mb-4">
+                    <span class="material-symbols-outlined text-[24px]">history</span>
+                </div>
+                <h3 class="font-bold text-base text-primary mb-2">Transparencia y Respaldo Legal</h3>
+                <p class="text-xs text-text-muted leading-relaxed mb-4">
+                    En cumplimiento de las leyes guatemaltecas de comercio electrónico y normativas tributarias de la SAT:
+                </p>
+
+                <ul class="text-xs text-text-muted space-y-2 list-disc list-inside">
+                    <li>Cada compra genera un comprobante fiscal digital auténtico y verificable ante la SAT.</li>
+                    <li>Los comprobantes y estados de tus órdenes quedan resguardados de forma íntegra para efectos de garantía.</li>
+                    <li>Puedes solicitar tus constancias de compra o la descarga de tu expediente en cualquier momento.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>

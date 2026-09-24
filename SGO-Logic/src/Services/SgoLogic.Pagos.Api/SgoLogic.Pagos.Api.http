@@ -1,0 +1,18 @@
+@SgoLogic.Pagos.Api_HostAddress = http://localhost:8085
+@ordenId = ORD-2026-000001
+
+### Pago de una orden con todos sus intentos
+GET {{SgoLogic.Pagos.Api_HostAddress}}/api/pagos/ordenes/{{ordenId}}
+Accept: application/json
+
+### Solo el historial de intentos
+GET {{SgoLogic.Pagos.Api_HostAddress}}/api/pagos/intentos/{{ordenId}}
+Accept: application/json
+
+### Reintentar el cobro con el token del enlace (404 si no existe, 410 si ya se uso o expiro)
+POST {{SgoLogic.Pagos.Api_HostAddress}}/api/pagos/reintentos/pegar-token-del-enlace-aqui
+Accept: application/json
+
+### Salud del proveedor: estado del circuito (CERRADO, ABIERTO, SEMIABIERTO), fallos recientes y ultima apertura
+GET {{SgoLogic.Pagos.Api_HostAddress}}/api/pagos/salud-proveedor
+Accept: application/json

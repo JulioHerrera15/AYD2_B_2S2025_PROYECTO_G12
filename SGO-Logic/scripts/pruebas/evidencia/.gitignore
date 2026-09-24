@@ -1,0 +1,5 @@
+# Evidencia de corridas de pruebas. Se guardan archivos .txt de salida.
+# Se versionan los .txt para que quede historial de evidencia.
+*
+!.gitignore
+!*.txt

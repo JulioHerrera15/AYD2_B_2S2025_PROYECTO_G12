@@ -1,0 +1,248 @@
+@{
+    ViewData["Title"] = "Tu pedido";
+    var confirmada = ViewBag.Confirmada as bool? ?? true;
+    var total = ((decimal)ViewBag.Total).ToString("N2");
+}
+
+@*
+    La confirmacion de la orden solo la deja en RESERVA_SOLICITADA: la reserva y el
+    cobro llegan despues por eventos de la saga. Por eso esta pagina no asume que se
+    cobro: consulta el estado real (GET /Estado/Api/{ordenId}) hasta que el pago se
+    resuelve y muestra el desenlace que corresponde.
+*@
+
+<div class="max-w-xl mx-auto text-center py-10">
+
+    <!-- Procesando: esperando el resultado del cobro -->
+    <div id="resultado-procesando" class="@(confirmada ? "" : "hidden")">
+        <div class="w-16 h-16 rounded-full bg-surface-container-low text-primary flex items-center justify-center mx-auto mb-6 ambient-shadow">
+            <span class="material-symbols-outlined text-3xl animate-spin">progress_activity</span>
+        </div>
+        <h1 class="text-3xl font-bold text-primary tracking-tight mb-2">Estamos procesando tu pago</h1>
+        <p class="text-sm text-text-muted mb-6">Tu pedido <span class="font-mono font-semibold text-primary">@ViewBag.NumeroOrden</span> ya quedó registrado. Esto toma solo unos segundos; no cierres esta página.</p>
+    </div>
+
+    <!-- Cobro exitoso -->
+    <div id="resultado-exitoso" class="hidden">
+        <div class="w-16 h-16 rounded-full bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center mx-auto mb-6 ambient-shadow">
+            <span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+        </div>
+
+        <h1 class="text-3xl font-bold text-primary tracking-tight mb-2">¡Orden Confirmada Exitosamente!</h1>
+        <p class="text-sm text-text-muted mb-6">
+            Hemos iniciado la orquestación de tu pedido a través de la saga transaccional de MegaStore.
+        </p>
+
+        <!-- Order Ticket Card -->
+        <div class="bg-surface-white rounded-2xl p-6 border border-border-subtle/60 ambient-shadow mb-8 text-left">
+            <div class="flex items-center justify-between pb-4 border-b border-border-subtle/40 mb-4">
+                <div>
+                    <span class="text-xs text-text-muted block">Identificador de Orden</span>
+                    <span class="text-base font-bold font-mono text-primary">@ViewBag.NumeroOrden</span>
+                </div>
+                <span class="bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold px-3 py-1 rounded-full">
+                    CONFIRMADA
+                </span>
+            </div>
+
+            <div class="space-y-3 text-xs">
+                <div class="flex justify-between">
+                    <span class="text-text-muted">ID Transaccional (UUID)</span>
+                    <span class="font-mono text-primary text-[11px]">@ViewBag.OrdenId</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-text-muted">Total Pagado</span>
+                    <span class="font-bold text-primary text-sm">Q @total</span>
+                </div>
+                <div class="flex justify-between">
+                    <span class="text-text-muted">Canal</span>
+                    <span class="font-medium text-primary">Web Omnicanal</span>
+                </div>
+            </div>
+
+            <!-- Orchestration Progress Steps -->
+            <div class="mt-6 pt-4 border-t border-border-subtle/40">
+                <span class="text-xs font-semibold text-primary block mb-3">Flujo de la Saga en Segundo Plano:</span>
+                <div class="space-y-2">
+                    <div class="flex items-center gap-2.5 text-xs text-text-muted">
+                        <span class="material-symbols-outlined text-green-600 text-[18px]">check</span>
+                        <span>Orden creada y registrada en PostgreSQL</span>
+                    </div>
+                    <div class="flex items-center gap-2.5 text-xs text-text-muted">
+                        <span class="material-symbols-outlined text-green-600 text-[18px]">check</span>
+                        <span>Reserva de inventario solicitada y verificada</span>
+                    </div>
+                    <div class="flex items-center gap-2.5 text-xs text-text-muted">
+                        <span class="material-symbols-outlined text-green-600 text-[18px]">check</span>
+                        <span>Cobro procesado a través de PayKlik</span>
+                    </div>
+                    <div class="flex items-center gap-2.5 text-xs text-text-muted">
+                        <span class="material-symbols-outlined text-secondary text-[18px]">hourglass_top</span>
+                        <span>Certificación fiscal SAT en proceso</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Cobro pendiente: el pedido existe pero el pago no se completo -->
+    <div id="resultado-pendiente" class="hidden">
+        <div class="w-16 h-16 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center mx-auto mb-6 ambient-shadow">
+            <span class="material-symbols-outlined text-3xl">schedule</span>
+        </div>
+        <h1 class="text-3xl font-bold text-primary tracking-tight mb-2">Tu pedido está registrado</h1>
+        <p class="text-sm text-text-muted mb-6">
+            No pudimos completar el cobro en este momento, así que el pago quedó <strong class="text-primary">pendiente</strong>.
+            Tu pedido no se perdió y no se realizó ningún cobro.
+        </p>
+        <div class="bg-surface-white rounded-2xl p-6 border border-border-subtle/60 ambient-shadow mb-8 text-left text-xs space-y-3">
+            <div class="flex items-center justify-between pb-3 border-b border-border-subtle/40">
+                <div>
+                    <span class="text-text-muted block">Número de pedido</span>
+                    <span class="text-base font-bold font-mono text-primary">@ViewBag.NumeroOrden</span>
+                </div>
+                <span class="bg-amber-100 text-amber-900 font-semibold px-3 py-1 rounded-full">PAGO PENDIENTE</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-text-muted">Total a pagar</span>
+                <span class="font-bold text-primary text-sm">Q @total</span>
+            </div>
+            <div class="pt-3 border-t border-border-subtle/40">
+                <span class="font-semibold text-primary block mb-2">¿Qué pasa ahora?</span>
+                <ul class="space-y-1.5 text-text-muted list-disc pl-4">
+                    <li>Si el problema fue del procesador de pagos, te enviaremos un correo con un enlace para completar el pago.</li>
+                    <li>Si tu tarjeta no fue aprobada, contacta a servicio al cliente con tu número de pedido para completar el pago con otro medio.</li>
+                    <li>Mientras el pago esté pendiente, tu pedido no se despacha. Puedes revisar su estado en cualquier momento.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pedido rechazado: no habia existencias -->
+    <div id="resultado-rechazado" class="hidden">
+        <div class="w-16 h-16 rounded-full bg-error-container text-on-error-container flex items-center justify-center mx-auto mb-6 ambient-shadow">
+            <span class="material-symbols-outlined text-3xl">inventory_2</span>
+        </div>
+        <h1 class="text-3xl font-bold text-primary tracking-tight mb-2">No pudimos completar tu pedido</h1>
+        <p class="text-sm text-text-muted mb-6">
+            Algunos productos de tu pedido <span class="font-mono font-semibold text-primary">@ViewBag.NumeroOrden</span> ya no tienen existencias.
+            No se realizó ningún cobro.
+        </p>
+    </div>
+
+    <!-- Pedido cancelado -->
+    <div id="resultado-cancelado" class="hidden">
+        <div class="w-16 h-16 rounded-full bg-error-container text-on-error-container flex items-center justify-center mx-auto mb-6 ambient-shadow">
+            <span class="material-symbols-outlined text-3xl">cancel</span>
+        </div>
+        <h1 class="text-3xl font-bold text-primary tracking-tight mb-2">Tu pedido fue cancelado</h1>
+        <p class="text-sm text-text-muted mb-2">
+            El pedido <span class="font-mono font-semibold text-primary">@ViewBag.NumeroOrden</span> se canceló antes de completar el pago.
+        </p>
+        <p id="resultado-cancelado-motivo" class="text-xs text-text-muted mb-6"></p>
+    </div>
+
+    <!-- Sin resultado todavia (la saga sigue en curso) o no se pudo consultar -->
+    <div id="resultado-en-curso" class="hidden">
+        <div class="w-16 h-16 rounded-full bg-surface-container-low text-primary flex items-center justify-center mx-auto mb-6 ambient-shadow">
+            <span class="material-symbols-outlined text-3xl">hourglass_top</span>
+        </div>
+        <h1 class="text-3xl font-bold text-primary tracking-tight mb-2">Tu pedido está registrado</h1>
+        <p class="text-sm text-text-muted mb-6">
+            El pedido <span class="font-mono font-semibold text-primary">@ViewBag.NumeroOrden</span> se está procesando y el pago todavía no se confirma.
+            Puedes ver cómo avanza desde la pantalla de seguimiento.
+        </p>
+    </div>
+
+    <!-- La orden se creo pero no se pudo iniciar su procesamiento -->
+    <div id="resultado-sin-confirmar" class="@(confirmada ? "hidden" : "")">
+        <div class="w-16 h-16 rounded-full bg-amber-100 text-amber-800 flex items-center justify-center mx-auto mb-6 ambient-shadow">
+            <span class="material-symbols-outlined text-3xl">warning</span>
+        </div>
+        <h1 class="text-3xl font-bold text-primary tracking-tight mb-2">Tu pedido quedó registrado, pero no pudimos procesarlo</h1>
+        <p class="text-sm text-text-muted mb-6">
+            Guardamos tu pedido <span class="font-mono font-semibold text-primary">@ViewBag.NumeroOrden</span>, pero hubo un problema al iniciar su procesamiento.
+            No se realizó ningún cargo. Contacta a servicio al cliente con tu número de pedido para completarlo.
+        </p>
+    </div>
+
+    <!-- Action Buttons -->
+    <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+        <a href="/Estado?ordenId=@ViewBag.OrdenId"
+           class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-6 py-3 rounded-full text-sm font-semibold hover:opacity-90 active:scale-95 transition-all shadow-sm">
+            <span class="material-symbols-outlined text-[18px]">track_changes</span>
+            Ver seguimiento de mi pedido
+        </a>
+
+        <a href="/"
+           class="w-full sm:w-auto inline-flex items-center justify-center gap-2 bg-surface-container-low text-primary px-5 py-3 rounded-full text-sm font-semibold hover:bg-surface-variant transition-colors border border-border-subtle/50">
+            <span class="material-symbols-outlined text-[18px]">storefront</span>
+            Seguir comprando
+        </a>
+    </div>
+</div>
+
+@if (confirmada)
+{
+    <script>
+        (function () {
+            const ordenId = @Json.Serialize((string)ViewBag.OrdenId);
+            const INTERVALO_MS = 2000;
+            // Pagos espera hasta 5 s por PayKlik y reintenta una vez con backoff antes
+            // de dejar el pago PENDIENTE; 45 s cubren eso mas la reserva y la proyeccion.
+            const ESPERA_MAXIMA_MS = 45000;
+            const inicio = Date.now();
+
+            // Estados de EstadoOrden agrupados por el desenlace que ve el cliente.
+            const EXITOSOS = ['PAGO_APLICADO', 'CONFIRMADA_PENDIENTE_FISCAL', 'CONFIRMADA', 'DESPACHO_SOLICITADO',
+                              'EN_PREPARACION', 'EN_TRANSITO', 'LISTA_PARA_RECOGER', 'ENTREGADA',
+                              'DEVOLUCION_EN_PROCESO', 'DEVUELTA'];
+            const PENDIENTES = ['PAGO_PENDIENTE'];
+            const RECHAZADOS = ['RECHAZADA'];
+            const CANCELADOS = ['CANCELADA', 'CANCELADA_RESERVA_VENCIDA'];
+            // CREADA, RESERVA_SOLICITADA, INVENTARIO_RESERVADO y COBRO_SOLICITADO: la saga sigue.
+
+            function mostrar(id) {
+                document.getElementById('resultado-procesando').classList.add('hidden');
+                document.getElementById(id).classList.remove('hidden');
+            }
+
+            async function consultar() {
+                let estado = null;
+                let orden = null;
+                try {
+                    const res = await fetch('/Estado/Api/' + encodeURIComponent(ordenId), { headers: { 'Accept': 'application/json' } });
+                    if (res.status === 401 || res.status === 403) {
+                        mostrar('resultado-en-curso');
+                        return;
+                    }
+                    // 404: la proyeccion de Consulta de Estado aun no registra la orden; se reintenta.
+                    if (res.ok) {
+                        orden = (await res.json()).orden;
+                        estado = orden?.estado;
+                    }
+                } catch (err) {
+                    console.error('No se pudo consultar el estado del pedido:', err);
+                }
+
+                if (EXITOSOS.includes(estado)) return mostrar('resultado-exitoso');
+                if (PENDIENTES.includes(estado)) return mostrar('resultado-pendiente');
+                if (RECHAZADOS.includes(estado)) return mostrar('resultado-rechazado');
+                if (CANCELADOS.includes(estado)) {
+                    if (estado === 'CANCELADA_RESERVA_VENCIDA') {
+                        document.getElementById('resultado-cancelado-motivo').textContent =
+                            'El tiempo para completar el pago venció y los productos se liberaron. No se realizó ningún cargo.';
+                    } else if (orden?.motivoUltimoCambio) {
+                        document.getElementById('resultado-cancelado-motivo').textContent = orden.motivoUltimoCambio;
+                    }
+                    return mostrar('resultado-cancelado');
+                }
+
+                if (Date.now() - inicio >= ESPERA_MAXIMA_MS) return mostrar('resultado-en-curso');
+                setTimeout(consultar, INTERVALO_MS);
+            }
+
+            setTimeout(consultar, 1000);
+        })();
+    </script>
+}
