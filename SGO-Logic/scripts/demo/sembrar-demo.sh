@@ -6,6 +6,21 @@ EMAIL="${DEMO_EMAIL:-demo@sgo.local}"
 PASSWORD="${DEMO_PASSWORD:-Demo1234!}"
 NOMBRE="${DEMO_NOMBRE:-Usuario Demo}"
 VERIFICATION_CODE="${DEMO_VERIFICATION_CODE:-}"
+MENSAJERIA_URL="${MENSAJERIA_URL:-http://localhost:8089}"
+
+# Usuarios de demo: "correo|nombre". La web trata como ADMIN a cualquier correo
+# que contenga "admin" (PermisosHelper), por eso los administrativos usan ese
+# prefijo; en la base todos quedan con rol CLIENTE hasta que exista un endpoint
+# de asignacion de rol.
+USUARIOS_DEMO=(
+  "admin@sgo.local|Administrador General"
+  "admin.bodega@sgo.local|Administrador de Bodega"
+  "admin.ventas@sgo.local|Administrador de Ventas"
+  "cliente1@sgo.local|Ana Lopez"
+  "cliente2@sgo.local|Carlos Ramirez"
+  "cliente3@sgo.local|Maria Guzman"
+  "cliente4@sgo.local|Luis Morales"
+)
 
 request() {
   local method="$1"
@@ -31,26 +46,65 @@ require_success() {
   fi
 }
 
-printf 'Preparando usuario demo %s\n' "$EMAIL"
-request POST "$BASE_URL/api/auth/registro" \
-  "{\"email\":\"$EMAIL\",\"contrasena\":\"$PASSWORD\",\"nombreCompleto\":\"$NOMBRE\"}"
-require_success
+# Lee de la cola del mock de mensajeria el ultimo codigo enviado a un correo.
+leer_codigo() {
+  local email="$1"
+  curl --silent "$MENSAJERIA_URL/api/mensajes" \
+    | tr '}' '\n' \
+    | grep -F "\"destinatario\":\"$email\"" \
+    | tail -1 \
+    | grep -oE '"cuerpo":"[^"]*"' \
+    | grep -oE '[0-9]{6}' \
+    | head -1
+}
 
-if [[ -z "$VERIFICATION_CODE" ]]; then
-  printf 'Usuario creado o ya existente. Define DEMO_VERIFICATION_CODE con el codigo del log de auth-api y vuelve a ejecutar.\n'
-  printf 'Ejemplo: docker compose logs auth-api | grep -i codigo\n'
-  exit 0
-fi
+# Registra, verifica e inicia sesion. Devuelve 1 si no se pudo verificar, para
+# que el seed siga con los demas usuarios en vez de abortar todo.
+sembrar_usuario() {
+  local email="$1" password="$2" nombre="$3" codigo="${4:-}"
 
-request POST "$BASE_URL/api/auth/verificar" \
-  "{\"email\":\"$EMAIL\",\"codigo\":\"$VERIFICATION_CODE\"}"
-require_success
+  printf 'Preparando usuario %s\n' "$email"
+  request POST "$BASE_URL/api/auth/registro" \
+    "{\"email\":\"$email\",\"contrasena\":\"$password\",\"nombreCompleto\":\"$nombre\"}"
+  require_success
 
-request POST "$BASE_URL/api/auth/login" \
-  "{\"email\":\"$EMAIL\",\"contrasena\":\"$PASSWORD\"}"
-if [[ "$HTTP_CODE" != "200" ]]; then
-  printf 'ERROR login %s: %s\n' "$HTTP_CODE" "$HTTP_BODY" >&2
-  exit 1
+  if [[ -z "$codigo" ]]; then
+    # reenviar-codigo deja uno fresco en la cola; si la cuenta ya estaba
+    # verificada responde 200 y el verificar de mas abajo no hace nada.
+    request POST "$BASE_URL/api/auth/reenviar-codigo" "{\"email\":\"$email\"}"
+    codigo=$(leer_codigo "$email") || true
+  fi
+
+  if [[ -z "$codigo" ]]; then
+    printf '  AVISO: sin codigo de verificacion para %s (mensajeria en %s)\n' "$email" "$MENSAJERIA_URL"
+    return 1
+  fi
+
+  request POST "$BASE_URL/api/auth/verificar" \
+    "{\"email\":\"$email\",\"codigo\":\"$codigo\"}"
+  require_success
+
+  request POST "$BASE_URL/api/auth/login" \
+    "{\"email\":\"$email\",\"contrasena\":\"$password\"}"
+  if [[ "$HTTP_CODE" != "200" ]]; then
+    printf 'ERROR login %s: %s\n' "$HTTP_CODE" "$HTTP_BODY" >&2
+    return 1
+  fi
+
+  printf '  OK %s\n' "$email"
+  return 0
+}
+
+fallidos=0
+sembrar_usuario "$EMAIL" "$PASSWORD" "$NOMBRE" "$VERIFICATION_CODE" || fallidos=$((fallidos + 1))
+
+for entrada in "${USUARIOS_DEMO[@]}"; do
+  sembrar_usuario "${entrada%%|*}" "$PASSWORD" "${entrada##*|}" || fallidos=$((fallidos + 1))
+done
+
+if (( fallidos > 0 )); then
+  printf '\n%d usuario(s) sin verificar. Revisa el mock de mensajeria o usa DEMO_VERIFICATION_CODE.\n' "$fallidos"
+  printf 'Ejemplo: docker compose logs auth-api | grep -i codigo\n\n'
 fi
 
 printf 'Cargando existencias de demo y catalogo web\n'
@@ -80,4 +134,5 @@ for sku in PROD-001 PROD-002 PROD-003 PROD-004 PROD-005 PROD-006 PROD-007 PROD-0
   done
 done
 
-printf 'Seed de demo completado. Usuario: %s | SKUs: SKU-DEMO-001..003 y PROD-001..008\n' "$EMAIL"
+printf 'Seed de demo completado. Usuarios: %s y %d mas (contrasena %s) | SKUs: SKU-DEMO-001..003 y PROD-001..008\n' \
+  "$EMAIL" "${#USUARIOS_DEMO[@]}" "$PASSWORD"
