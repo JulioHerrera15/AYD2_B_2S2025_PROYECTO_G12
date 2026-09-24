@@ -33,4 +33,23 @@ public sealed class ServicioMapeoPosTests
 
         Assert.Equal("T01", resultado);
     }
+
+    [Theory]
+    [InlineData("TIENDA-01-CENTRAL", "T01")]
+    [InlineData("TIENDA-02-MIRAFLORES", "T02")]
+    [InlineData("TIENDA-03-PORTALES", "T03")]
+    [InlineData("TIENDA-04-PRADERA", "T04")]
+    [InlineData("TIENDA-12", "T12")]
+    [InlineData("TDA-08", "T08")]
+    [InlineData("T1", "T01")]
+    [InlineData("32", "T32")]
+    [InlineData("UBICACION-DESCONOCIDA", "T01")]
+    public void Mapea_sucursales_frontend_y_formatos_pos_correctamente(string input, string esperado)
+    {
+        var servicio = new ServicioMapeoPos(defaultTienda: "T01");
+
+        var resultado = servicio.ResolverPosInstanciaId(input);
+
+        Assert.Equal(esperado, resultado);
+    }
 }

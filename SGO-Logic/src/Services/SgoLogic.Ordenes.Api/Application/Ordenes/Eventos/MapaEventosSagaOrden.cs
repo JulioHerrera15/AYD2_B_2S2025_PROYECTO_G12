@@ -122,7 +122,7 @@ public static class MapaEventosSagaOrden
                 NumeroOrden: orden.NumeroOrden,
                 ClienteId: orden.ClienteId,
                 Canal: orden.Canal,
-                TiendaDestinoId: null,
+                TiendaDestinoId: orden.UbicacionSolicitadaId,
                 Moneda: orden.Moneda,
                 Subtotal: orden.Subtotal,
                 Impuestos: orden.Impuestos,
@@ -175,7 +175,7 @@ public static class MapaEventosSagaOrden
             new OrdenCertificadaFiscalmenteData(
                 OrdenId: orden.Id,
                 NumeroOrden: orden.NumeroOrden,
-                TiendaDestinoId: null,
+                TiendaDestinoId: orden.UbicacionSolicitadaId,
                 DocumentoFiscalId: orden.DocumentoFiscalId ?? string.Empty,
                 TipoDocumento: TipoDocumentoFiscal.FACTURA,
                 Serie: orden.DocumentoFiscalSerie ?? string.Empty,
@@ -225,7 +225,7 @@ public static class MapaEventosSagaOrden
                 OrdenId: orden.Id,
                 NumeroOrden: orden.NumeroOrden,
                 ClienteId: orden.ClienteId,
-                TiendaDestinoId: null,
+                TiendaDestinoId: orden.UbicacionSolicitadaId,
                 EstabaConfirmada: estabaConfirmada,
                 Motivo: transicion.EstadoNuevo switch
                 {
