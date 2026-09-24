@@ -17,22 +17,27 @@ public class EstadoController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(string? ordenId)
+    public async Task<IActionResult> Index(string? ordenId, string? buscar, string? filtro)
     {
         var jwt = Request.Cookies["sgo_jwt"];
         var userEmail = Request.Cookies["sgo_user_email"];
         var userRole = Request.Cookies["sgo_user_role"] ?? "CLIENTE";
         var isAuthenticated = !string.IsNullOrWhiteSpace(jwt) && !string.IsNullOrWhiteSpace(userEmail);
+        var isStaff = PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt);
 
         ViewBag.IsAuthenticated = isAuthenticated;
         ViewBag.UserEmail = userEmail;
+        ViewBag.IsStaff = isStaff;
+        ViewBag.UserRole = userRole;
+        ViewBag.Buscar = buscar;
+        ViewBag.Filtro = string.IsNullOrWhiteSpace(filtro) ? "TODOS" : filtro.Trim().ToUpperInvariant();
 
         // 1. Si no esta autenticado
         if (!isAuthenticated)
         {
             if (!string.IsNullOrWhiteSpace(ordenId))
             {
-                TempData["Info"] = "Por motivos de privacidad y proteccion de datos, inicia sesion para rastrear tu orden.";
+                TempData["Info"] = "Por motivos de privacidad y protección de datos, inicia sesión para rastrear tu orden.";
                 return RedirectToAction("Login", "Auth", new { returnUrl = $"/Estado?ordenId={ordenId.Trim()}" });
             }
 
@@ -40,10 +45,11 @@ public class EstadoController : Controller
             return View();
         }
 
-        // 2. Si esta autenticado pero no paso ordenId: listar sus propias guias y pedidos
+        // 2. Si esta autenticado pero no paso ordenId: listar sus propias guias (o todas si es admin)
         if (string.IsNullOrWhiteSpace(ordenId))
         {
-            await CargarHistorialUsuarioAsync(userEmail!);
+            var identificador = isStaff ? "TODOS" : userEmail!;
+            await CargarHistorialUsuarioAsync(identificador, isStaff, buscar, ViewBag.Filtro as string);
             return View();
         }
 
@@ -54,18 +60,18 @@ public class EstadoController : Controller
         var orden = await _gateway.ObtenerEstadoOrdenAsync(idLimpio);
         if (orden is null)
         {
-            ViewBag.Error = $"No se encontro la orden '{idLimpio}' en el sistema.";
-            await CargarHistorialUsuarioAsync(userEmail!);
+            ViewBag.Error = $"No se encontró la orden '{idLimpio}' en el sistema.";
+            var identificador = isStaff ? "TODOS" : userEmail!;
+            await CargarHistorialUsuarioAsync(identificador, isStaff, buscar, ViewBag.Filtro as string);
             return View();
         }
 
         var esDuenio = string.Equals(orden.ClienteId, userEmail, StringComparison.OrdinalIgnoreCase);
-        var esPersonal = PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt);
 
-        if (!esDuenio && !esPersonal)
+        if (!esDuenio && !isStaff)
         {
-            ViewBag.Error = "Acceso denegado: Por razones de privacidad, solo puedes consultar las ordenes y guias asociadas a tu cuenta.";
-            await CargarHistorialUsuarioAsync(userEmail!);
+            ViewBag.Error = "Acceso denegado: Por razones de privacidad, solo puedes consultar las órdenes asociadas a tu cuenta.";
+            await CargarHistorialUsuarioAsync(userEmail!, false, null, null);
             return View();
         }
 
@@ -87,7 +93,7 @@ public class EstadoController : Controller
         var isAuthenticated = !string.IsNullOrWhiteSpace(jwt) && !string.IsNullOrWhiteSpace(userEmail);
 
         if (!isAuthenticated)
-            return Unauthorized(new { Error = "Requiere autenticacion para consultar estado" });
+            return Unauthorized(new { Error = "Requiere autenticación para consultar estado" });
 
         var idLimpio = ordenId.Trim();
         var orden = await _gateway.ObtenerEstadoOrdenAsync(idLimpio);
@@ -105,18 +111,42 @@ public class EstadoController : Controller
         return Json(new { orden, despacho });
     }
 
-    private async Task CargarHistorialUsuarioAsync(string email)
+    private async Task CargarHistorialUsuarioAsync(string identificador, bool esPersonal, string? buscar, string? filtro)
     {
-        var historial = await _gateway.ObtenerHistorialClienteAsync(email);
+        var tamano = esPersonal ? 100 : 25;
+        var historial = await _gateway.ObtenerHistorialClienteAsync(identificador, 1, tamano);
         var itemsConDespacho = new List<OrdenConDespachoItem>();
-        if (historial?.Ordenes != null)
+        if (historial?.Ordenes != null && historial.Ordenes.Count > 0)
         {
-            foreach (var ord in historial.Ordenes)
+            var tareas = historial.Ordenes.Select(async ord =>
             {
                 var desp = await _gateway.ObtenerDespachoOrdenAsync(ord.OrdenId);
-                itemsConDespacho.Add(new OrdenConDespachoItem(ord, desp));
-            }
+                return new OrdenConDespachoItem(ord, desp);
+            });
+            var resultados = await Task.WhenAll(tareas);
+            itemsConDespacho.AddRange(resultados);
         }
+
+        if (!string.IsNullOrWhiteSpace(buscar))
+        {
+            var b = buscar.Trim();
+            itemsConDespacho = itemsConDespacho.Where(x =>
+                (x.Orden.NumeroOrden != null && x.Orden.NumeroOrden.Contains(b, StringComparison.OrdinalIgnoreCase)) ||
+                x.Orden.OrdenId.Contains(b, StringComparison.OrdinalIgnoreCase) ||
+                (x.Orden.ClienteId != null && x.Orden.ClienteId.Contains(b, StringComparison.OrdinalIgnoreCase)) ||
+                (x.Despacho?.GuiaId != null && x.Despacho.GuiaId.Contains(b, StringComparison.OrdinalIgnoreCase))
+            ).ToList();
+        }
+
+        if (!string.IsNullOrWhiteSpace(filtro) && filtro != "TODOS")
+        {
+            itemsConDespacho = itemsConDespacho.Where(x =>
+                string.Equals(x.Orden.Estado, filtro, StringComparison.OrdinalIgnoreCase) ||
+                (x.Despacho != null && string.Equals(x.Despacho.Estado, filtro, StringComparison.OrdinalIgnoreCase))
+            ).ToList();
+        }
+
         ViewBag.HistorialDespachos = itemsConDespacho;
+        ViewBag.TotalOrdenes = historial?.TotalRegistros ?? itemsConDespacho.Count;
     }
 }

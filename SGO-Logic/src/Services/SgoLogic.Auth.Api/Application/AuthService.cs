@@ -7,6 +7,7 @@ namespace SgoLogic.Auth.Api.Application;
 public interface IAuthService
 {
     Task<RegistroResponse> RegistrarAsync(RegistroRequest request, CancellationToken ct = default);
+    Task<RegistroResponse> ReenviarCodigoAsync(string email, CancellationToken ct = default);
     Task<VerificarEmailResponse> VerificarEmailAsync(VerificarEmailRequest request, CancellationToken ct = default);
     Task<LoginResponse> LoginAsync(LoginRequest request, CancellationToken ct = default);
 }
@@ -56,28 +57,8 @@ public sealed class AuthService : IAuthService
         _contexto.CodigosVerificacion.Add(codigo);
         await _contexto.SaveChangesAsync(ct);
 
-        // Enviar codigo por correo via MockMensajeria
-        if (_httpClientFactory != null)
-        {
-            try
-            {
-                var cliente = _httpClientFactory.CreateClient("Mensajeria");
-                var nombre = !string.IsNullOrWhiteSpace(request.NombreCompleto) ? request.NombreCompleto : emailNormalizado;
-                var payload = new
-                {
-                    Destinatario = emailNormalizado,
-                    Asunto = "Codigo de verificacion - MegaStore",
-                    Cuerpo = $"Hola {nombre}, tu codigo de verificacion para activar tu cuenta en MegaStore es: {codigoPlano}. Valido por 15 minutos."
-                };
-                await cliente.PostAsJsonAsync("/api/mensajes/email", payload, ct);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Falla al enviar codigo de verificacion via mensajeria para {Email} - aislado", emailNormalizado);
-            }
-        }
+        await EnviarCorreoVerificacionAsync(emailNormalizado, request.NombreCompleto, codigoPlano, ct);
 
-        // Se loguea para pruebas automatizadas y demo
         _logger.LogInformation(
             "DEMO -- Codigo de verificacion para {Email}: {Codigo}",
             emailNormalizado, codigoPlano);
@@ -86,6 +67,62 @@ public sealed class AuthService : IAuthService
             UsuarioId: usuario.Id.ToString(),
             Email: usuario.Email,
             Mensaje: "Registro exitoso. Revisa tu correo para obtener el codigo de verificacion.");
+    }
+
+    public async Task<RegistroResponse> ReenviarCodigoAsync(string email, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(email) || !email.Contains("@") || !email.Contains("."))
+            throw new ArgumentException("El formato del correo electronico es invalido.");
+
+        var emailNormalizado = email.ToLowerInvariant().Trim();
+
+        var usuario = await _contexto.Usuarios
+            .FirstOrDefaultAsync(u => u.Email == emailNormalizado, ct)
+            ?? throw new KeyNotFoundException("No se encontro un usuario registrado con ese correo.");
+
+        if (usuario.EmailVerificado)
+            return new RegistroResponse(usuario.Id.ToString(), usuario.Email, "El correo ya se encuentra verificado.");
+
+        var codigoPlano = GenerarCodigo6Digitos();
+        var hashCodigo = BCrypt.Net.BCrypt.HashPassword(codigoPlano, workFactor: 10);
+        var codigo = CodigoVerificacion.Crear(usuario.Id, hashCodigo);
+
+        _contexto.CodigosVerificacion.Add(codigo);
+        await _contexto.SaveChangesAsync(ct);
+
+        await EnviarCorreoVerificacionAsync(emailNormalizado, usuario.NombreCompleto, codigoPlano, ct);
+
+        _logger.LogInformation(
+            "DEMO -- Codigo de verificacion reenviado para {Email}: {Codigo}",
+            emailNormalizado, codigoPlano);
+
+        return new RegistroResponse(
+            UsuarioId: usuario.Id.ToString(),
+            Email: usuario.Email,
+            Mensaje: "Se ha enviado un nuevo codigo de verificacion a tu correo.");
+    }
+
+    private async Task EnviarCorreoVerificacionAsync(string email, string? nombre, string codigoPlano, CancellationToken ct)
+    {
+        if (_httpClientFactory != null)
+        {
+            try
+            {
+                var cliente = _httpClientFactory.CreateClient("Mensajeria");
+                var nombreDest = !string.IsNullOrWhiteSpace(nombre) ? nombre : email;
+                var payload = new
+                {
+                    Destinatario = email,
+                    Asunto = "Codigo de verificacion - MegaStore",
+                    Cuerpo = $"Hola {nombreDest}, tu codigo de verificacion para activar tu cuenta en MegaStore es: {codigoPlano}. Valido por 15 minutos."
+                };
+                await cliente.PostAsJsonAsync("/api/mensajes/email", payload, ct);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Falla al enviar codigo de verificacion via mensajeria para {Email} - aislado", email);
+            }
+        }
     }
 
     public async Task<VerificarEmailResponse> VerificarEmailAsync(VerificarEmailRequest request, CancellationToken ct = default)

@@ -56,16 +56,36 @@ public class DespachoController : Controller
         var filtroNormalizado = string.IsNullOrWhiteSpace(filtro) ? "TODOS" : filtro.Trim().ToUpperInvariant();
         ViewBag.Filtro = filtroNormalizado;
 
-        var ubicacion = string.IsNullOrWhiteSpace(ubicacionId) ? "TIENDA-01-CENTRAL" : ubicacionId.Trim();
-        ViewBag.UbicacionId = ubicacion;
+        var ubicacionFiltro = string.IsNullOrWhiteSpace(ubicacionId) ? "TODAS" : ubicacionId.Trim();
+        ViewBag.UbicacionId = ubicacionFiltro;
 
         // Consultar cola de preparación real del servicio de Despacho (HU-019)
-        var colaReal = await _gateway.ObtenerColaPreparacionAsync(ubicacion);
+        var ubicaciones = ubicacionFiltro == "TODAS"
+            ? new[] { "CD-01", "TIENDA-01-CENTRAL" }
+            : new[] { ubicacionFiltro };
 
-        var todos = (colaReal ?? new List<DespachoPreparacionDto>()).Select(item => new DespachoItemModel(
+        var itemsAcumulados = new List<DespachoPreparacionDto>();
+        foreach (var u in ubicaciones)
+        {
+            var res = await _gateway.ObtenerColaPreparacionAsync(u);
+            if (res != null && res.Count > 0)
+            {
+                itemsAcumulados.AddRange(res);
+            }
+        }
+
+        var colaReal = itemsAcumulados
+            .GroupBy(x => !string.IsNullOrWhiteSpace(x.DespachoId) ? x.DespachoId : (!string.IsNullOrWhiteSpace(x.Id) ? x.Id : x.OrdenId))
+            .Select(g => g.First())
+            .OrderByDescending(x => x.CreadoEn)
+            .ToList();
+
+        var todos = colaReal.Select(item => new DespachoItemModel(
             IdDespacho: item.DespachoId,
             OrdenId: item.OrdenId,
-            Destino: item.MetodoEntrega == "RECOGIDA_TIENDA" ? $"MegaStore {item.UbicacionOrigenId}" : "Envío a Domicilio",
+            Destino: item.MetodoEntrega == "RECOGIDA_TIENDA" 
+                ? $"MegaStore Tienda Central" 
+                : $"Envío a Domicilio ({item.UbicacionOrigenId})",
             Metodo: item.MetodoEntrega,
             MetodoLabel: item.MetodoEntrega == "RECOGIDA_TIENDA" ? "Recogida Tienda" : "Domicilio",
             MetodoIcon: item.MetodoEntrega == "RECOGIDA_TIENDA" ? "storefront" : "local_shipping",
@@ -85,7 +105,7 @@ public class DespachoController : Controller
         var model = new DespachoViewModel(
             Filtro: filtroNormalizado,
             TotalDespachos: todos.Count,
-            EnPreparacion: todos.Count(d => d.Estado == "EN_PREPARACION"),
+            EnPreparacion: todos.Count(d => d.Estado == "EN_PREPARACION" || d.Estado == "GUIA_ASIGNADA"),
             EnTransito: todos.Count(d => d.Estado == "EN_TRANSITO"),
             Entregados: todos.Count(d => d.Estado == "ENTREGADA" || d.Estado == "LISTA_PARA_RECOGER"),
             ConteoDomicilio: todos.Count(d => d.Metodo == "DOMICILIO"),

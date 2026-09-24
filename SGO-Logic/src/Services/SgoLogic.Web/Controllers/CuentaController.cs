@@ -37,6 +37,13 @@ public class CuentaController : Controller
             return RedirectToAction("Login", "Auth", new { returnUrl = "/Cuenta/Ordenes" });
         }
 
+        var jwt = Request.Cookies["sgo_jwt"];
+        var userRole = Request.Cookies["sgo_user_role"] ?? "CLIENTE";
+        if (PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt))
+        {
+            return RedirectToAction("Index", "Estado");
+        }
+
         ViewBag.UserEmail = userEmail;
         var historial = await _gateway.ObtenerHistorialClienteAsync(userEmail, pagina, tamano);
         return View(historial);

@@ -144,12 +144,14 @@ public sealed class ConsultaEstadoOrdenesConsumidor
     {
         var data = Deserializar<OrdenConfirmadaData>(evt.Data);
         var vista = await ObtenerOCrearVista(evt.AggregateId, ctx, ct);
-        if (!AplicarSequence(evt, vista)) return;
 
         // EVENTO 8: enriquece — NO toca Estado
         vista.PagoId = data.PagoId;
         vista.TiendaDestinoId = data.TiendaDestinoId;
-        vista.UltimoSequence = evt.Sequence;
+        if (evt.Sequence > vista.UltimoSequence)
+        {
+            vista.UltimoSequence = evt.Sequence;
+        }
         vista.ActualizadaEn = DateTime.UtcNow;
 
         await ctx.SaveChangesAsync(ct);
@@ -183,13 +185,19 @@ public sealed class ConsultaEstadoOrdenesConsumidor
     {
         var data = Deserializar<OrdenCertificadaFiscalmenteData>(evt.Data);
         var vista = await ObtenerOCrearVista(evt.AggregateId, ctx, ct);
-        if (!AplicarSequence(evt, vista)) return;
 
         // EVENTO 12: enriquece con datos fiscales — NO toca Estado
-        vista.DocumentoFiscalId = data.DocumentoFiscalId;
+        var dteNo = !string.IsNullOrWhiteSpace(data.NumeroDocumento)
+            ? $"DTE-{data.Serie}-{data.NumeroDocumento}"
+            : (!string.IsNullOrWhiteSpace(data.NumeroAutorizacion) ? data.NumeroAutorizacion : data.DocumentoFiscalId);
+
+        vista.DocumentoFiscalId = dteNo;
         vista.SerieDocumentoFiscal = data.Serie;
         vista.NumeroDocumentoFiscal = data.NumeroDocumento;
-        vista.UltimoSequence = evt.Sequence;
+        if (evt.Sequence > vista.UltimoSequence)
+        {
+            vista.UltimoSequence = evt.Sequence;
+        }
         vista.ActualizadaEn = DateTime.UtcNow;
 
         await ctx.SaveChangesAsync(ct);

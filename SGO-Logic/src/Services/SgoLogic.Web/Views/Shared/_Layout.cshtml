@@ -151,56 +151,47 @@
 
             <!-- Navigation Links -->
             <nav class="hidden md:flex items-center gap-1">
-                <a href="/Catalogo" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
-                    <span class="material-symbols-outlined text-[17px]">store</span>
-                    <span>Catálogo</span>
-                </a>
-                <a href="/Carrito" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
-                    <span class="material-symbols-outlined text-[17px]">shopping_cart</span>
-                    <span>Carrito</span>
-                </a>
-                <a href="/Estado" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
-                    <span class="material-symbols-outlined text-[17px]">track_changes</span>
-                    <span>Rastreo</span>
-                </a>
-
                 @if (isStaff)
                 {
-                    <!-- Dropdown for Internal / Operational Tools (Only authorized staff/admin) -->
-                    <div class="relative dropdown-container">
-                        <button type="button" class="dropdown-trigger flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-secondary bg-secondary-fixed/30 border border-secondary-container/30">
-                            <span class="material-symbols-outlined text-[17px]">admin_panel_settings</span>
-                            <span>Operaciones</span>
-                            <span class="material-symbols-outlined text-[15px]">expand_more</span>
-                        </button>
-                        <div class="dropdown-menu absolute left-0 pt-1.5 w-56 hidden z-50 animate-fadeIn">
-                            <div class="bg-surface-white rounded-2xl shadow-xl border border-border-subtle/80 py-2">
-                                <div class="px-4 py-1.5 text-[10px] font-bold uppercase tracking-wider text-text-muted border-b border-border-subtle/40 mb-1">
-                                    Herramientas Operativas
-                                </div>
-                                <a href="/Pos" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
-                                    <span class="material-symbols-outlined text-[17px] text-secondary">point_of_sale</span>
-                                    Terminal OmniPOS (Caja)
-                                </a>
-                                <a href="/Vision360" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
-                                    <span class="material-symbols-outlined text-[17px] text-secondary">support_agent</span>
-                                    Visión 360 del Cliente
-                                </a>
-                                <a href="/Despacho" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
-                                    <span class="material-symbols-outlined text-[17px] text-secondary">local_shipping</span>
-                                    Control de Despacho
-                                </a>
-                                <a href="/Incidencias" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
-                                    <span class="material-symbols-outlined text-[17px] text-secondary">gavel</span>
-                                    Gestión de Incidencias
-                                </a>
-                                <a href="/Monitoreo" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
-                                    <span class="material-symbols-outlined text-[17px] text-secondary">hub</span>
-                                    Topología & Monitoreo
-                                </a>
-                            </div>
-                        </div>
-                    </div>
+                    <a href="/Despacho" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                        <span class="material-symbols-outlined text-[17px] text-secondary">local_shipping</span>
+                        <span>Despacho</span>
+                    </a>
+                    <a href="/Estado" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                        <span class="material-symbols-outlined text-[17px] text-secondary">receipt_long</span>
+                        <span>Todas las Órdenes</span>
+                    </a>
+                    <a href="/Pos" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                        <span class="material-symbols-outlined text-[17px] text-secondary">point_of_sale</span>
+                        <span>OmniPOS</span>
+                    </a>
+                    <a href="/Vision360" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                        <span class="material-symbols-outlined text-[17px] text-secondary">support_agent</span>
+                        <span>Visión 360</span>
+                    </a>
+                    <a href="/Incidencias" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                        <span class="material-symbols-outlined text-[17px] text-secondary">gavel</span>
+                        <span>Incidencias</span>
+                    </a>
+                    <a href="/Monitoreo" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                        <span class="material-symbols-outlined text-[17px] text-secondary">hub</span>
+                        <span>Monitoreo</span>
+                    </a>
+                }
+                else
+                {
+                    <a href="/Catalogo" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                        <span class="material-symbols-outlined text-[17px]">store</span>
+                        <span>Catálogo</span>
+                    </a>
+                    <a href="/Carrito" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                        <span class="material-symbols-outlined text-[17px]">shopping_cart</span>
+                        <span>Carrito</span>
+                    </a>
+                    <a href="/Estado" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                        <span class="material-symbols-outlined text-[17px]">track_changes</span>
+                        <span>Rastreo</span>
+                    </a>
                 }
             </nav>
 
@@ -218,24 +209,46 @@
                             </span>
                             <span class="material-symbols-outlined text-[16px] text-text-muted">expand_more</span>
                         </button>
-                        <div class="dropdown-menu absolute right-0 pt-1.5 w-48 hidden z-50">
+                        <div class="dropdown-menu absolute right-0 pt-1.5 w-52 hidden z-50">
                             <div class="bg-surface-white rounded-2xl shadow-xl border border-border-subtle/80 py-2">
                                 <div class="px-4 py-2 border-b border-border-subtle/40 mb-1">
                                     <span class="text-[11px] font-bold text-primary block truncate">@(userName ?? "Usuario")</span>
                                     <span class="text-[10px] text-text-muted block truncate font-mono">@userEmail</span>
+                                    @if (isStaff)
+                                    {
+                                        <span class="inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed">Rol: @userRole</span>
+                                    }
                                 </div>
-                                <a href="/Cuenta/Perfil" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
-                                    <span class="material-symbols-outlined text-[17px]">account_circle</span>
-                                    Mi Perfil
-                                </a>
-                                <a href="/Cuenta/Ordenes" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
-                                    <span class="material-symbols-outlined text-[17px]">receipt_long</span>
-                                    Mis Órdenes
-                                </a>
-                                <a href="/Cuenta/Privacidad" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
-                                    <span class="material-symbols-outlined text-[17px]">shield</span>
-                                    Privacidad & Datos
-                                </a>
+                                @if (isStaff)
+                                {
+                                    <a href="/Despacho" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                        <span class="material-symbols-outlined text-[17px] text-secondary">local_shipping</span>
+                                        Control de Despacho
+                                    </a>
+                                    <a href="/Estado" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                        <span class="material-symbols-outlined text-[17px] text-secondary">receipt_long</span>
+                                        Supervisión de Órdenes
+                                    </a>
+                                    <a href="/Cuenta/Perfil" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                        <span class="material-symbols-outlined text-[17px]">account_circle</span>
+                                        Mi Cuenta
+                                    </a>
+                                }
+                                else
+                                {
+                                    <a href="/Cuenta/Perfil" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                        <span class="material-symbols-outlined text-[17px]">account_circle</span>
+                                        Mi Perfil
+                                    </a>
+                                    <a href="/Cuenta/Ordenes" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                        <span class="material-symbols-outlined text-[17px]">receipt_long</span>
+                                        Mis Órdenes
+                                    </a>
+                                    <a href="/Cuenta/Privacidad" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                        <span class="material-symbols-outlined text-[17px]">shield</span>
+                                        Privacidad & Datos
+                                    </a>
+                                }
                                 <hr class="my-1 border-border-subtle/50" />
                                 <a href="/Auth/Logout" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-error hover:bg-error-container/30">
                                     <span class="material-symbols-outlined text-[17px]">logout</span>
@@ -259,38 +272,57 @@
 
         <!-- Mobile Navigation Sub-bar -->
         <div class="md:hidden flex items-center justify-around border-t border-border-subtle/60 py-2 px-2 bg-surface-white overflow-x-auto text-[11px] gap-1">
-            <a href="/Catalogo" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
-                <span class="material-symbols-outlined text-[18px]">store</span>
-                <span>Catálogo</span>
-            </a>
-            <a href="/Carrito" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
-                <span class="material-symbols-outlined text-[18px]">shopping_cart</span>
-                <span>Carrito</span>
-            </a>
-            <a href="/Estado" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
-                <span class="material-symbols-outlined text-[18px]">track_changes</span>
-                <span>Rastreo</span>
-            </a>
             @if (isStaff)
             {
-                <a href="/Pos" class="flex flex-col items-center px-2 py-1 font-medium text-secondary">
-                    <span class="material-symbols-outlined text-[18px]">admin_panel_settings</span>
-                    <span>Operaciones</span>
+                <a href="/Despacho" class="flex flex-col items-center px-2 py-1 font-medium text-secondary">
+                    <span class="material-symbols-outlined text-[18px]">local_shipping</span>
+                    <span>Despacho</span>
                 </a>
-            }
-            else if (isAuthenticated)
-            {
-                <a href="/Cuenta/Ordenes" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                <a href="/Estado" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
                     <span class="material-symbols-outlined text-[18px]">receipt_long</span>
-                    <span>Pedidos</span>
+                    <span>Órdenes</span>
+                </a>
+                <a href="/Pos" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[18px]">point_of_sale</span>
+                    <span>POS</span>
+                </a>
+                <a href="/Vision360" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[18px]">support_agent</span>
+                    <span>Visión 360</span>
+                </a>
+                <a href="/Monitoreo" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[18px]">hub</span>
+                    <span>Monitoreo</span>
                 </a>
             }
             else
             {
-                <a href="/Auth/Login" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
-                    <span class="material-symbols-outlined text-[18px]">login</span>
-                    <span>Entrar</span>
+                <a href="/Catalogo" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[18px]">store</span>
+                    <span>Catálogo</span>
                 </a>
+                <a href="/Carrito" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[18px]">shopping_cart</span>
+                    <span>Carrito</span>
+                </a>
+                <a href="/Estado" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[18px]">track_changes</span>
+                    <span>Rastreo</span>
+                </a>
+                @if (isAuthenticated)
+                {
+                    <a href="/Cuenta/Ordenes" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                        <span class="material-symbols-outlined text-[18px]">receipt_long</span>
+                        <span>Pedidos</span>
+                    </a>
+                }
+                else
+                {
+                    <a href="/Auth/Login" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                        <span class="material-symbols-outlined text-[18px]">login</span>
+                        <span>Entrar</span>
+                    </a>
+                }
             }
         </div>
     </header>
@@ -302,6 +334,13 @@
             <div class="mb-6 bg-secondary-fixed text-on-secondary-fixed border border-secondary-container/40 rounded-2xl p-4 flex items-center gap-3 ambient-shadow">
                 <span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">check_circle</span>
                 <div class="font-medium text-sm">@TempData["Exito"]</div>
+            </div>
+        }
+        @if (TempData["Info"] != null)
+        {
+            <div class="mb-6 bg-secondary-fixed/50 text-on-secondary-fixed border border-secondary-container/30 rounded-2xl p-4 flex items-center gap-3 ambient-shadow">
+                <span class="material-symbols-outlined text-secondary" style="font-variation-settings: 'FILL' 1;">info</span>
+                <div class="font-medium text-sm">@TempData["Info"]</div>
             </div>
         }
         @if (TempData["Error"] != null)
@@ -328,7 +367,7 @@
                         <span class="font-bold text-sm text-primary">MegaStore SGO-Logic</span>
                     </div>
                     <p class="text-[11px] leading-relaxed text-text-muted mb-3">
-                        Plataforma de comercio omnicanal y gestión de pedidos distribuidos (.NET 8, Redis, PostgreSQL y RabbitMQ).
+                        Tu tienda departamental en línea con entrega express, compras seguras y cobertura nacional.
                     </p>
                     <span class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-semibold">
                         <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
@@ -336,16 +375,30 @@
                     </span>
                 </div>
 
-                <!-- Col 2: Accesos Clientes -->
+                <!-- Col 2: Accesos Clientes o Administrativos -->
                 <div>
-                    <h4 class="font-bold text-primary mb-3 text-xs uppercase tracking-wider">Comercio & Cliente</h4>
-                    <ul class="space-y-2">
-                        <li><a href="/Catalogo" class="hover:text-primary transition-colors">Catálogo de Productos</a></li>
-                        <li><a href="/Carrito" class="hover:text-primary transition-colors">Carrito de Compras</a></li>
-                        <li><a href="/Checkout" class="hover:text-primary transition-colors">Finalizar Compra</a></li>
-                        <li><a href="/Estado" class="hover:text-primary transition-colors">Rastreo de Órdenes</a></li>
-                        <li><a href="/Cuenta/Privacidad" class="hover:text-primary transition-colors font-semibold text-secondary">Portal de Privacidad</a></li>
-                    </ul>
+                    @if (isStaff)
+                    {
+                        <h4 class="font-bold text-primary mb-3 text-xs uppercase tracking-wider">Consola Administrativa</h4>
+                        <ul class="space-y-2">
+                            <li><a href="/Despacho" class="hover:text-primary transition-colors">Control de Despacho</a></li>
+                            <li><a href="/Estado" class="hover:text-primary transition-colors">Supervisión de Órdenes</a></li>
+                            <li><a href="/Pos" class="hover:text-primary transition-colors">Terminal OmniPOS</a></li>
+                            <li><a href="/Vision360" class="hover:text-primary transition-colors">Visión 360 del Cliente</a></li>
+                            <li><a href="/Incidencias" class="hover:text-primary transition-colors">Gestión de Incidencias</a></li>
+                        </ul>
+                    }
+                    else
+                    {
+                        <h4 class="font-bold text-primary mb-3 text-xs uppercase tracking-wider">Comercio & Cliente</h4>
+                        <ul class="space-y-2">
+                            <li><a href="/Catalogo" class="hover:text-primary transition-colors">Catálogo de Productos</a></li>
+                            <li><a href="/Carrito" class="hover:text-primary transition-colors">Carrito de Compras</a></li>
+                            <li><a href="/Checkout" class="hover:text-primary transition-colors">Finalizar Compra</a></li>
+                            <li><a href="/Estado" class="hover:text-primary transition-colors">Rastreo de Órdenes</a></li>
+                            <li><a href="/Cuenta/Privacidad" class="hover:text-primary transition-colors font-semibold text-secondary">Portal de Privacidad</a></li>
+                        </ul>
+                    }
                 </div>
 
                 <!-- Col 3: Operaciones Internas o Mi Cuenta -->
@@ -358,7 +411,7 @@
                             <li><a href="/Vision360" class="hover:text-primary transition-colors">Visión 360 Call Center</a></li>
                             <li><a href="/Despacho" class="hover:text-primary transition-colors">Dashboard Logístico</a></li>
                             <li><a href="/Incidencias" class="hover:text-primary transition-colors">Bandeja de Incidencias</a></li>
-                            <li><a href="/Monitoreo" class="hover:text-primary transition-colors">Centro de Monitoreo & ADRs</a></li>
+                            <li><a href="/Monitoreo" class="hover:text-primary transition-colors">Centro de Monitoreo del Sistema</a></li>
                         </ul>
                     </div>
                 }

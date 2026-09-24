@@ -59,6 +59,15 @@ public class CatalogoController : Controller
     [HttpGet]
     public IActionResult Index(string? categoria, string? busqueda)
     {
+        var jwt = Request.Cookies["sgo_jwt"];
+        var userRole = Request.Cookies["sgo_user_role"] ?? "CLIENTE";
+        var userEmail = Request.Cookies["sgo_user_email"];
+        if (PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt))
+        {
+            TempData["Info"] = "Las cuentas de administración operan en la consola de despacho y monitoreo. El catálogo de compras es para clientes.";
+            return RedirectToAction("Index", "Despacho");
+        }
+
         ViewBag.Categoria = categoria;
         ViewBag.Busqueda = busqueda;
 

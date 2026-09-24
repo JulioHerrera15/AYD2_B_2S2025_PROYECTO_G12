@@ -98,7 +98,8 @@ public sealed record OrdenHistorialResumenModel(
     string NumeroOrden,
     string Estado,
     decimal Total,
-    DateTime ActualizadaEn);
+    DateTime ActualizadaEn,
+    string? ClienteId = null);
 
 public sealed record HistorialClienteModel(
     string ClienteId,
@@ -122,13 +123,17 @@ public sealed record DespachoOrdenModel(
     [property: JsonPropertyName("detalleEstado")] string? DetalleEstado = null);
 
 public sealed record DespachoPreparacionDto(
-    string DespachoId,
-    string OrdenId,
-    string UbicacionOrigenId,
-    string MetodoEntrega,
-    string Estado,
-    string? GuiaId,
-    DateTime? CreadoEn);
+    [property: JsonPropertyName("id")] string? Id,
+    [property: JsonPropertyName("ordenId")] string OrdenId,
+    [property: JsonPropertyName("ubicacionOrigenId")] string? UbicacionOrigenId,
+    [property: JsonPropertyName("metodoEntrega")] string MetodoEntrega,
+    [property: JsonPropertyName("estado")] string Estado,
+    [property: JsonPropertyName("guiaId")] string? GuiaId,
+    [property: JsonPropertyName("creadoEn")] DateTime? CreadoEn)
+{
+    [JsonPropertyName("despachoId")]
+    public string DespachoId => !string.IsNullOrWhiteSpace(Id) ? Id : (!string.IsNullOrWhiteSpace(OrdenId) ? OrdenId : string.Empty);
+}
 
 // ── Modelos de Inventario ───────────────────────────────────────────────────
 public sealed record ExistenciaSkuDto(
@@ -306,6 +311,14 @@ public sealed class GatewayClient
     public async Task<(bool Exito, string? Error)> VerificarAsync(VerificarModel model, CancellationToken ct = default)
     {
         var res = await _http.PostAsJsonAsync("/api/auth/verificar", model, ct);
+        if (res.IsSuccessStatusCode) return (true, null);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
+        return (false, err);
+    }
+
+    public async Task<(bool Exito, string? Error)> ReenviarCodigoAsync(string email, CancellationToken ct = default)
+    {
+        var res = await _http.PostAsJsonAsync("/api/auth/reenviar-codigo", new { Email = email }, ct);
         if (res.IsSuccessStatusCode) return (true, null);
         var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, err);

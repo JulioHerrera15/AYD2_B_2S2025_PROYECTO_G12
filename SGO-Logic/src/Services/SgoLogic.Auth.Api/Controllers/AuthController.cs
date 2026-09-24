@@ -42,6 +42,30 @@ public sealed class AuthController : ControllerBase
     }
 
     /// <summary>
+    /// Reenvia un codigo de verificacion vigente al correo de un usuario no verificado.
+    /// </summary>
+    [HttpPost("reenviar-codigo")]
+    [ProducesResponseType<RegistroResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ReenviarCodigo([FromBody] ReenviarCodigoRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var resultado = await _auth.ReenviarCodigoAsync(request.Email, ct);
+            return Ok(resultado);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new ProblemDetails { Title = "Solicitud invalida", Detail = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new ProblemDetails { Title = "No encontrado", Detail = ex.Message });
+        }
+    }
+
+    /// <summary>
     /// Verifica el email con el codigo de 6 digitos recibido.
     /// Hasta que no se verifica, el login devuelve 401.
     /// </summary>
