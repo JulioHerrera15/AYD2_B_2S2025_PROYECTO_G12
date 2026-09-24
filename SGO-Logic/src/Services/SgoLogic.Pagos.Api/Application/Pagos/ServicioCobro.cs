@@ -233,8 +233,8 @@ public sealed class ServicioCobro
             }
 
             _logger.LogWarning(
-                "Cobro de {OrdenId} sin respuesta de PayKlik ({Codigo}); el pago queda PENDIENTE.",
-                pago.OrdenId, codigoFalla);
+                "Cobro de {OrdenId} sin respuesta de PayKlik ({Codigo}: {MotivoFalla}); el pago queda PENDIENTE.",
+                pago.OrdenId, codigoFalla, motivoFalla);
 
             pago.MarcarPendiente(ocurridoEn);
 

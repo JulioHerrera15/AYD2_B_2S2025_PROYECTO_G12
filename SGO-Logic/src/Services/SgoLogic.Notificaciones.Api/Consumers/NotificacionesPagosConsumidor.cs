@@ -65,8 +65,11 @@ public sealed class NotificacionesPagosConsumidor
             var urlReintento = data.EnlaceReintento?.Url ?? "(enlace no disponible)";
             var expiraEn = data.EnlaceReintento?.ExpiraEn.ToString("u") ?? "N/A";
 
-            var cuerpo = $"Tu pago de {data.Moneda} {data.Monto:F2} para la orden {data.OrdenId} no pudo ser completado. " +
-                         $"Motivo: {data.MotivoFalla}. " +
+            // El motivo tecnico (data.MotivoFalla) NO va al cliente: puede traer nombres de
+            // host, del proveedor o errores de red. Queda en el intento de pago, en el log
+            // de Pagos y en Auditoria, que consume este mismo evento.
+            var cuerpo = $"Tu pago de {data.Moneda} {data.Monto:F2} para la orden {data.OrdenId} no pudo completarse en este momento. " +
+                         "Tu pedido sigue registrado y no se realizo ningun cobro. " +
                          $"Puedes completar tu pago utilizando el siguiente enlace seguro: {urlReintento} (Valido hasta: {expiraEn}).";
 
             await cliente.EnviarEmailAsync(
