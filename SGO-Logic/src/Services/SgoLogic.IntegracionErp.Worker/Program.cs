@@ -27,8 +27,8 @@ app.UseSgoDefaults();
 app.MapGet("/api/erp/conciliaciones", async (
 	IntegracionErpDbContext contexto,
 	DateTime? desde,
-	bool soloDiferencias,
-	CancellationToken cancelacion) =>
+	CancellationToken cancelacion,
+	bool soloDiferencias = false) =>
 {
 	var consulta = contexto.Conciliaciones.AsNoTracking();
 	if (desde.HasValue)
