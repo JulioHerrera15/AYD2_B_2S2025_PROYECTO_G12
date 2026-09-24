@@ -38,6 +38,14 @@ public sealed class NotificacionesDespachoConsumidorTests
                 throw new HttpRequestException("Proveedor externo no disponible (simulado)");
             return Task.CompletedTask;
         }
+
+        public Task EnviarEmailAsync(string destinatario, string asunto, string cuerpo, CancellationToken ct = default)
+        {
+            _llamadas.Add((destinatario, asunto, cuerpo));
+            if (_forzarFalla)
+                throw new HttpRequestException("Proveedor externo no disponible (simulado)");
+            return Task.CompletedTask;
+        }
     }
 
     private static ServiceProvider CrearServiceProvider(IMockMensajeriaClient cliente)

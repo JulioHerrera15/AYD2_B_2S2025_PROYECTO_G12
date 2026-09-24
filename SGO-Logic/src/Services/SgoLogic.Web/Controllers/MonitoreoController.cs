@@ -11,16 +11,6 @@ public sealed record ServicioHealthStatus(
     string Estado,
     string Descripcion);
 
-public sealed record TarjetaPrueba(
-    string Numero,
-    string Vencimiento,
-    string Cvv,
-    string Titular,
-    string Franquicia,
-    string Escenario,
-    string ResultadoEsperado,
-    string ColorBadge);
-
 public class MonitoreoController : Controller
 {
     private readonly GatewayClient _gateway;
@@ -36,6 +26,20 @@ public class MonitoreoController : Controller
     public IActionResult Index()
     {
         var jwtToken = Request.Cookies["sgo_jwt"];
+        if (string.IsNullOrWhiteSpace(jwtToken))
+        {
+            TempData["Error"] = "Acceso restringido. Por favor inicia sesión con credenciales administrativas para consultar la consola de monitoreo.";
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Monitoreo" });
+        }
+
+        var userRole = Request.Cookies["sgo_user_role"];
+        var userEmail = Request.Cookies["sgo_user_email"];
+        if (!PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwtToken))
+        {
+            TempData["Error"] = "Acceso denegado. La consola de monitoreo requiere credenciales administrativas de MegaStore.";
+            return RedirectToAction("Index", "Home");
+        }
+
         string? jwtSubject = null;
         string? jwtEmail = null;
         DateTime? jwtExp = null;
@@ -94,18 +98,9 @@ public class MonitoreoController : Controller
             new("web-portal", "http://localhost:8092", "Portal Web Omnicanal", "Operativo", "Frontend ASP.NET Core MVC con diseño responsive y alta fidelidad")
         };
 
-        var tarjetas = new List<TarjetaPrueba>
-        {
-            new("4111 1111 1111 1111", "12/28", "123", "Juan Perez", "Visa", "Camino Feliz (Aprobado)", "Token emitido y cobro completado exitosamente", "bg-emerald-100 text-emerald-800 border-emerald-300"),
-            new("5555 5555 5555 4444", "06/27", "456", "Maria Lopez", "MasterCard", "Camino Feliz Alternativo", "Token emitido y cobro completado", "bg-emerald-100 text-emerald-800 border-emerald-300"),
-            new("4000 0000 0000 0002", "11/26", "789", "Carlos Gomez", "Visa", "Fondos Insuficientes", "Rechazo de pasarela; orden queda en PAGO_PENDIENTE", "bg-amber-100 text-amber-800 border-amber-300"),
-            new("4000 0000 0000 9999", "01/24", "111", "Ana Rodriguez", "Visa", "Tarjeta Expirada", "Rechazo inmediato de validación en cliente o PayKlik", "bg-rose-100 text-rose-800 border-rose-300"),
-            new("4000 0000 0000 0005", "08/29", "999", "Roberto Morales", "Visa", "Bloqueo por Fraude", "Rechazo de seguridad y registro en bitácora de auditoría", "bg-red-100 text-red-800 border-red-300")
-        };
-
         ViewBag.Servicios = servicios;
-        ViewBag.Tarjetas = tarjetas;
 
         return View();
     }
 }
+

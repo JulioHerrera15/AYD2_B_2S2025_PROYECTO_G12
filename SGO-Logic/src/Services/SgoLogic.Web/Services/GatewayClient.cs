@@ -8,7 +8,13 @@ namespace SgoLogic.Web.Services;
 public sealed record RegistroModel(string Email, string Contrasena, string NombreCompleto);
 public sealed record VerificarModel(string Email, string Codigo);
 public sealed record LoginModel(string Email, string Contrasena);
-public sealed record AuthResult(string Token, Guid UsuarioId, string Email, string NombreCompleto, DateTime ExpiraEn);
+public sealed record AuthResult(
+    string Token,
+    Guid UsuarioId,
+    string Email,
+    string NombreCompleto,
+    DateTime ExpiraEn,
+    [property: JsonPropertyName("rol")] string? Rol = "CLIENTE");
 
 public sealed record ItemCarritoModel(
     [property: JsonPropertyName("sku")] string Sku,
@@ -45,7 +51,8 @@ public sealed record OrdenEstadoModel(
     DateTime? CreadaEn,
     DateTime? ActualizadaEn,
     List<IncidenciaModel>? Incidencias,
-    string? MotivoUltimoCambio = null);
+    string? MotivoUltimoCambio = null,
+    string? ClienteId = null);
 
 public sealed record CrearIncidenciaModel(string OrdenId, string Descripcion);
 
@@ -91,7 +98,8 @@ public sealed record OrdenHistorialResumenModel(
     string NumeroOrden,
     string Estado,
     decimal Total,
-    DateTime ActualizadaEn);
+    DateTime ActualizadaEn,
+    string? ClienteId = null);
 
 public sealed record HistorialClienteModel(
     string ClienteId,
@@ -102,7 +110,7 @@ public sealed record HistorialClienteModel(
 
 // ── Modelos de Despacho ─────────────────────────────────────────────────────
 public sealed record DespachoOrdenModel(
-    string DespachoId,
+    [property: JsonPropertyName("id")] string? DespachoId,
     string OrdenId,
     string Estado,
     string MetodoEntrega,
@@ -110,16 +118,22 @@ public sealed record DespachoOrdenModel(
     string? TrackingUrl,
     string? Transportista,
     string? UbicacionOrigenId,
-    DateTime? ActualizadoEn);
+    [property: JsonPropertyName("creadoEn")] DateTime? CreadoEn = null,
+    [property: JsonPropertyName("entregadoEn")] DateTime? EntregadoEn = null,
+    [property: JsonPropertyName("detalleEstado")] string? DetalleEstado = null);
 
 public sealed record DespachoPreparacionDto(
-    string DespachoId,
-    string OrdenId,
-    string UbicacionOrigenId,
-    string MetodoEntrega,
-    string Estado,
-    string? GuiaId,
-    DateTime? CreadoEn);
+    [property: JsonPropertyName("id")] string? Id,
+    [property: JsonPropertyName("ordenId")] string OrdenId,
+    [property: JsonPropertyName("ubicacionOrigenId")] string? UbicacionOrigenId,
+    [property: JsonPropertyName("metodoEntrega")] string MetodoEntrega,
+    [property: JsonPropertyName("estado")] string Estado,
+    [property: JsonPropertyName("guiaId")] string? GuiaId,
+    [property: JsonPropertyName("creadoEn")] DateTime? CreadoEn)
+{
+    [JsonPropertyName("despachoId")]
+    public string DespachoId => !string.IsNullOrWhiteSpace(Id) ? Id : (!string.IsNullOrWhiteSpace(OrdenId) ? OrdenId : string.Empty);
+}
 
 // ── Modelos de Inventario ───────────────────────────────────────────────────
 public sealed record ExistenciaSkuDto(
@@ -127,23 +141,34 @@ public sealed record ExistenciaSkuDto(
     string UbicacionId,
     int CantidadFisica,
     int CantidadReservada,
-    int CantidadDisponible,
-    DateTime UltimaActualizacion);
+    [property: JsonPropertyName("disponible")] int Disponible,
+    string? TipoUbicacion = null,
+    int Version = 0)
+{
+    [JsonPropertyName("cantidadDisponible")]
+    public int CantidadDisponible => Disponible;
+}
 
 public sealed record UbicacionResumenDto(
     string UbicacionId,
     string TipoUbicacion,
-    int TotalSkus,
-    int CantidadFisicaTotal,
-    int CantidadReservadaTotal,
-    int CantidadDisponibleTotal);
+    [property: JsonPropertyName("cantidadDeSkus")] int TotalSkus,
+    [property: JsonPropertyName("cantidadTotalFisica")] int CantidadFisicaTotal,
+    [property: JsonPropertyName("cantidadTotalReservada")] int CantidadReservadaTotal,
+    [property: JsonPropertyName("totalDisponible")] int CantidadDisponibleTotal);
 
 public sealed record ExistenciaUbicacionDto(
-    string UbicacionId,
     string Sku,
+    string UbicacionId,
     int CantidadFisica,
     int CantidadReservada,
-    int CantidadDisponible);
+    [property: JsonPropertyName("disponible")] int Disponible,
+    string? TipoUbicacion = null,
+    int Version = 0)
+{
+    [JsonPropertyName("cantidadDisponible")]
+    public int CantidadDisponible => Disponible;
+}
 
 public sealed class GatewayClient
 {
@@ -189,12 +214,97 @@ public sealed class GatewayClient
         }
     }
 
+    private static async Task<string> ParseProblemDetailsOrStringAsync(HttpResponseMessage response, CancellationToken ct)
+    {
+        try
+        {
+            var raw = await response.Content.ReadAsStringAsync(ct);
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return response.StatusCode switch
+                {
+                    System.Net.HttpStatusCode.Unauthorized => "Credenciales incorrectas o sesión no autorizada.",
+                    System.Net.HttpStatusCode.Forbidden => "No tienes permisos para realizar esta acción.",
+                    System.Net.HttpStatusCode.NotFound => "El recurso solicitado no fue encontrado.",
+                    System.Net.HttpStatusCode.Conflict => "Conflicto con un recurso existente.",
+                    System.Net.HttpStatusCode.BadRequest => "Solicitud inválida. Verifica los datos ingresados.",
+                    _ => $"Error en la operación (código {(int)response.StatusCode})."
+                };
+            }
+
+            var trimmed = raw.Trim();
+            if (trimmed.StartsWith("{") && trimmed.EndsWith("}"))
+            {
+                using var doc = JsonDocument.Parse(trimmed);
+                var root = doc.RootElement;
+
+                // 1. Si viene detail (RFC 7807 ProblemDetails standard)
+                if (root.TryGetProperty("detail", out var detailProp) && detailProp.ValueKind == JsonValueKind.String)
+                {
+                    var detail = detailProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(detail))
+                        return detail;
+                }
+
+                // 2. Si vienen errores de validación (HttpValidationProblemDetails)
+                if (root.TryGetProperty("errors", out var errorsProp) && errorsProp.ValueKind == JsonValueKind.Object)
+                {
+                    var errorList = new List<string>();
+                    foreach (var prop in errorsProp.EnumerateObject())
+                    {
+                        if (prop.Value.ValueKind == JsonValueKind.Array)
+                        {
+                            foreach (var errItem in prop.Value.EnumerateArray())
+                            {
+                                var s = errItem.GetString();
+                                if (!string.IsNullOrWhiteSpace(s))
+                                    errorList.Add(s);
+                            }
+                        }
+                        else if (prop.Value.ValueKind == JsonValueKind.String)
+                        {
+                            var s = prop.Value.GetString();
+                            if (!string.IsNullOrWhiteSpace(s))
+                                errorList.Add(s);
+                        }
+                    }
+                    if (errorList.Count > 0)
+                        return string.Join(" ", errorList);
+                }
+
+                // 3. Si viene message
+                if (root.TryGetProperty("message", out var msgProp) && msgProp.ValueKind == JsonValueKind.String)
+                {
+                    var msg = msgProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(msg))
+                        return msg;
+                }
+
+                // 4. Si viene title
+                if (root.TryGetProperty("title", out var titleProp) && titleProp.ValueKind == JsonValueKind.String)
+                {
+                    var title = titleProp.GetString();
+                    if (!string.IsNullOrWhiteSpace(title) && !title.Equals("One or more validation errors occurred.", StringComparison.OrdinalIgnoreCase))
+                        return title;
+                }
+            }
+
+            return trimmed;
+        }
+        catch
+        {
+            return response.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                ? "Credenciales incorrectas o sesión no autorizada."
+                : $"Error inesperado en la comunicación (código {(int)response.StatusCode}).";
+        }
+    }
+
     // ── Auth ───────────────────────────────────────────────────────────────────
     public async Task<(bool Exito, string? Error)> RegistrarAsync(RegistroModel model, CancellationToken ct = default)
     {
         var res = await _http.PostAsJsonAsync("/api/auth/registro", model, ct);
         if (res.IsSuccessStatusCode) return (true, null);
-        var err = await res.Content.ReadAsStringAsync(ct);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, err);
     }
 
@@ -202,7 +312,15 @@ public sealed class GatewayClient
     {
         var res = await _http.PostAsJsonAsync("/api/auth/verificar", model, ct);
         if (res.IsSuccessStatusCode) return (true, null);
-        var err = await res.Content.ReadAsStringAsync(ct);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
+        return (false, err);
+    }
+
+    public async Task<(bool Exito, string? Error)> ReenviarCodigoAsync(string email, CancellationToken ct = default)
+    {
+        var res = await _http.PostAsJsonAsync("/api/auth/reenviar-codigo", new { Email = email }, ct);
+        if (res.IsSuccessStatusCode) return (true, null);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, err);
     }
 
@@ -214,7 +332,7 @@ public sealed class GatewayClient
             var data = await res.Content.ReadFromJsonAsync<AuthResult>(JsonOptions, ct);
             return (true, data, null);
         }
-        var err = await res.Content.ReadAsStringAsync(ct);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, null, err);
     }
 
@@ -288,7 +406,7 @@ public sealed class GatewayClient
             var data = await res.Content.ReadFromJsonAsync<IncidenciaModel>(JsonOptions, ct);
             return (true, data, null);
         }
-        var err = await res.Content.ReadAsStringAsync(ct);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, null, err);
     }
 
@@ -302,7 +420,7 @@ public sealed class GatewayClient
             var orden = await res.Content.ReadFromJsonAsync<OrdenCreadaModel>(JsonOptions, ct);
             return (true, orden, null);
         }
-        var err = await res.Content.ReadAsStringAsync(ct);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, null, err);
     }
 
@@ -315,7 +433,7 @@ public sealed class GatewayClient
             var respuesta = await res.Content.ReadFromJsonAsync<ConfirmarOrdenResponse>(JsonOptions, ct);
             return (true, respuesta?.Orden, null);
         }
-        var err = await res.Content.ReadAsStringAsync(ct);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, null, err);
     }
 
@@ -347,7 +465,7 @@ public sealed class GatewayClient
         var payload = new { Estado = estado, Detalle = detalle, OcurridoEn = DateTime.UtcNow };
         var res = await _http.PostAsJsonAsync($"/api/despacho/{ordenId}/estados", payload, JsonOptions, ct);
         if (res.IsSuccessStatusCode) return (true, null);
-        var err = await res.Content.ReadAsStringAsync(ct);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, err);
     }
 
@@ -356,7 +474,7 @@ public sealed class GatewayClient
         SetAuthHeader();
         var res = await _http.PutAsJsonAsync($"/api/despacho/{ordenId}/metodo-entrega", new { MetodoEntrega = nuevoMetodo }, JsonOptions, ct);
         if (res.IsSuccessStatusCode) return (true, null);
-        var err = await res.Content.ReadAsStringAsync(ct);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, err);
     }
 
@@ -405,7 +523,7 @@ public sealed class GatewayClient
         var payload = new { Descripcion = descripcion, Estado = estado, Resolucion = resolucion };
         var res = await _http.PutAsJsonAsync($"/api/incidencias/{id}", payload, JsonOptions, ct);
         if (res.IsSuccessStatusCode) return (true, null);
-        var err = await res.Content.ReadAsStringAsync(ct);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, err);
     }
 }

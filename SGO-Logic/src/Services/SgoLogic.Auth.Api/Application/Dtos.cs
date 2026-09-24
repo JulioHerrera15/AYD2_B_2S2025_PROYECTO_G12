@@ -20,6 +20,8 @@ public sealed record VerificarEmailRequest(
 
 public sealed record VerificarEmailResponse(string Mensaje);
 
+public sealed record ReenviarCodigoRequest(string Email);
+
 // ── Login ─────────────────────────────────────────────────────────────────────
 
 public sealed record LoginRequest(
@@ -31,7 +33,8 @@ public sealed record LoginResponse(
     string UsuarioId,
     string Email,
     string NombreCompleto,
-    DateTime ExpiraEn);
+    DateTime ExpiraEn,
+    string Rol = "CLIENTE");
 
 // ── Carrito ───────────────────────────────────────────────────────────────────
 

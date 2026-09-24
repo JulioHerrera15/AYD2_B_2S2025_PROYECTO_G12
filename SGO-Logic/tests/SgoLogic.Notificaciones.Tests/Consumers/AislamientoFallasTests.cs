@@ -28,7 +28,17 @@ public sealed class AislamientoFallasTests
             Llamadas++;
             if (_forzarFalla)
             {
-                throw new HttpRequestException("Error 500 simulado en proveedor externo de mensajería (SMS/Push)");
+                throw new HttpRequestException("Error 500 simulado en proveedor externo de mensajeria (SMS/Push)");
+            }
+            return Task.CompletedTask;
+        }
+
+        public Task EnviarEmailAsync(string destinatario, string asunto, string cuerpo, CancellationToken ct = default)
+        {
+            Llamadas++;
+            if (_forzarFalla)
+            {
+                throw new HttpRequestException("Error 500 simulado en proveedor externo de mensajeria (Email)");
             }
             return Task.CompletedTask;
         }

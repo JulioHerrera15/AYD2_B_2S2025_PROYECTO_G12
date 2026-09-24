@@ -15,6 +15,21 @@ public class IncidenciasController : Controller
     [HttpGet]
     public async Task<IActionResult> Index(string? ordenId, string? estado)
     {
+        var jwt = Request.Cookies["sgo_jwt"];
+        if (string.IsNullOrWhiteSpace(jwt))
+        {
+            TempData["Error"] = "Acceso restringido. Inicia sesión con tus credenciales de operador para acceder al centro de incidencias.";
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Incidencias" });
+        }
+
+        var userRole = Request.Cookies["sgo_user_role"];
+        var userEmail = Request.Cookies["sgo_user_email"];
+        if (!PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt))
+        {
+            TempData["Error"] = "Acceso denegado. La bandeja global de incidencias es de uso exclusivo para personal operativo.";
+            return RedirectToAction("Index", "Home");
+        }
+
         ViewBag.OrdenId = ordenId;
         ViewBag.Estado = estado ?? "TODOS";
 
@@ -27,6 +42,13 @@ public class IncidenciasController : Controller
     [HttpGet]
     public IActionResult Crear(string? ordenId)
     {
+        var jwt = Request.Cookies["sgo_jwt"];
+        if (string.IsNullOrWhiteSpace(jwt))
+        {
+            TempData["Error"] = "Inicia sesión con tu cuenta para reportar una incidencia sobre tu pedido.";
+            return RedirectToAction("Login", "Auth", new { returnUrl = $"/Incidencias/Crear{(string.IsNullOrWhiteSpace(ordenId) ? "" : $"?ordenId={ordenId}")}" });
+        }
+
         ViewBag.OrdenId = ordenId;
         return View();
     }
@@ -34,6 +56,12 @@ public class IncidenciasController : Controller
     [HttpPost]
     public async Task<IActionResult> Crear(string ordenId, string descripcion)
     {
+        var jwt = Request.Cookies["sgo_jwt"];
+        if (string.IsNullOrWhiteSpace(jwt))
+        {
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Incidencias/Crear" });
+        }
+
         if (string.IsNullOrWhiteSpace(ordenId) || string.IsNullOrWhiteSpace(descripcion))
         {
             ViewBag.OrdenId = ordenId;
@@ -56,6 +84,17 @@ public class IncidenciasController : Controller
     [HttpPost]
     public async Task<IActionResult> Resolver(Guid id, string resolucion, string? nuevoEstado)
     {
+        var jwt = Request.Cookies["sgo_jwt"];
+        if (string.IsNullOrWhiteSpace(jwt))
+        {
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Incidencias" });
+        }
+
+        if (!PermisosHelper.EsPersonalAutorizado(Request.Cookies["sgo_user_role"], Request.Cookies["sgo_user_email"], jwt))
+        {
+            return Forbid();
+        }
+
         if (id == Guid.Empty || string.IsNullOrWhiteSpace(resolucion))
         {
             TempData["Error"] = "Debe proporcionar una resolución válida.";

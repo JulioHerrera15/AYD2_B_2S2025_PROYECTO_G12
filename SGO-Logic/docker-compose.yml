@@ -158,6 +158,7 @@ services:
       Auth__JwtSecret: ${JWT_SECRET}
       Auth__JwtExpiracionMinutos: ${AUTH_JWT_EXPIRACION_MINUTOS}
       Auth__CarritoTtlSegundos: ${AUTH_CARRITO_TTL_SEGUNDOS}
+      Mensajeria__MockBaseUrl: http://mock-mensajeria:8080
     ports:
       - "8088:8080"
     depends_on:
@@ -431,6 +432,12 @@ services:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
       ASPNETCORE_URLS: http://+:8080
       MockMensajeria__ForzarFalla: ${MOCK_MENSAJERIA_FORZAR_FALLA}
+      Smtp__Host: ${SMTP_HOST:-}
+      Smtp__Port: ${SMTP_PORT:-587}
+      Smtp__User: ${SMTP_USER:-}
+      Smtp__Password: ${SMTP_PASSWORD:-}
+      Smtp__EnableSsl: ${SMTP_ENABLE_SSL:-true}
+      Smtp__From: ${SMTP_FROM:-}
     ports:
       - "8089:8080"
     healthcheck:

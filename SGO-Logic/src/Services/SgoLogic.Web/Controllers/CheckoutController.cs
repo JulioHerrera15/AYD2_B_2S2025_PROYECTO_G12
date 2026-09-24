@@ -15,6 +15,21 @@ public class CheckoutController : Controller
     [HttpGet]
     public async Task<IActionResult> Index()
     {
+        var jwt = Request.Cookies["sgo_jwt"];
+        if (string.IsNullOrWhiteSpace(jwt))
+        {
+            TempData["Error"] = "Por favor inicia sesión o regístrate para proceder al checkout y completar tu compra de forma segura.";
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Checkout" });
+        }
+
+        var userRole = Request.Cookies["sgo_user_role"] ?? "CLIENTE";
+        var userEmail = Request.Cookies["sgo_user_email"];
+        if (PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt))
+        {
+            TempData["Info"] = "Las cuentas administrativas gestionan la plataforma y despachos. Para comprar en la tienda, utiliza una cuenta de cliente.";
+            return RedirectToAction("Index", "Despacho");
+        }
+
         var carrito = await _gateway.ObtenerCarritoAsync();
         if (carrito is null || carrito.Items is null || carrito.Items.Count == 0)
         {
@@ -40,6 +55,21 @@ public class CheckoutController : Controller
         string medioPago,
         string? tokenMedioPago)
     {
+        var jwt = Request.Cookies["sgo_jwt"];
+        if (string.IsNullOrWhiteSpace(jwt))
+        {
+            TempData["Error"] = "Sesión expirada. Inicia sesión nuevamente para procesar tu compra.";
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Checkout" });
+        }
+
+        var userRole = Request.Cookies["sgo_user_role"] ?? "CLIENTE";
+        var userEmail = Request.Cookies["sgo_user_email"] ?? clienteEmail;
+        if (PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt))
+        {
+            TempData["Info"] = "Las cuentas de administración no realizan compras en línea. Accede al centro de operaciones.";
+            return RedirectToAction("Index", "Despacho");
+        }
+
         var carrito = await _gateway.ObtenerCarritoAsync();
         if (carrito is null || carrito.Items is null || carrito.Items.Count == 0)
         {
@@ -47,7 +77,6 @@ public class CheckoutController : Controller
             return RedirectToAction("Index", "Carrito");
         }
 
-        var userEmail = Request.Cookies["sgo_user_email"] ?? clienteEmail;
         if (string.IsNullOrWhiteSpace(userEmail))
         {
             userEmail = $"invitado-{Guid.NewGuid().ToString("N")[..8]}@megastore.com";

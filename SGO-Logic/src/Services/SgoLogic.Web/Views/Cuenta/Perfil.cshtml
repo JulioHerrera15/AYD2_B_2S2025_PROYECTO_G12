@@ -71,12 +71,12 @@
                             <span class="material-symbols-outlined text-[22px]">security</span>
                         </div>
                         <div>
-                            <h3 class="font-bold text-base text-primary">Seguridad y Autenticación en el Borde</h3>
-                            <p class="text-xs text-text-muted">Protección de credenciales y sesiones según ADR-020</p>
+                            <h3 class="font-bold text-base text-primary">Seguridad de la Cuenta y Sesión</h3>
+                            <p class="text-xs text-text-muted">Protección avanzada de credenciales y navegación segura</p>
                         </div>
                     </div>
                     <span class="px-3 py-1 rounded-full text-xs font-bold @(hasJwt ? "bg-emerald-100 text-emerald-800 border border-emerald-300" : "bg-amber-100 text-amber-800 border border-amber-300")">
-                        @(hasJwt ? "Token JWT Activo" : "Sesión Anónima")
+                        @(hasJwt ? "Sesión Verificada" : "Sesión Anónima")
                     </span>
                 </div>
 
@@ -84,20 +84,20 @@
                     <div class="p-4 rounded-2xl bg-surface-container-low/50 border border-border-subtle/40">
                         <div class="flex items-center gap-2 mb-1.5 text-primary font-semibold">
                             <span class="material-symbols-outlined text-[18px] text-secondary">verified_user</span>
-                            <span>Validación YARP en Gateway</span>
+                            <span>Conexión Cifrada y Segura</span>
                         </div>
                         <p class="text-text-muted text-[11px] leading-relaxed">
-                            Tus peticiones hacia microservicios transaccionales viajan con cabecera <code class="bg-white px-1.5 py-0.5 rounded border border-border-subtle text-primary">Authorization: Bearer</code> firmada criptográficamente.
+                            Tus compras y consultas viajan protegidas con cifrado SSL/TLS de alta seguridad hacia nuestros servidores.
                         </p>
                     </div>
 
                     <div class="p-4 rounded-2xl bg-surface-container-low/50 border border-border-subtle/40">
                         <div class="flex items-center gap-2 mb-1.5 text-primary font-semibold">
                             <span class="material-symbols-outlined text-[18px] text-secondary">lock</span>
-                            <span>Cumplimiento PCI-DSS RES-08</span>
+                            <span>Protección de Pagos Certificada</span>
                         </div>
                         <p class="text-text-muted text-[11px] leading-relaxed">
-                            Tus números de tarjeta nunca tocan MegaStore; se tokenizan de forma aislada en la pasarela externa PayKlik mediante CORS directo.
+                            Tus datos de tarjeta se procesan directamente en la pasarela de pagos bajo estándar PCI-DSS; nunca se almacenan en MegaStore.
                         </p>
                     </div>
                 </div>

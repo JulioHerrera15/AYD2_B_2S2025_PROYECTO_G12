@@ -18,7 +18,7 @@ Cada sistema externo se representa con un mock que corre como contenedor propio 
 |---|---|---|---|
 | `payklik-mock` | 8084 | .NET | Modos `NORMAL`, `LENTO` (latencia configurable), `CAIDO` (respuesta 503), `RECHAZO` (respuesta 200 con cargo rechazado por fondos insuficientes) e `INTERMITENTE` (probabilidad de falla configurable). Idempotencia por `Idempotency-Key` en cargos y reembolsos. |
 | `sat-mock` | 8086 | .NET | Modos `NORMAL`, `LENTO`, `CAIDO` (503) y `RECHAZO`, más una probabilidad de falla 503 aplicable en cualquier modo. Idempotencia en la certificación. |
-| `logiexpress-mock` | 8096 | .NET | Modos `NORMAL`, `LENTO` y `CAIDO`, más un timeout determinístico: una de cada 50 solicitudes de guía no responde. Rastreo y anulación de guías, y cambio manual del estado de rastreo. |
+| `logiexpress-mock` | 8098 | .NET | Modos `NORMAL`, `LENTO` y `CAIDO`, más un timeout determinístico: una de cada 50 solicitudes de guía no responde. Rastreo y anulación de guías, y cambio manual del estado de rastreo. |
 | `mock-mensajeria` | 8089 | .NET | Falla forzada (respuesta 500) en el envío de SMS, correo y notificaciones push, activable por configuración o en caliente. |
 | `mock-erp` | 4000 | Node | Recepción de lotes en CSV, XML y JSON con cuadre de totales (rechazo 422), duplicados (409) y secuencia retrocedida (409). Caída provocada: 503, 500 o timeout de 8 segundos con respuesta 504. |
 | `mock-pos` | 4001 | Node | 32 tiendas (`T01` a `T32`) con idempotencia por tienda y `eventoId`. Caída por tienda o masiva: 503, 500 o timeout. |

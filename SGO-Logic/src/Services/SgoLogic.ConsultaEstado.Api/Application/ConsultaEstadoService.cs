@@ -111,11 +111,19 @@ public sealed class ConsultaEstadoService : IConsultaEstadoService
         tamano = Math.Clamp(tamano, 1, 100);
         pagina = Math.Max(1, pagina);
 
-        var total = await _contexto.OrdenesVista
-            .CountAsync(o => o.ClienteId == clienteId, ct);
+        var esAdmin = string.Equals(clienteId, "TODOS", StringComparison.OrdinalIgnoreCase) ||
+                      string.Equals(clienteId, "ADMIN", StringComparison.OrdinalIgnoreCase) ||
+                      (!string.IsNullOrWhiteSpace(clienteId) && clienteId.Contains("admin", StringComparison.OrdinalIgnoreCase));
 
-        var ordenes = await _contexto.OrdenesVista
-            .Where(o => o.ClienteId == clienteId)
+        var consulta = _contexto.OrdenesVista.AsQueryable();
+        if (!esAdmin)
+        {
+            consulta = consulta.Where(o => o.ClienteId == clienteId);
+        }
+
+        var total = await consulta.CountAsync(ct);
+
+        var ordenes = await consulta
             .OrderByDescending(o => o.ActualizadaEn)
             .Skip((pagina - 1) * tamano)
             .Take(tamano)
@@ -127,7 +135,7 @@ public sealed class ConsultaEstadoService : IConsultaEstadoService
             Tamano: tamano,
             TotalRegistros: total,
             Ordenes: ordenes.Select(o => new OrdenResumenDto(
-                o.OrdenId, o.NumeroOrden ?? string.Empty, o.Estado ?? "CREADA", o.Total, o.ActualizadaEn))
+                o.OrdenId, o.NumeroOrden ?? string.Empty, o.Estado ?? "CREADA", o.Total, o.ActualizadaEn, o.ClienteId))
                 .ToList());
     }
 

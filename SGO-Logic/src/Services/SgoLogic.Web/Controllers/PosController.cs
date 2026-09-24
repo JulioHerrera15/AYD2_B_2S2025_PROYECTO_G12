@@ -13,8 +13,23 @@ public class PosController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index(string? busqueda, bool demo = false)
+    public async Task<IActionResult> Index(string? busqueda)
     {
+        var jwt = Request.Cookies["sgo_jwt"];
+        if (string.IsNullOrWhiteSpace(jwt))
+        {
+            TempData["Error"] = "Acceso restringido. Por favor inicia sesión con credenciales de personal de tienda para operar el terminal OmniPOS.";
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Pos" });
+        }
+
+        var userRole = Request.Cookies["sgo_user_role"];
+        var userEmail = Request.Cookies["sgo_user_email"];
+        if (!PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt))
+        {
+            TempData["Error"] = "Acceso denegado. El terminal OmniPOS es exclusivo para personal administrativo y cajeros de MegaStore.";
+            return RedirectToAction("Index", "Home");
+        }
+
         ViewBag.Busqueda = busqueda;
         CarritoModel? carrito = null;
 
@@ -38,11 +53,11 @@ public class PosController : Controller
             }
             else
             {
-                // 2. Buscar carrito por correo o identificador de cliente / sesión
+                // 2. Buscar carrito por correo o identificador de cliente en Redis
                 carrito = await _gateway.ObtenerCarritoPorIdAsync(term);
                 if (carrito is null || carrito.Items is null || carrito.Items.Count == 0)
                 {
-                    ViewBag.Mensaje = $"No se encontró un carrito activo para '{busqueda}'. Puedes verificar el correo o iniciar una nueva venta.";
+                    ViewBag.Mensaje = $"No se encontró un carrito activo en Redis para '{busqueda}'. Puedes verificar el correo del cliente.";
                 }
                 else
                 {
@@ -52,23 +67,8 @@ public class PosController : Controller
         }
         else
         {
-            // Cargar carrito activo de la sesión si existe para conveniencia de la demo
+            // Cargar carrito activo de la sesión del operador si existe
             carrito = await _gateway.ObtenerCarritoAsync();
-        }
-
-        // Solo proveer artículos de demostración si se solicita explícitamente (?demo=true)
-        if (demo && (carrito is null || carrito.Items is null || carrito.Items.Count == 0))
-        {
-            carrito = new CarritoModel(
-                ClienteOSesionId: "demo.cliente@megastore.com",
-                Items: new List<ItemCarritoModel>
-                {
-                    new("PROD-001", "Lumina Smart Refrigerator Pro", 1, 14999.00m),
-                    new("PROD-002", "Smart Ultra HD LED TV 65\"", 1, 5499.00m)
-                },
-                Total: 20498.00m
-            );
-            ViewBag.EsDemo = true;
         }
 
         return View(carrito);
@@ -77,6 +77,17 @@ public class PosController : Controller
     [HttpPost]
     public async Task<IActionResult> Cobrar(string clienteId, string medioPago)
     {
+        var jwt = Request.Cookies["sgo_jwt"];
+        if (string.IsNullOrWhiteSpace(jwt))
+        {
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Pos" });
+        }
+
+        if (!PermisosHelper.EsPersonalAutorizado(Request.Cookies["sgo_user_role"], Request.Cookies["sgo_user_email"], jwt))
+        {
+            return Forbid();
+        }
+
         var carrito = await _gateway.ObtenerCarritoPorIdAsync(clienteId) ?? await _gateway.ObtenerCarritoAsync();
         if (carrito is null || carrito.Items is null || carrito.Items.Count == 0)
         {
@@ -92,8 +103,11 @@ public class PosController : Controller
             i.PrecioUnitario
         )).ToList();
 
+        var operatoremail = Request.Cookies["sgo_user_email"] ?? "operador.tienda@megastore.com";
+        var clienteFinal = string.IsNullOrWhiteSpace(clienteId) ? operatoremail : clienteId.Trim();
+
         var crearModel = new CrearOrdenModel(
-            ClienteId: string.IsNullOrWhiteSpace(clienteId) ? "cliente.pos@megastore.com" : clienteId,
+            ClienteId: clienteFinal,
             Canal: "TIENDA",
             MetodoEntrega: "RECOGIDA_TIENDA",
             Moneda: "GTQ",
@@ -120,6 +134,17 @@ public class PosController : Controller
     [HttpPost]
     public IActionResult EnviarLinkPago(string clienteId)
     {
+        var jwt = Request.Cookies["sgo_jwt"];
+        if (string.IsNullOrWhiteSpace(jwt))
+        {
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Pos" });
+        }
+
+        if (!PermisosHelper.EsPersonalAutorizado(Request.Cookies["sgo_user_role"], Request.Cookies["sgo_user_email"], jwt))
+        {
+            return Forbid();
+        }
+
         TempData["Exito"] = $"Enlace de pago omnicanal enviado por SMS y WhatsApp al cliente {clienteId}.";
         return RedirectToAction("Index", new { busqueda = clienteId });
     }

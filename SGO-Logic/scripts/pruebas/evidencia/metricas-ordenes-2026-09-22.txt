@@ -1,0 +1,635 @@
+# HELP outbox_pendientes Filas de la tabla outbox de este servicio en estado Pendiente.
+# TYPE outbox_pendientes gauge
+outbox_pendientes 0
+# HELP outbox_publicados_total Mensajes de outbox publicados y confirmados por el broker.
+# TYPE outbox_publicados_total counter
+outbox_publicados_total 4835
+# HELP outbox_fallidos_total Mensajes de outbox que agotaron el maximo de reintentos y se enviaron a sgo.eventos.dlx.
+# TYPE outbox_fallidos_total counter
+outbox_fallidos_total 0
+# HELP outbox_latencia_publicacion_segundos Segundos entre que la fila de outbox se crea y se publica confirmada.
+# TYPE outbox_latencia_publicacion_segundos histogram
+outbox_latencia_publicacion_segundos_sum 239495.5607586994
+outbox_latencia_publicacion_segundos_count 4835
+outbox_latencia_publicacion_segundos_bucket{le="0.005"} 0
+outbox_latencia_publicacion_segundos_bucket{le="0.01"} 0
+outbox_latencia_publicacion_segundos_bucket{le="0.025"} 0
+outbox_latencia_publicacion_segundos_bucket{le="0.05"} 0
+outbox_latencia_publicacion_segundos_bucket{le="0.075"} 0
+outbox_latencia_publicacion_segundos_bucket{le="0.1"} 0
+outbox_latencia_publicacion_segundos_bucket{le="0.25"} 0
+outbox_latencia_publicacion_segundos_bucket{le="0.5"} 14
+outbox_latencia_publicacion_segundos_bucket{le="0.75"} 28
+outbox_latencia_publicacion_segundos_bucket{le="1"} 49
+outbox_latencia_publicacion_segundos_bucket{le="2.5"} 200
+outbox_latencia_publicacion_segundos_bucket{le="5"} 341
+outbox_latencia_publicacion_segundos_bucket{le="7.5"} 518
+outbox_latencia_publicacion_segundos_bucket{le="10"} 612
+outbox_latencia_publicacion_segundos_bucket{le="+Inf"} 4835
+# HELP mensajes_consumidos_total Mensajes de eventos procesados exitosamente por un EventConsumerBase.
+# TYPE mensajes_consumidos_total counter
+mensajes_consumidos_total 1130
+# HELP mensajes_duplicados_total Mensajes descartados por EventConsumerBase por tener un eventId ya procesado.
+# TYPE mensajes_duplicados_total counter
+mensajes_duplicados_total 0
+# HELP alertas_fiscales_levantadas_total Alertas fiscales levantadas en ordenes cuando la SAT agoto los reintentos de certificacion.
+# TYPE alertas_fiscales_levantadas_total counter
+alertas_fiscales_levantadas_total 0
+# HELP http_request_duration_seconds The duration of HTTP requests processed by an ASP.NET Core application.
+# TYPE http_request_duration_seconds histogram
+http_request_duration_seconds_sum{code="200",method="GET",controller="",action="",endpoint="/health/live"} 0.0282795
+http_request_duration_seconds_count{code="200",method="GET",controller="",action="",endpoint="/health/live"} 83
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/health/live",le="0.001"} 81
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/health/live",le="0.002"} 82
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/health/live",le="0.004"} 82
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/health/live",le="0.008"} 83
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/health/live",le="0.016"} 83
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/health/live",le="0.032"} 83
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/health/live",le="0.064"} 83
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/health/live",le="0.128"} 83
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/health/live",le="0.256"} 83
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/health/live",le="0.512"} 83
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/health/live",le="1.024"} 83
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/health/live",le="2.048"} 83
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/health/live",le="4.096"} 83
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/health/live",le="8.192"} 83
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/health/live",le="16.384"} 83
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/health/live",le="32.768"} 83
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/health/live",le="+Inf"} 83
+http_request_duration_seconds_sum{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/"} 3.1229081000000014
+http_request_duration_seconds_count{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/"} 380
+http_request_duration_seconds_bucket{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/",le="0.001"} 0
+http_request_duration_seconds_bucket{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/",le="0.002"} 0
+http_request_duration_seconds_bucket{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/",le="0.004"} 0
+http_request_duration_seconds_bucket{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/",le="0.008"} 293
+http_request_duration_seconds_bucket{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/",le="0.016"} 377
+http_request_duration_seconds_bucket{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/",le="0.032"} 378
+http_request_duration_seconds_bucket{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/",le="0.064"} 378
+http_request_duration_seconds_bucket{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/",le="0.128"} 378
+http_request_duration_seconds_bucket{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/",le="0.256"} 379
+http_request_duration_seconds_bucket{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/",le="0.512"} 380
+http_request_duration_seconds_bucket{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/",le="1.024"} 380
+http_request_duration_seconds_bucket{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/",le="2.048"} 380
+http_request_duration_seconds_bucket{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/",le="4.096"} 380
+http_request_duration_seconds_bucket{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/",le="8.192"} 380
+http_request_duration_seconds_bucket{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/",le="16.384"} 380
+http_request_duration_seconds_bucket{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/",le="32.768"} 380
+http_request_duration_seconds_bucket{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/",le="+Inf"} 380
+http_request_duration_seconds_sum{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar"} 2.9599566999999993
+http_request_duration_seconds_count{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar"} 380
+http_request_duration_seconds_bucket{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar",le="0.001"} 0
+http_request_duration_seconds_bucket{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar",le="0.002"} 0
+http_request_duration_seconds_bucket{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar",le="0.004"} 0
+http_request_duration_seconds_bucket{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar",le="0.008"} 265
+http_request_duration_seconds_bucket{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar",le="0.016"} 377
+http_request_duration_seconds_bucket{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar",le="0.032"} 378
+http_request_duration_seconds_bucket{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar",le="0.064"} 379
+http_request_duration_seconds_bucket{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar",le="0.128"} 380
+http_request_duration_seconds_bucket{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar",le="0.256"} 380
+http_request_duration_seconds_bucket{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar",le="0.512"} 380
+http_request_duration_seconds_bucket{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar",le="1.024"} 380
+http_request_duration_seconds_bucket{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar",le="2.048"} 380
+http_request_duration_seconds_bucket{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar",le="4.096"} 380
+http_request_duration_seconds_bucket{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar",le="8.192"} 380
+http_request_duration_seconds_bucket{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar",le="16.384"} 380
+http_request_duration_seconds_bucket{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar",le="32.768"} 380
+http_request_duration_seconds_bucket{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar",le="+Inf"} 380
+http_request_duration_seconds_sum{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}"} 0.2953307999999999
+http_request_duration_seconds_count{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}"} 73
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}",le="0.001"} 0
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}",le="0.002"} 0
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}",le="0.004"} 46
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}",le="0.008"} 72
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}",le="0.016"} 73
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}",le="0.032"} 73
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}",le="0.064"} 73
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}",le="0.128"} 73
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}",le="0.256"} 73
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}",le="0.512"} 73
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}",le="1.024"} 73
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}",le="2.048"} 73
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}",le="4.096"} 73
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}",le="8.192"} 73
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}",le="16.384"} 73
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}",le="32.768"} 73
+http_request_duration_seconds_bucket{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}",le="+Inf"} 73
+# HELP http_requests_received_total Provides the count of HTTP requests that have been processed by the ASP.NET Core pipeline.
+# TYPE http_requests_received_total counter
+http_requests_received_total{code="200",method="GET",controller="",action="",endpoint="/health/live"} 83
+http_requests_received_total{code="201",method="POST",controller="",action="",endpoint="/api/ordenes/"} 380
+http_requests_received_total{code="200",method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar"} 380
+http_requests_received_total{code="200",method="GET",controller="",action="",endpoint="/api/ordenes/{id}"} 73
+# HELP http_requests_in_progress The number of requests currently in progress in the ASP.NET Core pipeline. One series without controller/action label values counts all in-progress requests, with separate series existing for each controller-action pair.
+# TYPE http_requests_in_progress gauge
+http_requests_in_progress{method="GET",controller="",action="",endpoint="/health/live"} 0
+http_requests_in_progress{method="POST",controller="",action="",endpoint="/api/ordenes/"} 0
+http_requests_in_progress{method="POST",controller="",action="",endpoint="/api/ordenes/{id}/confirmar"} 0
+http_requests_in_progress{method="GET",controller="",action="",endpoint="/api/ordenes/{id}"} 0
+# HELP dotnet_collection_count_total GC collection count
+# TYPE dotnet_collection_count_total counter
+dotnet_collection_count_total{generation="0"} 3
+dotnet_collection_count_total{generation="1"} 1
+dotnet_collection_count_total{generation="2"} 0
+# HELP process_start_time_seconds Start time of the process since unix epoch in seconds.
+# TYPE process_start_time_seconds gauge
+process_start_time_seconds 1790123204.9253824
+# HELP process_cpu_seconds_total Total user and system CPU time spent in seconds.
+# TYPE process_cpu_seconds_total counter
+process_cpu_seconds_total 31.75
+# HELP process_virtual_memory_bytes Virtual memory size in bytes.
+# TYPE process_virtual_memory_bytes gauge
+process_virtual_memory_bytes 279673573376
+# HELP process_working_set_bytes Process working set
+# TYPE process_working_set_bytes gauge
+process_working_set_bytes 436469760
+# HELP process_private_memory_bytes Process private memory size
+# TYPE process_private_memory_bytes gauge
+process_private_memory_bytes 370487296
+# HELP process_open_handles Number of open handles
+# TYPE process_open_handles gauge
+process_open_handles 308
+# HELP process_num_threads Total number of threads
+# TYPE process_num_threads gauge
+process_num_threads 34
+# HELP dotnet_total_memory_bytes Total known allocated memory
+# TYPE dotnet_total_memory_bytes gauge
+dotnet_total_memory_bytes 106676512
+# HELP prometheus_net_metric_families Number of metric families currently registered.
+# TYPE prometheus_net_metric_families gauge
+prometheus_net_metric_families{metric_type="counter"} 21
+prometheus_net_metric_families{metric_type="gauge"} 63
+prometheus_net_metric_families{metric_type="summary"} 0
+prometheus_net_metric_families{metric_type="histogram"} 7
+# HELP prometheus_net_metric_instances Number of metric instances currently registered across all metric families.
+# TYPE prometheus_net_metric_instances gauge
+prometheus_net_metric_instances{metric_type="counter"} 26
+prometheus_net_metric_instances{metric_type="gauge"} 82
+prometheus_net_metric_instances{metric_type="summary"} 0
+prometheus_net_metric_instances{metric_type="histogram"} 14
+# HELP prometheus_net_metric_timeseries Number of metric timeseries currently generated from all metric instances.
+# TYPE prometheus_net_metric_timeseries gauge
+prometheus_net_metric_timeseries{metric_type="counter"} 26
+prometheus_net_metric_timeseries{metric_type="gauge"} 82
+prometheus_net_metric_timeseries{metric_type="summary"} 0
+prometheus_net_metric_timeseries{metric_type="histogram"} 345
+# HELP prometheus_net_exemplars_recorded_total Number of exemplars that were accepted into in-memory storage in the prometheus-net SDK.
+# TYPE prometheus_net_exemplars_recorded_total counter
+prometheus_net_exemplars_recorded_total 4517
+# HELP prometheus_net_eventcounteradapter_sources_connected_total Number of event sources that are currently connected to the adapter.
+# TYPE prometheus_net_eventcounteradapter_sources_connected_total gauge
+prometheus_net_eventcounteradapter_sources_connected_total 5
+# HELP prometheus_net_meteradapter_instruments_connected Number of instruments that are currently connected to the adapter.
+# TYPE prometheus_net_meteradapter_instruments_connected gauge
+prometheus_net_meteradapter_instruments_connected 24
+# HELP npgsql_db_client_connections_usage ({connection}) The number of connections that are currently in state described by the state attribute. (ObservableUpDownCounter`1)
+# TYPE npgsql_db_client_connections_usage gauge
+npgsql_db_client_connections_usage{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",state="idle"} 2
+npgsql_db_client_connections_usage{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",state="used"} 0
+# HELP npgsql_db_client_connections_max ({connection}) The maximum number of open connections allowed. (ObservableUpDownCounter`1)
+# TYPE npgsql_db_client_connections_max gauge
+npgsql_db_client_connections_max{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin"} 100
+# HELP npgsql_db_client_commands_executing ({command}) The number of currently executing database commands. (UpDownCounter`1)
+# TYPE npgsql_db_client_commands_executing gauge
+npgsql_db_client_commands_executing{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin"} 0
+# HELP npgsql_db_client_commands_bytes_written (By) The number of bytes written. (Counter`1)
+# TYPE npgsql_db_client_commands_bytes_written gauge
+npgsql_db_client_commands_bytes_written{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin"} 13853800
+# HELP npgsql_db_client_commands_bytes_read (By) The number of bytes read. (Counter`1)
+# TYPE npgsql_db_client_commands_bytes_read gauge
+npgsql_db_client_commands_bytes_read{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin"} 12298659
+# HELP npgsql_db_client_commands_duration (s) The duration of database commands, in seconds. (Histogram`1)
+# TYPE npgsql_db_client_commands_duration histogram
+npgsql_db_client_commands_duration_sum{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin"} 12.905196200000004
+npgsql_db_client_commands_duration_count{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="0.01"} 7779
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="0.02"} 7893
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="0.04"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="0.08"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="0.16"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="0.32"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="0.64"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="1.28"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="2.56"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="5.12"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="10.24"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="20.48"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="40.96"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="81.92"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="163.84"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="327.68"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="655.36"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="1310.72"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="2621.44"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="5242.88"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="10485.76"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="20971.52"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="41943.04"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="83886.08"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="167772.16"} 7905
+npgsql_db_client_commands_duration_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="+Inf"} 7905
+# HELP microsoft_aspnetcore_server_kestrel_kestrel_queued_connections ({connection}) Number of connections that are currently queued and are waiting to start. (UpDownCounter`1)
+# TYPE microsoft_aspnetcore_server_kestrel_kestrel_queued_connections gauge
+microsoft_aspnetcore_server_kestrel_kestrel_queued_connections{network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080"} 0
+microsoft_aspnetcore_server_kestrel_kestrel_queued_connections{network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080"} 0
+# HELP microsoft_aspnetcore_server_kestrel_kestrel_active_connections ({connection}) Number of connections that are currently active on the server. (UpDownCounter`1)
+# TYPE microsoft_aspnetcore_server_kestrel_kestrel_active_connections gauge
+microsoft_aspnetcore_server_kestrel_kestrel_active_connections{network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080"} 0
+microsoft_aspnetcore_server_kestrel_kestrel_active_connections{network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080"} 1
+# HELP microsoft_aspnetcore_hosting_http_server_active_requests ({request}) Number of active HTTP server requests. (UpDownCounter`1)
+# TYPE microsoft_aspnetcore_hosting_http_server_active_requests gauge
+microsoft_aspnetcore_hosting_http_server_active_requests{http_request_method="GET",url_scheme="http"} 1
+microsoft_aspnetcore_hosting_http_server_active_requests{http_request_method="POST",url_scheme="http"} 0
+# HELP microsoft_aspnetcore_routing_aspnetcore_routing_match_attempts ({match_attempt}) Number of requests that were attempted to be matched to an endpoint. (Counter`1)
+# TYPE microsoft_aspnetcore_routing_aspnetcore_routing_match_attempts gauge
+microsoft_aspnetcore_routing_aspnetcore_routing_match_attempts{aspnetcore_routing_is_fallback="False",aspnetcore_routing_match_status="success",http_route="/health/live"} 83
+microsoft_aspnetcore_routing_aspnetcore_routing_match_attempts{aspnetcore_routing_is_fallback="False",aspnetcore_routing_match_status="success",http_route="/metrics"} 175
+microsoft_aspnetcore_routing_aspnetcore_routing_match_attempts{aspnetcore_routing_is_fallback="False",aspnetcore_routing_match_status="success",http_route="/api/ordenes/"} 380
+microsoft_aspnetcore_routing_aspnetcore_routing_match_attempts{aspnetcore_routing_is_fallback="False",aspnetcore_routing_match_status="success",http_route="/api/ordenes/{id}/confirmar"} 380
+# HELP microsoft_aspnetcore_hosting_http_server_request_duration (s) Duration of HTTP server requests. (Histogram`1)
+# TYPE microsoft_aspnetcore_hosting_http_server_request_duration histogram
+microsoft_aspnetcore_hosting_http_server_request_duration_sum{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http"} 0.07082159999999998
+microsoft_aspnetcore_hosting_http_server_request_duration_count{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="0.01"} 82
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="0.02"} 82
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="0.04"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="0.08"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="0.16"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="0.32"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="0.64"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="1.28"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="2.56"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="5.12"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="10.24"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="20.48"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="40.96"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="81.92"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="163.84"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="327.68"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="655.36"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="1310.72"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="2621.44"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="5242.88"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="10485.76"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="20971.52"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="41943.04"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="83886.08"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="167772.16"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/health/live",network_protocol_version="1.1",url_scheme="http",le="+Inf"} 83
+microsoft_aspnetcore_hosting_http_server_request_duration_sum{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http"} 0.6093038
+microsoft_aspnetcore_hosting_http_server_request_duration_count{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="0.01"} 173
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="0.02"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="0.04"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="0.08"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="0.16"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="0.32"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="0.64"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="1.28"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="2.56"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="5.12"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="10.24"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="20.48"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="40.96"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="81.92"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="163.84"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="327.68"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="655.36"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="1310.72"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="2621.44"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="5242.88"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="10485.76"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="20971.52"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="41943.04"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="83886.08"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="167772.16"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="GET",http_response_status_code="200",http_route="/metrics",network_protocol_version="1.1",url_scheme="http",le="+Inf"} 174
+microsoft_aspnetcore_hosting_http_server_request_duration_sum{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http"} 3.2583192
+microsoft_aspnetcore_hosting_http_server_request_duration_count{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="0.01"} 343
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="0.02"} 377
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="0.04"} 378
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="0.08"} 378
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="0.16"} 378
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="0.32"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="0.64"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="1.28"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="2.56"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="5.12"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="10.24"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="20.48"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="40.96"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="81.92"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="163.84"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="327.68"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="655.36"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="1310.72"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="2621.44"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="5242.88"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="10485.76"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="20971.52"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="41943.04"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="83886.08"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="167772.16"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="201",http_route="/api/ordenes/",network_protocol_version="1.1",url_scheme="http",le="+Inf"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_sum{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http"} 3.0537604999999988
+microsoft_aspnetcore_hosting_http_server_request_duration_count{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="0.01"} 339
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="0.02"} 377
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="0.04"} 379
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="0.08"} 379
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="0.16"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="0.32"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="0.64"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="1.28"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="2.56"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="5.12"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="10.24"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="20.48"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="40.96"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="81.92"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="163.84"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="327.68"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="655.36"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="1310.72"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="2621.44"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="5242.88"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="10485.76"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="20971.52"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="41943.04"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="83886.08"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="167772.16"} 380
+microsoft_aspnetcore_hosting_http_server_request_duration_bucket{http_request_method="POST",http_response_status_code="200",http_route="/api/ordenes/{id}/confirmar",network_protocol_version="1.1",url_scheme="http",le="+Inf"} 380
+# HELP microsoft_aspnetcore_server_kestrel_kestrel_connection_duration (s) The duration of connections on the server. (Histogram`1)
+# TYPE microsoft_aspnetcore_server_kestrel_kestrel_connection_duration histogram
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_sum{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080"} 0.10217039999999997
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_count{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="0.01"} 82
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="0.02"} 82
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="0.04"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="0.08"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="0.16"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="0.32"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="0.64"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="1.28"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="2.56"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="5.12"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="10.24"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="20.48"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="40.96"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="81.92"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="163.84"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="327.68"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="655.36"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="1310.72"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="2621.44"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="5242.88"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="10485.76"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="20971.52"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="41943.04"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="83886.08"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="167772.16"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::1",server_port="8080",le="+Inf"} 83
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_sum{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080"} 5614.4279037000015
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_count{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080"} 29
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="0.01"} 3
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="0.02"} 6
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="0.04"} 8
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="0.08"} 8
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="0.16"} 8
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="0.32"} 8
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="0.64"} 8
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="1.28"} 8
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="2.56"} 8
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="5.12"} 8
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="10.24"} 8
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="20.48"} 9
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="40.96"} 9
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="81.92"} 9
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="163.84"} 9
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="327.68"} 29
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="655.36"} 29
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="1310.72"} 29
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="2621.44"} 29
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="5242.88"} 29
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="10485.76"} 29
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="20971.52"} 29
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="41943.04"} 29
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="83886.08"} 29
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="167772.16"} 29
+microsoft_aspnetcore_server_kestrel_kestrel_connection_duration_bucket{network_protocol_name="http",network_protocol_version="1.1",network_transport="tcp",network_type="ipv6",server_address="::ffff:172.18.0.18",server_port="8080",le="+Inf"} 29
+# HELP npgsql_db_client_commands_prepared_ratio The ratio of prepared command executions. (ObservableGauge`1)
+# TYPE npgsql_db_client_commands_prepared_ratio gauge
+npgsql_db_client_commands_prepared_ratio{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin"} 0
+# HELP system_runtime_cpu_usage (%) CPU Usage
+# TYPE system_runtime_cpu_usage gauge
+system_runtime_cpu_usage 0.01910737578450959
+# HELP system_runtime_working_set (MB) Working Set
+# TYPE system_runtime_working_set gauge
+system_runtime_working_set 436.46976
+# HELP system_runtime_gc_heap_size (MB) GC Heap Size
+# TYPE system_runtime_gc_heap_size gauge
+system_runtime_gc_heap_size 106.20788
+# HELP system_runtime_gen_0_gc_count_total Gen 0 GC Count
+# TYPE system_runtime_gen_0_gc_count_total counter
+system_runtime_gen_0_gc_count_total 3
+# HELP system_runtime_gen_1_gc_count_total Gen 1 GC Count
+# TYPE system_runtime_gen_1_gc_count_total counter
+system_runtime_gen_1_gc_count_total 1
+# HELP system_runtime_gen_2_gc_count_total Gen 2 GC Count
+# TYPE system_runtime_gen_2_gc_count_total counter
+system_runtime_gen_2_gc_count_total 0
+# HELP system_runtime_gen_0_gc_budget (MB) Gen 0 GC Budget
+# TYPE system_runtime_gen_0_gc_budget gauge
+system_runtime_gen_0_gc_budget 251
+# HELP system_runtime_threadpool_thread_count ThreadPool Thread Count
+# TYPE system_runtime_threadpool_thread_count gauge
+system_runtime_threadpool_thread_count 4
+# HELP system_runtime_monitor_lock_contention_count_total Monitor Lock Contention Count
+# TYPE system_runtime_monitor_lock_contention_count_total counter
+system_runtime_monitor_lock_contention_count_total 143
+# HELP system_runtime_threadpool_queue_length ThreadPool Queue Length
+# TYPE system_runtime_threadpool_queue_length gauge
+system_runtime_threadpool_queue_length 0
+# HELP system_runtime_threadpool_completed_items_count_total ThreadPool Completed Work Item Count
+# TYPE system_runtime_threadpool_completed_items_count_total counter
+system_runtime_threadpool_completed_items_count_total 68622
+# HELP system_runtime_alloc_total (B) Allocation Rate
+# TYPE system_runtime_alloc_total counter
+system_runtime_alloc_total 787411864
+# HELP system_runtime_active_timer_count Number of Active Timers
+# TYPE system_runtime_active_timer_count gauge
+system_runtime_active_timer_count 20
+# HELP system_runtime_gc_fragmentation (%) GC Fragmentation
+# TYPE system_runtime_gc_fragmentation gauge
+system_runtime_gc_fragmentation 1.197917986177115
+# HELP system_runtime_gc_committed (MB) GC Committed Bytes
+# TYPE system_runtime_gc_committed gauge
+system_runtime_gc_committed 269.791232
+# HELP system_runtime_exception_count_total Exception Count
+# TYPE system_runtime_exception_count_total counter
+system_runtime_exception_count_total 0
+# HELP system_runtime_time_in_gc (%) % Time in GC since last GC
+# TYPE system_runtime_time_in_gc gauge
+system_runtime_time_in_gc 0
+# HELP system_runtime_total_pause_time_by_gc_total (ms) Time paused by GC
+# TYPE system_runtime_total_pause_time_by_gc_total counter
+system_runtime_total_pause_time_by_gc_total 41.237
+# HELP system_runtime_gen_0_size (B) Gen 0 Size
+# TYPE system_runtime_gen_0_size gauge
+system_runtime_gen_0_size 114064
+# HELP system_runtime_gen_1_size (B) Gen 1 Size
+# TYPE system_runtime_gen_1_size gauge
+system_runtime_gen_1_size 969808
+# HELP system_runtime_gen_2_size (B) Gen 2 Size
+# TYPE system_runtime_gen_2_size gauge
+system_runtime_gen_2_size 8106768
+# HELP system_runtime_loh_size (B) LOH Size
+# TYPE system_runtime_loh_size gauge
+system_runtime_loh_size 316608
+# HELP system_runtime_poh_size (B) POH (Pinned Object Heap) Size
+# TYPE system_runtime_poh_size gauge
+system_runtime_poh_size 281736
+# HELP system_runtime_assembly_count Number of Assemblies Loaded
+# TYPE system_runtime_assembly_count gauge
+system_runtime_assembly_count 142
+# HELP system_runtime_il_bytes_jitted (B) IL Bytes Jitted
+# TYPE system_runtime_il_bytes_jitted gauge
+system_runtime_il_bytes_jitted 2981193
+# HELP system_runtime_methods_jitted_count Number of Methods Jitted
+# TYPE system_runtime_methods_jitted_count gauge
+system_runtime_methods_jitted_count 38343
+# HELP system_runtime_time_in_jit_total (ms) Time spent in JIT
+# TYPE system_runtime_time_in_jit_total counter
+system_runtime_time_in_jit_total 5040.0988
+# HELP system_net_nameresolution_dns_lookups_requested DNS Lookups Requested
+# TYPE system_net_nameresolution_dns_lookups_requested gauge
+system_net_nameresolution_dns_lookups_requested 4
+# HELP system_net_nameresolution_current_dns_lookups Current DNS Lookups
+# TYPE system_net_nameresolution_current_dns_lookups gauge
+system_net_nameresolution_current_dns_lookups 0
+# HELP system_net_nameresolution_dns_lookups_duration (ms) Average DNS Lookup Duration
+# TYPE system_net_nameresolution_dns_lookups_duration gauge
+system_net_nameresolution_dns_lookups_duration 0
+# HELP system_net_sockets_current_outgoing_connect_attempts Current Outgoing Connect Attempts
+# TYPE system_net_sockets_current_outgoing_connect_attempts gauge
+system_net_sockets_current_outgoing_connect_attempts 0
+# HELP system_net_sockets_outgoing_connections_established Outgoing Connections Established
+# TYPE system_net_sockets_outgoing_connections_established gauge
+system_net_sockets_outgoing_connections_established 6
+# HELP system_net_sockets_incoming_connections_established Incoming Connections Established
+# TYPE system_net_sockets_incoming_connections_established gauge
+system_net_sockets_incoming_connections_established 112
+# HELP system_net_sockets_bytes_received Bytes Received
+# TYPE system_net_sockets_bytes_received gauge
+system_net_sockets_bytes_received 13787194
+# HELP system_net_sockets_bytes_sent Bytes Sent
+# TYPE system_net_sockets_bytes_sent gauge
+system_net_sockets_bytes_sent 31690842
+# HELP system_net_sockets_datagrams_received Datagrams Received
+# TYPE system_net_sockets_datagrams_received gauge
+system_net_sockets_datagrams_received 0
+# HELP system_net_sockets_datagrams_sent Datagrams Sent
+# TYPE system_net_sockets_datagrams_sent gauge
+system_net_sockets_datagrams_sent 0
+# HELP microsoft_aspnetcore_hosting_requests_per_second_total Request Rate
+# TYPE microsoft_aspnetcore_hosting_requests_per_second_total counter
+microsoft_aspnetcore_hosting_requests_per_second_total 1089
+# HELP microsoft_aspnetcore_hosting_total_requests Total Requests
+# TYPE microsoft_aspnetcore_hosting_total_requests gauge
+microsoft_aspnetcore_hosting_total_requests 1089
+# HELP microsoft_aspnetcore_hosting_current_requests Current Requests
+# TYPE microsoft_aspnetcore_hosting_current_requests gauge
+microsoft_aspnetcore_hosting_current_requests 0
+# HELP microsoft_aspnetcore_hosting_failed_requests Failed Requests
+# TYPE microsoft_aspnetcore_hosting_failed_requests gauge
+microsoft_aspnetcore_hosting_failed_requests 0
+# HELP microsoft_aspnetcore_server_kestrel_connections_per_second_total Connection Rate
+# TYPE microsoft_aspnetcore_server_kestrel_connections_per_second_total counter
+microsoft_aspnetcore_server_kestrel_connections_per_second_total 111
+# HELP microsoft_aspnetcore_server_kestrel_total_connections Total Connections
+# TYPE microsoft_aspnetcore_server_kestrel_total_connections gauge
+microsoft_aspnetcore_server_kestrel_total_connections 112
+# HELP microsoft_aspnetcore_server_kestrel_tls_handshakes_per_second_total TLS Handshake Rate
+# TYPE microsoft_aspnetcore_server_kestrel_tls_handshakes_per_second_total counter
+microsoft_aspnetcore_server_kestrel_tls_handshakes_per_second_total 0
+# HELP microsoft_aspnetcore_server_kestrel_total_tls_handshakes Total TLS Handshakes
+# TYPE microsoft_aspnetcore_server_kestrel_total_tls_handshakes gauge
+microsoft_aspnetcore_server_kestrel_total_tls_handshakes 0
+# HELP microsoft_aspnetcore_server_kestrel_current_tls_handshakes Current TLS Handshakes
+# TYPE microsoft_aspnetcore_server_kestrel_current_tls_handshakes gauge
+microsoft_aspnetcore_server_kestrel_current_tls_handshakes 0
+# HELP microsoft_aspnetcore_server_kestrel_failed_tls_handshakes Failed TLS Handshakes
+# TYPE microsoft_aspnetcore_server_kestrel_failed_tls_handshakes gauge
+microsoft_aspnetcore_server_kestrel_failed_tls_handshakes 0
+# HELP microsoft_aspnetcore_server_kestrel_current_connections Current Connections
+# TYPE microsoft_aspnetcore_server_kestrel_current_connections gauge
+microsoft_aspnetcore_server_kestrel_current_connections 1
+# HELP microsoft_aspnetcore_server_kestrel_connection_queue_length Connection Queue Length
+# TYPE microsoft_aspnetcore_server_kestrel_connection_queue_length gauge
+microsoft_aspnetcore_server_kestrel_connection_queue_length 0
+# HELP microsoft_aspnetcore_server_kestrel_request_queue_length Request Queue Length
+# TYPE microsoft_aspnetcore_server_kestrel_request_queue_length gauge
+microsoft_aspnetcore_server_kestrel_request_queue_length 0
+# HELP microsoft_aspnetcore_server_kestrel_current_upgraded_requests Current Upgraded Requests (WebSockets)
+# TYPE microsoft_aspnetcore_server_kestrel_current_upgraded_requests gauge
+microsoft_aspnetcore_server_kestrel_current_upgraded_requests 0
+# HELP system_net_nameresolution_dns_lookup_duration (s) Measures the time taken to perform a DNS lookup. (Histogram`1)
+# TYPE system_net_nameresolution_dns_lookup_duration histogram
+system_net_nameresolution_dns_lookup_duration_sum{dns_question_name="db-operacional"} 0.0031509999999999997
+system_net_nameresolution_dns_lookup_duration_count{dns_question_name="db-operacional"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="0.01"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="0.02"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="0.04"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="0.08"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="0.16"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="0.32"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="0.64"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="1.28"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="2.56"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="5.12"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="10.24"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="20.48"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="40.96"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="81.92"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="163.84"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="327.68"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="655.36"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="1310.72"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="2621.44"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="5242.88"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="10485.76"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="20971.52"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="41943.04"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="83886.08"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="167772.16"} 4
+system_net_nameresolution_dns_lookup_duration_bucket{dns_question_name="db-operacional",le="+Inf"} 4
+# HELP npgsql_db_client_connections_create_time (s) The time it took to create a new connection. (Histogram`1)
+# TYPE npgsql_db_client_connections_create_time histogram
+npgsql_db_client_connections_create_time_sum{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin"} 0.0309597
+npgsql_db_client_connections_create_time_count{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="0.01"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="0.02"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="0.04"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="0.08"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="0.16"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="0.32"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="0.64"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="1.28"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="2.56"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="5.12"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="10.24"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="20.48"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="40.96"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="81.92"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="163.84"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="327.68"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="655.36"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="1310.72"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="2621.44"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="5242.88"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="10485.76"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="20971.52"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="41943.04"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="83886.08"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="167772.16"} 4
+npgsql_db_client_connections_create_time_bucket{pool_name="Host=db-operacional;Port=5432;Database=sgo_ordenes;Username=sgo_admin",le="+Inf"} 4

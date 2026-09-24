@@ -32,8 +32,10 @@ builder.Services.AddScoped<IGeneradorCorrelativoReserva, GeneradorCorrelativoRes
 builder.Services.AddScoped<ServicioReservas>();
 builder.Services.AddScoped<ServicioExistencias>();
 builder.Services.AddScoped<ServicioExpiracionReservas>();
+builder.Services.AddScoped<ServicioLiberacionReservas>();
+builder.Services.AddScoped<ServicioReingresoStock>();
 
-builder.Services.AddHostedService<ReservaSolicitadaConsumidor>();
+builder.Services.AddHostedService<OrdenesEventosConsumidor>();
 
 // HU-002: barrido periodico que libera las reservas con TTL vencido.
 builder.Services.AddHostedService<ExpiracionReservasWorker>();

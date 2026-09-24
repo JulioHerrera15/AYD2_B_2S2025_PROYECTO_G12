@@ -34,6 +34,8 @@ public sealed class JwtService : IJwtService
             new Claim(JwtRegisteredClaimNames.Sub, usuario.Id.ToString()),
             new Claim(JwtRegisteredClaimNames.Email, usuario.Email),
             new Claim("nombre", usuario.NombreCompleto),
+            new Claim("rol", usuario.Rol),
+            new Claim(ClaimTypes.Role, usuario.Rol),
             new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString())
         };
 
@@ -47,6 +49,7 @@ public sealed class JwtService : IJwtService
             UsuarioId: usuario.Id.ToString(),
             Email: usuario.Email,
             NombreCompleto: usuario.NombreCompleto,
-            ExpiraEn: expira);
+            ExpiraEn: expira,
+            Rol: usuario.Rol);
     }
 }

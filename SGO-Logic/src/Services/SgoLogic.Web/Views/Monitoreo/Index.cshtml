@@ -1,7 +1,6 @@
 @{
     ViewData["Title"] = "Centro de Control & Topología de Arquitectura";
     var servicios = ViewBag.Servicios as List<SgoLogic.Web.Controllers.ServicioHealthStatus> ?? new();
-    var tarjetas = ViewBag.Tarjetas as List<SgoLogic.Web.Controllers.TarjetaPrueba> ?? new();
     var jwtToken = ViewBag.JwtToken as string;
     var jwtSubject = ViewBag.JwtSubject as string;
     var jwtEmail = ViewBag.JwtEmail as string;
@@ -19,7 +18,7 @@
                 Topología Distribuida &bull; Observabilidad Integral
             </div>
             <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight">Centro de Control & Monitoreo del Sistema</h1>
-            <p class="text-xs sm:text-sm text-text-muted">Supervisión en vivo de microservicios, autenticación en el borde (ADR-020) y pruebas de pago (RES-08).</p>
+            <p class="text-xs sm:text-sm text-text-muted">Supervisión en vivo de microservicios, autenticación perimetral y gobernanza de arquitectura distribuida.</p>
         </div>
 
         <div class="flex items-center gap-3">
@@ -30,7 +29,7 @@
         </div>
     </div>
 
-    <!-- ADR-020 Border Authentication Inspector Card -->
+    <!-- Border Authentication Inspector Card -->
     <div class="bg-surface-white rounded-3xl p-6 sm:p-8 border border-border-subtle/60 ambient-shadow">
         <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 mb-6 border-b border-border-subtle">
             <div class="flex items-center gap-3">
@@ -38,7 +37,7 @@
                     <span class="material-symbols-outlined text-[22px]">vpn_key</span>
                 </div>
                 <div>
-                    <h2 class="text-base font-bold text-primary">Autenticación en el Borde (ADR-020)</h2>
+                    <h2 class="text-base font-bold text-primary">Autenticación Perimetral Centralizada</h2>
                     <p class="text-xs text-text-muted">Inspección de tokens Bearer validados en el YARP API Gateway</p>
                 </div>
             </div>
@@ -140,80 +139,63 @@
         </div>
     </div>
 
-    <!-- PayKlik Test Sandbox Library (RES-08 / ADR-010) -->
+    <!-- Directrices de Seguridad, Resiliencia y Auditoría -->
     <div class="bg-surface-white rounded-3xl p-6 sm:p-8 border border-border-subtle/60 ambient-shadow">
         <div class="flex items-center gap-3 pb-4 mb-6 border-b border-border-subtle">
             <div class="w-10 h-10 rounded-xl bg-surface-container-low text-primary flex items-center justify-center font-bold">
-                <span class="material-symbols-outlined text-[22px]">credit_card</span>
+                <span class="material-symbols-outlined text-[22px]">policy</span>
             </div>
             <div>
-                <h2 class="text-base font-bold text-primary">Laboratorio de Pruebas de Medios de Pago PayKlik (RES-08)</h2>
-                <p class="text-xs text-text-muted">Tarjetas de prueba simuladas en la pasarela externa <code class="bg-surface-container-low px-1 rounded font-mono">http://localhost:8084</code></p>
+                <h2 class="text-base font-bold text-primary">Políticas de Arquitectura, Resiliencia y Gobernanza</h2>
+                <p class="text-xs text-text-muted">Cumplimiento estricto de estándares corporativos, resiliencia y auditoría inmutable</p>
             </div>
         </div>
 
-        <div class="overflow-x-auto">
-            <table class="w-full text-left text-xs border-collapse">
-                <thead>
-                    <tr class="bg-surface-container-low/60 text-text-muted uppercase tracking-wider font-semibold border-b border-border-subtle/70">
-                        <th class="py-3 px-4">Franquicia</th>
-                        <th class="py-3 px-4">Número de Tarjeta</th>
-                        <th class="py-3 px-4">Vencimiento</th>
-                        <th class="py-3 px-4">CVV</th>
-                        <th class="py-3 px-4">Titular</th>
-                        <th class="py-3 px-4">Escenario</th>
-                        <th class="py-3 px-4">Resultado Esperado</th>
-                        <th class="py-3 px-4 text-right">Acción</th>
-                    </tr>
-                </thead>
-                <tbody class="divide-y divide-border-subtle/50">
-                    @foreach (var t in tarjetas)
-                    {
-                        <tr class="hover:bg-surface-container-low/30 transition-colors">
-                            <td class="py-3 px-4 font-semibold text-primary">
-                                @t.Franquicia
-                            </td>
-                            <td class="py-3 px-4 font-mono font-bold text-primary">
-                                @t.Numero
-                            </td>
-                            <td class="py-3 px-4 font-mono text-text-muted">
-                                @t.Vencimiento
-                            </td>
-                            <td class="py-3 px-4 font-mono text-text-muted">
-                                @t.Cvv
-                            </td>
-                            <td class="py-3 px-4 text-text-muted">
-                                @t.Titular
-                            </td>
-                            <td class="py-3 px-4">
-                                <span class="inline-flex px-2 py-0.5 rounded-full text-[10px] font-bold border @t.ColorBadge">
-                                    @t.Escenario
-                                </span>
-                            </td>
-                            <td class="py-3 px-4 text-text-muted text-[11px] max-w-xs">
-                                @t.ResultadoEsperado
-                            </td>
-                            <td class="py-3 px-4 text-right">
-                                <button type="button" 
-                                        onclick="copiarTarjeta('@t.Numero', '@t.Vencimiento', '@t.Cvv', '@t.Titular')"
-                                        class="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-surface-container-low hover:bg-surface-variant text-primary text-[11px] font-semibold transition-all">
-                                    <span class="material-symbols-outlined text-[13px]">content_copy</span>
-                                    Copiar
-                                </button>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div class="p-5 rounded-2xl bg-surface-container-low/40 border border-border-subtle flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center gap-2 mb-3 text-secondary">
+                        <span class="material-symbols-outlined text-[20px]">shield_person</span>
+                        <h3 class="font-bold text-sm text-primary">Autenticación Perimetral Segura</h3>
+                    </div>
+                    <p class="text-xs text-text-muted leading-relaxed mb-4">
+                        El API Gateway valida firmas JWT HMAC-SHA256 en rutas protegidas. Si el token expira o es inválido, rechaza la solicitud antes de sobrecargar la red interna.
+                    </p>
+                </div>
+                <div class="text-[11px] font-mono text-text-muted bg-surface-white p-2.5 rounded-xl border border-border-subtle">
+                    Bandera: <strong class="text-primary">Gateway:ExigirJwt = @exigirJwt</strong>
+                </div>
+            </div>
+
+            <div class="p-5 rounded-2xl bg-surface-container-low/40 border border-border-subtle flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center gap-2 mb-3 text-secondary">
+                        <span class="material-symbols-outlined text-[20px]">lock_reset</span>
+                        <h3 class="font-bold text-sm text-primary">Bitácora Inmutable de Auditoría</h3>
+                    </div>
+                    <p class="text-xs text-text-muted leading-relaxed mb-4">
+                        Registro transaccional append-only en PostgreSQL. Los eventos de dominio, pagos y cancelaciones disparan triggers inmutables sin posibilidad de eliminación.
+                    </p>
+                </div>
+                <div class="text-[11px] font-mono text-text-muted bg-surface-white p-2.5 rounded-xl border border-border-subtle">
+                    Auditoría Worker: <strong class="text-emerald-700">Port 5435 (Active)</strong>
+                </div>
+            </div>
+
+            <div class="p-5 rounded-2xl bg-surface-container-low/40 border border-border-subtle flex flex-col justify-between">
+                <div>
+                    <div class="flex items-center gap-2 mb-3 text-secondary">
+                        <span class="material-symbols-outlined text-[20px]">schema</span>
+                        <h3 class="font-bold text-sm text-primary">Orquestación Asíncrona (Sagas)</h3>
+                    </div>
+                    <p class="text-xs text-text-muted leading-relaxed mb-4">
+                        Orquestación asíncrona mediante RabbitMQ Topic Exchange (<code class="bg-surface-container-low px-1 rounded">sgo.ordenes</code>). Materialización reactiva en Redis y PostgreSQL con latencia P100 &lt; 5s.
+                    </p>
+                </div>
+                <div class="text-[11px] font-mono text-text-muted bg-surface-white p-2.5 rounded-xl border border-border-subtle">
+                    Exchange: <strong class="text-primary">sgo.ordenes (Topic)</strong>
+                </div>
+            </div>
         </div>
     </div>
 </div>
-
-<script>
-    function copiarTarjeta(numero, vencimiento, cvv, titular) {
-        const texto = `Tarjeta: ${numero} | Exp: ${vencimiento} | CVV: ${cvv} | Titular: ${titular}`;
-        navigator.clipboard.writeText(numero).then(() => {
-            alert('Número de tarjeta copiado al portapapeles: ' + numero);
-        });
-    }
-</script>

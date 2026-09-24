@@ -3,6 +3,7 @@ namespace SgoLogic.Notificaciones.Api.Application;
 public interface IMockMensajeriaClient
 {
     Task EnviarAsync(string clienteId, string estadoOrden, string ordenId, CancellationToken ct = default);
+    Task EnviarEmailAsync(string destinatario, string asunto, string cuerpo, CancellationToken ct = default);
 }
 
 public sealed class MockMensajeriaClient : IMockMensajeriaClient
@@ -16,13 +17,22 @@ public sealed class MockMensajeriaClient : IMockMensajeriaClient
         _logger = logger;
     }
 
-    public async Task EnviarAsync(string clienteId, string estadoOrden, string ordenId, CancellationToken ct = default)
+    public Task EnviarAsync(string clienteId, string estadoOrden, string ordenId, CancellationToken ct = default)
+    {
+        return EnviarEmailAsync(
+            destinatario: clienteId,
+            asunto: $"Tu orden {ordenId} cambio de estado",
+            cuerpo: $"El estado de tu orden {ordenId} es ahora: {estadoOrden}",
+            ct: ct);
+    }
+
+    public async Task EnviarEmailAsync(string destinatario, string asunto, string cuerpo, CancellationToken ct = default)
     {
         var payload = new
         {
-            Destinatario = clienteId,
-            Asunto = $"Tu orden {ordenId} cambio de estado",
-            Cuerpo = $"El estado de tu orden {ordenId} es ahora: {estadoOrden}"
+            Destinatario = destinatario,
+            Asunto = asunto,
+            Cuerpo = cuerpo
         };
 
         var response = await _http.PostAsJsonAsync("/api/mensajes/email", payload, ct);
@@ -34,7 +44,7 @@ public sealed class MockMensajeriaClient : IMockMensajeriaClient
                 response.StatusCode);
 
         _logger.LogInformation(
-            "Notificacion enviada al cliente {ClienteId} para orden {OrdenId} — estado {Estado}",
-            clienteId, ordenId, estadoOrden);
+            "Notificacion enviada a {Destinatario} | Asunto: {Asunto}",
+            destinatario, asunto);
     }
 }

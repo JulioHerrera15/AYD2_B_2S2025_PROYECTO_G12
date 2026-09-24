@@ -38,6 +38,7 @@ param(
     [string]$InventarioUrl = 'http://localhost:8094',
     [string]$DespachoUrl = 'http://localhost:8097',
     [string]$LogiExpressUrl = 'http://localhost:8098',
+    [string]$PayKlikUrl = 'http://localhost:8084',
     [string]$Sku = 'SKU-CAMINO-FELIZ',
     [string]$UbicacionId = 'CD-01'
 )
@@ -212,12 +213,30 @@ Write-Step "Siembra" "SKU=$Sku cant=100 en $UbicacionId" 'AUTO'
 
 Write-Host ""
 Write-Host "Paso 1: Crear y confirmar la orden"
+
+# TARJETA exige tokenMedioPago (ADR-010, DDA 14.3.1). El script hace de navegador:
+# tokeniza una tarjeta de prueba directo contra PayKlik y solo el token llega a
+# Ordenes. El PAN y el CVV no se imprimen.
+$tokenBody = @{
+    numeroTarjeta  = '4111111111111111'
+    cvv            = '123'
+    mesExpiracion  = 12
+    anioExpiracion = (Get-Date).Year + 3
+}
+$tokenRes = Invoke-HttpJson -Method 'POST' -Url "$PayKlikUrl/v1/tokens" -Body $tokenBody
+if ($null -eq $tokenRes -or [string]::IsNullOrWhiteSpace($tokenRes.token)) {
+    Write-Host "  FALLO: no se pudo tokenizar la tarjeta en $PayKlikUrl"
+    exit 1
+}
+Write-Step "Tokenizar tarjeta" "ultimosCuatro=$($tokenRes.ultimosCuatro) marca=$($tokenRes.marca)" 'AUTO'
+
 $crearBody = @{
     clienteId        = "CAMINO-FELIZ-$(Get-Date -Format 'yyyyMMddHHmmss')"
     canal            = 'WEB'
     metodoEntrega    = 'DOMICILIO'
     moneda           = 'GTQ'
     medioPago        = 'TARJETA'
+    tokenMedioPago   = $tokenRes.token
     impuestos        = 12.0
     direccionEntrega = @{
         pais         = 'GT'
