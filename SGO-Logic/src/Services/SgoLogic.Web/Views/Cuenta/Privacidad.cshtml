@@ -71,7 +71,7 @@
             </div>
             <h4 class="font-bold text-sm text-primary mb-1">Cifrado de Extremo a Extremo</h4>
             <p class="text-xs text-text-muted leading-relaxed">
-                Tránsito protegido mediante TLS 1.3 y datos en reposo cifrados con AES-256 en bases de datos PostgreSQL y Redis.
+                Tránsito protegido mediante TLS 1.3 y datos protegidos con cifrado avanzado en reposo para máxima confidencialidad.
             </p>
         </div>
 
@@ -79,9 +79,9 @@
             <div class="w-10 h-10 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center mb-3">
                 <span class="material-symbols-outlined text-[22px]">history_edu</span>
             </div>
-            <h4 class="font-bold text-sm text-primary mb-1">Auditoría Append-Only</h4>
+            <h4 class="font-bold text-sm text-primary mb-1">Registro Transaccional Inmutable</h4>
             <p class="text-xs text-text-muted leading-relaxed">
-                Bitácora forense de eventos inmodificable con permisos revocados para UPDATE y DELETE en base de datos.
+                Historial protegido con sello de tiempo verificable para el respaldo legal y garantía de cada una de tus compras.
             </p>
         </div>
     </div>
@@ -210,7 +210,7 @@
                             <span class="material-symbols-outlined text-text-muted text-[20px] mt-0.5">analytics</span>
                             <div>
                                 <span class="text-xs font-bold text-primary block">Telemetría y Métricas de Rendimiento Web</span>
-                                <span class="text-[11px] text-text-muted">Registro anónimo de tiempos de carga y latencia para cumplir con el SLA de &lt; 5 segundos.</span>
+                                <span class="text-[11px] text-text-muted">Registro anónimo de métricas de carga para garantizar una navegación rápida y fluida en la tienda.</span>
                             </div>
                         </div>
                         <input type="checkbox" name="consentTelemetry" value="true" @(consentTelemetry ? "checked" : "") class="mt-1 w-4 h-4 text-secondary rounded border-border-subtle focus:ring-secondary cursor-pointer" />
@@ -226,55 +226,55 @@
             </div>
         </div>
 
-        <!-- Security Architecture & PCI-DSS Info (1 col) -->
+        <!-- Security & PCI-DSS Consumer Explainer (1 col) -->
         <div class="space-y-6">
-            <!-- PCI-DSS Explainer -->
+            <!-- PCI-DSS Consumer Explainer -->
             <div class="bg-surface-white rounded-3xl p-6 sm:p-8 border border-border-subtle/60 ambient-shadow">
                 <div class="w-12 h-12 rounded-2xl bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center mb-4">
                     <span class="material-symbols-outlined text-[24px]">verified_user</span>
                 </div>
-                <h3 class="font-bold text-base text-primary mb-2">Aislamiento PCI-DSS</h3>
+                <h3 class="font-bold text-base text-primary mb-2">Protección Financiera Certificada</h3>
                 <p class="text-xs text-text-muted leading-relaxed mb-4">
-                    Para resguardar tu seguridad financiera, este portal implementa una arquitectura de tokenización en el cliente:
+                    Para resguardar tu seguridad financiera, este portal opera bajo rigurosos protocolos internacionales de protección al comprador:
                 </p>
 
                 <div class="space-y-3 text-xs">
                     <div class="flex items-start gap-2.5">
                         <span class="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">1</span>
-                        <p class="text-text-muted">El número de tarjeta y CVV se capturan en un formulario cifrado en tu navegador.</p>
+                        <p class="text-text-muted">Tus datos de tarjeta se procesan en formularios cifrados mediante conexión segura TLS 1.3.</p>
                     </div>
                     <div class="flex items-start gap-2.5">
                         <span class="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">2</span>
-                        <p class="text-text-muted">Tu navegador envía los datos directamente a <code class="bg-surface-container-low px-1 rounded font-mono text-primary">PayKlik (:8084)</code> mediante TLS.</p>
+                        <p class="text-text-muted">La transacción se valida directamente con la pasarela de pagos certificada sin intermediarios no autorizados.</p>
                     </div>
                     <div class="flex items-start gap-2.5">
                         <span class="w-5 h-5 rounded-full bg-emerald-100 text-emerald-800 text-[11px] font-bold flex items-center justify-center shrink-0 mt-0.5">3</span>
-                        <p class="text-text-muted">PayKlik responde un token opaco <code class="bg-surface-container-low px-1 rounded font-mono text-primary">tok_pk_...</code>. Solo este token se almacena en MegaStore.</p>
+                        <p class="text-text-muted">MegaStore nunca almacena números de tarjeta ni códigos CVV en sus servidores locales.</p>
                     </div>
                 </div>
 
                 <div class="mt-6 pt-4 border-t border-border-subtle">
                     <div class="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-[11px] font-medium flex items-center gap-2">
                         <span class="material-symbols-outlined text-[16px] text-emerald-600">lock</span>
-                        <span>Riesgo de fuga de tarjetas: 0%</span>
+                        <span>Transacciones 100% Protegidas y Tokenizadas</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Inmutable Audit Explainer -->
+            <!-- Inmutable Audit & Tax Explainer -->
             <div class="bg-surface-white rounded-3xl p-6 sm:p-8 border border-border-subtle/60 ambient-shadow">
                 <div class="w-12 h-12 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center mb-4">
                     <span class="material-symbols-outlined text-[24px]">history</span>
                 </div>
-                <h3 class="font-bold text-base text-primary mb-2">Auditoría Forense Inmutable</h3>
+                <h3 class="font-bold text-base text-primary mb-2">Transparencia y Respaldo Legal</h3>
                 <p class="text-xs text-text-muted leading-relaxed mb-4">
-                    En cumplimiento de las normas de seguridad de la información y observabilidad:
+                    En cumplimiento de las leyes guatemaltecas de comercio electrónico y normativas tributarias de la SAT:
                 </p>
 
                 <ul class="text-xs text-text-muted space-y-2 list-disc list-inside">
-                    <li>La tabla <code class="font-mono text-primary">auditoria_pedidos</code> es exclusivamente de inserción (append-only).</li>
-                    <li>Los usuarios de aplicación carecen de permisos SQL <code class="font-mono text-error">UPDATE</code> o <code class="font-mono text-error">DELETE</code>.</li>
-                    <li>Cualquier intento de alteración deja una alerta en la bitácora criptográfica central.</li>
+                    <li>Cada compra genera un comprobante fiscal digital auténtico y verificable ante la SAT.</li>
+                    <li>Los comprobantes y estados de tus órdenes quedan resguardados de forma íntegra para efectos de garantía.</li>
+                    <li>Puedes solicitar tus constancias de compra o la descarga de tu expediente en cualquier momento.</li>
                 </ul>
             </div>
         </div>

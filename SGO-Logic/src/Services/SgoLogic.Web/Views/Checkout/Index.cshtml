@@ -177,7 +177,7 @@
                 <!-- PCI-DSS Banner -->
                 <div class="mt-4 p-3 bg-emerald-50 text-emerald-950 rounded-2xl border border-emerald-200/60 flex items-center gap-2.5 text-xs">
                     <span class="material-symbols-outlined text-emerald-700 text-[18px]">verified_user</span>
-                    <span><strong>Aislamiento y Seguridad PCI-DSS:</strong> La tarjeta se tokeniza directamente con la pasarela PayKlik. Ningún servidor de MegaStore ni del API Gateway almacena jamás tu número de tarjeta ni CVV.</span>
+                    <span><strong>Seguridad y Protección PCI-DSS:</strong> Tu tarjeta se procesa y cifra directamente con la pasarela de pagos. MegaStore nunca visualiza ni almacena tu número de tarjeta ni CVV.</span>
                 </div>
 
                 <!-- Panel de datos de tarjeta — solo visible con TARJETA -->
@@ -440,11 +440,11 @@
         }
 
         btn.disabled = true;
-        statusEl.textContent = 'Tokenizando directamente con PayKlik (CORS seguro)...';
+        statusEl.textContent = 'Verificando con la pasarela de pagos segura...';
         statusEl.className = 'text-xs font-semibold py-1 text-text-muted';
 
         try {
-            // SEGURIDAD PCI-DSS: El PAN se envía directamente a la pasarela PayKlik.
+            // SEGURIDAD PCI-DSS: El PAN se envía directamente a la pasarela externa segura.
             // Nunca transita por MegaStore ni por el gateway.
             const tokenRes = await fetch('http://localhost:8084/v1/tokens', {
                 method: 'POST',
@@ -454,7 +454,7 @@
 
             if (!tokenRes.ok) {
                 const err = await tokenRes.json().catch(() => ({}));
-                const detalle = err?.title ?? `PayKlik respondió ${tokenRes.status}`;
+                const detalle = err?.title ?? `La pasarela respondió ${tokenRes.status}`;
                 throw new Error(detalle);
             }
 
@@ -464,14 +464,14 @@
             // Solo el token opaco se asigna al campo oculto del formulario
             document.getElementById('token-medio-pago').value = token;
 
-            statusEl.textContent = 'Tarjeta tokenizada con éxito — confirmando orden transaccional...';
+            statusEl.textContent = 'Tarjeta validada con éxito — procesando tu compra...';
             statusEl.className = 'text-xs font-semibold py-1 text-secondary';
 
             setTimeout(() => form.submit(), 300);
 
         } catch (err) {
-            console.error('Error tokenizando:', err);
-            statusEl.textContent = 'Error al tokenizar: ' + (err.message ?? 'Verifica los datos e intenta de nuevo.');
+            console.error('Error procesando pago:', err);
+            statusEl.textContent = 'No fue posible validar la tarjeta: ' + (err.message ?? 'Verifica los datos e intenta de nuevo.');
             statusEl.className = 'text-xs font-semibold py-1 text-error';
             btn.disabled = false;
         }

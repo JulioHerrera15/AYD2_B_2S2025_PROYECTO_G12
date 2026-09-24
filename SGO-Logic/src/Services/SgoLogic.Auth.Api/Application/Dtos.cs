@@ -20,6 +20,8 @@ public sealed record VerificarEmailRequest(
 
 public sealed record VerificarEmailResponse(string Mensaje);
 
+public sealed record ReenviarCodigoRequest(string Email);
+
 // ── Login ─────────────────────────────────────────────────────────────────────
 
 public sealed record LoginRequest(

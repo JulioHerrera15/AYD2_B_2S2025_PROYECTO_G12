@@ -26,9 +26,23 @@ public class CarritoController : Controller
         }
     }
 
+    private bool EsAdminOStaff()
+    {
+        var jwt = Request.Cookies["sgo_jwt"];
+        var userRole = Request.Cookies["sgo_user_role"] ?? "CLIENTE";
+        var userEmail = Request.Cookies["sgo_user_email"];
+        return PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt);
+    }
+
     [HttpGet]
     public async Task<IActionResult> Index()
     {
+        if (EsAdminOStaff())
+        {
+            TempData["Info"] = "Las cuentas de administración gestionan la plataforma y despachos. Para comprar en la tienda, utiliza una cuenta de cliente.";
+            return RedirectToAction("Index", "Despacho");
+        }
+
         EnsureGuestSession();
         var carrito = await _gateway.ObtenerCarritoAsync();
         return View(carrito);
@@ -37,6 +51,11 @@ public class CarritoController : Controller
     [HttpPost]
     public async Task<IActionResult> Agregar(string sku, string descripcion, int cantidad, decimal precioUnitario)
     {
+        if (EsAdminOStaff())
+        {
+            return RedirectToAction("Index", "Despacho");
+        }
+
         EnsureGuestSession();
         await _gateway.AgregarItemCarritoAsync(new AgregarItemModel(sku, descripcion, cantidad, precioUnitario));
         return RedirectToAction("Index");

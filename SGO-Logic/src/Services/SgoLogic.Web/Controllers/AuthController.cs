@@ -186,6 +186,28 @@ public class AuthController : Controller
         return RedirectToAction("Login");
     }
 
+    [HttpPost]
+    public async Task<IActionResult> ReenviarCodigo(string email)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            TempData["Error"] = "Por favor ingresa tu correo electrónico.";
+            return RedirectToAction("Verificar");
+        }
+
+        var (exito, error) = await _gateway.ReenviarCodigoAsync(email.Trim());
+        if (!exito)
+        {
+            TempData["Error"] = error ?? "No se pudo reenviar el código. Intenta de nuevo.";
+        }
+        else
+        {
+            TempData["Exito"] = "Te hemos enviado un nuevo código de verificación a tu correo.";
+        }
+
+        return RedirectToAction("Verificar", new { email = email.Trim() });
+    }
+
     [HttpGet]
     public IActionResult Logout()
     {

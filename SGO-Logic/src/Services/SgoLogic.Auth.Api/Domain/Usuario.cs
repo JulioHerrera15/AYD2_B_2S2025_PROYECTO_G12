@@ -50,4 +50,13 @@ public sealed class Usuario
         HashContrasena = nuevoHash;
         ActualizadoEn = DateTime.UtcNow;
     }
+
+    public void ActualizarNombre(string nuevoNombre)
+    {
+        if (!string.IsNullOrWhiteSpace(nuevoNombre))
+        {
+            NombreCompleto = nuevoNombre.Trim();
+            ActualizadoEn = DateTime.UtcNow;
+        }
+    }
 }

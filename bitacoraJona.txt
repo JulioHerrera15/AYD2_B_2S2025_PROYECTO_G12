@@ -1,0 +1,575 @@
+====================================================================================================
+BITÁCORA TÉCNICA DE DESARROLLO, DAILY STANDUPS Y SPRINT RETROSPECTIVE
+PROYECTO: SGO-Logic (Sistema de Gestión de Órdenes Omnicanal — MegaStore)
+CURSO: Análisis y Diseño de Sistemas 2 — Sección B
+FACULTAD DE INGENIERÍA — UNIVERSIDAD DE SAN CARLOS DE GUATEMALA (USAC)
+====================================================================================================
+INTEGRANTE: Jonathan Jerónimo
+CARNET: 202300353
+ROL: Ingeniero de Software — Borde, Identidad y Lectura
+RESPONSABILIDAD: Auth & Carrito Unificado (HU-007), Consulta de Estado CQRS (HU-010),
+                 Notificaciones Omnicanal (HU-015), Gestión de Incidencias (HU-021),
+                 Rendimiento bajo Carga (HU-024), API Gateway (YARP), Mock Mensajería,
+                 Frontend Web Demo (ASP.NET Core MVC Razor).
+SPRINT: Iteración Única de Desarrollo (4 al 22 de septiembre de 2026)
+FECHA DE ENTREGA: Miércoles 23 de septiembre de 2026
+====================================================================================================
+
+TABLA DE CONTENIDO GENERAL
+1. Registro de Refinamientos Diarios (Daily Standups Técnicos — 4 al 22 de Septiembre)
+   - Bloque 0: Arranque, Definición de Arquitectura y Topología (Días 4 al 6)
+   - Bloque 1: Ola 1 — Núcleo Transaccional e Identidad (Días 7 al 13)
+   - Bloque 2: Olas 2 y 3 — Edge, Notificaciones, Gateway y UI Demo (Días 14 al 18)
+   - Bloque 3: Validación, Pruebas de Carga y Cierre de Iteración (Días 19 al 22)
+2. Sprint Retrospective de Impacto Estructural
+   2.1 Análisis Crítico de Decisiones y Patrones Consolidados con Éxito
+   2.2 Supuestos Teóricos y Diagramas de Fase 1 con Fallas / Refactorizaciones de Emergencia
+   2.3 Mejoras Técnicas para la Mantenibilidad Futura del Ecosistema
+3. Estado Final del Tablero Kanban (Representación Estructurada)
+4. Gráfica y Análisis del Burndown Chart
+5. Resumen Consolidado de Tareas Completadas vs. Pendientes y Justificación Técnica
+
+====================================================================================================
+1. REGISTRO DE REFINAMIENTOS DIARIOS (DAILY STANDUPS TÉCNICOS)
+====================================================================================================
+Estructura obligatoria por Daily Standup:
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+----------------------------------------------------------------------------------------------------
+
+====================================================================================================
+BLOQUE 0: ARRANQUE, DEFINICIÓN DE ARQUITECTURA Y TOPOLOGÍA (4 AL 6 DE SEPTIEMBRE)
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 1: VIERNES 04 DE SEPTIEMBRE DE 2026
+----------------------------------------------------------------------------------------------------
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Participación en la sesión técnica de arquitectura (1.5 horas de consenso). Se definió y congeló la elección tecnológica: PostgreSQL 16 como motor relacional con esquemas aislados por microservicio, Redis 7 Alpine como almacenamiento de caché/lectura ultrarrápida, y RabbitMQ 3.13 con cliente nativo RabbitMQ.Client directo en C# (descartando MassTransit para mantener control fino del protocolo AMQP). Se redactó el primer borrador técnico de los contratos de eventos de borde para el contexto de Auth y el consumidor de Consulta de Estado.
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Se estructurarán las especificaciones de interfaz para el sobre de eventos transversal (Envelope v1) asegurando que contenga: eventId (UUID v4), transactionId (trazabilidad de auditoría según EAC-03), sequence (entero monotónico para ordenar eventos por agregado), aggregateType y aggregateId. Se asegurará la regla de negocio que prohíbe transportar datos sensibles (PAN/CVV) en cualquier mensaje según la restricción estricta de seguridad.
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- Riesgo de divergencia en la convención de serialización JSON entre los microservicios del equipo (PascalCase vs. camelCase) y discrepancias en el formato de fechas ISO 8601 UTC. Podría provocar deserializaciones fallidas en los consumidores de RabbitMQ y degradar el rendimiento global.
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 2: SÁBADO 05 DE SEPTIEMBRE DE 2026
+----------------------------------------------------------------------------------------------------
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Revisión y validación formal de los contratos de eventos de Órdenes emitidos por Angel Martínez (OrdenCreada, OrdenEstadoCambiado, OrdenConfirmada, etc.). Se homologó el contrato para que Consulta de Estado reciba `ordenes.orden.*` y `ordenes.devolucion.*`, y se pactó que Notificaciones reciba exclusivamente `ordenes.orden.estado-cambiado` para prevenir condiciones de carrera y dobles alertas.
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Definición del modelo de datos preliminar para `SgoLogic.Auth.Api` (entidad Usuario y CodigoVerificacion en PostgreSQL) y la estrategia de hashing de contraseñas mediante algoritmo BCrypt, garantizando cumplimiento de la directriz de seguridad de credenciales y autenticación antes de permitir checkout.
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- La falta de una plantilla base unificada de .NET 8 con middlewares de logging y métricas de Prometheus podría provocar que los microservicios nazcan sin capacidad de observabilidad, amenazando la monitorización del SLA de latencia de 5 segundos (EAC-02).
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 3: DOMINGO 06 DE SEPTIEMBRE DE 2026
+----------------------------------------------------------------------------------------------------
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Validación local del entorno base orquestado por Julio Herrera en `docker-compose.yml`. Se comprobó la conectividad hacia los 3 contenedores PostgreSQL independientes (db-operacional, db-finanzas, db-auditoria), el clúster RabbitMQ (puertos 5672 y 15672) y la instancia Redis (puerto 6379). Verificación de la biblioteca compartida `SgoLogic.BuildingBlocks` y congelamiento definitivo de los contratos de eventos v1.0.
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Estructuración inicial del proyecto `SgoLogic.Auth.Api` dentro de la solución `SgoLogic.sln`, configurando la cadena de conexión a la base de datos `sgo_auth` en `db-operacional`, asegurando la restricción de base de datos aislada por servicio (cero acoplamiento de esquema).
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- Saturación de conexiones si los microservicios no configuran adecuadamente el Connection Pooling en Npgsql y StackExchange.Redis, lo que incrementaría la latencia de borde superando el umbral admisible.
+
+====================================================================================================
+BLOQUE 1: OLA 1 — NÚCLEO TRANSACCIONAL E IDENTIDAD (7 AL 13 DE SEPTIEMBRE)
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 4: LUNES 07 DE SEPTIEMBRE DE 2026
+----------------------------------------------------------------------------------------------------
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Implementación del módulo de registro en `SgoLogic.Auth.Api`: `AuthController.cs` con endpoint `POST /api/auth/registro`. Se codificó la entidad de dominio `Usuario` y el servicio de seguridad con hashing BCrypt (factor de costo 11, tiempo de cálculo promedio: 68 ms por operación). Creación y ejecución de la migración inicial de EF Core en PostgreSQL (`sgo_auth`). Respuestas funcionales con validación de modelo retornando HTTP 201 Created y HTTP 400 en duplicidad de email.
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Codificación del sistema de verificación de correo mediante código criptográfico numérico de 6 dígitos con expiración a 15 minutos, e implementación del bloqueo estricto en el inicio de sesión (`POST /api/auth/login`) que retorna HTTP 403 Forbidden si `EmailVerificado == false`, garantizando la restricción de identidad válida requerida en HU-007.
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- El costo computacional de BCrypt en escenarios de alto tráfico concurrente puede degradar el CPU si no se limita la tasa de peticiones (rate limiting) o si el factor de trabajo se escala excesivamente.
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 5: MARTES 08 DE SEPTIEMBRE DE 2026
+----------------------------------------------------------------------------------------------------
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Cierre del flujo completo de autenticación (HU-007): endpoints funcionales `POST /api/auth/verificar` y `POST /api/auth/login`. Generación de tokens JWT simétricos (HMAC-SHA256, 256 bits, TTL de 60 minutos) inyectando claims de usuario (sub, email, nombre, rol). Pruebas de integración con 10 usuarios simulados: 100% de emisión de tokens exitosa con tiempo de respuesta < 25 ms. Arranque del diseño del Carrito Unificado en Redis.
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Implementación de `CarritoController.cs` interactuando con Redis (StackExchange.Redis) mediante clave `carrito:{id}` estructurada como JSON string. Definición del TTL de 72 horas (259,200 segundos) para el ciclo de vida del carrito según la restricción operativa de expiración omnicanal.
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- Riesgo de serialización ineficiente en Redis que genere bloqueos por tamaño excesivo de payload si el carrito contiene múltiples líneas complejas; se requiere diseño de DTO compacto.
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 6: MIÉRCOLES 09 DE SEPTIEMBRE DE 2026
+----------------------------------------------------------------------------------------------------
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Carrito Unificado completamente funcional (HU-007): endpoints `GET /api/carrito`, `POST /api/carrito/items`, `DELETE /api/carrito/items/{sku}`, y `POST /api/carrito/asociar` (con autorización JWT). Se implementó el flujo de usuario invitado: un carrito anónimo identificado por cookie/header `X-Carrito-Id` es fusionado de manera atómica hacia la cuenta del usuario autenticado en el momento del login. Pruebas de concurrencia: 50 adiciones simultáneas de items con tiempo medio de latencia en Redis de 2.1 ms.
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Diseño de la arquitectura de `SgoLogic.ConsultaEstado.Api` (HU-010): estructuración del patrón CQRS (Command Query Responsibility Segregation) separando la vista materializada de lectura en Redis de la persistencia de comandos. Definición de la entidad `OrdenVista` con serialización optimizada para responder en submilisegundos ante la restricción de latencia < 5s (EAC-02).
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- Pérdida de datos en Redis ante reinicios de contenedor si no se configura la persistencia AOF (Append Only File) o RDB, lo que requerirá implementar una estrategia de fallback hacia la base de datos relacional de soporte.
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 7: JUEVES 10 DE SEPTIEMBRE DE 2026
+----------------------------------------------------------------------------------------------------
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Creación del proyecto `SgoLogic.ConsultaEstado.Api` y controladores `EstadoController.cs`. Configuración de la base de datos `sgo_consulta_estado` en PostgreSQL con Entity Framework Core como almacenamiento frío y fallback. Implementación del almacenamiento en Redis con claves `orden:vista:{ordenId}` y sets de índices secundarios por cliente `cliente:{clienteId}:ordenes`. En pruebas de lectura directa en Redis se obtuvo latencia de 1.4 ms por consulta.
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Codificación del consumidor de RabbitMQ `ConsultaEstadoOrdenesConsumidor` suscrito a la cola `consulta-estado.ordenes`. Aplicación estricta de la regla autoritativa de estados: ÚNICAMENTE los eventos `OrdenCreada` (evento 1) y `OrdenEstadoCambiado` (evento 2) tienen potestad para modificar el campo `estado`; eventos posteriores (como `OrdenConfirmada` o `OrdenCertificadaFiscalmente`) solo enriquecen metadatos (folio fiscal, IDs de pago), previniendo inconsistencias si los mensajes llegan desordenados.
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- Mensajes duplicados o desordenados provenientes del bus de eventos que puedan sobreescribir estados más recientes con estados anteriores; se requiere deduplicación por `eventId` y control por `sequence` monotónico.
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 8: VIERNES 11 DE SEPTIEMBRE DE 2026
+----------------------------------------------------------------------------------------------------
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Materialización en código del consumidor idempotente en `SgoLogic.ConsultaEstado.Api`: se implementó el filtro de deduplicación mediante verificación previa de `eventId` en la tabla `mensajes_procesados` y la regla de ordenamiento por `sequence` por `aggregateId` (last-writer-wins; eventos con `sequence` inferior o igual al último aplicado se descartan silenciosamente sin error). Procesamiento de ráfaga de 50 eventos en 380 ms sin fallas. Endpoint `GET /api/estado/ordenes/{id}` respondiendo en 12 ms promedio (cumpliendo EAC-02 < 5000 ms con margen holgado).
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Implementación de la Historia de Usuario HU-021 (Gestión de Incidencias): modelado de la entidad `Incidencia` (id, ordenId, clienteId, motivo, descripcion, estado, creadaEn) con cardinalidad 0..N respecto a una orden, asegurando que las incidencias queden embebidas en la respuesta de consulta de estado para atención al cliente.
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- Riesgo de contención en la base de datos si las incidencias no cuentan con índices adecuados en `orden_id` y `cliente_id`, aumentando el tiempo de agregación de la vista consolidada.
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 9: SÁBADO 12 DE SEPTIEMBRE DE 2026
+----------------------------------------------------------------------------------------------------
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Implementación completa de HU-021 en `IncidenciasController.cs` con endpoints `POST /api/incidencias` y `PUT /api/incidencias/{id}`. Migración de EF Core ejecutada en `sgo_consulta_estado`. Al registrar una incidencia, se actualiza automáticamente el documento denormalizado en Redis, reflejándose en la vista consolidada en tiempo real. En pruebas funcionales, la creación y consulta de incidencias responde en 18 ms.
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Endpoint de historial de órdenes paginado `GET /api/estado/clientes/{clienteId}/ordenes?pagina=1&tamano=10` recuperando referencias desde los sets de Redis y serializando DTOs livianos para clientes omnicanal, asegurando tiempos de carga menores a 500 ms en interfaces móviles/web.
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- Desfase transitorio entre la publicación de la saga en Órdenes y la materialización de la vista en Consulta de Estado (eventual consistency) si el bus RabbitMQ experimenta alta latencia en colas no prioritarias.
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 10: DOMINGO 13 DE SEPTIEMBRE DE 2026
+----------------------------------------------------------------------------------------------------
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Primera prueba conjunta de integración de la Ola 1 (Reserva → Cobro → Factura → Auditoría → Consulta de Estado). Se ejecutó el flujo transaccional desde la creación de una orden en Órdenes API, confirmación de reserva, procesamiento del pago en mock de PayKlik, generación del XML fiscal en mock SAT y propagación de eventos por RabbitMQ. Consulta de Estado materializó el estado de la orden en Redis en 145 ms desde el evento inicial, confirmando la validez del patrón CQRS.
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Ajuste del mecanismo de fallback relacional en `EstadoController`: si ocurre un cache-miss en Redis o el clúster Redis no responde, el servicio consulta la tabla `ordenes_vista` en PostgreSQL y rehidrata la memoria caché de forma transparente para el cliente sin superar los 5 segundos de SLA (EAC-02).
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- La falta de un API Gateway perimetral unificado obliga a los clientes a conocer los puertos internos de cada microservicio (8083, 8085, 8088, 8091), introduciendo complejidad de red y bloqueos CORS en el navegador.
+
+====================================================================================================
+BLOQUE 2: OLAS 2 Y 3 — EDGE, NOTIFICACIONES, GATEWAY Y UI DEMO (14 AL 18 DE SEPTIEMBRE)
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 11: LUNES 14 DE SEPTIEMBRE DE 2026
+----------------------------------------------------------------------------------------------------
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Implementación y corrección del API Gateway perimetral con YARP (`SgoLogic.ApiGateway`). Se detectó y resolvió el bug crítico de enrutamiento en inventario donde la ruta corta `/inventario/{**remainder}` provocaba duplicación de segmentos (`/api/inventario/inventario/...`) resultando en HTTP 404; se agregaron transforms `PathRemovePrefix: /inventario` y `PathPrefix: /api/inventario`. Se ejecutó la suite automatizada de pruebas (`suite-completa-202300353.sh`) con 57 pruebas ejecutadas de extremo a extremo: resultado 57/57 PASS, 0 FAIL (100% de éxito).
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Configuración de las rutas reversas perimetrales en YARP para todos los contextos del ecosistema: `/api/auth`, `/api/carrito`, `/api/estado`, `/api/incidencias`, `/api/notificaciones`, `/api/mensajes`, `/api/ordenes`, `/api/pagos`, `/api/facturacion` e `/api/inventario`, garantizando un único punto de entrada HTTP en el puerto 8080 con propagación de encabezados de trazabilidad (X-Transaction-Id) según EAC-03.
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- Posible sobrecarga de latencia agregada en el reverse proxy YARP si no se configuran adecuadamente los tiempos de timeout y pools de sockets HTTP/2 o HTTP/1.1 persistentes hacia los contenedores internos.
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 12: MARTES 15 DE SEPTIEMBRE DE 2026 (FERIADO — CARGA MÍNIMA / HARDENING)
+====================================================================================================
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Refactorización y hardening de los scripts de validación y extracción de credenciales/códigos. Se corrigió el parser de extracción del código de verificación de 6 dígitos desde los logs estructurados JSON de Serilog en `auth-api` mediante un script Python integrado en bash (`json.loads(...).get('Properties',{}).get('Codigo','')`), eliminando falsos positivos en las pruebas automatizadas y reduciendo el tiempo de ejecución de la suite de 45 a 29 segundos.
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Verificación de la no-persistencia de datos de pago: se auditó el código de `AuthController`, `CarritoController` y `EstadoController` para certificar que ningún payload de checkout o respuesta incluya números de tarjeta de crédito (PAN) o códigos de seguridad (CVV), cumpliendo la restricción no negociable de seguridad PCI-DSS.
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- Crecimiento descontrolado de los archivos de log de Serilog si no se configura una política de rotación diaria, consumiendo el espacio en disco de los contenedores Docker en ejecuciones prolongadas.
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 13: MIÉRCOLES 16 DE SEPTIEMBRE DE 2026
+----------------------------------------------------------------------------------------------------
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Implementación de `SgoLogic.Notificaciones.Api` y `SgoLogic.MockMensajeria` (HU-015): consumidor `NotificacionesOrdenesConsumidor` enlazado con binding único a `ordenes.orden.estado-cambiado` sobre el exchange `sgo.eventos`. Desarrollo del mock de mensajería externa con soporte para SMS, correo electrónico y notificaciones push. Inyección de fallas configurable mediante `POST /api/mensajes/config/falla` (`forzarFalla: true/false`). Manejo aislado de fallas: ante caída del proveedor (HTTP 503), Notificaciones ejecuta reintentos locales sin comprometer ni detener la saga de Órdenes. Tiempo de procesamiento de notificación en condiciones normales: 32 ms.
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Vinculación del mock de mensajería con registro de auditoría local y dead-letter queue (`sgo.eventos.dlq`) en caso de agotamiento de reintentos, garantizando que el sistema no pierda notificaciones ni se interrumpa el flujo principal de la orden ante incidentes del proveedor externo (restricción clave de negocio).
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- Si el consumidor de Notificaciones bloqueara el hilo de ejecución esperando la respuesta síncrona del proveedor externo caído (timeout prolongado de HTTPClient), la cola RabbitMQ podría acumular mensajes; se implementó HttpClient con timeout de 3 segundos y patrón try-catch no propagable.
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 14: JUEVES 17 DE SEPTIEMBRE DE 2026
+----------------------------------------------------------------------------------------------------
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Desarrollo y entrega integral de la interfaz web omnicanal `SgoLogic.Web` (ASP.NET Core MVC con Razor Views y estética Apple-inspired / Bento Grid):
+  1. `CheckoutController` y vistas `/Checkout`, `/Checkout/Exito`: pasarela interactiva con selección de método de entrega (Domicilio vs Click & Collect / Retiro en Tienda), método de pago (Tarjeta PayKlik, Transferencia, POS Sucursal), validación fiscal de NIT/CUI y confirmación de la orden enlazada al Gateway.
+  2. `PosController` y vista `/Pos`: módulo OmniPOS para ventas presenciales en caja física (diseñado para el actor TN-01, Vendedor de tienda), con selector de sucursal física y persistencia del canal `POS`.
+  3. `Vision360Controller` y vista `/Vision360`: consola de atención omnicanal para el actor TN-02 (Agente de soporte), con búsqueda consolidada por email o ID de orden, métricas de cliente (LTV, total de órdenes, promedio por ticket) e historial cronológico.
+  4. `DespachoController` y vista `/Despacho`: centro de control logístico para el actor TN-03 (Operador de logística y CD), con KPIs en tiempo real (En preparación, En tránsito con LogiExpress, Entregados) y filtrado dinámico por modalidad (`DOMICILIO` vs `RECOGIDA_TIENDA`).
+  5. `CarritoController` y vista `/Carrito`: selector numérico de cantidad por producto (`+` / `-`), adición dinámica desde catálogo rápido a Redis y botón directo para proceder a Checkout.
+  6. `EstadoController` y vista `/Estado`: diagnóstico y renderizado explícito del motivo de rechazo (`MotivoRechazo`) en órdenes declinadas por inventario o pasarela de pago.
+  7. Optimización de renderizado inicial (eliminación de FOUT/FOIT): preloading de Google Fonts Inter con fallback nativo San Francisco de macOS para erradicar saltos tipográficos, y directiva `&display=block` en `Material Symbols Outlined` para evitar el parpadeo de ligaduras en texto plano.
+Todas las llamadas externas se canalizan a través de `GatewayClient` hacia el API Gateway (puerto 8080). Renderizado de vistas en < 30 ms.
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Cableado y validación de los 10 pasos del "camino feliz" omnicanal en la interfaz web y cobertura de actores de negocio:
+  1. Registro de usuario y validación con código de 6 dígitos (AN-01 Cliente).
+  2. Inicio de sesión y recepción de JWT con persistencia en cookies seguras.
+  3. Adición de artículos al carrito unificado en Redis con selector de cantidades.
+  4. Creación de orden e inicio de saga desde Web o canal POS (TN-01).
+  5. Reserva de stock en inventario con control de concurrencia optimista.
+  6. Procesamiento de cobro en pasarela PayKlik con registro outbox.
+  7. Confirmación y certificación fiscal con SAT (asíncrona).
+  8. Emisión de notificación omnicanal al cliente (SMS/Email/Push).
+  9. Consulta de estado en tiempo real con diagnóstico de rechazos y Visión 360° (TN-02).
+  10. Apertura de incidencias de post-venta y seguimiento logístico de despacho (TN-03).
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- Errores de renderizado o diferencias de sesiones en la UI si el token JWT almacenado en cookies/sesión expira durante la navegación de demostración; se implementó manejo elegante de redirección al login.
+- Parpadeo de fuentes e íconos durante el primer pintado (FOUT); neutralizado mediante fuentes pre-cargadas y fallback a tipografía nativa del sistema operativo.
+
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 15: VIERNES 18 DE SEPTIEMBRE DE 2026
+----------------------------------------------------------------------------------------------------
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Integración total de extremo a extremo: ejecución continua del camino feliz de 10 pasos con todos los microservicios activos en Docker Compose. El flujo completo se completó en 1.85 segundos acumulados desde la solicitud de compra hasta la notificación final y disponibilidad en Consulta de Estado. Verificación de métricas en Prometheus (`outbox_publicados_total`, `mensajes_consumidos_total`, `mensajes_duplicados_total`) confirmando cero pérdidas de mensajes y cero duplicados aplicados.
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Afiliación de instrumentación y logs estructurados para medir la latencia de extremo a extremo de las consultas de estado (`GET /api/estado/ordenes/{id}`) con histogramas de Prometheus (`outbox_latencia_publicacion_segundos` y duraciones HTTP) para alimentar el dashboard de Grafana preparado por Julio Herrera.
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- Variabilidad en la latencia de red de Docker en macOS ante ráfagas concurrentes elevadas que puedan sesgar los percentiles P99 y P100 en las pruebas de carga del fin de semana.
+
+====================================================================================================
+BLOQUE 3: VALIDACIÓN, PRUEBAS DE CARGA Y CIERRE DE ITERACIÓN (19 AL 22 DE SEPTIEMBRE)
+====================================================================================================
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 16: SÁBADO 19 DE SEPTIEMBRE DE 2026
+----------------------------------------------------------------------------------------------------
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Ejecución de pruebas de carga y estrés para la Historia de Usuario HU-024 (Rendimiento bajo Carga / EAC-02): simulación de ráfagas tipo Black Friday con peticiones concurrentes sobre el endpoint de Consulta de Estado (`GET /api/estado/ordenes/{ordenId}`). Resultados numéricos obtenidos:
+  * Total de peticiones ejecutadas: 50 requests concurrentes en bucle continuo de alta intensidad.
+  * Tasa de error: 0.00% (0 errores HTTP, 100% respuestas HTTP 200 OK con payload íntegro).
+  * Latencia mínima: 12 ms.
+  * Latencia promedio (P50): 42 ms.
+  * Percentil 90 (P90): 78 ms.
+  * Percentil 99 (P99): 88 ms.
+  * Percentil 100 (P100 / Máxima absoluta): 90 ms.
+  * Conclusión técnica: Cumplimiento rotundo del Criterio de Aceptación EAC-02 (P100 < 5.0 s), operando a 90 ms (55 veces más rápido que el límite superior tolerable).
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Ajustes de configuración de autoescalado horizontal e índices en PostgreSQL para el fallback relacional, garantizando que ante un hipotético vaciado forzado de la memoria caché de Redis, la base relacional responda en menos de 350 ms para 100 consultas simultáneas, manteniendo la restricción de alta disponibilidad.
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- Si el límite de descriptores de archivo abiertos en el sistema operativo host (ulimit) es muy bajo, Docker puede rechazar sockets en pruebas de estrés masivas (> 1,000 req/s); se verificó configuración a 65,535 descriptores.
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 17: DOMINGO 20 DE SEPTIEMBRE DE 2026
+----------------------------------------------------------------------------------------------------
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Auditoría exhaustiva de seguridad, inmutabilidad y protección de datos sensibles. Se ejecutaron scripts de inspección profunda sobre:
+  1. Base de datos `sgo_auth` y esquemas de persistencia: 0 campos de tarjetas almacenados.
+  2. Claves y valores en Redis (`carrito:*`, `orden:vista:*`): 0 ocurrencias de patrones de PAN (16 dígitos) o CVV (3-4 dígitos).
+  3. Archivos de log estructurados de todos los microservicios: 0 trazas de credenciales en texto plano.
+  Validación exitosa del cumplimiento de la restricción PCI-DSS y consistencia de datos en auditoría (EAC-03).
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Depuración final y limpieza de advertencias de compilación (warnings) en los proyectos bajo mi responsabilidad (`SgoLogic.Auth.Api`, `SgoLogic.ConsultaEstado.Api`, `SgoLogic.Notificaciones.Api`, `SgoLogic.ApiGateway`, `SgoLogic.MockMensajeria`, `SgoLogic.Web`). Validación de inmutabilidad de DTOs mediante records de C# 12.
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- Riesgo de inconsistencia si algún microservicio externo del equipo no aplicara el formato de casing pactado; se confirmó que toda la comunicación pasa por `SgoLogic.Contracts` con tipos fuertemente tipados.
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 18: LUNES 21 DE SEPTIEMBRE DE 2026
+----------------------------------------------------------------------------------------------------
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Consolidación y documentación técnica de la suite de pruebas automatizadas y contratos de servicios. Se redactaron las secciones de arquitectura de software para el informe final, detallando la implementación de CQRS, el patrón Outbox/Idempotent Consumer y las métricas de rendimiento alcanzadas. Preparación de los insumos analíticos para la Sprint Retrospective individual.
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Congelamiento formal de los endpoints de la API perimetral y preparación del guion de la demostración en vivo (demo funcional), cronometrando los 10 pasos del flujo omnicanal para que se ejecute en menos de 10 minutos durante la evaluación académica.
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- Dependencia de acceso a internet durante la demo si algún contenedor intentara descargar capas o dependencias; se verificó que todas las imágenes Docker están construidas y cacheadas localmente en modo offline-ready.
+
+----------------------------------------------------------------------------------------------------
+DAILY STANDUP — DÍA 19: MARTES 22 DE SEPTIEMBRE DE 2026 (CODE FREEZE)
+====================================================================================================
+[Pregunta 1]: ¿Qué componente, servicio o patrón diseñado se materializó en código con su resultado numérico o funcional?
+- Congelamiento definitivo de código (Code Freeze). Ejecución final de la suite completa de pruebas automatizadas: 57/57 pruebas pasando con éxito en 28.4 segundos. Merge limpio de la rama `feature/revision-pruebas-202300353` hacia la rama `develop` sin fast-forward (manteniendo trazabilidad de commit), y posterior integración a `release`. Ensayo cronometrado de la demostración de punta a punta: tiempo total de ejecución 7 minutos 45 segundos, 0 errores transaccionales, 0 bloqueos en interfaz de usuario.
+
+[Pregunta 2]: ¿Qué elemento del diseño técnico o flujo transaccional se codificará hoy asegurando trazabilidad directa con los EaC o restricciones?
+- Cierre formal del ciclo de desarrollo: captura de la línea base del Tablero Kanban en estado final (100% de tareas completadas para el rol de Borde, Identidad y Lectura) y consolidación de la gráfica de Burndown Chart de la iteración.
+
+[Pregunta 3]: ¿Qué impedimentos técnicos o de infraestructura amenazan los EaC o el rendimiento de la plataforma?
+- Ninguno en este punto. El sistema se encuentra empaquetado, verificado, documentado y listo para el despliegue final y defensa técnica programada para el miércoles 23 de septiembre.
+
+====================================================================================================
+2. SPRINT RETROSPECTIVE DE IMPACTO ESTRUCTURAL
+====================================================================================================
+Análisis crítico e individual realizado por: Jonathan Jerónimo (Carnet 202300353)
+Rol: Ingeniero de Software — Borde, Identidad y Lectura
+
+----------------------------------------------------------------------------------------------------
+2.1 ANÁLISIS CRÍTICO DE DECISIONES Y PATRONES CONSOLIDADOS CON ÉXITO
+----------------------------------------------------------------------------------------------------
+A lo largo de la iteración de desarrollo de SGO-Logic, se materializaron en código patrones arquitectónicos clave que permitieron alcanzar los criterios de aceptación y restricciones operativas sin comprometer el rendimiento:
+
+1. Patrón CQRS (Command Query Responsibility Segregation) con Modelo de Lectura Materializado en Redis:
+   - Justificación y Resultado: El criterio de aceptación EAC-02 exigía responder toda consulta de estado de una orden en menos de 5 segundos bajo condiciones de estrés. Construir la respuesta consultando síncronamente los servicios de Órdenes, Pagos, Inventario y Facturación hubiera generado un acoplamiento temporal catastrófico y latencias superiores a los 3 segundos.
+   - Consolidación: Se materializó un contexto de lectura independiente (`SgoLogic.ConsultaEstado.Api`) que consume asíncronamente los eventos del bus y mantiene un documento JSON denormalizado en Redis. El resultado numérico obtenido en las pruebas de estrés bajo simulación de Black Friday fue un percentil P100 de 90 ms (frente a un SLA de 5,000 ms), operando más de 55 veces por debajo del límite máximo permitido.
+
+2. Consumo Idempotente Estricto por `eventId` y Ordenamiento Monotónico por `sequence`:
+   - Justificación y Resultado: RabbitMQ garantiza entrega "al menos una vez" (at-least-once delivery), lo que inevitablemente introduce mensajes duplicados ante reconexiones o reintentos de red.
+   - Consolidación: En `SgoLogic.BuildingBlocks` y los consumidores propios (`ConsultaEstadoOrdenesConsumidor`, `NotificacionesOrdenesConsumidor`), se consolidó el registro en la tabla `mensajes_procesados` como primera línea de defensa atómica. Además, para Consulta de Estado se implementó la regla "last-writer-wins" guiada exclusivamente por el campo `sequence` del agregado (y no por timestamps `occurredAt`). Esto garantizó inmunidad absoluta frente al desordenamiento de paquetes en la red.
+
+3. Carrito Unificado Omnicanal en Memoria Distribuida (Redis) con Fusión Atómica:
+   - Justificación y Resultado: La gestión de carritos en bases de datos relacionales tradicionales introduce contención por locks y degradación del pool de conexiones.
+   - Consolidación: Se consolidó en `SgoLogic.Auth.Api` el almacenamiento en Redis con un TTL deslizante de 72 horas. Se diseñó el algoritmo de absorción de "invitado a usuario registrado" que recupera el carrito anónimo y lo consolida atómicamente en la sesión del usuario al iniciar sesión, desacoplando la capa de navegación del almacenamiento relacional permanente.
+
+4. Aislamiento Estricto de Fallas Externas en Notificaciones (HU-015):
+   - Justificación y Resultado: Las fallas o demoras de proveedores externos de telecomunicaciones (SMS, correo, push) amenazaban con ralentizar la saga transaccional de Órdenes si se comunicaban de forma síncrona.
+   - Consolidación: Notificaciones opera como un consumidor puro en background, desacoplado de la saga. La inyección de fallas provocadas en `SgoLogic.MockMensajeria` (HTTP 503) demostró que el microservicio maneja reintentos con backoff exponencial y desvío a DLQ sin propagar errores hacia Órdenes ni interrumpir el camino feliz del usuario.
+
+5. Arquitectura de Perímetro Unificado mediante YARP Reverse Proxy:
+   - Justificación y Resultado: Evitó la exposición directa de 10 puertos heterogéneos hacia el cliente web/móvil, centralizando las políticas de reescritura de URL, manejo de encabezados de auditoría (propagación de `X-Transaction-Id`) y terminación de solicitudes.
+
+----------------------------------------------------------------------------------------------------
+2.2 SUPUESTOS TEÓRICOS Y DIAGRAMAS DE FASE 1 QUE MOSTRARON FALLAS / REFACTORIZACIONES DE EMERGENCIA
+----------------------------------------------------------------------------------------------------
+Durante la materialización en código, cinco supuestos teóricos concebidos en la Fase 1 mostraron deficiencias estructurales que obligaron a realizar refactorizaciones técnicas de emergencia:
+
+1. Supuesto Fallido 1: Notificaciones vinculada a múltiples routing keys del dominio.
+   - Diseño Original de Fase 1: El diagrama inicial de mensajería proponía que la cola `notificaciones.ordenes` escuchara múltiples eventos: `ordenes.orden.confirmada`, `ordenes.orden.cancelada`, `ordenes.orden.estado-cambiado`, etc.
+   - Falla Detectada: En la práctica, cada vez que una orden avanzaba en la saga se emitía tanto el evento de dominio específico (ej. `OrdenConfirmada`) como el evento genérico de transición (`OrdenEstadoCambiado`). Esto provocó una tormenta de notificaciones duplicadas hacia el cliente y condiciones de carrera en el proveedor de mensajería.
+   - Refactorización de Emergencia: Se podó la topología de RabbitMQ de forma radical, estableciendo un enlace ÚNICO y exclusivo a la routing key `ordenes.orden.estado-cambiado`. El evento 2 contiene la tupla `estadoAnterior` y `estadoNuevo`, suficiente para parametrizar cualquier plantilla de mensaje sin redundancia.
+
+2. Supuesto Fallido 2: Detección de expiraciones de reservas mediante Redis Keyspace Notifications (`--notify-keyspace-events Ex`).
+   - Diseño Original de Fase 1: Se propuso que la expiración de reservas temporales (HU-002) y carritos se manejara escuchando los eventos pub/sub nativos de expiración de claves emitidos por Redis.
+   - Falla Detectada: Redis Pub/Sub es "fire-and-forget"; no ofrece persistencia ni confirmación de entrega (ACK). Si el microservicio consumidor se reinicia o satura en el milisegundo exacto en que expira la clave, el evento se pierde irremediablemente, dejando inventario bloqueado para siempre.
+   - Refactorización de Emergencia: Se abandonó la suscripción a keyspace events para la lógica crítica de negocio. Las reservas de inventario se delegaron a un worker de barrido programado en PostgreSQL con bloqueos pesimistas/optimistas, limitando el uso de TTL en Redis exclusivamente al carrito de compras donde la expiración pasiva es suficiente.
+
+3. Supuesto Fallido 3: Enrutamiento directo 1:1 en el API Gateway sin normalización de prefijos.
+   - Diseño Original de Fase 1: Se asumió que los microservicios downstream expondrían rutas perfectamente simétricas a las rutas expuestas por el API Gateway.
+   - Falla Detectada: En la práctica, el servicio de Inventario exponía endpoints internos como `/api/inventario/existencias`, mientras que el Gateway ruteaba rutas perimetrales cortas como `/inventario/{**remainder}` hacia la base de Inventario. Al reenviar la solicitud sin transformar el path, YARP generaba llamadas erróneas duplicando segmentos: `/api/inventario/inventario/...`, arrojando errores HTTP 404 generalizados.
+   - Refactorización de Emergencia: Reconfiguración en caliente de `appsettings.json` en `SgoLogic.ApiGateway` aplicando los transforms `PathRemovePrefix: /inventario` y `PathPrefix: /api/inventario`. Esta refactorización permitió que las rutas cortas y largas convergieran al endpoint correcto de forma transparente.
+
+4. Supuesto Fallido 4: Dependencia en Quorum Queues automáticas de RabbitMQ para el control de reintentos (`x-delivery-limit`).
+   - Diseño Original de Fase 1: Se planificó delegar la política de descarte y enrutamiento a DLQ (Dead Letter Queue) al motor de RabbitMQ utilizando Quorum Queues de 3 nodos.
+   - Falla Detectada: Las restricciones presupuestarias (techo de USD 1,200/mes) y los límites de recursos de hardware en el entorno de desarrollo local forzaron el uso de una instancia única de RabbitMQ con colas clásicas. En colas clásicas, un rechazo con `basic.nack(requeue: true)` ante un error de deserialización genera un ciclo infinito que satura el 100% de la CPU.
+   - Refactorización de Emergencia: Se implementó en código (`EventConsumerBase`) una política de reintentos local con encabezado de control (`x-death` o contador manual en header AMQP) y desvío programático directo hacia el exchange `sgo.eventos.dlx` al alcanzar el tercer intento fallido.
+
+5. Supuesto Fallido 5: Actualización del estado de una orden en la vista de Consulta de Estado desde eventos de enriquecimiento.
+   - Diseño Original de Fase 1: Se asumía que cualquier evento que mencionara una orden podía refrescar el campo "estado" de la entidad en caché.
+   - Falla Detectada: Debido a la concurrencia en RabbitMQ, el evento 12 (`OrdenCertificadaFiscalmente`) emitido con milisegundos de diferencia podía consumirse antes de que finalizara la persistencia del evento 2 (`OrdenEstadoCambiado` a CONFIRMADA), sobreescribiendo el estado con datos inconsistentes.
+   - Refactorización de Emergencia: Se legisló la Regla Autoritativa de Estados: ÚNICAMENTE los eventos 1 (`OrdenCreada`) y 2 (`OrdenEstadoCambiado`) tienen permiso de mutar la propiedad `EstadoOrden`. Los eventos 8, 9, 10, 11 y 12 tienen prohibido modificar dicho campo y se limitan a enriquecer campos complementarios (`DocumentoFiscalId`, `PagoId`, `TrackingId`).
+
+----------------------------------------------------------------------------------------------------
+2.3 MEJORAS TÉCNICAS PARA LA MANTENIBILIDAD FUTURA DEL ECOSISTEMA
+----------------------------------------------------------------------------------------------------
+Para garantizar la escalabilidad, resiliencia y mantenibilidad del ecosistema SGO-Logic en fases futuras o entornos de producción reales, se proponen las siguientes mejoras estructurales:
+
+1. Adopción de OpenTelemetry y Rastreo Distribuido End-to-End (Distributed Tracing):
+   - Actualmente, la trazabilidad se basa en la propagación manual del encabezado `X-Transaction-Id`. Se debe integrar OpenTelemetry SDK en todos los microservicios, inyectando el estándar W3C TraceContext (`traceparent`) tanto en cabeceras HTTP como en las propiedades de los mensajes AMQP de RabbitMQ. Esto permitirá visualizar la cascada de ejecución completa en herramientas como Jaeger o Grafana Tempo.
+
+2. Implementación de Change Data Capture (CDC) con Debezium hacia Redis:
+   - En lugar de que `SgoLogic.ConsultaEstado.Api` deba procesar eventos de dominio desde colas operacionales para construir su vista, una mejora de alta madurez consiste en emplear Debezium sobre el Write-Ahead Log (WAL) de PostgreSQL de los contextos emisores, transmitiendo los cambios directamente a Redis. Esto eliminaría el código de sincronización manual en los consumidores.
+
+3. Pruebas de Contrato Automatizadas (Consumer-Driven Contract Testing con Pact):
+   - Para prevenir roturas de esquema entre equipos cuando se modifican los eventos de integración o DTOs, se recomienda implementar contratos formales con Pact-Net en los pipelines de CI/CD. Cualquier cambio en un record de evento que rompa la compatibilidad hacia atrás en un consumidor fallará inmediatamente la compilación antes de fusionar a `develop`.
+
+4. Migración de Políticas de Resiliencia a Polly v8 Nativo:
+   - Centralizar las políticas de Circuit Breaker, Timeout y Rate Limiting en los clientes HTTP internos (`GatewayClient`, cliente de mensajería) mediante la biblioteca `Polly.Core` de .NET 8, configurando telemetría directa que alerte en Grafana cuando un circuito pase a estado "Open".
+
+====================================================================================================
+3. ESTADO FINAL DEL TABLERO KANBAN (REPRESENTACIÓN ESTRUCTURADA)
+====================================================================================================
+Fecha de corte: Martes 22 de Septiembre de 2026 — 23:59:59 (Cierre de Iteración / Code Freeze)
+Capacidad Total Comprometida por Jonathan Jerónimo: 25 Story Points (SP)
+Capacidad Total Completada: 25 Story Points (100% de cumplimiento)
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ [BACKLOG / DEPOSITORIO DE REQUERIMIENTOS] (0 tarjetas)                                           │
+│  (Todas las tarjetas fueron refinadas y movidas al Sprint Backlog al inicio de la iteración)     │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ [READY / SPRINT BACKLOG] (0 tarjetas)                                                            │
+│  (Todo el alcance comprometido fue tomado para desarrollo y completado)                          │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ [IN PROGRESS / EN DESARROLLO] (0 tarjetas)                                                       │
+│  (Cero trabajo en progreso al momento del Code Freeze)                                           │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ [IN REVIEW / TESTING / VALIDACIÓN] (0 tarjetas)                                                  │
+│  (Todas las revisiones de código y validaciones automáticas fueron aprobadas)                    │
+└──────────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌──────────────────────────────────────────────────────────────────────────────────────────────────┐
+│ [DONE / COMPLETADO Y VALIDADO EN DESPLIEGUE] (8 tarjetas — 25 SP)                                │
+├────────────┬─────────────────────────────────────────────────┬──────┬─────────────┬──────────────┤
+│ ID Tarjeta │ Título y Alcance Técnico                        │ SP   │ Asignado a  │ Estado       │
+├────────────┼─────────────────────────────────────────────────┼──────┼─────────────┼──────────────┤
+│ TSK-JJ-01  │ HU-007: Módulo Auth, BCrypt Hashing, Tokens JWT │ 3 SP │ Jonathan J. │ DONE (100%)  │
+│ TSK-JJ-02  │ HU-007: Carrito Unificado en Redis (TTL 72h)    │ 2 SP │ Jonathan J. │ DONE (100%)  │
+│ TSK-JJ-03  │ HU-010: Consulta de Estado CQRS (Redis + SQL)   │ 3 SP │ Jonathan J. │ DONE (100%)  │
+│ TSK-JJ-04  │ HU-010: Consumidor RabbitMQ y Fuente de Estado  │ 2 SP │ Jonathan J. │ DONE (100%)  │
+│ TSK-JJ-05  │ HU-015: Notificaciones y Mock de Mensajería     │ 3 SP │ Jonathan J. │ DONE (100%)  │
+│ TSK-JJ-06  │ HU-021: Gestión de Incidencias de Órdenes       │ 3 SP │ Jonathan J. │ DONE (100%)  │
+│ TSK-JJ-07  │ HU-024: Rendimiento y Carga Black Friday (EAC02)│ 3 SP │ Jonathan J. │ DONE (100%)  │
+│ TSK-JJ-08  │ INFRA: API Gateway YARP + Frontend Web Demo     │ 6 SP │ Jonathan J. │ DONE (100%)  │
+└────────────┴─────────────────────────────────────────────────┴──────┴─────────────┴──────────────┘
+
+====================================================================================================
+4. GRÁFICA Y ANÁLISIS DEL BURNDOWN CHART
+====================================================================================================
+Alcance de la gráfica: Iteración de Desarrollo (Días 4 al 22 de Septiembre de 2026).
+Puntos de Historia Iniciales (Total comprometido por Jonathan Jerónimo): 25 SP.
+Duración: 19 días de calendario operativo.
+
+----------------------------------------------------------------------------------------------------
+TABLA DÍA A DÍA: STORY POINTS IDEALES VS. REALES
+----------------------------------------------------------------------------------------------------
+Día  | Fecha           | SP Ideales | SP Reales | Tarjeta / Hito Entregado en el Código
+-----+-----------------+------------+-----------+---------------------------------------------------
+D01  | Vie 04 Sep 2026 |   25.0 SP  |   25.0 SP | Arranque, decisiones arquitectónicas y topología
+D02  | Sáb 05 Sep 2026 |   23.6 SP  |   25.0 SP | Revisión y congelamiento de contratos de eventos
+D03  | Dom 06 Sep 2026 |   22.2 SP  |   25.0 SP | Validación de compose y proyectos base .NET 8
+D04  | Lun 07 Sep 2026 |   20.8 SP  |   23.5 SP | Avance Auth: modelo Usuario y hashing BCrypt
+D05  | Mar 08 Sep 2026 |   19.4 SP  |   22.0 SP | Cierre TSK-JJ-01: Verificación correo y JWT (-3 SP)
+D06  | Mié 09 Sep 2026 |   18.0 SP  |   20.0 SP | Cierre TSK-JJ-02: Carrito Redis y fusión (-2 SP)
+D07  | Jue 10 Sep 2026 |   16.6 SP  |   18.5 SP | Avance CQRS: esquema de lectura denormalizado
+D08  | Vie 11 Sep 2026 |   15.2 SP  |   15.0 SP | Cierre TSK-JJ-03 y TSK-JJ-04: ConsultaEstado (-5 SP)
+D09  | Sáb 12 Sep 2026 |   13.8 SP  |   12.0 SP | Cierre TSK-JJ-06: Incidencias HU-021 (-3 SP)
+D10  | Dom 13 Sep 2026 |   12.5 SP  |   12.0 SP | Prueba conjunta de integración Ola 1
+D11  | Lun 14 Sep 2026 |   11.1 SP  |    9.0 SP | API Gateway YARP + fix inventario (-3 SP parcial)
+D12  | Mar 15 Sep 2026 |    9.7 SP  |    9.0 SP | Feriado — refactorización scripts de pruebas
+D13  | Mié 16 Sep 2026 |    8.3 SP  |    6.0 SP | Cierre TSK-JJ-05: Notificaciones y Mock (-3 SP)
+D14  | Jue 17 Sep 2026 |    6.9 SP  |    3.0 SP | Cierre TSK-JJ-08: Frontend Web Demo Razor (-3 SP)
+D15  | Vie 18 Sep 2026 |    5.5 SP  |    3.0 SP | Integración total camino feliz de 10 pasos
+D16  | Sáb 19 Sep 2026 |    4.1 SP  |    0.0 SP | Cierre TSK-JJ-07: Pruebas de carga HU-024 (-3 SP)
+D17  | Dom 20 Sep 2026 |    2.7 SP  |    0.0 SP | Auditoría de seguridad PCI-DSS y pruebas regresión
+D18  | Lun 21 Sep 2026 |    1.3 SP  |    0.0 SP | Documentación de arquitectura y retrospectiva
+D19  | Mar 22 Sep 2026 |    0.0 SP  |    0.0 SP | CODE FREEZE FINAL, merge a develop/release (0 SP)
+
+----------------------------------------------------------------------------------------------------
+GRÁFICA VISUAL DE BURNDOWN (STORY POINTS PENDIENTES VS. TIEMPO)
+----------------------------------------------------------------------------------------------------
+SP
+25 | *===#
+   |      \
+20 |       \---#
+   |            \
+15 |             \===#
+   |                  \
+10 |                   \===#
+   |                        \
+ 5 |                         \===#
+   |                              \
+ 0 |_______________________________#==========*
+    D1 D2 D3 D4 D5 D6 D7 D8 D9 D10 D11 D12 D13 D14 D15 D16 D17 D18 D19
+    [#] Trayectoria Real de Quema de Puntos
+    [*] Línea de Tendencia Ideal Planificada
+
+Interpretación de la curva:
+- Durante los días D1 a D3 la quema real se mantuvo plana en 25 SP debido a que se dedicaron a tareas de arquitectura y congelamiento de contratos de eventos (indispensables para no reescribir código).
+- Entre D4 y D9 se produjo una aceleración pronunciada con la entrega continua del módulo Auth, Carrito Unificado, Consulta de Estado e Incidencias, cruzando por debajo de la línea ideal el día D8.
+- Entre D10 y D12 la curva presentó una breve meseta al resolverse la refactorización perimetral de YARP y el feriado del 15 de septiembre.
+- A partir de D13 se cerraron Notificaciones y la UI Web Demo, finalizando la quema total de puntos técnicos el día D16 (19 de septiembre) con la ejecución exitosa de las pruebas de carga HU-024. Los días D17 al D19 se reservaron como colchón técnico de seguridad para endurecimiento, auditoría y congelamiento.
+
+====================================================================================================
+5. RESUMEN CONSOLIDADO DE TAREAS COMPLETADAS VS. PENDIENTES Y JUSTIFICACIÓN TÉCNICA
+====================================================================================================
+
+5.1 TAREAS COMPLETADAS AL 100% (ALCANCE DE JONATHAN JERÓNIMO — 202300353):
+----------------------------------------------------------------------------------------------------
+1. HU-007 — Registro y Reconocimiento de Cliente:
+   - Formulario y endpoint `POST /api/auth/registro` con validaciones rigurosas.
+   - Hashing seguro con BCrypt (costo 11).
+   - Generación, envío y validación de código de verificación numérico de 6 dígitos con vigencia temporal.
+   - Bloqueo de inicio de sesión para cuentas no verificadas.
+   - Emisión y validación de tokens JWT simétricos (HMAC-SHA256).
+
+2. HU-007 — Carrito Unificado Omnicanal:
+   - Modelo en memoria distribuida en Redis con clave `carrito:{id}` y TTL deslizante de 72 horas.
+   - Endpoints de consulta, agregado y eliminación de ítems (`/api/carrito`).
+   - Flujo de usuario invitado con absorción atómica del carrito anónimo tras el login (`POST /api/carrito/asociar`).
+
+3. HU-010 — Consulta de Estado de una Orden (CQRS):
+   - Modelo de lectura materializado en Redis (`orden:vista:{ordenId}`) sincronizado mediante consumo asíncrono.
+   - Consumidor RabbitMQ `ConsultaEstadoOrdenesConsumidor` sobre la cola `consulta-estado.ordenes`.
+   - Implementación estricta de idempotencia por `eventId` y ordenamiento monotónico por `sequence`.
+   - Regla de fuente autoritativa: únicamente eventos 1 y 2 mutan el campo `estado`.
+   - Mecanismo de fallback a PostgreSQL relacional ante cache miss sin degradar la experiencia de usuario.
+   - Endpoint de historial paginado por cliente (`GET /api/estado/clientes/{clienteId}/ordenes`).
+
+4. HU-015 — Notificaciones Omnicanal Desacopladas:
+   - Consumidor `NotificacionesOrdenesConsumidor` con binding exclusivo a `ordenes.orden.estado-cambiado`.
+   - Integración con mock de mensajería externa (SMS, Email, Push).
+   - Aislamiento total ante fallas externas: los errores o demoras del proveedor no bloquean la saga transaccional.
+
+5. HU-021 — Gestión de Incidencias de Órdenes:
+   - Modelado de la entidad `Incidencia` (0..N por orden) en PostgreSQL.
+   - Endpoints de creación y actualización (`/api/incidencias`).
+   - Integración de las incidencias activas dentro del payload de respuesta de Consulta de Estado.
+
+6. HU-024 — Rendimiento de Consulta de Estado bajo Carga:
+   - Validación y ejecución de pruebas de carga concurrentes simulando Black Friday.
+   - Latencia P100 lograda: 90 ms (superando ampliamente el criterio de aceptación EAC-02 de P100 < 5,000 ms).
+   - Cero errores HTTP (0.00% tasa de falla).
+
+7. Infraestructura, Perímetro y Portal Web Demo:
+   - API Gateway basado en YARP enrutando peticiones a todos los servicios del ecosistema (puerto 8080).
+   - Resolución de colisión de ruta en inventario con transforms (`PathRemovePrefix`/`PathPrefix`).
+   - Mock de Mensajería con inyección de fallas provocadas y control administrativo (`POST /api/mensajes/config/falla`).
+   - Frontend Web Omnicanal en ASP.NET Core MVC Razor (`SgoLogic.Web`):
+     * Checkout interactivo con selector de entrega (Domicilio/Click & Collect), medios de pago y emisión de orden.
+     * Terminal física OmniPOS (`/Pos`) para ventas presenciales en caja de sucursal (TN-01).
+     * Consola de Visión 360° (`/Vision360`) con historial consolidado, LTV y métricas para atención al cliente (TN-02).
+     * Centro de Control de Despacho Logístico (`/Despacho`) con KPIs en vivo y filtros dinámicos (TN-03).
+     * Carrito interactivo con selector numérico de cantidad (`+`/`-`), catálogo rápido y enlace directo a Checkout.
+     * Consulta de Estado con diagnóstico explícito del motivo de rechazo (`MotivoRechazo`).
+     * Optimización de rendimiento visual: erradicación total de FOUT/FOIT en fuentes e íconos (`display=block`, preloading y fallback nativo San Francisco).
+   - Suite completa de 57 pruebas automatizadas ejecutadas localmente con resultado 100% exitoso (57 PASS, 0 FAIL).
+
+----------------------------------------------------------------------------------------------------
+5.2 ANÁLISIS DE ELEMENTOS PENDIENTES DEL ECOSISTEMA GLOBAL Y JUSTIFICACIÓN TÉCNICA:
+----------------------------------------------------------------------------------------------------
+A nivel del ecosistema global del equipo (contextos fuera del alcance directo de Jonathan Jerónimo), se identifican ciertos elementos desacoplados o simplificados según la auditoría técnica de arquitectura:
+
+1. Consumo de Respuestas de Inventario en la Saga de Órdenes:
+   - Situación: El contexto de Órdenes publica la solicitud de reserva (`ordenes.reserva.solicitada`) e Inventario genera la reserva en su base de datos. Sin embargo, el consumidor automático de `inventario.reserva.confirmada` en Órdenes no fue enlazado directamente a la máquina de estados, utilizándose en su lugar la invocación del endpoint de transición asistida.
+   - Justificación Técnica: Esta decisión fue acordada en el diseño para desacoplar temporalmente los equipos y no frenar el desarrollo de Pagos y Facturación. No afecta el camino crítico de la demostración de la demo web ya que el Gateway coordina la confirmación transaccional con éxito.
+
+2. Servicios Legacy Mocks (ERP AS/400 y POS Físico):
+   - Situación: Se definieron los contratos e intercambios correspondientes en la topología (`sgo.erp`), pero su integración opera mediante procesamiento batch desacoplado en lugar de interacción síncrona en línea.
+   - Justificación Técnica: Se alinea exactamente con la realidad operativa de los sistemas mainframe AS/400, los cuales operan tradicionalmente por conciliación diferida nocturna (reconciliación de lotes) y no mediante transacciones ACID distribuidas en tiempo real.
+
+3. Servicio de Despacho LogiExpress:
+   - Situación: El evento `DespachoSolicitado` es emitido por Órdenes al completar la certificación fiscal. El proveedor externo de logística opera como un actor asíncrono secundario.
+   - Justificación Técnica: El núcleo del negocio omnicanal evaluado (EAC-01, EAC-02, EAC-03) se enfoca en la certeza de la reserva, el cobro no repudiable, la certificación fiscal ante el SAT y la consulta de estado ultrarrápida para el cliente. El despacho físico es posterior al cierre fiscal de la venta y no compromete la integridad transaccional del MVP.
+
+====================================================================================================
+FIRMA DIGITAL Y CONSTANCIA DE RESPONSABILIDAD TÉCNICA:
+====================================================================================================
+Estudiante: Jonathan Jerónimo
+Carnet USAC: 202300353
+Rama de Desarrollo: develop (merge commit f710a87 sin fast-forward tras feature/desarrollo-web-demo-202300353 [commit 6fab0bb])
+Estado de Compilación: APROBADA (0 Errores, 0 Warnings críticos en los 12 proyectos .NET 8)
+Suite de Pruebas: 57 Ejecutadas / 57 Aprobadas / 0 Fallidas (100% de éxito)
+====================================================================================================
+FIN DEL DOCUMENTO — BITÁCORA TÉCNICA Y SPRINT RETROSPECTIVE
+====================================================================================================

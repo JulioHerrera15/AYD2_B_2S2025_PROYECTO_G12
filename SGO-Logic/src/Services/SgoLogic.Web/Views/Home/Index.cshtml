@@ -10,221 +10,163 @@
 
 <!-- Hero Section -->
 <div class="mb-12">
-    <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold mb-4 ambient-shadow">
-        <span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">bolt</span>
-        SGO-Logic MegaStore Omnicanal &bull; Ecosistema Completo
-    </div>
-    <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold text-primary tracking-tight mb-4">
-        Centro de Control Logístico y Comercio Omnicanal
-    </h1>
-    <p class="text-base sm:text-lg text-text-muted max-w-3xl leading-relaxed mb-8">
-        Plataforma distribuida de alto rendimiento (.NET 8, Redis, PostgreSQL y RabbitMQ) que integra identidad unificada, sincronización cross-canal de carritos, recuperación en POS, despacho con transportistas y trazabilidad CQRS con respuesta garantizada.
-    </p>
+    @if (isStaff)
+    {
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold mb-4 ambient-shadow">
+            <span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">admin_panel_settings</span>
+            Panel de Operaciones &bull; Supervisión Administrativa (Rol: @userRole)
+        </div>
+        <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold text-primary tracking-tight mb-4">
+            Centro de Control & Operaciones MegaStore
+        </h1>
+        <p class="text-base sm:text-lg text-text-muted max-w-3xl leading-relaxed mb-8">
+            Supervisión logística centralizada, control de preparación en bodegas y centros de distribución, trazabilidad de órdenes omnicanal, terminales POS y auditoría de incidencias.
+        </p>
 
-    <div class="flex flex-wrap items-center gap-3">
-        <a href="/Catalogo" class="inline-flex items-center gap-2 bg-primary text-on-primary px-6 py-2.5 rounded-full font-medium text-sm hover:opacity-90 transition-opacity shadow-sm active:scale-95 duration-150">
-            <span class="material-symbols-outlined text-[18px]">storefront</span>
-            Explorar Catálogo
-        </a>
-        <a href="/Carrito" class="inline-flex items-center gap-2 bg-secondary text-white px-5 py-2.5 rounded-full font-medium text-sm hover:bg-secondary/90 transition-colors shadow-sm active:scale-95 duration-150">
-            <span class="material-symbols-outlined text-[18px]">shopping_cart</span>
-            Ver Carrito
-        </a>
-        <a href="/Estado" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
-            <span class="material-symbols-outlined text-[18px]">track_changes</span>
-            Rastrear Pedido
-        </a>
-        @if (isStaff)
-        {
+        <div class="flex flex-wrap items-center gap-3">
+            <a href="/Despacho" class="inline-flex items-center gap-2 bg-primary text-on-primary px-6 py-2.5 rounded-full font-medium text-sm hover:opacity-90 transition-opacity shadow-sm active:scale-95 duration-150">
+                <span class="material-symbols-outlined text-[18px]">local_shipping</span>
+                Control de Despacho
+            </a>
+            <a href="/Estado" class="inline-flex items-center gap-2 bg-secondary text-white px-5 py-2.5 rounded-full font-medium text-sm hover:bg-secondary/90 transition-colors shadow-sm active:scale-95 duration-150">
+                <span class="material-symbols-outlined text-[18px]">receipt_long</span>
+                Supervisión de Órdenes
+            </a>
             <a href="/Pos" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
                 <span class="material-symbols-outlined text-[18px]">point_of_sale</span>
                 Terminal OmniPOS
             </a>
+            <a href="/Vision360" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
+                <span class="material-symbols-outlined text-[18px]">support_agent</span>
+                Visión 360
+            </a>
             <a href="/Monitoreo" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
                 <span class="material-symbols-outlined text-[18px]">hub</span>
-                Centro de Monitoreo
+                Monitoreo
             </a>
-        }
-        else if (isAuthenticated)
-        {
-            <a href="/Cuenta/Ordenes" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
-                <span class="material-symbols-outlined text-[18px]">receipt_long</span>
-                Mis Pedidos
-            </a>
-            <a href="/Cuenta/Perfil" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
-                <span class="material-symbols-outlined text-[18px]">account_circle</span>
-                Mi Perfil
-            </a>
-        }
-        else
-        {
-            <a href="/Auth/Login" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
-                <span class="material-symbols-outlined text-[18px]">login</span>
-                Iniciar Sesión
-            </a>
-            <a href="/Auth/Registro" class="inline-flex items-center gap-2 bg-surface-container-low text-secondary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
-                <span class="material-symbols-outlined text-[18px]">person_add</span>
-                Registrarse
-            </a>
-        }
-    </div>
-</div>
+        </div>
+    }
+    else
+    {
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold mb-4 ambient-shadow">
+            <span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">store</span>
+            MegaStore Omnicanal &bull; Tu Tienda en Línea
+        </div>
+        <h1 class="text-3xl sm:text-4xl md:text-5xl font-bold text-primary tracking-tight mb-4">
+            Comercio Omnicanal y Experiencia de Compra Integral
+        </h1>
+        <p class="text-base sm:text-lg text-text-muted max-w-3xl leading-relaxed mb-8">
+            Tu tienda departamental de confianza con disponibilidad de stock en tiempo real en nuestras 32 sucursales, entregas express a domicilio, retiro ágil en tienda y seguimiento en vivo de tus compras.
+        </p>
 
-<!-- Bento Grid: Core Commercial Capabilities -->
-<div class="mb-4 flex items-center justify-between pb-2 border-b border-border-subtle">
-    <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-text-muted">
-        <span class="material-symbols-outlined text-[18px] text-secondary">store</span>
-        Portal Comercial & Atención al Cliente
-    </div>
-</div>
-
-<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-    <!-- Card 1: Catálogo Comercial -->
-    <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
-        <div>
-            <div class="w-12 h-12 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center mb-5">
-                <span class="material-symbols-outlined text-[26px]">storefront</span>
-            </div>
-            <h3 class="text-lg font-bold text-primary mb-2">Catálogo Comercial Omnicanal</h3>
-            <p class="text-xs text-text-muted leading-relaxed mb-6">
-                Consulta de productos con existencias en vivo de las 32 tiendas físicas y 2 centros de distribución, optimizado sin bloqueos.
-            </p>
-        </div>
-        <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
-            <a href="/Catalogo" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
-                Explorar catálogo <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+        <div class="flex flex-wrap items-center gap-3">
+            <a href="/Catalogo" class="inline-flex items-center gap-2 bg-primary text-on-primary px-6 py-2.5 rounded-full font-medium text-sm hover:opacity-90 transition-opacity shadow-sm active:scale-95 duration-150">
+                <span class="material-symbols-outlined text-[18px]">storefront</span>
+                Explorar Catálogo
             </a>
-            <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Stock en Tiempo Real</span>
-        </div>
-    </div>
-
-    <!-- Card 2: Unified Cart in Redis -->
-    <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
-        <div>
-            <div class="w-12 h-12 rounded-2xl bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center mb-5">
-                <span class="material-symbols-outlined text-[26px]">shopping_bag</span>
-            </div>
-            <h3 class="text-lg font-bold text-primary mb-2">Carrito Unificado</h3>
-            <p class="text-xs text-text-muted leading-relaxed mb-6">
-                Sincronización multidispositivo en tiempo real con guardado automático y recuperación fluida al iniciar sesión.
-            </p>
-        </div>
-        <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
-            <a href="/Carrito" class="text-xs font-semibold text-secondary hover:underline inline-flex items-center gap-1 transition-colors">
-                Ver carrito <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+            <a href="/Carrito" class="inline-flex items-center gap-2 bg-secondary text-white px-5 py-2.5 rounded-full font-medium text-sm hover:bg-secondary/90 transition-colors shadow-sm active:scale-95 duration-150">
+                <span class="material-symbols-outlined text-[18px]">shopping_cart</span>
+                Ver Carrito
             </a>
-            <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Persistencia Cloud</span>
-        </div>
-    </div>
-
-    <!-- Card 3: Checkout Omnicanal -->
-    <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
-        <div>
-            <div class="w-12 h-12 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center mb-5">
-                <span class="material-symbols-outlined text-[26px]">credit_card</span>
-            </div>
-            <h3 class="text-lg font-bold text-primary mb-2">Checkout & Órdenes</h3>
-            <p class="text-xs text-text-muted leading-relaxed mb-6">
-                Entrega a domicilio o Click & Collect en tiendas físicas, facturación fiscal SAT FEL y confirmación inmediata con pasarela tokenizada.
-            </p>
-        </div>
-        <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
-            <a href="/Checkout" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
-                Ir a pagar <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+            <a href="/Estado" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
+                <span class="material-symbols-outlined text-[18px]">track_changes</span>
+                Rastrear Pedido
             </a>
-            <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Pago Seguro PayKlik</span>
+            @if (isAuthenticated)
+            {
+                <a href="/Cuenta/Ordenes" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
+                    <span class="material-symbols-outlined text-[18px]">receipt_long</span>
+                    Mis Pedidos
+                </a>
+                <a href="/Cuenta/Perfil" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
+                    <span class="material-symbols-outlined text-[18px]">account_circle</span>
+                    Mi Perfil
+                </a>
+            }
+            else
+            {
+                <a href="/Auth/Login" class="inline-flex items-center gap-2 bg-surface-container-low text-primary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
+                    <span class="material-symbols-outlined text-[18px]">login</span>
+                    Iniciar Sesión
+                </a>
+                <a href="/Auth/Registro" class="inline-flex items-center gap-2 bg-surface-container-low text-secondary px-5 py-2.5 rounded-full font-medium text-sm hover:bg-surface-variant transition-colors active:scale-95 duration-150 border border-border-subtle/50">
+                    <span class="material-symbols-outlined text-[18px]">person_add</span>
+                    Registrarse
+                </a>
+            }
         </div>
-    </div>
-
-    <!-- Card 4: Trazabilidad CQRS -->
-    <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
-        <div>
-            <div class="w-12 h-12 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center mb-5">
-                <span class="material-symbols-outlined text-[26px]">track_changes</span>
-            </div>
-            <h3 class="text-lg font-bold text-primary mb-2">Rastreo & Estado de Pedidos</h3>
-            <p class="text-xs text-text-muted leading-relaxed mb-6">
-                Consulta en caliente con actualización inmediata de eventos logísticos, número de guía y confirmación de entrega.
-            </p>
-        </div>
-        <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
-            <a href="/Estado" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
-                Rastrear orden <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
-            </a>
-            <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Trazabilidad en Vivo</span>
-        </div>
-    </div>
-
-    <!-- Card 5: Identidad & Acceso -->
-    <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
-        <div>
-            <div class="w-12 h-12 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center mb-5">
-                <span class="material-symbols-outlined text-[26px]">badge</span>
-            </div>
-            <h3 class="text-lg font-bold text-primary mb-2">Identidad & Acceso Seguro</h3>
-            <p class="text-xs text-text-muted leading-relaxed mb-6">
-                Protección de credenciales con hash criptográfico BCrypt, verificación segura en dos pasos mediante código numérico y tokens de sesión protegidos.
-            </p>
-        </div>
-        <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
-            <a href="@(isAuthenticated ? "/Cuenta/Perfil" : "/Auth/Login")" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
-                @(isAuthenticated ? "Mi perfil" : "Iniciar sesión") <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
-            </a>
-            <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Identidad Cifrada</span>
-        </div>
-    </div>
-
-    <!-- Card 6: Privacidad & Cumplimiento -->
-    <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
-        <div>
-            <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-800 flex items-center justify-center mb-5">
-                <span class="material-symbols-outlined text-[26px]">shield_person</span>
-            </div>
-            <h3 class="text-lg font-bold text-primary mb-2">Privacidad & Datos</h3>
-            <p class="text-xs text-text-muted leading-relaxed mb-6">
-                Centro de derechos ARCO, descarga estructurada de datos (JSON), política de derecho al olvido y resguardo de datos personales.
-            </p>
-        </div>
-        <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
-            <a href="/Cuenta/Privacidad" class="text-xs font-semibold text-secondary hover:underline inline-flex items-center gap-1 transition-colors">
-                Gestionar privacidad <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
-            </a>
-            <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Protección de Datos</span>
-        </div>
-    </div>
+    }
 </div>
 
 @if (isStaff)
 {
-    <!-- Bento Grid: Internal Staff & Operational Tools (Only visible to authorized staff/admin) -->
+    <!-- Bento Grid: Operaciones & Administración (Exclusivo para Staff / Admin) -->
     <div class="mb-4 flex items-center justify-between pb-2 border-b border-border-subtle">
         <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-secondary">
             <span class="material-symbols-outlined text-[18px]">admin_panel_settings</span>
-            Herramientas Operativas Internas (Personal & Administradores)
+            Consola Operativa y Módulos de Gestión
         </div>
     </div>
 
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
-        <!-- Card: OmniPOS Terminal -->
+        <!-- Card 1: Control de Despacho -->
+        <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
+            <div>
+                <div class="w-12 h-12 rounded-2xl bg-green-100 text-green-900 flex items-center justify-center mb-5">
+                    <span class="material-symbols-outlined text-[26px]">local_shipping</span>
+                </div>
+                <h3 class="text-lg font-bold text-primary mb-2">Centro de Control de Despacho</h3>
+                <p class="text-xs text-text-muted leading-relaxed mb-6">
+                    Supervisión de cola de preparación en Centro de Distribución y Tiendas, generación de guías LogiExpress y avance de estados logísticos.
+                </p>
+            </div>
+            <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
+                <a href="/Despacho" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
+                    Abrir Despacho <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                </a>
+                <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Logística</span>
+            </div>
+        </div>
+
+        <!-- Card 2: Supervisión Global de Órdenes -->
+        <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
+            <div>
+                <div class="w-12 h-12 rounded-2xl bg-blue-100 text-blue-900 flex items-center justify-center mb-5">
+                    <span class="material-symbols-outlined text-[26px]">receipt_long</span>
+                </div>
+                <h3 class="text-lg font-bold text-primary mb-2">Supervisión de Todas las Órdenes</h3>
+                <p class="text-xs text-text-muted leading-relaxed mb-6">
+                    Bandeja completa de todas las compras del sistema, verificación fiscal SAT FEL, montos transaccionales y búsqueda avanzada por cliente.
+                </p>
+            </div>
+            <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
+                <a href="/Estado" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
+                    Ver todas las órdenes <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                </a>
+                <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Supervisión</span>
+            </div>
+        </div>
+
+        <!-- Card 3: Terminal OmniPOS -->
         <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
             <div>
                 <div class="w-12 h-12 rounded-2xl bg-amber-100 text-amber-900 flex items-center justify-center mb-5">
                     <span class="material-symbols-outlined text-[26px]">point_of_sale</span>
                 </div>
-                <h3 class="text-lg font-bold text-primary mb-2">OmniPOS (Tienda Física)</h3>
+                <h3 class="text-lg font-bold text-primary mb-2">Terminal OmniPOS (Caja)</h3>
                 <p class="text-xs text-text-muted leading-relaxed mb-6">
-                    Recuperación en mostrador de carritos iniciados en la web o app móvil mediante correo o NIT. Cobro presencial en caja física.
+                    Recuperación en mostrador de carritos iniciados en línea, cobro presencial en tiendas físicas y emisión de comprobantes en caja.
                 </p>
             </div>
             <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
                 <a href="/Pos" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
                     Abrir Terminal POS <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
                 </a>
-                <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">POS Central</span>
+                <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Caja & POS</span>
             </div>
         </div>
 
-        <!-- Card: Visión 360 & Soporte -->
+        <!-- Card 4: Visión 360 del Cliente -->
         <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
             <div>
                 <div class="w-12 h-12 rounded-2xl bg-purple-100 text-purple-900 flex items-center justify-center mb-5">
@@ -232,92 +174,220 @@
                 </div>
                 <h3 class="text-lg font-bold text-primary mb-2">Visión 360 del Cliente</h3>
                 <p class="text-xs text-text-muted leading-relaxed mb-6">
-                    Historial completo de compras, métricas consolidadas (LTV, pedidos), carritos en caliente e incidencias post-venta.
+                    Perfil consolidado de clientes, métricas acumuladas de compras, carritos activos en caliente y soporte post-venta personalizado.
                 </p>
             </div>
             <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
                 <a href="/Vision360" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
-                    Atención 360° <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                    Consola 360° <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
                 </a>
                 <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Soporte 360</span>
             </div>
         </div>
 
-        <!-- Card: Despacho Logístico -->
+        <!-- Card 5: Gestión de Incidencias -->
         <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
             <div>
-                <div class="w-12 h-12 rounded-2xl bg-green-100 text-green-900 flex items-center justify-center mb-5">
-                    <span class="material-symbols-outlined text-[26px]">local_shipping</span>
-                </div>
-                <h3 class="text-lg font-bold text-primary mb-2">Despacho & LogiExpress</h3>
-                <p class="text-xs text-text-muted leading-relaxed mb-6">
-                    Centro de control de preparación en Centro de Distribución, guías de transporte con LogiExpress y entregas en tienda.
-                </p>
-            </div>
-            <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
-                <a href="/Despacho" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
-                    Control logístico <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
-                </a>
-                <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Bodega & Logística</span>
-            </div>
-        </div>
-
-        <!-- Card: Incidencias & Post-Venta -->
-        <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
-            <div>
-                <div class="w-12 h-12 rounded-2xl bg-amber-50 text-amber-800 flex items-center justify-center mb-5">
+                <div class="w-12 h-12 rounded-2xl bg-rose-100 text-rose-900 flex items-center justify-center mb-5">
                     <span class="material-symbols-outlined text-[26px]">gavel</span>
                 </div>
-                <h3 class="text-lg font-bold text-primary mb-2">Incidencias & Post-Venta</h3>
+                <h3 class="text-lg font-bold text-primary mb-2">Gestión de Incidencias</h3>
                 <p class="text-xs text-text-muted leading-relaxed mb-6">
-                    Bandeja operativa para gestión de incidencias reportadas, dictámenes de resolución y trazabilidad para auditoría.
+                    Bandeja operativa para recepción, investigación y resolución formal de incidencias de entrega, cobro o devoluciones.
                 </p>
             </div>
             <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
                 <a href="/Incidencias" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
-                    Ver incidencias <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                    Ver Incidencias <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
                 </a>
-                <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Atención Post-Venta</span>
+                <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Auditoría</span>
             </div>
         </div>
 
-        <!-- Card: Monitoreo & Topología -->
+        <!-- Card 6: Monitoreo & Topología -->
         <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
             <div>
-                <div class="w-12 h-12 rounded-2xl bg-blue-50 text-blue-800 flex items-center justify-center mb-5">
+                <div class="w-12 h-12 rounded-2xl bg-sky-100 text-sky-900 flex items-center justify-center mb-5">
                     <span class="material-symbols-outlined text-[26px]">hub</span>
                 </div>
-                <h3 class="text-lg font-bold text-primary mb-2">Consola de Control del Ecosistema</h3>
+                <h3 class="text-lg font-bold text-primary mb-2">Topología & Monitoreo</h3>
                 <p class="text-xs text-text-muted leading-relaxed mb-6">
-                    Supervisión de salud de microservicios, autenticación centralizada en el borde y telemetría operativa.
+                    Supervisión en vivo de salud de microservicios, estado de colas de mensajería y telemetría operativa del sistema.
                 </p>
             </div>
             <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
-                <a href="/Monitoreo" class="text-xs font-semibold text-secondary hover:underline inline-flex items-center gap-1 transition-colors">
-                    Consola de Monitoreo <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                <a href="/Monitoreo" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
+                    Panel de Monitoreo <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
                 </a>
-                <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Monitoreo Activo</span>
+                <span class="text-[11px] font-mono text-text-muted bg-surface-container-low px-2 py-0.5 rounded">Infraestructura</span>
             </div>
         </div>
     </div>
-}
 
-<!-- Architecture Status Banner -->
-<div class="bg-surface-container-low rounded-3xl p-6 border border-border-subtle/60 flex flex-col md:flex-row items-center justify-between gap-4 ambient-shadow">
-    <div class="flex items-center gap-3">
-        <div class="w-3.5 h-3.5 rounded-full bg-green-500 animate-pulse flex-shrink-0"></div>
-        <div>
-            <div class="text-sm font-bold text-primary">Ecosistema y Servicios Omnicanal Operativos</div>
-            <div class="text-xs text-text-muted">Infraestructura de alta disponibilidad con procesamiento transaccional en tiempo real.</div>
+    <!-- Admin Status Banner -->
+    <div class="bg-surface-container-low rounded-3xl p-6 border border-border-subtle/60 flex flex-col md:flex-row items-center justify-between gap-4 ambient-shadow">
+        <div class="flex items-center gap-3">
+            <div class="w-3.5 h-3.5 rounded-full bg-green-500 animate-pulse flex-shrink-0"></div>
+            <div>
+                <div class="text-sm font-bold text-primary">Consola de Operaciones MegaStore Activa</div>
+                <div class="text-xs text-text-muted">Autenticado como personal autorizado con privilegios de gestión global.</div>
+            </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="/Estado" class="text-xs font-semibold text-primary bg-surface-white hover:bg-surface-bright px-3.5 py-2 rounded-xl border border-border-subtle shadow-sm transition-colors flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[16px]">receipt_long</span>
+                Supervisión de Órdenes
+            </a>
+            <a href="/Despacho" class="text-xs font-semibold text-white bg-primary hover:opacity-90 px-3.5 py-2 rounded-xl shadow-sm transition-colors flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[16px]">local_shipping</span>
+                Ir a Despacho
+            </a>
         </div>
     </div>
-    <div class="flex flex-wrap items-center gap-2">
-        <a href="/Estado" class="text-xs font-semibold text-primary bg-surface-white hover:bg-surface-bright px-3.5 py-2 rounded-xl border border-border-subtle shadow-sm transition-colors flex items-center gap-1.5">
-            <span class="material-symbols-outlined text-[16px]">track_changes</span>
-            Rastrear Pedido
-        </a>
-        <a href="/Cuenta/Privacidad" class="text-xs font-semibold text-text-muted hover:text-primary px-3 py-2 transition-colors">
-            Aviso de Privacidad &rarr;
-        </a>
+}
+else
+{
+    <!-- Bento Grid: Core Commercial Capabilities (Para Clientes y Visitantes) -->
+    <div class="mb-4 flex items-center justify-between pb-2 border-b border-border-subtle">
+        <div class="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-text-muted">
+            <span class="material-symbols-outlined text-[18px] text-secondary">store</span>
+            Portal Comercial & Experiencia de Compra
+        </div>
     </div>
-</div>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-12">
+        <!-- Card 1: Catálogo Comercial -->
+        <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
+            <div>
+                <div class="w-12 h-12 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center mb-5">
+                    <span class="material-symbols-outlined text-[26px]">storefront</span>
+                </div>
+                <h3 class="text-lg font-bold text-primary mb-2">Catálogo Comercial Omnicanal</h3>
+                <p class="text-xs text-text-muted leading-relaxed mb-6">
+                    Consulta de productos con existencias en vivo de las 32 tiendas físicas y 2 centros de distribución, optimizado sin bloqueos.
+                </p>
+            </div>
+            <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
+                <a href="/Catalogo" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
+                    Explorar catálogo <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                </a>
+                <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Stock en Tiempo Real</span>
+            </div>
+        </div>
+
+        <!-- Card 2: Unified Cart in Redis -->
+        <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
+            <div>
+                <div class="w-12 h-12 rounded-2xl bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center mb-5">
+                    <span class="material-symbols-outlined text-[26px]">shopping_bag</span>
+                </div>
+                <h3 class="text-lg font-bold text-primary mb-2">Carrito Unificado</h3>
+                <p class="text-xs text-text-muted leading-relaxed mb-6">
+                    Sincronización multidispositivo en tiempo real con guardado automático y recuperación fluida al iniciar sesión.
+                </p>
+            </div>
+            <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
+                <a href="/Carrito" class="text-xs font-semibold text-secondary hover:underline inline-flex items-center gap-1 transition-colors">
+                    Ver carrito <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                </a>
+                <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Persistencia Cloud</span>
+            </div>
+        </div>
+
+        <!-- Card 3: Checkout Omnicanal -->
+        <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
+            <div>
+                <div class="w-12 h-12 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center mb-5">
+                    <span class="material-symbols-outlined text-[26px]">credit_card</span>
+                </div>
+                <h3 class="text-lg font-bold text-primary mb-2">Checkout & Órdenes</h3>
+                <p class="text-xs text-text-muted leading-relaxed mb-6">
+                    Entrega a domicilio o Click & Collect en tiendas físicas, facturación fiscal SAT FEL y confirmación inmediata con pasarela tokenizada.
+                </p>
+            </div>
+            <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
+                <a href="/Checkout" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
+                    Ir a pagar <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                </a>
+                <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Pago 100% Seguro</span>
+            </div>
+        </div>
+
+        <!-- Card 4: Trazabilidad y Rastreo -->
+        <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
+            <div>
+                <div class="w-12 h-12 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center mb-5">
+                    <span class="material-symbols-outlined text-[26px]">track_changes</span>
+                </div>
+                <h3 class="text-lg font-bold text-primary mb-2">Rastreo & Estado de Pedidos</h3>
+                <p class="text-xs text-text-muted leading-relaxed mb-6">
+                    Consulta en caliente con actualización inmediata de eventos logísticos, número de guía y confirmación de entrega.
+                </p>
+            </div>
+            <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
+                <a href="/Estado" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
+                    Rastrear orden <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                </a>
+                <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Trazabilidad en Vivo</span>
+            </div>
+        </div>
+
+        <!-- Card 5: Identidad & Acceso -->
+        <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
+            <div>
+                <div class="w-12 h-12 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center mb-5">
+                    <span class="material-symbols-outlined text-[26px]">badge</span>
+                </div>
+                <h3 class="text-lg font-bold text-primary mb-2">Identidad & Acceso Seguro</h3>
+                <p class="text-xs text-text-muted leading-relaxed mb-6">
+                    Protección integral de credenciales, verificación en dos pasos mediante código al correo y sesiones seguras y protegidas.
+                </p>
+            </div>
+            <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
+                <a href="@(isAuthenticated ? "/Cuenta/Perfil" : "/Auth/Login")" class="text-xs font-semibold text-primary hover:text-secondary inline-flex items-center gap-1 transition-colors">
+                    @(isAuthenticated ? "Mi perfil" : "Iniciar sesión") <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                </a>
+                <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Acceso Protegido</span>
+            </div>
+        </div>
+
+        <!-- Card 6: Privacidad & Cumplimiento -->
+        <div class="bg-surface-white rounded-3xl p-7 border border-border-subtle/50 ambient-shadow flex flex-col justify-between hover:border-primary/40 transition-all hover:shadow-md">
+            <div>
+                <div class="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-800 flex items-center justify-center mb-5">
+                    <span class="material-symbols-outlined text-[26px]">shield_person</span>
+                </div>
+                <h3 class="text-lg font-bold text-primary mb-2">Privacidad & Datos</h3>
+                <p class="text-xs text-text-muted leading-relaxed mb-6">
+                    Centro de derechos ARCO, descarga estructurada de datos (JSON), política de derecho al olvido y resguardo de datos personales.
+                </p>
+            </div>
+            <div class="pt-4 border-t border-border-subtle/40 flex items-center justify-between">
+                <a href="/Cuenta/Privacidad" class="text-xs font-semibold text-secondary hover:underline inline-flex items-center gap-1 transition-colors">
+                    Gestionar privacidad <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
+                </a>
+                <span class="text-[11px] font-medium text-text-muted bg-surface-container-low px-2.5 py-1 rounded-full">Protección de Datos</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Store Status Banner -->
+    <div class="bg-surface-container-low rounded-3xl p-6 border border-border-subtle/60 flex flex-col md:flex-row items-center justify-between gap-4 ambient-shadow">
+        <div class="flex items-center gap-3">
+            <div class="w-3.5 h-3.5 rounded-full bg-green-500 animate-pulse flex-shrink-0"></div>
+            <div>
+                <div class="text-sm font-bold text-primary">Tienda Departamental y Cobertura Nacional Activa</div>
+                <div class="text-xs text-text-muted">Servicio continuo en 32 tiendas físicas, entrega a domicilio express y facturación SAT FEL garantizada.</div>
+            </div>
+        </div>
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="/Estado" class="text-xs font-semibold text-primary bg-surface-white hover:bg-surface-bright px-3.5 py-2 rounded-xl border border-border-subtle shadow-sm transition-colors flex items-center gap-1.5">
+                <span class="material-symbols-outlined text-[16px]">track_changes</span>
+                Rastrear Pedido
+            </a>
+            <a href="/Cuenta/Privacidad" class="text-xs font-semibold text-text-muted hover:text-primary px-3 py-2 transition-colors">
+                Aviso de Privacidad &rarr;
+            </a>
+        </div>
+    </div>
+}
