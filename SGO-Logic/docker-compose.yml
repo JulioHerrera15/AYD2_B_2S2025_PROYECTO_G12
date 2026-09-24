@@ -576,6 +576,37 @@ services:
       timeout: 5s
       retries: 5
 
+  # Siembra datos de demo (usuarios con contrasena 1234, inventario, ordenes,
+  # envios, pagos, facturas e incidencias) una vez que los servicios migraron
+  # sus bases. Corre una vez y termina; solo toca bases vacias (ver
+  # scripts/seed/sembrar.sh). SEED_HABILITADO=false en .env lo desactiva.
+  seed-datos:
+    image: postgres:16-alpine
+    restart: "no"
+    entrypoint: ["sh", "/seed/sembrar.sh"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_OPERACIONAL_DB: ${POSTGRES_OPERACIONAL_DB}
+      SEED_HABILITADO: ${SEED_HABILITADO:-true}
+    volumes:
+      - ./scripts/seed:/seed:ro
+    depends_on:
+      auth-api:
+        condition: service_healthy
+      inventario-api:
+        condition: service_healthy
+      ordenes-api:
+        condition: service_healthy
+      despacho-api:
+        condition: service_healthy
+      consulta-estado-api:
+        condition: service_healthy
+      pagos-api:
+        condition: service_healthy
+      facturacion-api:
+        condition: service_healthy
+
   prometheus:
     image: prom/prometheus:v2.55.1
     volumes:
