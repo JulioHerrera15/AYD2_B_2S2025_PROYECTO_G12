@@ -26,7 +26,10 @@ public sealed record OrdenEstadoDto(
     string? MotivoUltimoCambio,
     DateTime? CreadaEn,
     DateTime ActualizadaEn,
-    IReadOnlyList<IncidenciaDto> Incidencias);
+    IReadOnlyList<IncidenciaDto> Incidencias,
+    string? UbicacionOrigenId = null,
+    string? SerieDocumentoFiscal = null,
+    string? NumeroDocumentoFiscal = null);
 
 public sealed record OrdenResumenDto(
     string OrdenId,

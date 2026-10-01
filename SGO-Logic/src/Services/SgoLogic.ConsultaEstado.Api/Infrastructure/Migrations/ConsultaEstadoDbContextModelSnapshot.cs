@@ -216,6 +216,11 @@ namespace SgoLogic.ConsultaEstado.Api.Infrastructure.Migrations
                         .HasColumnType("numeric(18,2)")
                         .HasColumnName("total");
 
+                    b.Property<string>("UbicacionOrigenId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("ubicacion_origen_id");
+
                     b.Property<string>("UbicacionSolicitadaId")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)")

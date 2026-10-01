@@ -45,6 +45,11 @@ public sealed class OrdenVista
     public string? GuiaDespacho { get; set; }
     /// <summary>Estado interno del despacho (EN_PREPARACION, EN_TRANSITO, ENTREGADO, etc.).</summary>
     public string? EstadoDespacho { get; set; }
+    /// <summary>
+    /// Ubicacion desde la que sale el pedido (tienda o centro de distribucion), tomada
+    /// de OrigenDespachoDeterminado. Es donde Inventario desconto las unidades.
+    /// </summary>
+    public string? UbicacionOrigenId { get; set; }
 
     // ── Control de ordenamiento (por aggregateId) ─────────────────────────────
     /// <summary>Ultimo sequence aplicado para este aggregateId. Parte de la regla last-writer-wins.</summary>

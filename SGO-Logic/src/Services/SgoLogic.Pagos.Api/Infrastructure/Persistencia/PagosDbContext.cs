@@ -25,6 +25,9 @@ public sealed class PagosDbContext : DbContext
 
     public DbSet<EnlaceReintento> EnlacesReintento => Set<EnlaceReintento>();
 
+    /// <summary>Tarjetas guardadas: solo referencia de boveda de PayKlik y metadatos, nunca PAN ni CVV.</summary>
+    public DbSet<TarjetaGuardada> TarjetasGuardadas => Set<TarjetaGuardada>();
+
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     public DbSet<MensajeProcesado> MensajesProcesados => Set<MensajeProcesado>();

@@ -145,6 +145,27 @@ public static class PermisosHelper
         return false;
     }
 
+    /// <summary>
+    /// Pertenencia de una orden: el personal autorizado puede ver cualquiera y un
+    /// cliente solo las suyas (el email de la sesion debe coincidir con el ClienteId
+    /// de la orden). Sin sesion, nadie. Es la verificacion de la descarga de factura
+    /// de CuentaController, compartida con la vista de factura del rastreo.
+    /// </summary>
+    public static bool PuedeVerOrden(OrdenEstadoModel? orden, string? userEmail, string? userRole, string? jwtToken)
+    {
+        if (string.IsNullOrWhiteSpace(userEmail))
+        {
+            return false;
+        }
+
+        if (EsPersonalAutorizado(userRole ?? "CLIENTE", userEmail, jwtToken))
+        {
+            return true;
+        }
+
+        return orden is not null && string.Equals(orden.ClienteId, userEmail, StringComparison.OrdinalIgnoreCase);
+    }
+
     public static bool EsAdministrador(string? jwtToken, string? userRole = null, string? userEmail = null)
     {
         if (!string.IsNullOrWhiteSpace(userEmail) && userEmail.Contains("admin", StringComparison.OrdinalIgnoreCase))

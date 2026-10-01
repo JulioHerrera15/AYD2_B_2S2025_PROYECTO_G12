@@ -58,3 +58,65 @@ Content-Type: application/json
 ### Consultar la reserva de una orden
 GET {{SgoLogic.Inventario.Api_HostAddress}}/api/inventario/reservas/ORD-2026-000123
 Accept: application/json
+
+### Catalogo publico de sucursales activas (tiendas y centros de distribucion con coordenadas)
+GET {{SgoLogic.Inventario.Api_HostAddress}}/api/inventario/sucursales
+Accept: application/json
+
+### Tienda activa mas cercana a "desde" con stock del SKU (404 si ninguna tienda tiene)
+GET {{SgoLogic.Inventario.Api_HostAddress}}/api/inventario/existencias/PROD-102/cercana?desde=TIENDA-01-CENTRAL&cantidad=1
+Accept: application/json
+
+### Simular desde donde saldria un pedido, sin reservar. Cuenta como disponibles las
+# retenciones activas del carrito. esOtraSucursal es true si sale de una TIENDA
+# distinta de ubicacionReferenciaId.
+POST {{SgoLogic.Inventario.Api_HostAddress}}/api/inventario/reservas/simular
+Content-Type: application/json
+
+{
+  "carritoId": "cart:6f1c2a7e-0000-4000-8000-000000000001",
+  "metodoEntrega": "DOMICILIO",
+  "ubicacionPreferidaId": null,
+  "ubicacionReferenciaId": "TIENDA-01-CENTRAL",
+  "lineas": [
+    { "sku": "PROD-105", "cantidad": 1 }
+  ]
+}
+
+### --- Retenciones de stock del carrito (solo red interna; sin ruta en el Gateway) ---
+
+### Retener (crear o ajustar) la cantidad total de un SKU en el carrito. 409 con
+# {sku, disponible, mensaje, sucursalCercana} si no hay stock en ninguna parte.
+PUT {{SgoLogic.Inventario.Api_HostAddress}}/interno/inventario/carritos/cart%3A6f1c2a7e-0000-4000-8000-000000000001/items/PROD-101
+Content-Type: application/json
+
+{
+  "cantidad": 2,
+  "ubicacionPreferidaId": "TIENDA-01-CENTRAL"
+}
+
+### Ver las retenciones vigentes del carrito
+GET {{SgoLogic.Inventario.Api_HostAddress}}/interno/inventario/carritos/cart%3A6f1c2a7e-0000-4000-8000-000000000001
+Accept: application/json
+
+### Renovar: extiende las activas y reactiva las vencidas donde aun haya stock
+POST {{SgoLogic.Inventario.Api_HostAddress}}/interno/inventario/carritos/cart%3A6f1c2a7e-0000-4000-8000-000000000001/renovar
+Content-Type: application/json
+
+{
+  "skus": ["PROD-101"]
+}
+
+### Transferir las retenciones de un carrito de invitado al de la cuenta
+POST {{SgoLogic.Inventario.Api_HostAddress}}/interno/inventario/carritos/guest%3Aa1b2c3d4/transferir
+Content-Type: application/json
+
+{
+  "destinoCarritoId": "cart:6f1c2a7e-0000-4000-8000-000000000001"
+}
+
+### Liberar un SKU del carrito
+DELETE {{SgoLogic.Inventario.Api_HostAddress}}/interno/inventario/carritos/cart%3A6f1c2a7e-0000-4000-8000-000000000001/items/PROD-101
+
+### Liberar todo el carrito
+DELETE {{SgoLogic.Inventario.Api_HostAddress}}/interno/inventario/carritos/cart%3A6f1c2a7e-0000-4000-8000-000000000001

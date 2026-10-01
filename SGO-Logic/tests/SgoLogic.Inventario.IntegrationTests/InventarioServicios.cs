@@ -47,6 +47,7 @@ public static class InventarioServicios
         servicios.AddScoped<IRepositorioMovimientos, RepositorioMovimientos>();
         servicios.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
         servicios.AddScoped<IGeneradorCorrelativoReserva, GeneradorCorrelativoReserva>();
+        servicios.AddScoped<IRepositorioReservasCarrito, RepositorioReservasCarrito>();
         servicios.AddScoped<ServicioReservas>();
         servicios.AddScoped<ServicioExistencias>();
         servicios.AddScoped<ServicioExpiracionReservas>();

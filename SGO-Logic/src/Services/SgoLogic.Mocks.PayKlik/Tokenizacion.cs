@@ -12,12 +12,16 @@ namespace SgoLogic.Mocks.PayKlik;
 /// en lugar de un 400 generico del binding. <see cref="ToString" /> se sobrescribe
 /// para que un record impreso por accidente (log, excepcion, depurador) no filtre
 /// el PAN ni el CVV.
+///
+/// <see cref="Guardar" /> (opcional) pide ademas guardar la tarjeta en la boveda:
+/// la respuesta trae entonces una referenciaTarjeta persistente.
 /// </summary>
 public sealed record PeticionTokenizacion(
     string? NumeroTarjeta,
     string? Cvv,
     int? MesExpiracion,
-    int? AnioExpiracion)
+    int? AnioExpiracion,
+    bool? Guardar = null)
 {
     public override string ToString() => nameof(PeticionTokenizacion) + " { datos de tarjeta omitidos }";
 }
@@ -25,7 +29,8 @@ public sealed record PeticionTokenizacion(
 /// <summary>
 /// Respuesta de POST /v1/tokens. Solo metadatos no sensibles: nunca el numero ni el
 /// CVV. <c>UsoUnico</c> y <c>VigenciaSegundos</c> documentan la politica del token
-/// en la propia respuesta.
+/// en la propia respuesta. <c>ReferenciaTarjeta</c> solo viene cuando la
+/// tokenizacion pidio guardar la tarjeta en la boveda.
 /// </summary>
 public sealed record RespuestaTokenizacion(
     string Token,
@@ -36,7 +41,8 @@ public sealed record RespuestaTokenizacion(
     DateTime EmitidoEn,
     DateTime VenceEn,
     int VigenciaSegundos,
-    bool UsoUnico);
+    bool UsoUnico,
+    string? ReferenciaTarjeta = null);
 
 /// <summary>
 /// Lo unico que el mock recuerda de una tarjeta tokenizada. El PAN y el CVV se

@@ -87,7 +87,8 @@ public static class MapaEventosSagaOrden
                 Lineas: orden.Lineas
                     .Select(linea => new ReservaInventarioLineaData(linea.Sku, linea.Cantidad))
                     .ToList(),
-                SolicitadaEn: transicion.CambiadoEn));
+                SolicitadaEn: transicion.CambiadoEn,
+                CarritoId: orden.CarritoId));
 
     private static void EmitirCobroSolicitado(Orden orden, TransicionOrden transicion, IOutboxWriter outbox) =>
         Encolar(

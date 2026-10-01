@@ -13,6 +13,10 @@ namespace SgoLogic.Inventario.Api.Workers;
 /// servicio en el instante justo perderia la liberacion para siempre. Con el barrido,
 /// una reserva vencida sigue vencida y se toma en el siguiente ciclo.
 ///
+/// En el mismo ciclo, y en un alcance aparte, barre tambien las retenciones de
+/// carrito vencidas (<see cref="ServicioExpiracionReservasCarrito" />): el mismo
+/// temporizador sirve a los dos agregados y un fallo en uno no arrastra al otro.
+///
 /// Aca no hay logica de negocio: solo el temporizador y el alcance.
 /// </summary>
 public sealed class ExpiracionReservasWorker : BackgroundService
@@ -58,6 +62,29 @@ public sealed class ExpiracionReservasWorker : BackgroundService
                 // Un ciclo que revienta entero (la base no responde, por ejemplo) no
                 // debe tumbar el worker: se reintenta en el siguiente intervalo.
                 _logger.LogError(ex, "Ciclo de ExpiracionReservasWorker termino con un error inesperado.");
+            }
+
+            try
+            {
+                using var alcance = _fabricaAlcances.CreateScope();
+                var servicioCarrito = alcance.ServiceProvider.GetRequiredService<ServicioExpiracionReservasCarrito>();
+
+                var expiradasCarrito = await servicioCarrito.ProcesarLoteAsync(stoppingToken);
+
+                if (expiradasCarrito > 0)
+                {
+                    _logger.LogInformation(
+                        "Barrido de expiracion: {Expiradas} retencion(es) de carrito liberadas por TTL.",
+                        expiradasCarrito);
+                }
+            }
+            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Barrido de retenciones de carrito termino con un error inesperado.");
             }
 
             try

@@ -69,4 +69,32 @@ public sealed class ExistenciaTests
         var existencia = Nueva();
         Assert.Throws<ArgumentOutOfRangeException>(() => existencia.Reservar(cantidad));
     }
+
+    [Fact]
+    public void AjustarCantidadFisica_por_debajo_de_lo_reservado_lanza_y_no_modifica_nada()
+    {
+        var existencia = Nueva(fisica: 10);
+        existencia.Reservar(4);
+        var versionAntes = existencia.Version;
+
+        var ex = Assert.Throws<ExcepcionCantidadFisicaMenorQueReservada>(() => existencia.AjustarCantidadFisica(3));
+
+        Assert.Equal(3, ex.CantidadFisica);
+        Assert.Equal(4, ex.CantidadReservada);
+        Assert.Equal(10, existencia.CantidadFisica);
+        Assert.Equal(4, existencia.CantidadReservada);
+        Assert.Equal(versionAntes, existencia.Version);
+    }
+
+    [Fact]
+    public void AjustarCantidadFisica_igual_a_lo_reservado_se_acepta_y_deja_disponible_en_cero()
+    {
+        var existencia = Nueva(fisica: 10);
+        existencia.Reservar(4);
+
+        existencia.AjustarCantidadFisica(4);
+
+        Assert.Equal(4, existencia.CantidadFisica);
+        Assert.Equal(0, existencia.Disponible);
+    }
 }

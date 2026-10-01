@@ -130,12 +130,21 @@ public sealed class Existencia
         Version += 1;
     }
 
-    /// <summary>Ajusta la cantidad fisica (carga inicial, recuento, reingreso).</summary>
+    /// <summary>
+    /// Ajusta la cantidad fisica (carga inicial, recuento, reingreso). Lanza
+    /// <see cref="ExcepcionCantidadFisicaMenorQueReservada" /> si la nueva cantidad no
+    /// alcanza para lo ya reservado, sin modificar nada.
+    /// </summary>
     public void AjustarCantidadFisica(int cantidadFisica)
     {
         if (cantidadFisica < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(cantidadFisica), "La cantidad fisica no puede ser negativa.");
+        }
+
+        if (cantidadFisica < CantidadReservada)
+        {
+            throw new ExcepcionCantidadFisicaMenorQueReservada(Sku, UbicacionId, cantidadFisica, CantidadReservada);
         }
 
         CantidadFisica = cantidadFisica;

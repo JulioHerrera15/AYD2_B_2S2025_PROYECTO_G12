@@ -159,12 +159,16 @@ services:
       Auth__JwtExpiracionMinutos: ${AUTH_JWT_EXPIRACION_MINUTOS}
       Auth__CarritoTtlSegundos: ${AUTH_CARRITO_TTL_SEGUNDOS}
       Mensajeria__MockBaseUrl: http://mock-mensajeria:8080
+      # Retencion de stock del carrito: Auth llama a Inventario por la red interna.
+      Inventario__BaseUrl: http://inventario-api:8080
     ports:
       - "8088:8080"
     depends_on:
       db-operacional:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      inventario-api:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
@@ -211,6 +215,7 @@ services:
       Outbox__PollingIntervalMs: ${OUTBOX_POLLING_MS}
       Outbox__MaxReintentos: ${OUTBOX_MAX_REINTENTOS}
       Outbox__BatchSize: ${OUTBOX_BATCH_SIZE}
+      Inventario__CarritoTtlSegundos: ${INVENTARIO_CARRITO_TTL_SEGUNDOS:-900}
     ports:
       - "8094:8080"
     depends_on:
@@ -327,6 +332,11 @@ services:
     environment:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
       ASPNETCORE_URLS: http://+:8080
+      # Boveda de tarjetas guardadas: sobrevive a reinicios del contenedor. Solo
+      # referencia, marca, ultimos cuatro y vencimiento; nunca PAN ni CVV.
+      Boveda__RutaArchivo: /data/boveda-tarjetas.json
+    volumes:
+      - sgo_payklik_boveda:/data
     ports:
       - "8084:8080"
     healthcheck:
@@ -349,6 +359,8 @@ services:
       Outbox__MaxReintentos: ${OUTBOX_MAX_REINTENTOS}
       Outbox__BatchSize: ${OUTBOX_BATCH_SIZE}
       PayKlik__BaseUrl: http://payklik-mock:8080
+      # Tarjetas guardadas: valida el JWT de Auth para saber quien es el cliente.
+      Auth__JwtSecret: ${JWT_SECRET}
     ports:
       - "8085:8080"
     depends_on:
@@ -663,6 +675,7 @@ services:
       retries: 10
 
 volumes:
+  sgo_payklik_boveda:
   sgo_db_operacional_data:
   sgo_db_finanzas_data:
   sgo_db_auditoria_data:

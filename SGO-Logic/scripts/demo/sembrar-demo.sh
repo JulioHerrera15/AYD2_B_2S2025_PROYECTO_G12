@@ -167,5 +167,69 @@ for sku in PROD-001 PROD-002 PROD-003 PROD-004 PROD-005 PROD-006 PROD-007 PROD-0
   done
 done
 
-printf 'Seed de demo completado. Usuarios: %s y %d mas (contrasena %s) | SKUs: SKU-DEMO-001..003 y PROD-001..008\n' \
+# Productos con stock bajo (PROD-101..105) para probar las retenciones de carrito y
+# la sugerencia de la tienda mas cercana con existencias. Roles de sucursal
+# (distancia Haversine desde T1, coordenadas de inventario.sucursal):
+#   T1     = TIENDA-01-CENTRAL     sucursal "casa" de las pruebas
+#   TVACIA = TIENDA-09-FONTABELLA  la mas cercana a T1 (0.4 km); sin PROD-102
+#   TCERCA = TIENDA-05-OAKLAND     la segunda mas cercana a T1 (0.65 km)
+#   T2     = TIENDA-12-AMERICAS    otra tienda cercana a T1 (1.9 km)
+#   TLEJOS = TIENDA-17-XELA        Quetzaltenango, otro departamento (112.7 km)
+# PUT fija la cantidad fisica, asi que cada 'up' vuelve a este estado. Inventario
+# responde 409 si la nueva cantidad queda por debajo de lo ya reservado (por
+# ejemplo, un carrito con unidades apartadas): se avisa y se sigue con el resto.
+T1="TIENDA-01-CENTRAL"
+T2="TIENDA-12-AMERICAS"
+TVACIA="TIENDA-09-FONTABELLA"
+TCERCA="TIENDA-05-OAKLAND"
+TLEJOS="TIENDA-17-XELA"
+
+cargar_existencia() {
+  local sku="$1" ubicacion="$2" tipo="$3" cantidad="$4"
+  request PUT "$BASE_URL/api/inventario/existencias" \
+    "{\"sku\":\"$sku\",\"ubicacionId\":\"$ubicacion\",\"tipoUbicacion\":\"$tipo\",\"cantidadFisica\":$cantidad}"
+  case "$HTTP_CODE" in
+    2*) printf '  OK %s en %s = %s\n' "$sku" "$ubicacion" "$cantidad" ;;
+    409) printf '  AVISO 409 %s en %s: %s\n' "$sku" "$ubicacion" "$HTTP_BODY" ;;
+    *)
+      printf 'ERROR existencias %s %s en %s: %s\n' "$HTTP_CODE" "$sku" "$ubicacion" "$HTTP_BODY" >&2
+      exit 1
+      ;;
+  esac
+}
+
+printf 'Cargando productos con stock bajo (PROD-101..105)\n'
+# PROD-101: solo T1 y T2 tienen 2 unidades.
+for fila in "CD-01|CENTRO_DISTRIBUCION|0" "CD-CENTRAL|CENTRO_DISTRIBUCION|0" "$T1|TIENDA|2" "$T2|TIENDA|2"; do
+  IFS='|' read -r ubicacion tipo cantidad <<< "$fila"
+  cargar_existencia PROD-101 "$ubicacion" "$tipo" "$cantidad"
+done
+
+# PROD-102: agotado en T1 y en la tienda mas cercana (TVACIA); hay en TCERCA y TLEJOS.
+for fila in "CD-01|CENTRO_DISTRIBUCION|0" "CD-CENTRAL|CENTRO_DISTRIBUCION|0" "$T1|TIENDA|0" "$T2|TIENDA|0" \
+            "$TVACIA|TIENDA|0" "$TCERCA|TIENDA|2" "$TLEJOS|TIENDA|2"; do
+  IFS='|' read -r ubicacion tipo cantidad <<< "$fila"
+  cargar_existencia PROD-102 "$ubicacion" "$tipo" "$cantidad"
+done
+
+# PROD-103: la unica unidad esta en TLEJOS.
+for fila in "CD-01|CENTRO_DISTRIBUCION|0" "CD-CENTRAL|CENTRO_DISTRIBUCION|0" "$T1|TIENDA|0" "$T2|TIENDA|0" \
+            "$TLEJOS|TIENDA|1"; do
+  IFS='|' read -r ubicacion tipo cantidad <<< "$fila"
+  cargar_existencia PROD-103 "$ubicacion" "$tipo" "$cantidad"
+done
+
+# PROD-104: sin existencias en ninguna parte.
+for fila in "CD-01|CENTRO_DISTRIBUCION|0" "CD-CENTRAL|CENTRO_DISTRIBUCION|0" "$T1|TIENDA|0" "$T2|TIENDA|0"; do
+  IFS='|' read -r ubicacion tipo cantidad <<< "$fila"
+  cargar_existencia PROD-104 "$ubicacion" "$tipo" "$cantidad"
+done
+
+# PROD-105 (control): disponible en CD-CENTRAL, T1 y T2.
+for fila in "CD-CENTRAL|CENTRO_DISTRIBUCION|2" "$T1|TIENDA|2" "$T2|TIENDA|2"; do
+  IFS='|' read -r ubicacion tipo cantidad <<< "$fila"
+  cargar_existencia PROD-105 "$ubicacion" "$tipo" "$cantidad"
+done
+
+printf 'Seed de demo completado. Usuarios: %s y %d mas (contrasena %s) | SKUs: SKU-DEMO-001..003, PROD-001..008 y PROD-101..105\n' \
   "$EMAIL" "${#USUARIOS_DEMO[@]}" "$PASSWORD"

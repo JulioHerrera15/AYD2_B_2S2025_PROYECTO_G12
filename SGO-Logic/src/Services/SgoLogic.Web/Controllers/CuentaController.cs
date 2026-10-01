@@ -65,6 +65,49 @@ public class CuentaController : Controller
         return View(historial);
     }
 
+    /// <summary>Mis tarjetas: las tarjetas guardadas del cliente, con la opcion de eliminarlas.</summary>
+    [HttpGet]
+    public async Task<IActionResult> Tarjetas()
+    {
+        var userEmail = Request.Cookies["sgo_user_email"];
+        var jwt = Request.Cookies["sgo_jwt"];
+        if (string.IsNullOrWhiteSpace(userEmail) || string.IsNullOrWhiteSpace(jwt))
+        {
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Cuenta/Tarjetas" });
+        }
+
+        var userRole = Request.Cookies["sgo_user_role"] ?? "CLIENTE";
+        if (PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt))
+        {
+            return RedirectToAction("Index", "Estado");
+        }
+
+        ViewBag.UserEmail = userEmail;
+        return View(await _gateway.ListarTarjetasAsync());
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EliminarTarjeta(Guid id)
+    {
+        if (string.IsNullOrWhiteSpace(Request.Cookies["sgo_jwt"]))
+        {
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Cuenta/Tarjetas" });
+        }
+
+        var (exito, error) = await _gateway.EliminarTarjetaAsync(id);
+        if (exito)
+        {
+            TempData["Exito"] = "Tarjeta eliminada.";
+        }
+        else
+        {
+            TempData["Error"] = $"No se pudo eliminar la tarjeta: {error}";
+        }
+
+        return RedirectToAction(nameof(Tarjetas));
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Cancelar(string ordenId, int pagina = 1)
@@ -111,13 +154,14 @@ public class CuentaController : Controller
 
         // El cliente solo puede descargar facturas de sus propias ordenes.
         var userRole = Request.Cookies["sgo_user_role"] ?? "CLIENTE";
-        if (!PermisosHelper.EsPersonalAutorizado(userRole, userEmail, Request.Cookies["sgo_jwt"]))
+        var jwt = Request.Cookies["sgo_jwt"];
+        var orden = PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt)
+            ? null
+            : await _gateway.ObtenerEstadoOrdenAsync(ordenId);
+
+        if (!PermisosHelper.PuedeVerOrden(orden, userEmail, userRole, jwt))
         {
-            var orden = await _gateway.ObtenerEstadoOrdenAsync(ordenId);
-            if (orden is null || !string.Equals(orden.ClienteId, userEmail, StringComparison.OrdinalIgnoreCase))
-            {
-                return NotFound();
-            }
+            return NotFound();
         }
 
         var factura = await _gateway.ObtenerFacturaAsync(ordenId);

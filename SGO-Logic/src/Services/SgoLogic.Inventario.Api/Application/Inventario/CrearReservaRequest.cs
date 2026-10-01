@@ -8,12 +8,14 @@ public sealed record CrearReservaRequest(
     MetodoEntrega MetodoEntrega,
     string? UbicacionPreferidaId,
     int TtlReservaSegundos,
-    IReadOnlyList<LineaSolicitudReserva> Lineas)
+    IReadOnlyList<LineaSolicitudReserva> Lineas,
+    string? CarritoId = null)
 {
     public SolicitudReserva ASolicitud() => new(
         OrdenId,
         MetodoEntrega,
         UbicacionPreferidaId,
         TtlReservaSegundos,
-        Lineas ?? Array.Empty<LineaSolicitudReserva>());
+        Lineas ?? Array.Empty<LineaSolicitudReserva>(),
+        CarritoId);
 }

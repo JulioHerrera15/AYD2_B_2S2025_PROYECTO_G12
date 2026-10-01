@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using SgoLogic.Auth.Api.Application;
 using SgoLogic.Auth.Api.Infrastructure;
+using SgoLogic.Auth.Api.Infrastructure.Inventario;
 using SgoLogic.BuildingBlocks.Extensions;
 using StackExchange.Redis;
 
@@ -24,6 +25,15 @@ var redisConnection = builder.Configuration.GetConnectionString("Redis")
     ?? throw new InvalidOperationException("ConnectionStrings:Redis no esta configurado");
 builder.Services.AddSingleton<IConnectionMultiplexer>(
     ConnectionMultiplexer.Connect(redisConnection));
+builder.Services.AddSingleton<IAlmacenCarrito, RedisAlmacenCarrito>();
+
+// ── Inventario (retencion de stock del carrito, red interna) ─────────────────
+var inventarioUrl = builder.Configuration["Inventario:BaseUrl"] ?? "http://inventario-api:8080";
+builder.Services.AddHttpClient<IClienteInventarioCarrito, ClienteInventarioCarritoHttp>(http =>
+{
+    http.BaseAddress = new Uri(inventarioUrl);
+    http.Timeout = TimeSpan.FromSeconds(5);
+});
 
 // ── JWT ───────────────────────────────────────────────────────────────────────
 var jwtSecret = builder.Configuration["Auth:JwtSecret"]
