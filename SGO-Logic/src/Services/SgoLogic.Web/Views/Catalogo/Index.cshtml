@@ -3,6 +3,16 @@
     ViewData["Title"] = "Catálogo Comercial Omnicanal";
     var categoriaActual = ViewBag.Categoria as string ?? "TODOS";
     var busquedaActual = ViewBag.Busqueda as string ?? "";
+    var sucursales = ViewBag.Sucursales as IReadOnlyList<SgoLogic.Web.Services.SucursalModel>
+        ?? Array.Empty<SgoLogic.Web.Services.SucursalModel>();
+    var sucursalSeleccionada = ViewBag.SucursalSeleccionada as string ?? SgoLogic.Web.Controllers.CatalogoController.SucursalPorDefecto;
+    var centrosDistribucion = sucursales.Where(s => !s.EsTienda).ToList();
+    var tiendasPorDepartamento = sucursales
+        .Where(s => s.EsTienda)
+        .GroupBy(s => s.Departamento)
+        .OrderBy(g => g.Key == "Guatemala" ? 0 : 1)
+        .ThenBy(g => g.Key)
+        .ToList();
 }
 
 <div class="mb-8">
@@ -22,49 +32,32 @@
             <span class="material-symbols-outlined text-secondary text-[20px]">location_on</span>
             <div class="flex flex-col">
                 <span class="text-[10px] text-text-muted font-semibold uppercase tracking-wider">Sucursal Seleccionada</span>
-                <select id="sucursal-selector" class="text-xs font-bold text-primary bg-transparent border-none p-0 focus:ring-0 cursor-pointer" onchange="document.cookie = `sgo_sucursal=${encodeURIComponent(this.value)}; path=/; max-age=2592000`; actualizarDisponibilidadTienda(this.value)">
-                    <optgroup label="Centros de Distribución">
-                        <option value="CD-01">Centro de Distribución Central (CD-01)</option>
-                        <option value="CD-CENTRAL">Centro de Distribución Norte (CD-CENTRAL)</option>
-                    </optgroup>
-                    <optgroup label="Guatemala">
-                        <option value="TIENDA-01-CENTRAL" selected>MegaStore Central — Zona 10 (T01)</option>
-                        <option value="TIENDA-02-MIRAFLORES">MegaStore Miraflores — Zona 11 (T02)</option>
-                        <option value="TIENDA-03-PORTALES">MegaStore Portales — Zona 17 (T03)</option>
-                        <option value="TIENDA-04-PRADERA">MegaStore Pradera Concepción (T04)</option>
-                        <option value="TIENDA-05-OAKLAND">MegaStore Oakland Mall — Zona 10 (T05)</option>
-                        <option value="TIENDA-06-NARANJO">MegaStore Naranjo Mall — Mixco (T06)</option>
-                        <option value="TIENDA-07-CAYALA">MegaStore Paseo Cayalá — Zona 16 (T07)</option>
-                        <option value="TIENDA-08-ROOSEVELT">MegaStore Peri-Roosevelt — Zona 7 (T08)</option>
-                        <option value="TIENDA-09-FONTABELLA">MegaStore Plaza Fontabella — Zona 10 (T09)</option>
-                        <option value="TIENDA-10-METRONORTE">MegaStore Metronorte — Zona 17 (T10)</option>
-                        <option value="TIENDA-11-MAJADAS">MegaStore Parque Las Majadas — Zona 11 (T11)</option>
-                        <option value="TIENDA-12-AMERICAS">MegaStore Plaza Las Américas — Zona 13 (T12)</option>
-                        <option value="TIENDA-13-SANCRISTOBAL">MegaStore San Cristóbal — Mixco (T13)</option>
-                        <option value="TIENDA-14-VILLANUEVA">MegaStore Metrocentro — Villa Nueva (T14)</option>
-                        <option value="TIENDA-15-CARRETERA">MegaStore Pradera Express — Km 14 (T15)</option>
-                        <option value="TIENDA-16-CENTRALNORTE">MegaStore Centra Norte — Zona 18 (T16)</option>
-                    </optgroup>
-                    <optgroup label="El Salvador">
-                        <option value="TIENDA-17-XELA">MegaStore Multiplaza — San Salvador (T17)</option>
-                        <option value="TIENDA-18-INTERPLAZA">MegaStore Metrocentro — San Salvador (T18)</option>
-                        <option value="TIENDA-19-ANTIGUA">MegaStore Galerías Escalón — San Salvador (T19)</option>
-                        <option value="TIENDA-20-ESCUINTLA">MegaStore La Gran Vía — Santa Tecla (T20)</option>
-                        <option value="TIENDA-21-MAZATENANGO">MegaStore Plaza Mundo — Soyapango (T21)</option>
-                        <option value="TIENDA-22-COBAN">MegaStore Metrocentro — Santa Ana (T22)</option>
-                        <option value="TIENDA-23-HUEHUETENANGO">MegaStore Metrocentro — San Miguel (T23)</option>
-                        <option value="TIENDA-24-CHIMALTENANGO">MegaStore Plaza El Encuentro — Sonsonate (T24)</option>
-                    </optgroup>
-                    <optgroup label="Costa Rica">
-                        <option value="TIENDA-25-ZACAPA">MegaStore Multiplaza Escazú — San José (T25)</option>
-                        <option value="TIENDA-26-CHIQUIMULA">MegaStore Mall San Pedro — San José (T26)</option>
-                        <option value="TIENDA-27-PUERTOBARRIOS">MegaStore City Mall — Alajuela (T27)</option>
-                        <option value="TIENDA-28-PETEN">MegaStore Multiplaza del Este — Curridabat (T28)</option>
-                        <option value="TIENDA-29-RETALHULEU">MegaStore Paseo de las Flores — Heredia (T29)</option>
-                        <option value="TIENDA-30-COATEPEQUE">MegaStore Paseo Metrópoli — Cartago (T30)</option>
-                        <option value="TIENDA-31-JUTIAPA">MegaStore Plaza Liberia — Guanacaste (T31)</option>
-                        <option value="TIENDA-32-SALAMA">MegaStore Paseo del Mar — Puntarenas (T32)</option>
-                    </optgroup>
+                <select id="sucursal-selector" class="text-xs font-bold text-primary bg-transparent border-none p-0 focus:ring-0 cursor-pointer">
+                    @if (sucursales.Count == 0)
+                    {
+                        <option value="@sucursalSeleccionada" selected>@sucursalSeleccionada</option>
+                    }
+                    else
+                    {
+                        if (centrosDistribucion.Count > 0)
+                        {
+                            <optgroup label="Centros de Distribución">
+                                @foreach (var cd in centrosDistribucion)
+                                {
+                                    <option value="@cd.Id" selected="@(cd.Id == sucursalSeleccionada)">@cd.Nombre</option>
+                                }
+                            </optgroup>
+                        }
+                        foreach (var grupo in tiendasPorDepartamento)
+                        {
+                            <optgroup label="@grupo.Key">
+                                @foreach (var tienda in grupo)
+                                {
+                                    <option value="@tienda.Id" selected="@(tienda.Id == sucursalSeleccionada)">@tienda.Nombre</option>
+                                }
+                            </optgroup>
+                        }
+                    }
                 </select>
             </div>
         </div>
@@ -136,9 +129,15 @@
                             <span class="material-symbols-outlined text-[15px] text-secondary">inventory</span>
                             Stock en Sucursal:
                         </span>
-                        <span id="stock-badge-@prod.Sku" class="font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md" data-stock="loading">
+                        <span id="stock-badge-@prod.Sku" class="font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md text-right" data-stock="loading">
                             Consultando...
                         </span>
+                    </div>
+                    <div id="stock-cercana-@prod.Sku" class="hidden -mt-2 mb-4 text-right">
+                        <button type="button" class="btn-cambiar-sucursal inline-flex items-center gap-1 text-[11px] font-semibold text-secondary hover:underline" data-ubicacion="">
+                            <span class="material-symbols-outlined text-[14px]">swap_horiz</span>
+                            Cambiar a esa sucursal
+                        </button>
                     </div>
                 </div>
 
@@ -212,6 +211,28 @@
         return existencia.ubicacionId ?? existencia.UbicacionId ?? '';
     }
 
+    function guardarSucursal(ubicacionId) {
+        document.cookie = `sgo_sucursal=${encodeURIComponent(ubicacionId)}; path=/; max-age=2592000`;
+    }
+
+    function formatearKm(km) {
+        if (km === null || km === undefined) return null;
+        return Number(km).toLocaleString('es-GT', { maximumFractionDigits: 1 });
+    }
+
+    function habilitarAgregar(btn, qtyInput, maximo) {
+        if (!btn) return;
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        if (qtyInput && maximo) qtyInput.max = Math.min(10, maximo);
+    }
+
+    function deshabilitarAgregar(btn) {
+        if (!btn) return;
+        btn.disabled = true;
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+    }
+
     // Consultar stock en tiempo real desde inventario-api al cambiar de sucursal
     async function actualizarDisponibilidadTienda(ubicacionId) {
         const skus = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Select(m => m.Sku)));
@@ -219,60 +240,59 @@
 
         for (const sku of skus) {
             const el = document.getElementById(`stock-badge-${sku}`);
+            const contenedorCercana = document.getElementById(`stock-cercana-${sku}`);
+            const btnCambiar = contenedorCercana?.querySelector('.btn-cambiar-sucursal');
             const form = document.querySelector(`form[data-stock-form="${sku}"]`);
             const btn = form?.querySelector('button[type="submit"]');
             const qtyInput = form?.querySelector('input[name="cantidad"]');
             if (!el) continue;
+            contenedorCercana?.classList.add('hidden');
 
             try {
                 // Cache-busting: timestamp único por petición para evitar cache de navegador/gateway
                 const cacheBust = Date.now();
-                const res = await fetch(`/Catalogo/Stock?sku=${encodeURIComponent(sku)}&_=${cacheBust}`, {
+                const res = await fetch(`/Catalogo/Stock?sku=${encodeURIComponent(sku)}&ubicacionId=${encodeURIComponent(ubicacionId)}&_=${cacheBust}`, {
                     headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' }
                 });
                 if (res.ok) {
-                    let data = await res.json();
-                    data = normalizeKeys(data);
+                    const data = normalizeKeys(await res.json());
+                    const existencias = data.existencias ?? [];
+                    const cercana = data.cercana;
 
-                    const existencia = data.find(e => getUbicacionId(e) === ubicacionId);
+                    const existencia = existencias.find(e => getUbicacionId(e) === ubicacionId);
                     const disponible = getDisponible(existencia);
+                    const totalGlobal = existencias.reduce((acc, curr) => acc + Math.max(0, getDisponible(curr)), 0);
 
                     if (existencia && disponible > 0) {
                         el.textContent = `${disponible} en stock`;
-                        el.className = "font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md";
+                        el.className = "font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md text-right";
                         el.dataset.stock = 'available';
-                        if (btn) {
-                            btn.disabled = false;
-                            btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                            if (qtyInput) qtyInput.max = Math.min(10, disponible);
+                        habilitarAgregar(btn, qtyInput, disponible);
+                    } else if (cercana) {
+                        // Agotado en la sucursal elegida: se sugiere la tienda mas cercana
+                        // con stock. Agregar sigue habilitado: el carrito aparta en esa tienda.
+                        const km = formatearKm(cercana.distanciaKm);
+                        el.textContent = km
+                            ? `Agotado aquí - disponible en ${cercana.nombre} a ${km} km`
+                            : `Agotado aquí - disponible en ${cercana.nombre}`;
+                        el.className = "font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md text-right";
+                        el.dataset.stock = 'other';
+                        if (btnCambiar) {
+                            btnCambiar.dataset.ubicacion = cercana.ubicacionId;
+                            contenedorCercana.classList.remove('hidden');
                         }
-                    } else if (existencia && disponible <= 0) {
-                        el.textContent = "Agotado aquí";
-                        el.className = "font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md";
-                        el.dataset.stock = 'out';
-                        if (btn) {
-                            btn.disabled = true;
-                            btn.classList.add('opacity-50', 'cursor-not-allowed');
-                        }
+                        habilitarAgregar(btn, qtyInput, cercana.disponible);
+                    } else if (totalGlobal > 0) {
+                        // Ninguna tienda tiene, pero un centro de distribucion si.
+                        el.textContent = "Agotado aquí - disponible en centro de distribución";
+                        el.className = "font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md text-right";
+                        el.dataset.stock = 'cd';
+                        habilitarAgregar(btn, qtyInput, totalGlobal);
                     } else {
-                        const totalGlobal = data.reduce((acc, curr) => acc + getDisponible(curr), 0);
-                        if (totalGlobal > 0) {
-                            el.textContent = "En otra sucursal";
-                            el.className = "font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md";
-                            el.dataset.stock = 'other';
-                            if (btn) {
-                                btn.disabled = true;
-                                btn.classList.add('opacity-50', 'cursor-not-allowed');
-                            }
-                        } else {
-                            el.textContent = "Sin existencias";
-                            el.className = "font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md";
-                            el.dataset.stock = 'none';
-                            if (btn) {
-                                btn.disabled = true;
-                                btn.classList.add('opacity-50', 'cursor-not-allowed');
-                            }
-                        }
+                        el.textContent = "Sin existencias en ninguna sucursal";
+                        el.className = "font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md text-right";
+                        el.dataset.stock = 'none';
+                        deshabilitarAgregar(btn);
                     }
                 } else {
                     anyError = true;
@@ -314,9 +334,15 @@
         const chkAuto = document.getElementById("chk-auto-refresh");
 
         if (selector) {
+            // La sucursal elegida viaja en la cookie: el carrito la usa para apartar ahi.
+            if (!document.cookie.split('; ').some(c => c.startsWith('sgo_sucursal='))) {
+                guardarSucursal(selector.value);
+            }
+
             actualizarDisponibilidadTienda(selector.value);
 
             selector.addEventListener("change", function () {
+                guardarSucursal(this.value);
                 actualizarDisponibilidadTienda(this.value);
                 if (chkAuto?.checked) {
                     iniciarAutoRefresh(this.value);
@@ -324,9 +350,22 @@
             });
         }
 
+        document.querySelectorAll('.btn-cambiar-sucursal').forEach(boton => {
+            boton.addEventListener('click', function () {
+                const destino = this.dataset.ubicacion;
+                if (!destino || !selector) return;
+                selector.value = destino;
+                guardarSucursal(destino);
+                actualizarDisponibilidadTienda(destino);
+                if (chkAuto?.checked) {
+                    iniciarAutoRefresh(destino);
+                }
+            });
+        });
+
         if (btnRefrescar) {
             btnRefrescar.addEventListener("click", function () {
-                const ubicacionId = selector?.value || "TIENDA-01-CENTRAL";
+                const ubicacionId = selector?.value || "@sucursalSeleccionada";
                 this.disabled = true;
                 this.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Actualizando...</span>';
                 actualizarDisponibilidadTienda(ubicacionId).finally(() => {
@@ -338,7 +377,7 @@
 
         if (chkAuto) {
             chkAuto.addEventListener("change", function () {
-                const ubicacionId = selector?.value || "TIENDA-01-CENTRAL";
+                const ubicacionId = selector?.value || "@sucursalSeleccionada";
                 if (this.checked) {
                     iniciarAutoRefresh(ubicacionId);
                 } else {
@@ -372,6 +411,30 @@
                     badgeMobile.classList.remove('hidden');
                 }
             }
+        }
+
+        function mostrarErrorCarrito(mensaje) {
+            let toast = document.getElementById('cart-toast-error');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'cart-toast-error';
+                toast.className = 'fixed bottom-5 right-5 z-50 transition-all duration-300 max-w-sm';
+                document.body.appendChild(toast);
+            }
+
+            toast.innerHTML = `
+                <div class="bg-surface-white border border-rose-200 shadow-2xl rounded-2xl p-4 flex items-center gap-3 text-xs font-medium text-primary ambient-shadow">
+                    <div class="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center flex-shrink-0">
+                        <span class="material-symbols-outlined text-[20px]">inventory</span>
+                    </div>
+                    <div class="flex-1 text-rose-900"></div>
+                </div>
+            `;
+            toast.querySelector('.flex-1').textContent = mensaje;
+            toast.classList.remove('hidden');
+
+            if (window._toastErrorTimeout) clearTimeout(window._toastErrorTimeout);
+            window._toastErrorTimeout = setTimeout(() => toast.classList.add('hidden'), 6000);
         }
 
         function mostrarNotificacionCarrito(descripcion, total) {
@@ -427,8 +490,16 @@
                         body: formData
                     });
 
-                    if (res.ok) {
-                        const data = await res.json();
+                    const data = await res.json().catch(() => null);
+
+                    if (data && (!res.ok || data.exito === false)) {
+                        // Inventario no aparto el stock (409) o no respondio (503): el
+                        // carrito no cambio y se avisa sin salir del catalogo.
+                        mostrarErrorCarrito(data.mensaje || 'No se pudo agregar el producto.');
+                        btn.disabled = false;
+                        btn.innerHTML = originalHtml;
+                        actualizarDisponibilidadTienda(selector?.value || "@sucursalSeleccionada");
+                    } else if (res.ok && data) {
                         actualizarBadgeCarrito(data.totalItems);
                         mostrarNotificacionCarrito(data.descripcion || 'Producto', data.totalItems);
 

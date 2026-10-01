@@ -27,6 +27,12 @@ public sealed class InventarioDbContext : DbContext
     /// <summary>Ledger append-only de entradas y salidas fisicas (HU-016).</summary>
     public DbSet<MovimientoExistencia> Movimientos => Set<MovimientoExistencia>();
 
+    /// <summary>Catalogo de tiendas y centros de distribucion, con coordenadas.</summary>
+    public DbSet<Sucursal> Sucursales => Set<Sucursal>();
+
+    /// <summary>Retenciones de stock mientras el producto esta en el carrito.</summary>
+    public DbSet<ReservaCarrito> ReservasCarrito => Set<ReservaCarrito>();
+
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     public DbSet<MensajeProcesado> MensajesProcesados => Set<MensajeProcesado>();

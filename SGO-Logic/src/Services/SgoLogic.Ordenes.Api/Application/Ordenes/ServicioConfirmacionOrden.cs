@@ -108,7 +108,8 @@ public sealed class ServicioConfirmacionOrden
             solicitud.UbicacionSolicitadaId,
             receptorCui: receptorCui,
             direccionEntrega: solicitud.DireccionEntrega,
-            tokenMedioPago: requiereToken ? solicitud.TokenMedioPago : null);
+            tokenMedioPago: requiereToken ? solicitud.TokenMedioPago : null,
+            carritoId: solicitud.CarritoId);
 
         await _ordenes.AgregarAsync(orden, cancelacion);
 

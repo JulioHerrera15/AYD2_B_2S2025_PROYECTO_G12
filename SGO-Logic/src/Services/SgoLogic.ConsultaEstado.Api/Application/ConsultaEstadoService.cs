@@ -158,5 +158,8 @@ public sealed class ConsultaEstadoService : IConsultaEstadoService
             ActualizadaEn: v.ActualizadaEn,
             Incidencias: incidencias.Select(i => new IncidenciaDto(
                 i.Id, i.Estado, i.Descripcion, i.Resolucion, i.CreadaEn, i.ActualizadaEn))
-                .ToList());
+                .ToList(),
+            UbicacionOrigenId: v.UbicacionOrigenId,
+            SerieDocumentoFiscal: v.SerieDocumentoFiscal,
+            NumeroDocumentoFiscal: v.NumeroDocumentoFiscal);
 }

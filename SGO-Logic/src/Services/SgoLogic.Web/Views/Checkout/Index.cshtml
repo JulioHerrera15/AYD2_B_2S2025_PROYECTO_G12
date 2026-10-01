@@ -4,7 +4,29 @@
     var subtotal = Model.Items?.Sum(i => i.Subtotal) ?? 0m;
     var iva = Math.Round(subtotal * 0.12m / 1.12m, 2);
     var subtotalNeto = subtotal - iva;
+    var tiendas = (ViewBag.Sucursales as IReadOnlyList<SgoLogic.Web.Services.SucursalModel>
+        ?? Array.Empty<SgoLogic.Web.Services.SucursalModel>())
+        .Where(s => s.EsTienda)
+        .ToList();
+    var tarjetasGuardadas = ViewBag.Tarjetas as IReadOnlyList<SgoLogic.Web.Services.TarjetaGuardadaModel>
+        ?? Array.Empty<SgoLogic.Web.Services.TarjetaGuardadaModel>();
+    var autenticado = (bool)(ViewBag.Autenticado ?? false);
+    var hayTarjetas = autenticado && tarjetasGuardadas.Count > 0;
+    // Se preselecciona la tarjeta usada mas recientemente (las vencidas no se pueden elegir).
+    var tarjetaPreseleccionada = tarjetasGuardadas
+        .Where(t => !t.Vencida)
+        .OrderByDescending(t => t.UltimoUsoEn ?? DateTime.MinValue)
+        .ThenByDescending(t => t.CreadaEn)
+        .FirstOrDefault();
+    var sucursalSeleccionada = ViewBag.SucursalSeleccionada as string;
+    if (string.IsNullOrWhiteSpace(sucursalSeleccionada) || tiendas.All(t => t.Id != sucursalSeleccionada))
+    {
+        sucursalSeleccionada = tiendas.FirstOrDefault()?.Id ?? SgoLogic.Web.Controllers.CatalogoController.SucursalPorDefecto;
+    }
 }
+
+<!-- Logos de marca de tarjeta (Font Awesome, iconos fa-cc-*) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer" />
 
 <div class="max-w-4xl mx-auto">
     <!-- Breadcrumb & Header -->
@@ -99,6 +121,17 @@
                     </label>
                 </div>
 
+                <!-- Aviso de origen del pedido (simulacion de reserva en Inventario) -->
+                <div id="aviso-simulacion" class="hidden mb-4 p-3.5 rounded-2xl border text-xs font-medium flex items-start gap-2.5" role="status" aria-live="polite">
+                    <span id="aviso-simulacion-icono" class="material-symbols-outlined text-[18px]">info</span>
+                    <div class="flex-1">
+                        <div id="aviso-simulacion-texto"></div>
+                        <button type="button" id="btn-usar-sugerida" class="hidden mt-1.5 font-semibold text-secondary hover:underline" data-ubicacion="">
+                            Elegir esa tienda
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Domicilio Details Panel -->
                 <div id="panel-domicilio" class="flex flex-col gap-3 pt-2">
                     <div class="grid grid-cols-2 gap-3">
@@ -132,11 +165,20 @@
                 <!-- Tienda Details Panel -->
                 <div id="panel-tienda" class="hidden flex flex-col gap-3 pt-2">
                     <label class="block text-xs font-semibold text-on-surface-variant mb-1">Tienda donde recogerás tu pedido</label>
-                    <select name="ubicacionSolicitadaId" class="w-full px-3 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary">
-                        <option value="TIENDA-01-CENTRAL">MegaStore Central — Zona 10 (Abierto 8:00 - 20:00)</option>
-                        <option value="TIENDA-02-MIRAFLORES">MegaStore Miraflores — Zona 11 (Abierto 9:00 - 21:00)</option>
-                        <option value="TIENDA-03-PORTALES">MegaStore Portales — Zona 17 (Abierto 9:00 - 20:00)</option>
-                        <option value="TIENDA-04-PRADERA">MegaStore Pradera Concepción (Abierto 9:00 - 21:00)</option>
+                    <select name="ubicacionSolicitadaId" id="select-tienda" disabled class="w-full px-3 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary">
+                        @if (tiendas.Count == 0)
+                        {
+                            <option value="@sucursalSeleccionada" selected>@sucursalSeleccionada</option>
+                        }
+                        @foreach (var grupo in tiendas.GroupBy(t => t.Departamento).OrderBy(g => g.Key == "Guatemala" ? 0 : 1).ThenBy(g => g.Key))
+                        {
+                            <optgroup label="@grupo.Key">
+                                @foreach (var tienda in grupo)
+                                {
+                                    <option value="@tienda.Id" selected="@(tienda.Id == sucursalSeleccionada)">@tienda.Nombre</option>
+                                }
+                            </optgroup>
+                        }
                     </select>
                     <p class="text-xs text-text-muted mt-1">Te avisaremos por SMS y correo cuando tu pedido esté listo para recoger.</p>
                 </div>
@@ -176,8 +218,56 @@
 
                 <!-- Panel de datos de tarjeta — solo visible con TARJETA -->
                 <div id="panel-tarjeta" class="mt-4 pt-4 border-t border-border-subtle/50 flex flex-col gap-3">
+                    @if (hayTarjetas)
+                    {
+                        <!-- Tarjetas guardadas: solo marca, ultimos cuatro, vencimiento y titular -->
+                        <div id="tarjetas-guardadas" class="flex flex-col gap-2">
+                            <div class="text-xs font-semibold text-on-surface-variant">Usar tarjeta guardada</div>
+                            @foreach (var tarjeta in tarjetasGuardadas)
+                            {
+                                <div class="tarjeta-guardada flex items-start gap-2" data-id="@tarjeta.Id">
+                                    <label class="flex-1 flex items-center gap-3 p-3 rounded-2xl border border-border-subtle bg-surface-container-low/30 transition-colors @(tarjeta.Vencida ? "opacity-50 cursor-not-allowed" : "cursor-pointer hover:bg-surface-container-low")">
+                                        <input type="radio" name="opcion-tarjeta" value="@tarjeta.Id"
+                                               class="radio-tarjeta-guardada text-primary focus:ring-primary h-4 w-4"
+                                               data-marca="@tarjeta.Marca" data-ultimos="@tarjeta.Ultimos4"
+                                               disabled="@tarjeta.Vencida"
+                                               checked="@(tarjeta.Id == tarjetaPreseleccionada?.Id)" />
+                                        <i class="@tarjeta.IconoMarca text-[28px] text-primary" aria-hidden="true"></i>
+                                        <span class="sr-only">@tarjeta.Marca</span>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="font-mono text-sm font-semibold text-primary tracking-wider">@tarjeta.Enmascarado</div>
+                                            <div class="text-[11px] text-text-muted truncate">@("Vence " + tarjeta.VenceTexto + (string.IsNullOrWhiteSpace(tarjeta.Titular) ? "" : " - " + tarjeta.Titular))</div>
+                                        </div>
+                                        @if (tarjeta.Vencida)
+                                        {
+                                            <span class="text-[10px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded">Vencida</span>
+                                        }
+                                    </label>
+                                    <button type="button" class="btn-eliminar-tarjeta mt-3 text-[11px] font-medium text-error hover:underline"
+                                            data-id="@tarjeta.Id" data-ultimos="@tarjeta.Ultimos4">
+                                        Eliminar
+                                    </button>
+                                </div>
+                            }
+
+                            <!-- Solo el CVV: el resto ya lo conoce PayKlik por la referencia guardada -->
+                            <div id="cvv-guardada-panel" class="hidden">
+                                <label for="cvv-guardada" class="block text-xs font-semibold text-on-surface-variant mb-1">Código de seguridad</label>
+                                <input id="cvv-guardada" type="password" inputmode="numeric" maxlength="3"
+                                       placeholder="3 dígitos" autocomplete="cc-csc"
+                                       oninput="this.value = this.value.replace(/\D/g, ''); actualizarBotonConfirmar();"
+                                       class="w-40 px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary font-mono" />
+                            </div>
+
+                            <button type="button" id="btn-agregar-tarjeta" onclick="abrirNuevaTarjeta()"
+                                    class="self-start text-xs font-semibold text-secondary hover:underline">
+                                + Agregar tarjeta
+                            </button>
+                        </div>
+                    }
+
                     <!-- Paso 1: capturar y validar la tarjeta -->
-                    <div id="tarjeta-captura" class="flex flex-col gap-3">
+                    <div id="tarjeta-captura" class="@(tarjetaPreseleccionada is not null && hayTarjetas ? "hidden " : "")flex flex-col gap-3">
                         <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             <div class="sm:col-span-2">
                                 <div class="flex items-center justify-between mb-1">
@@ -204,6 +294,28 @@
                             </div>
                         </div>
 
+                        @if (autenticado)
+                        {
+                            <div class="flex flex-col gap-2">
+                                <label class="flex items-center gap-2 text-xs text-on-surface-variant cursor-pointer">
+                                    <input type="checkbox" id="chk-guardar-tarjeta" checked onchange="document.getElementById('titular-panel').classList.toggle('hidden', !this.checked)"
+                                           class="rounded text-primary focus:ring-primary h-4 w-4" />
+                                    Guardar esta tarjeta para futuras compras
+                                </label>
+                                <div id="titular-panel">
+                                    <label for="titular-input" class="block text-xs font-semibold text-on-surface-variant mb-1">Nombre del titular</label>
+                                    <input id="titular-input" type="text" maxlength="120" autocomplete="cc-name" value="@ViewBag.UserName"
+                                           class="w-full sm:w-2/3 px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary" />
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <p class="text-[11px] text-text-muted">
+                                <a href="/Auth/Login?returnUrl=/Checkout" class="font-semibold text-secondary hover:underline">Inicia sesión</a> para guardar tus tarjetas.
+                            </p>
+                        }
+
                         <button type="button" id="btn-validar" onclick="validarTarjeta()"
                                 class="w-full sm:w-auto self-start bg-surface-container-low text-primary border border-border-subtle px-5 py-2.5 rounded-xl text-sm font-semibold hover:bg-surface-variant active:scale-[0.98] transition-all flex items-center justify-center gap-2">
                             <span class="material-symbols-outlined text-[18px]">verified</span>
@@ -227,6 +339,7 @@
 
                     <!-- Mensajes de validación / error -->
                     <div id="tokenizacion-status" class="hidden text-xs font-semibold" role="status" aria-live="polite"></div>
+                    <div id="aviso-guardar-tarjeta" class="hidden text-[11px] text-text-muted" role="status" aria-live="polite"></div>
 
                     <!-- Campo oculto que recibirá el token de PayKlik -->
                     <input type="hidden" id="token-medio-pago" name="tokenMedioPago" />
@@ -332,12 +445,131 @@
     // { token, marca, ultimosCuatro, venceLocalMs } o null si no hay tarjeta validada.
     let tarjetaValidada = null;
 
+    // Tarjetas guardadas: 'guardada' paga con una tarjeta de la lista (solo pide el
+    // CVV y el token lo emite PayKlik via Pagos); 'nueva' es el formulario de siempre.
+    const USUARIO_AUTENTICADO = @(autenticado ? "true" : "false");
+    const INICIA_CON_GUARDADA = @(hayTarjetas && tarjetaPreseleccionada is not null ? "true" : "false");
+    let modoTarjeta = INICIA_CON_GUARDADA ? 'guardada' : 'nueva';
+
+    function tokenAntiforgery() {
+        return document.querySelector('#checkout-form input[name="__RequestVerificationToken"]')?.value ?? '';
+    }
+
+    // Marca por prefijo: Visa 4; Mastercard 51-55 o 2221-2720; Amex 34 o 37.
+    function detectarMarca(digitos) {
+        if (digitos.startsWith('4')) return 'VISA';
+        const dos = parseInt(digitos.substring(0, 2), 10);
+        if (dos === 34 || dos === 37) return 'AMEX';
+        if (dos >= 51 && dos <= 55) return 'MASTERCARD';
+        const cuatro = parseInt(digitos.substring(0, 4), 10);
+        if (digitos.length >= 4 && cuatro >= 2221 && cuatro <= 2720) return 'MASTERCARD';
+        return null;
+    }
+
+    const ICONOS_MARCA = {
+        VISA: 'fa-brands fa-cc-visa',
+        MASTERCARD: 'fa-brands fa-cc-mastercard',
+        AMEX: 'fa-brands fa-cc-amex'
+    };
+
+    function largoCvv(marca) {
+        return marca === 'AMEX' ? 4 : 3;
+    }
+
+    function ajustarCvv(input, marca) {
+        const largo = largoCvv(marca);
+        input.maxLength = largo;
+        input.placeholder = `${largo} dígitos`;
+        if (input.value.length > largo) input.value = input.value.substring(0, largo);
+    }
+
+    function radioGuardadaSeleccionado() {
+        return document.querySelector('.radio-tarjeta-guardada:checked');
+    }
+
+    // Suelta el token actual sin tocar que panel se muestra.
+    function limpiarToken() {
+        tarjetaValidada = null;
+        document.getElementById('token-medio-pago').value = '';
+    }
+
+    function seleccionarTarjetaGuardada(radio) {
+        modoTarjeta = 'guardada';
+        limpiarToken();
+        ocultarEstado();
+        document.getElementById('tarjeta-captura').classList.add('hidden');
+        document.getElementById('tarjeta-validada').classList.add('hidden');
+
+        const cvv = document.getElementById('cvv-guardada');
+        cvv.value = '';
+        ajustarCvv(cvv, radio.dataset.marca);
+        document.getElementById('cvv-guardada-panel').classList.remove('hidden');
+        actualizarBotonConfirmar();
+    }
+
+    function abrirNuevaTarjeta() {
+        modoTarjeta = 'nueva';
+        limpiarToken();
+        ocultarEstado();
+        document.querySelectorAll('.radio-tarjeta-guardada').forEach(r => r.checked = false);
+        document.getElementById('cvv-guardada-panel')?.classList.add('hidden');
+        mostrarCaptura();
+        actualizarBotonConfirmar();
+        document.getElementById('pan-input').focus();
+    }
+
+    document.querySelectorAll('.radio-tarjeta-guardada').forEach(radio => {
+        radio.addEventListener('change', function () {
+            if (this.checked) seleccionarTarjetaGuardada(this);
+        });
+    });
+
+    function quitarTarjetaDeLaLista(id) {
+        document.querySelector(`.tarjeta-guardada[data-id="${id}"]`)?.remove();
+        if (modoTarjeta === 'guardada' && !radioGuardadaSeleccionado()) {
+            const siguiente = document.querySelector('.radio-tarjeta-guardada:not(:disabled)');
+            if (siguiente) {
+                siguiente.checked = true;
+                seleccionarTarjetaGuardada(siguiente);
+            } else {
+                abrirNuevaTarjeta();
+            }
+        }
+    }
+
+    document.querySelectorAll('.btn-eliminar-tarjeta').forEach(boton => {
+        boton.addEventListener('click', async function () {
+            if (!confirm(`¿Eliminar la tarjeta terminada en ${this.dataset.ultimos}?`)) return;
+
+            const datos = new URLSearchParams({ id: this.dataset.id });
+            try {
+                const res = await fetch('/Checkout/EliminarTarjeta', {
+                    method: 'POST',
+                    headers: { 'RequestVerificationToken': tokenAntiforgery() },
+                    body: datos
+                });
+                if (res.ok) {
+                    quitarTarjetaDeLaLista(this.dataset.id);
+                } else {
+                    mostrarEstado('error', 'No se pudo eliminar la tarjeta. Intenta de nuevo.');
+                }
+            } catch {
+                mostrarEstado('error', 'No se pudo eliminar la tarjeta. Intenta de nuevo.');
+            }
+        });
+    });
+
     // ── Toggle método de entrega ──────────────────────────────────────────────
     function toggleEntrega(valor) {
         const panelDomicilio = document.getElementById('panel-domicilio');
         const panelTienda    = document.getElementById('panel-tienda');
         const labelDomicilio = document.getElementById('label-domicilio');
         const labelTienda    = document.getElementById('label-tienda');
+
+        // Con DOMICILIO el select de tienda queda deshabilitado y no se envia: asi
+        // Inventario prioriza el centro de distribucion en lugar de la tienda.
+        document.getElementById('select-tienda').disabled = valor !== 'RECOGIDA_TIENDA';
+        simularOrigen();
 
         if (valor === 'RECOGIDA_TIENDA') {
             panelDomicilio.classList.add('hidden');
@@ -374,19 +606,16 @@
         let formatted = val.match(/.{1,4}/g)?.join(' ') || val;
         input.value = formatted;
 
+        // Marca detectada mientras se escribe: icono, nombre y largo del CVV.
         const badge = document.getElementById('card-brand-badge');
-        const marcas = {
-            '4': ['VISA', 'bg-blue-100 text-blue-800'],
-            '5': ['MASTERCARD', 'bg-amber-100 text-amber-800'],
-            '3': ['AMEX', 'bg-teal-100 text-teal-800']
-        };
-        const marca = marcas[val.charAt(0)];
+        const marca = detectarMarca(val);
         if (marca) {
-            badge.textContent = marca[0];
-            badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded ' + marca[1];
+            badge.innerHTML = `<i class="${ICONOS_MARCA[marca]} text-[18px] align-middle" aria-hidden="true"></i> <span class="align-middle">${marca}</span>`;
+            badge.className = 'text-[11px] font-bold px-2 py-0.5 rounded bg-surface-container-low text-primary inline-flex items-center gap-1';
         } else {
             badge.className = 'hidden';
         }
+        ajustarCvv(document.getElementById('cvv-input'), marca);
     }
 
     function formatearExp(input) {
@@ -430,13 +659,24 @@
         return tarjetaValidada !== null && Date.now() < tarjetaValidada.venceLocalMs - MARGEN_VENCIMIENTO_MS;
     }
 
+    function cvvGuardadaCompleto() {
+        const radio = radioGuardadaSeleccionado();
+        const cvv = document.getElementById('cvv-guardada')?.value ?? '';
+        return radio !== null && new RegExp(`^\\d{${largoCvv(radio.dataset.marca)}}$`).test(cvv);
+    }
+
     function actualizarBotonConfirmar() {
         const btn = document.getElementById('btn-confirmar');
         const ayuda = document.getElementById('confirmar-ayuda');
         const conTarjeta = medioPagoSeleccionado() === 'TARJETA';
-        const habilitado = !conTarjeta || tokenVigente();
+        const habilitado = !conTarjeta
+            || tokenVigente()
+            || (modoTarjeta === 'guardada' && cvvGuardadaCompleto());
 
         btn.disabled = !habilitado;
+        ayuda.textContent = modoTarjeta === 'guardada'
+            ? 'Escribe el código de seguridad de tu tarjeta para continuar.'
+            : 'Valida tu tarjeta para continuar.';
         ayuda.classList.toggle('hidden', habilitado);
     }
 
@@ -445,11 +685,16 @@
         document.getElementById('tarjeta-validada').classList.add('hidden');
     }
 
-    // Descarta el token actual y vuelve al formulario de tarjeta.
+    // Descarta el token actual. Con tarjeta nueva vuelve al formulario; con tarjeta
+    // guardada solo pide otra vez el CVV.
     function descartarTarjetaValidada() {
-        tarjetaValidada = null;
-        document.getElementById('token-medio-pago').value = '';
-        mostrarCaptura();
+        limpiarToken();
+        if (modoTarjeta === 'guardada') {
+            const cvv = document.getElementById('cvv-guardada');
+            if (cvv) cvv.value = '';
+        } else {
+            mostrarCaptura();
+        }
         actualizarBotonConfirmar();
     }
 
@@ -505,10 +750,11 @@
         try {
             let res;
             try {
+                const guardar = USUARIO_AUTENTICADO && document.getElementById('chk-guardar-tarjeta')?.checked === true;
                 res = await fetch(URL_TOKENIZACION, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ numeroTarjeta: pan, cvv, mesExpiracion, anioExpiracion }),
+                    body: JSON.stringify({ numeroTarjeta: pan, cvv, mesExpiracion, anioExpiracion, guardar }),
                     signal: cancelador.signal
                 });
             } catch {
@@ -551,6 +797,12 @@
             document.getElementById('tarjeta-validada').classList.remove('hidden');
             ocultarEstado();
             actualizarBotonConfirmar();
+
+            // PayKlik la guardo en su boveda: se registra en la cuenta antes de pagar.
+            // Si falla, el pago sigue igual con el token ya emitido.
+            if (respuesta.referenciaTarjeta) {
+                await guardarTarjeta(respuesta);
+            }
         } catch (err) {
             console.error('Error validando la tarjeta:', err);
             mostrarEstado('error', 'No pudimos comunicarnos con el procesador de pagos. Tu carrito sigue guardado: intenta validar la tarjeta de nuevo en unos momentos.');
@@ -564,8 +816,81 @@
         }
     }
 
+    async function guardarTarjeta(respuesta) {
+        const aviso = document.getElementById('aviso-guardar-tarjeta');
+        const datos = new URLSearchParams({
+            referenciaTarjeta: respuesta.referenciaTarjeta,
+            marca: respuesta.marca,
+            ultimos4: respuesta.ultimosCuatro,
+            mesExp: respuesta.mesExpiracion,
+            anioExp: respuesta.anioExpiracion,
+            titular: document.getElementById('titular-input')?.value ?? ''
+        });
+
+        try {
+            const res = await fetch('/Checkout/GuardarTarjeta', {
+                method: 'POST',
+                headers: { 'RequestVerificationToken': tokenAntiforgery() },
+                body: datos
+            });
+            aviso.textContent = res.ok
+                ? 'Guardamos tu tarjeta para tus próximas compras.'
+                : 'No pudimos guardar tu tarjeta; tu pago continúa normalmente.';
+        } catch {
+            aviso.textContent = 'No pudimos guardar tu tarjeta; tu pago continúa normalmente.';
+        }
+        aviso.classList.remove('hidden');
+    }
+
+    // Tarjeta guardada: pide a Pagos un token de un solo uso con el CVV escrito y lo
+    // deja en el mismo lugar que la tokenizacion directa (mismo timer de vencimiento).
+    async function obtenerTokenTarjetaGuardada() {
+        const radio = radioGuardadaSeleccionado();
+        const cvvInput = document.getElementById('cvv-guardada');
+        if (!radio || !cvvGuardadaCompleto()) {
+            mostrarEstado('error', `Escribe los ${radio ? largoCvv(radio.dataset.marca) : 3} dígitos del código de seguridad.`);
+            return false;
+        }
+
+        mostrarEstado('info', 'Validando tu tarjeta con el procesador de pagos…');
+        const datos = new URLSearchParams({ id: radio.value, cvv: cvvInput.value });
+        cvvInput.value = '';
+
+        let res;
+        try {
+            res = await fetch('/Checkout/TokenTarjetaGuardada', {
+                method: 'POST',
+                headers: { 'RequestVerificationToken': tokenAntiforgery(), 'Accept': 'application/json' },
+                body: datos
+            });
+        } catch {
+            mostrarEstado('error', 'No pudimos comunicarnos con el procesador de pagos. Intenta de nuevo en unos momentos.');
+            actualizarBotonConfirmar();
+            return false;
+        }
+
+        const cuerpo = await res.json().catch(() => ({}));
+        if (!res.ok) {
+            mostrarEstado('error', cuerpo.mensaje || 'No se pudo usar la tarjeta guardada.');
+            // 410: PayKlik ya no la reconoce y Pagos la desactivo.
+            if (res.status === 410) quitarTarjetaDeLaLista(radio.value);
+            actualizarBotonConfirmar();
+            return false;
+        }
+
+        tarjetaValidada = {
+            token: cuerpo.token,
+            marca: cuerpo.marca,
+            ultimosCuatro: cuerpo.ultimosCuatro,
+            venceLocalMs: Date.now() + (cuerpo.vigenciaSegundos ?? 900) * 1000
+        };
+        document.getElementById('token-medio-pago').value = cuerpo.token;
+        ocultarEstado();
+        return true;
+    }
+
     // ── Paso 2: confirmar el pedido con el token ya emitido ───────────────────
-    function confirmarPedido() {
+    async function confirmarPedido() {
         const form = document.getElementById('checkout-form');
 
         if (!document.getElementById('check-privacidad').checked) {
@@ -574,6 +899,13 @@
         }
 
         if (medioPagoSeleccionado() === 'TARJETA') {
+            if (modoTarjeta === 'guardada' && !tokenVigente()) {
+                const btnConfirmar = document.getElementById('btn-confirmar');
+                btnConfirmar.disabled = true;
+                const obtenido = await obtenerTokenTarjetaGuardada();
+                if (!obtenido) return;
+            }
+
             if (!tokenVigente()) {
                 descartarTarjetaValidada();
                 mostrarEstado('aviso', 'La validación de tu tarjeta expiró por seguridad. Ingresa los datos y valídala de nuevo.');
@@ -590,5 +922,88 @@
         form.submit();
     }
 
+    // ── Aviso de origen: simula la reserva sin reservar ───────────────────────
+    function metodoEntregaSeleccionado() {
+        return document.querySelector('input[name="metodoEntrega"]:checked')?.value ?? 'DOMICILIO';
+    }
+
+    function mostrarAvisoSimulacion(tipo, texto, sugerida) {
+        const aviso = document.getElementById('aviso-simulacion');
+        const icono = document.getElementById('aviso-simulacion-icono');
+        const botonSugerida = document.getElementById('btn-usar-sugerida');
+        const estilos = {
+            aviso: ['bg-amber-50', 'border-amber-200/70', 'text-amber-950', 'local_shipping'],
+            error: ['bg-rose-50', 'border-rose-200/70', 'text-rose-950', 'error']
+        };
+        const [fondo, borde, color, simbolo] = estilos[tipo] ?? estilos.aviso;
+
+        aviso.className = `mb-4 p-3.5 rounded-2xl border text-xs font-medium flex items-start gap-2.5 ${fondo} ${borde} ${color}`;
+        icono.textContent = simbolo;
+        document.getElementById('aviso-simulacion-texto').textContent = texto;
+
+        if (sugerida) {
+            botonSugerida.dataset.ubicacion = sugerida;
+            botonSugerida.classList.remove('hidden');
+        } else {
+            botonSugerida.classList.add('hidden');
+        }
+    }
+
+    function ocultarAvisoSimulacion() {
+        document.getElementById('aviso-simulacion').className = 'hidden';
+    }
+
+    let simulacionEnCurso = 0;
+
+    async function simularOrigen() {
+        const metodo = metodoEntregaSeleccionado();
+        const tienda = document.getElementById('select-tienda').value;
+        const turno = ++simulacionEnCurso;
+
+        const parametros = new URLSearchParams({ metodoEntrega: metodo, _: Date.now() });
+        if (metodo === 'RECOGIDA_TIENDA' && tienda) parametros.set('ubicacionSolicitadaId', tienda);
+
+        try {
+            const res = await fetch(`/Checkout/Simular?${parametros}`, { headers: { 'Accept': 'application/json' } });
+            if (turno !== simulacionEnCurso) return;
+            if (!res.ok || res.status === 204) {
+                ocultarAvisoSimulacion();
+                return;
+            }
+
+            const sim = await res.json();
+
+            if (!sim.ubicacionId) {
+                mostrarAvisoSimulacion('error', sim.motivo || 'No hay unidades suficientes para todo tu pedido en una misma ubicación.');
+            } else if (metodo === 'DOMICILIO' && sim.esOtraSucursal) {
+                mostrarAvisoSimulacion('aviso',
+                    `Tu pedido se enviará desde la tienda ${sim.nombreUbicacion}, no desde tu sucursal ni desde el centro de distribución. Puede tardar más en llegar.`);
+            } else if (metodo === 'RECOGIDA_TIENDA' && !sim.factible) {
+                mostrarAvisoSimulacion('aviso',
+                    `Tu sucursal no tiene todos los productos. ${sim.nombreUbicacion} sí los tiene para que los recojas ahí.`,
+                    sim.ubicacionId);
+            } else {
+                ocultarAvisoSimulacion();
+            }
+        } catch {
+            if (turno === simulacionEnCurso) ocultarAvisoSimulacion();
+        }
+    }
+
+    document.getElementById('select-tienda').addEventListener('change', simularOrigen);
+
+    document.getElementById('btn-usar-sugerida').addEventListener('click', function () {
+        const select = document.getElementById('select-tienda');
+        const destino = this.dataset.ubicacion;
+        if (!destino || ![...select.options].some(o => o.value === destino)) return;
+        select.value = destino;
+        simularOrigen();
+    });
+
+    // Tarjeta guardada preseleccionada (la de uso mas reciente): solo falta el CVV.
+    const preseleccionada = radioGuardadaSeleccionado();
+    if (preseleccionada) seleccionarTarjetaGuardada(preseleccionada);
+
     actualizarBotonConfirmar();
+    simularOrigen();
 </script>

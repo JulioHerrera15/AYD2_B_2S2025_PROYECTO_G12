@@ -29,6 +29,11 @@ public sealed record FaltanteLinea(string Sku, int Solicitado, int Disponible);
 /// prefiere CENTRO_DISTRIBUCION); (3) la de menor disponible sobrante, para no
 /// fragmentar el stock grande; (4) el identificador de ubicacion, como desempate
 /// estable.
+///
+/// <paramref name="disponibleAdicional" /> suma, por ubicacion y SKU, unidades que
+/// ya estan reservadas pero que quien pide puede usar: las retenciones activas de
+/// su propio carrito. Sin eso, el carrito competiria contra si mismo al confirmar
+/// la orden o al simularla.
 /// </summary>
 public static class SelectorUbicacionReserva
 {
@@ -36,7 +41,8 @@ public static class SelectorUbicacionReserva
         IReadOnlyCollection<LineaReservada> lineas,
         IReadOnlyCollection<Existencia> existencias,
         string? ubicacionPreferidaId,
-        MetodoEntrega metodoEntrega)
+        MetodoEntrega metodoEntrega,
+        IReadOnlyDictionary<(string UbicacionId, string Sku), int>? disponibleAdicional = null)
     {
         var pedidoPorSku = lineas
             .GroupBy(linea => linea.Sku)
@@ -53,20 +59,24 @@ public static class SelectorUbicacionReserva
             var porSku = grupo.ToDictionary(existencia => existencia.Sku);
 
             var cubreTodo = pedidoPorSku.All(par =>
-                porSku.TryGetValue(par.Key, out var existencia) && existencia.Disponible >= par.Value);
+                porSku.TryGetValue(par.Key, out var existencia)
+                && DisponibleEfectivo(existencia, disponibleAdicional) >= par.Value);
 
             if (!cubreTodo)
             {
                 continue;
             }
 
-            var sobrante = pedidoPorSku.Sum(par => porSku[par.Key].Disponible - par.Value);
+            var sobrante = pedidoPorSku.Sum(par => DisponibleEfectivo(porSku[par.Key], disponibleAdicional) - par.Value);
             elegibles.Add((grupo.Key, porSku[pedidoPorSku.Keys.First()].TipoUbicacion, sobrante));
         }
 
         if (elegibles.Count == 0)
         {
-            return new SeleccionUbicacion(null, DeterminarMotivo(pedidoPorSku, existencias), Faltantes(pedidoPorSku, existencias));
+            return new SeleccionUbicacion(
+                null,
+                DeterminarMotivo(pedidoPorSku, existencias),
+                Faltantes(pedidoPorSku, existencias, disponibleAdicional));
         }
 
         var tipoPreferido = metodoEntrega == MetodoEntrega.RECOGIDA_TIENDA
@@ -95,13 +105,26 @@ public static class SelectorUbicacionReserva
             : MotivoRechazoReserva.STOCK_INSUFICIENTE;
     }
 
+    /// <summary>
+    /// Disponible de la existencia mas lo que <paramref name="disponibleAdicional" />
+    /// devuelve para su ubicacion y SKU (cero si no hay entrada).
+    /// </summary>
+    public static int DisponibleEfectivo(
+        Existencia existencia,
+        IReadOnlyDictionary<(string UbicacionId, string Sku), int>? disponibleAdicional) =>
+        existencia.Disponible
+        + (disponibleAdicional?.GetValueOrDefault((existencia.UbicacionId, existencia.Sku)) ?? 0);
+
     private static IReadOnlyList<FaltanteLinea> Faltantes(
         IReadOnlyDictionary<string, int> pedidoPorSku,
-        IReadOnlyCollection<Existencia> existencias)
+        IReadOnlyCollection<Existencia> existencias,
+        IReadOnlyDictionary<(string UbicacionId, string Sku), int>? disponibleAdicional)
     {
         var disponiblePorSku = existencias
             .GroupBy(existencia => existencia.Sku)
-            .ToDictionary(grupo => grupo.Key, grupo => grupo.Max(existencia => existencia.Disponible));
+            .ToDictionary(
+                grupo => grupo.Key,
+                grupo => grupo.Max(existencia => DisponibleEfectivo(existencia, disponibleAdicional)));
 
         return pedidoPorSku
             .Select(par => new FaltanteLinea(

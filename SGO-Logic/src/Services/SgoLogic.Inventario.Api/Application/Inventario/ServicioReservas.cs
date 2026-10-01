@@ -21,6 +21,12 @@ namespace SgoLogic.Inventario.Api.Application.Inventario;
 ///
 /// Idempotencia: si la orden ya tiene reserva, se devuelve esa sin tocar nada ni
 /// re-emitir.
+///
+/// Adopcion del carrito: si la solicitud trae CarritoId, las retenciones ACTIVA de
+/// ese carrito cuentan como disponibles al elegir ubicacion y, si la reserva sale,
+/// se liberan (ADOPTADA) en la misma unidad de trabajo justo antes de reservar.
+/// Las unidades pasan de la retencion a la reserva sin contarse dos veces. Si la
+/// reserva se rechaza, las retenciones quedan intactas.
 /// </summary>
 public sealed class ServicioReservas
 {
@@ -28,6 +34,7 @@ public sealed class ServicioReservas
     private readonly IRepositorioReservas _reservas;
     private readonly IOutboxWriter _outbox;
     private readonly IGeneradorCorrelativoReserva _generadorCorrelativo;
+    private readonly IRepositorioReservasCarrito _retencionesCarrito;
     private readonly InventarioOptions _opciones;
 
     public ServicioReservas(
@@ -35,12 +42,14 @@ public sealed class ServicioReservas
         IRepositorioReservas reservas,
         IOutboxWriter outbox,
         IGeneradorCorrelativoReserva generadorCorrelativo,
+        IRepositorioReservasCarrito retencionesCarrito,
         IOptions<InventarioOptions> opciones)
     {
         _existencias = existencias;
         _reservas = reservas;
         _outbox = outbox;
         _generadorCorrelativo = generadorCorrelativo;
+        _retencionesCarrito = retencionesCarrito;
         _opciones = opciones.Value;
     }
 
@@ -64,19 +73,36 @@ public sealed class ServicioReservas
         }
 
         var ttlEfectivo = _opciones.TtlEfectivo(solicitud.TtlReservaSegundos);
-        var skus = pedidoPorSku.Keys.ToArray();
+
+        // Lo que el carrito de esta orden ya tiene retenido le pertenece: cuenta como
+        // disponible para ella aunque la existencia lo tenga en reservada.
+        var retenciones = await RetencionesDelCarritoAsync(solicitud.CarritoId, cancelacion);
+        var disponibleDelCarrito = retenciones
+            .Where(retencion => retencion.EstaActiva)
+            .GroupBy(retencion => (retencion.UbicacionId, retencion.Sku))
+            .ToDictionary(grupo => grupo.Key, grupo => grupo.Sum(retencion => retencion.Cantidad));
+
+        var skus = pedidoPorSku.Keys
+            .Union(retenciones.Select(retencion => retencion.Sku), StringComparer.Ordinal)
+            .ToArray();
         var existencias = await _existencias.ListarPorSkusAsync(skus, cancelacion);
 
         var seleccion = SelectorUbicacionReserva.Seleccionar(
             pedidoPorSku.Select(par => new LineaReservada(par.Key, par.Value)).ToList(),
             existencias,
             solicitud.UbicacionPreferidaId,
-            solicitud.MetodoEntrega);
+            solicitud.MetodoEntrega,
+            disponibleDelCarrito);
 
         if (seleccion.UbicacionId is null)
         {
             return Rechazar(solicitud.OrdenId, seleccion);
         }
+
+        // Primero se sueltan las retenciones del carrito y despues se reserva la orden,
+        // todo sobre las mismas existencias en memoria: el SaveChanges de quien llama
+        // lo confirma en una sola transaccion.
+        AdoptarRetenciones(retenciones, existencias);
 
         var existenciasElegidas = existencias
             .Where(existencia => existencia.UbicacionId == seleccion.UbicacionId)
@@ -171,6 +197,41 @@ public sealed class ServicioReservas
     {
         var reservas = await _reservas.ListarPorUbicacionAsync(ubicacionId, estado, cancelacion);
         return reservas.Select(ReservaDto.Desde).ToList();
+    }
+
+    private async Task<IReadOnlyList<ReservaCarrito>> RetencionesDelCarritoAsync(
+        string? carritoId,
+        CancellationToken cancelacion)
+    {
+        if (string.IsNullOrWhiteSpace(carritoId))
+        {
+            return Array.Empty<ReservaCarrito>();
+        }
+
+        return await _retencionesCarrito.ListarVigentesPorCarritoAsync(carritoId.Trim(), cancelacion);
+    }
+
+    /// <summary>
+    /// Las retenciones ACTIVA devuelven sus unidades a la existencia y quedan
+    /// ADOPTADA; las EXPIRADA (que ya no retenian nada) se cierran para que una
+    /// renovacion posterior del carrito no las reviva.
+    /// </summary>
+    private static void AdoptarRetenciones(IReadOnlyList<ReservaCarrito> retenciones, IReadOnlyList<Existencia> existencias)
+    {
+        foreach (var retencion in retenciones)
+        {
+            if (!retencion.EstaActiva)
+            {
+                retencion.Liberar();
+                continue;
+            }
+
+            existencias
+                .FirstOrDefault(existencia => existencia.Sku == retencion.Sku && existencia.UbicacionId == retencion.UbicacionId)
+                ?.LiberarReserva(retencion.Cantidad);
+
+            retencion.Adoptar();
+        }
     }
 
     private ResultadoReservaDto Rechazar(string ordenId, SeleccionUbicacion seleccion)

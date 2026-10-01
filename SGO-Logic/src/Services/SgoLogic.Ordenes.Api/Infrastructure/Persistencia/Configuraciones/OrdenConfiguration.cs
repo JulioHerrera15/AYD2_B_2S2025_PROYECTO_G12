@@ -144,6 +144,11 @@ public sealed class OrdenConfiguration : IEntityTypeConfiguration<Orden>
             .HasColumnName("token_medio_pago")
             .HasMaxLength(Orden.LongitudMaximaTokenMedioPago);
 
+        // Carrito del que salio la orden; viaja a Inventario para adoptar sus retenciones.
+        builder.Property(orden => orden.CarritoId)
+            .HasColumnName("carrito_id")
+            .HasMaxLength(Orden.LongitudMaximaCarritoId);
+
         builder.Property(orden => orden.PagoId)
             .HasColumnName("pago_id")
             .HasMaxLength(128);

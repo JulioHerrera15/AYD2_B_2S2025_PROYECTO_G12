@@ -48,6 +48,7 @@ public sealed class ServicioReservasTests
             repoReservas,
             outbox,
             new GeneradorCorrelativoReservaFalso(correlativoInicial),
+            new RepositorioReservasCarritoFalso(),
             Options.Create(opciones ?? new InventarioOptions()));
         return (servicio, repoExistencias, repoReservas, outbox);
     }

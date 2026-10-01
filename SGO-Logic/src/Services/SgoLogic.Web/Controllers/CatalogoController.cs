@@ -48,8 +48,33 @@ public class CatalogoController : Controller
 
         new("PROD-008", "Aspiradora Robot Láser con Fregado", "Hogar Inteligente", 3899.00m,
             "Navegación LiDAR de alta precisión, succión de 5000Pa, mapeo multinivel en 3D y estación de autovaciado de polvo.",
-            "cleaning_services", "Smart")
+            "cleaning_services", "Smart"),
+
+        // Productos con stock bajo para probar retenciones de carrito y la
+        // sucursal mas cercana con existencias (ver scripts/demo/sembrar-demo.sh).
+        new("PROD-101", "Audífonos Inalámbricos ANC Pro", "Audio", 1299.00m,
+            "Cancelación activa de ruido híbrida, 40 horas de batería, audio espacial y carga rápida USB-C de 10 minutos para 5 horas.",
+            "headphones", "Últimas Unidades"),
+
+        new("PROD-102", "Tablet 11\" OLED 256GB", "Informática", 4299.00m,
+            "Pantalla OLED de 120Hz, procesador octa-core, 8GB RAM, lápiz óptico incluido y conectividad Wi-Fi 6E.",
+            "tablet_mac", "Stock Limitado"),
+
+        new("PROD-103", "Monitor Gamer Curvo 32\" 165Hz", "Informática", 2899.00m,
+            "Panel VA curvo 1500R QHD, 165Hz con 1ms MPRT, FreeSync Premium y HDR400 para juegos competitivos.",
+            "monitor", "Exclusivo"),
+
+        new("PROD-104", "Deshumidificador Inteligente 30L", "Climatización", 2199.00m,
+            "Extrae hasta 30 litros diarios, control por aplicación, sensor de humedad automático y modo secado de ropa.",
+            "humidity_percentage", "Temporada"),
+
+        new("PROD-105", "Cámara de Seguridad Wi-Fi 2K", "Hogar Inteligente", 699.00m,
+            "Resolución 2K con visión nocturna a color, detección de personas, audio bidireccional y grabación en la nube.",
+            "videocam", "Seguridad")
     ];
+
+    /// <summary>Sucursal con la que arranca el catalogo si el cliente aun no eligio una.</summary>
+    public const string SucursalPorDefecto = "TIENDA-01-CENTRAL";
 
     public CatalogoController(GatewayClient gateway)
     {
@@ -57,7 +82,7 @@ public class CatalogoController : Controller
     }
 
     [HttpGet]
-    public IActionResult Index(string? categoria, string? busqueda)
+    public async Task<IActionResult> Index(string? categoria, string? busqueda)
     {
         var jwt = Request.Cookies["sgo_jwt"];
         var userRole = Request.Cookies["sgo_user_role"] ?? "CLIENTE";
@@ -70,6 +95,10 @@ public class CatalogoController : Controller
 
         ViewBag.Categoria = categoria;
         ViewBag.Busqueda = busqueda;
+        ViewBag.Sucursales = await _gateway.ObtenerSucursalesAsync();
+        ViewBag.SucursalSeleccionada = string.IsNullOrWhiteSpace(Request.Cookies["sgo_sucursal"])
+            ? SucursalPorDefecto
+            : Request.Cookies["sgo_sucursal"];
 
         var filtrados = Productos.AsEnumerable();
 
@@ -90,14 +119,31 @@ public class CatalogoController : Controller
         return View(filtrados.ToList());
     }
 
+    /// <summary>
+    /// Existencias del SKU en todas las ubicaciones. Si se indica la sucursal
+    /// seleccionada y ahi esta agotado, incluye la tienda mas cercana que si tiene
+    /// (o null si ninguna tienda tiene).
+    /// </summary>
     [HttpGet]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public async Task<IActionResult> Stock(string sku)
+    public async Task<IActionResult> Stock(string sku, string? ubicacionId)
     {
         if (string.IsNullOrWhiteSpace(sku))
             return BadRequest(new { Error = "SKU requerido" });
 
-        var existencias = await _gateway.ObtenerExistenciasSkuAsync(sku.Trim());
-        return Json(existencias ?? new List<ExistenciaSkuDto>());
+        var skuLimpio = sku.Trim();
+        var existencias = await _gateway.ObtenerExistenciasSkuAsync(skuLimpio) ?? new List<ExistenciaSkuDto>();
+
+        SucursalCercanaModel? cercana = null;
+        if (!string.IsNullOrWhiteSpace(ubicacionId))
+        {
+            var aqui = existencias.FirstOrDefault(e => e.UbicacionId == ubicacionId);
+            if (aqui is null || aqui.Disponible <= 0)
+            {
+                cercana = await _gateway.ObtenerSucursalCercanaAsync(skuLimpio, ubicacionId.Trim());
+            }
+        }
+
+        return Json(new { existencias, cercana });
     }
 }

@@ -327,6 +327,501 @@ namespace SgoLogic.Inventario.Api.Infrastructure.Persistencia.Migraciones
                     b.ToTable("reserva", "inventario");
                 });
 
+            modelBuilder.Entity("SgoLogic.Inventario.Api.Domain.ReservaCarrito", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Cantidad")
+                        .HasColumnType("integer")
+                        .HasColumnName("cantidad");
+
+                    b.Property<string>("CarritoId")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("carrito_id");
+
+                    b.Property<DateTime>("CreadaEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("creada_en");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("estado");
+
+                    b.Property<DateTime>("ExpiraEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expira_en");
+
+                    b.Property<string>("Sku")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("sku");
+
+                    b.Property<string>("TipoUbicacion")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("tipo_ubicacion");
+
+                    b.Property<string>("UbicacionId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("ubicacion_id");
+
+                    b.Property<string>("UbicacionPreferidaId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("ubicacion_preferida_id");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CarritoId", "Sku")
+                        .IsUnique()
+                        .HasDatabaseName("ix_reserva_carrito_activa")
+                        .HasFilter("estado = 'ACTIVA'");
+
+                    b.HasIndex("Estado", "ExpiraEn")
+                        .HasDatabaseName("ix_reserva_carrito_estado_expira_en");
+
+                    b.ToTable("reserva_carrito", "inventario");
+                });
+
+            modelBuilder.Entity("SgoLogic.Inventario.Api.Domain.Sucursal", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Activa")
+                        .HasColumnType("boolean")
+                        .HasColumnName("activa");
+
+                    b.Property<string>("Departamento")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("departamento");
+
+                    b.Property<double?>("Latitud")
+                        .HasColumnType("double precision")
+                        .HasColumnName("latitud");
+
+                    b.Property<double?>("Longitud")
+                        .HasColumnType("double precision")
+                        .HasColumnName("longitud");
+
+                    b.Property<string>("Municipio")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("municipio");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("nombre");
+
+                    b.Property<string>("TipoUbicacion")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("tipo_ubicacion");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("sucursal", "inventario");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = "CD-CENTRAL",
+                            Activa = true,
+                            Departamento = "Guatemala",
+                            Latitud = 14.586,
+                            Longitud = -90.542000000000002,
+                            Municipio = "Guatemala",
+                            Nombre = "Centro de Distribución Central — Zona 12",
+                            TipoUbicacion = "CENTRO_DISTRIBUCION"
+                        },
+                        new
+                        {
+                            Id = "CD-01",
+                            Activa = true,
+                            Departamento = "Guatemala",
+                            Latitud = 14.664999999999999,
+                            Longitud = -90.471999999999994,
+                            Municipio = "Guatemala",
+                            Nombre = "Centro de Distribución Norte — Zona 18 (CD-01)",
+                            TipoUbicacion = "CENTRO_DISTRIBUCION"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-01-CENTRAL",
+                            Activa = true,
+                            Departamento = "Guatemala",
+                            Latitud = 14.601000000000001,
+                            Longitud = -90.513000000000005,
+                            Municipio = "Guatemala",
+                            Nombre = "MegaStore Central — Zona 10 (T01)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-02-MIRAFLORES",
+                            Activa = true,
+                            Departamento = "Guatemala",
+                            Latitud = 14.621499999999999,
+                            Longitud = -90.552999999999997,
+                            Municipio = "Guatemala",
+                            Nombre = "MegaStore Miraflores — Zona 11 (T02)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-03-PORTALES",
+                            Activa = true,
+                            Departamento = "Guatemala",
+                            Latitud = 14.644,
+                            Longitud = -90.478999999999999,
+                            Municipio = "Guatemala",
+                            Nombre = "MegaStore Portales — Zona 17 (T03)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-04-PRADERA",
+                            Activa = true,
+                            Departamento = "Guatemala",
+                            Latitud = 14.564,
+                            Longitud = -90.456999999999994,
+                            Municipio = "Santa Catarina Pinula",
+                            Nombre = "MegaStore Pradera Concepción (T04)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-05-OAKLAND",
+                            Activa = true,
+                            Departamento = "Guatemala",
+                            Latitud = 14.5985,
+                            Longitud = -90.507499999999993,
+                            Municipio = "Guatemala",
+                            Nombre = "MegaStore Oakland Mall — Zona 10 (T05)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-06-NARANJO",
+                            Activa = true,
+                            Departamento = "Guatemala",
+                            Latitud = 14.644,
+                            Longitud = -90.549000000000007,
+                            Municipio = "Mixco",
+                            Nombre = "MegaStore Naranjo Mall — Mixco (T06)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-07-CAYALA",
+                            Activa = true,
+                            Departamento = "Guatemala",
+                            Latitud = 14.611000000000001,
+                            Longitud = -90.486999999999995,
+                            Municipio = "Guatemala",
+                            Nombre = "MegaStore Paseo Cayalá — Zona 16 (T07)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-08-ROOSEVELT",
+                            Activa = true,
+                            Departamento = "Guatemala",
+                            Latitud = 14.629,
+                            Longitud = -90.560000000000002,
+                            Municipio = "Guatemala",
+                            Nombre = "MegaStore Peri-Roosevelt — Zona 7 (T08)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-09-FONTABELLA",
+                            Activa = true,
+                            Departamento = "Guatemala",
+                            Latitud = 14.603999999999999,
+                            Longitud = -90.515000000000001,
+                            Municipio = "Guatemala",
+                            Nombre = "MegaStore Plaza Fontabella — Zona 10 (T09)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-10-METRONORTE",
+                            Activa = true,
+                            Departamento = "Guatemala",
+                            Latitud = 14.651,
+                            Longitud = -90.486000000000004,
+                            Municipio = "Guatemala",
+                            Nombre = "MegaStore Metronorte — Zona 17 (T10)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-11-MAJADAS",
+                            Activa = true,
+                            Departamento = "Guatemala",
+                            Latitud = 14.612,
+                            Longitud = -90.548000000000002,
+                            Municipio = "Guatemala",
+                            Nombre = "MegaStore Parque Las Majadas — Zona 11 (T11)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-12-AMERICAS",
+                            Activa = true,
+                            Departamento = "Guatemala",
+                            Latitud = 14.587999999999999,
+                            Longitud = -90.525000000000006,
+                            Municipio = "Guatemala",
+                            Nombre = "MegaStore Plaza Las Américas — Zona 13 (T12)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-13-SANCRISTOBAL",
+                            Activa = true,
+                            Departamento = "Guatemala",
+                            Latitud = 14.6,
+                            Longitud = -90.587999999999994,
+                            Municipio = "Mixco",
+                            Nombre = "MegaStore San Cristóbal — Mixco (T13)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-14-VILLANUEVA",
+                            Activa = true,
+                            Departamento = "Guatemala",
+                            Latitud = 14.526999999999999,
+                            Longitud = -90.587999999999994,
+                            Municipio = "Villa Nueva",
+                            Nombre = "MegaStore Metrocentro — Villa Nueva (T14)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-15-CARRETERA",
+                            Activa = true,
+                            Departamento = "Guatemala",
+                            Latitud = 14.576000000000001,
+                            Longitud = -90.469999999999999,
+                            Municipio = "Santa Catarina Pinula",
+                            Nombre = "MegaStore Pradera Express — Km 14 (T15)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-16-CENTRALNORTE",
+                            Activa = true,
+                            Departamento = "Guatemala",
+                            Latitud = 14.662000000000001,
+                            Longitud = -90.477000000000004,
+                            Municipio = "Guatemala",
+                            Nombre = "MegaStore Centra Norte — Zona 18 (T16)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-17-XELA",
+                            Activa = true,
+                            Departamento = "Quetzaltenango",
+                            Latitud = 14.846,
+                            Longitud = -91.530000000000001,
+                            Municipio = "Quetzaltenango",
+                            Nombre = "MegaStore Utz Ulew — Quetzaltenango (T17)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-18-INTERPLAZA",
+                            Activa = true,
+                            Departamento = "Quetzaltenango",
+                            Latitud = 14.855,
+                            Longitud = -91.518000000000001,
+                            Municipio = "Quetzaltenango",
+                            Nombre = "MegaStore Interplaza Xela — Quetzaltenango (T18)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-19-ANTIGUA",
+                            Activa = true,
+                            Departamento = "Sacatepéquez",
+                            Latitud = 14.558,
+                            Longitud = -90.733000000000004,
+                            Municipio = "Antigua Guatemala",
+                            Nombre = "MegaStore La Antigua — Sacatepéquez (T19)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-20-ESCUINTLA",
+                            Activa = true,
+                            Departamento = "Escuintla",
+                            Latitud = 14.305,
+                            Longitud = -90.784999999999997,
+                            Municipio = "Escuintla",
+                            Nombre = "MegaStore Escuintla Centro (T20)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-21-MAZATENANGO",
+                            Activa = true,
+                            Departamento = "Suchitepéquez",
+                            Latitud = 14.534000000000001,
+                            Longitud = -91.503,
+                            Municipio = "Mazatenango",
+                            Nombre = "MegaStore Mazatenango — Suchitepéquez (T21)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-22-COBAN",
+                            Activa = true,
+                            Departamento = "Alta Verapaz",
+                            Latitud = 15.471,
+                            Longitud = -90.370999999999995,
+                            Municipio = "Cobán",
+                            Nombre = "MegaStore Cobán — Alta Verapaz (T22)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-23-HUEHUETENANGO",
+                            Activa = true,
+                            Departamento = "Huehuetenango",
+                            Latitud = 15.319000000000001,
+                            Longitud = -91.471000000000004,
+                            Municipio = "Huehuetenango",
+                            Nombre = "MegaStore Huehuetenango Centro (T23)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-24-CHIMALTENANGO",
+                            Activa = true,
+                            Departamento = "Chimaltenango",
+                            Latitud = 14.661,
+                            Longitud = -90.819999999999993,
+                            Municipio = "Chimaltenango",
+                            Nombre = "MegaStore Chimaltenango Centro (T24)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-25-ZACAPA",
+                            Activa = true,
+                            Departamento = "Zacapa",
+                            Latitud = 14.972,
+                            Longitud = -89.530000000000001,
+                            Municipio = "Zacapa",
+                            Nombre = "MegaStore Zacapa Centro (T25)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-26-CHIQUIMULA",
+                            Activa = true,
+                            Departamento = "Chiquimula",
+                            Latitud = 14.800000000000001,
+                            Longitud = -89.545000000000002,
+                            Municipio = "Chiquimula",
+                            Nombre = "MegaStore Chiquimula Centro (T26)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-27-PUERTOBARRIOS",
+                            Activa = true,
+                            Departamento = "Izabal",
+                            Latitud = 15.727,
+                            Longitud = -88.593999999999994,
+                            Municipio = "Puerto Barrios",
+                            Nombre = "MegaStore Puerto Barrios — Izabal (T27)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-28-PETEN",
+                            Activa = true,
+                            Departamento = "Petén",
+                            Latitud = 16.920000000000002,
+                            Longitud = -89.891999999999996,
+                            Municipio = "Flores",
+                            Nombre = "MegaStore Santa Elena — Petén (T28)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-29-RETALHULEU",
+                            Activa = true,
+                            Departamento = "Retalhuleu",
+                            Latitud = 14.537000000000001,
+                            Longitud = -91.677000000000007,
+                            Municipio = "Retalhuleu",
+                            Nombre = "MegaStore Retalhuleu Centro (T29)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-30-COATEPEQUE",
+                            Activa = true,
+                            Departamento = "Quetzaltenango",
+                            Latitud = 14.702999999999999,
+                            Longitud = -91.864000000000004,
+                            Municipio = "Coatepeque",
+                            Nombre = "MegaStore Coatepeque — Quetzaltenango (T30)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-31-JUTIAPA",
+                            Activa = true,
+                            Departamento = "Jutiapa",
+                            Latitud = 14.292,
+                            Longitud = -89.894999999999996,
+                            Municipio = "Jutiapa",
+                            Nombre = "MegaStore Jutiapa Centro (T31)",
+                            TipoUbicacion = "TIENDA"
+                        },
+                        new
+                        {
+                            Id = "TIENDA-32-SALAMA",
+                            Activa = true,
+                            Departamento = "Baja Verapaz",
+                            Latitud = 15.103,
+                            Longitud = -90.316000000000003,
+                            Municipio = "Salamá",
+                            Nombre = "MegaStore Salamá — Baja Verapaz (T32)",
+                            TipoUbicacion = "TIENDA"
+                        });
+                });
+
             modelBuilder.Entity("SgoLogic.Inventario.Api.Domain.LineaReserva", b =>
                 {
                     b.HasOne("SgoLogic.Inventario.Api.Domain.Reserva", null)

@@ -29,6 +29,19 @@ public sealed class InventarioOptions
     /// <summary>Cuantas reservas vencidas procesa como maximo cada ciclo del barrido.</summary>
     public int ExpiracionBatchSize { get; set; } = 20;
 
+    /// <summary>
+    /// Cuanto retiene stock un producto en el carrito sin que el cliente toque el
+    /// carrito. Cualquier cambio en el carrito renueva el plazo de todas sus lineas.
+    /// Variable de entorno INVENTARIO_CARRITO_TTL_SEGUNDOS en docker-compose.
+    /// </summary>
+    public int CarritoTtlSegundos { get; set; } = 900;
+
+    /// <summary>
+    /// <see cref="CarritoTtlSegundos" /> recortado a [60, 3600]: un carrito no debe
+    /// retener stock por horas, ni vencer antes de que el cliente alcance a pagar.
+    /// </summary>
+    public int CarritoTtlEfectivo => Math.Clamp(CarritoTtlSegundos > 0 ? CarritoTtlSegundos : 900, 60, 3600);
+
     /// <summary>Recorta <paramref name="solicitado" /> al rango permitido; usa el valor por defecto si no es positivo.</summary>
     public int TtlEfectivo(int solicitado)
     {

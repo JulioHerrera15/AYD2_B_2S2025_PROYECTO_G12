@@ -169,7 +169,8 @@ public sealed class OrdenesEventosConsumidor : BackgroundService
                         datos.MetodoEntrega,
                         datos.UbicacionPreferidaId,
                         datos.TtlReservaSegundos,
-                        datos.Lineas.Select(l => new LineaSolicitudReserva(l.Sku, l.Cantidad)).ToList()),
+                        datos.Lineas.Select(l => new LineaSolicitudReserva(l.Sku, l.Cantidad)).ToList(),
+                        datos.CarritoId),
                     cancelacion);
 
                 return true;

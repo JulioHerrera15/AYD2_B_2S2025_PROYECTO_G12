@@ -13,6 +13,10 @@ builder.Services.ConfigureHttpJsonOptions(opciones =>
 
 builder.Services.Configure<TokenizacionOptions>(builder.Configuration.GetSection(TokenizacionOptions.Seccion));
 builder.Services.AddSingleton<EstadoMock>();
+builder.Services.Configure<BovedaOptions>(builder.Configuration.GetSection(BovedaOptions.Seccion));
+builder.Services.AddSingleton(proveedor => new BovedaTarjetas(
+    () => DateTime.UtcNow,
+    proveedor.GetRequiredService<IOptions<BovedaOptions>>().Value.RutaArchivo));
 
 // Decision del mock para la demo: POST /v1/tokens acepta cualquier origen porque el
 // navegador lo llama directo desde la UI (asi el numero de tarjeta y el CVV viajan
@@ -40,6 +44,7 @@ app.MapGet("/health/live", () => Results.Ok(new { estado = "vivo" }));
 app.MapPost("/v1/tokens", async (
     PeticionTokenizacion peticion,
     EstadoMock estado,
+    BovedaTarjetas boveda,
     IOptions<TokenizacionOptions> opciones) =>
 {
     var configuracion = estado.Configuracion;
@@ -74,10 +79,93 @@ app.MapPost("/v1/tokens", async (
     }
 
     var vigencia = TimeSpan.FromSeconds(Math.Max(1, opciones.Value.VigenciaSegundos));
-    return Results.Json(
-        estado.Tokens.Emitir(validacion.Tarjeta!, vigencia),
-        statusCode: StatusCodes.Status201Created);
+    var respuesta = estado.Tokens.Emitir(validacion.Tarjeta!, vigencia);
+
+    // guardar=true: ademas del token de un solo uso, la tarjeta queda en la boveda
+    // con una referencia persistente. La boveda nunca recibe el PAN ni el CVV.
+    if (peticion.Guardar == true)
+    {
+        respuesta = respuesta with { ReferenciaTarjeta = boveda.Guardar(validacion.Tarjeta!) };
+    }
+
+    return Results.Json(respuesta, statusCode: StatusCodes.Status201Created);
 }).RequireCors(PoliticaCorsTokens);
+
+// Token de un solo uso a partir de una tarjeta guardada en la boveda. Lo llama
+// Pagos (servidor a servidor) con la referencia y el CVV que el cliente escribio;
+// el CVV se valida (4 digitos AMEX, 3 las demas) y se descarta. Devuelve la misma
+// forma que POST /v1/tokens. 404 si la referencia no existe, 422 si el CVV no es
+// valido o la tarjeta esta vencida.
+app.MapPost("/v1/tarjetas/tokens", async (
+    PeticionTokenDesdeReferencia peticion,
+    EstadoMock estado,
+    BovedaTarjetas boveda,
+    IOptions<TokenizacionOptions> opciones) =>
+{
+    var configuracion = estado.Configuracion;
+    var modoEfectivo = ResolverModoEfectivo(configuracion);
+
+    if (modoEfectivo == ModoMock.LENTO && configuracion.LatenciaMs > 0)
+    {
+        await Task.Delay(configuracion.LatenciaMs);
+    }
+
+    if (modoEfectivo == ModoMock.CAIDO)
+    {
+        return Results.Problem(
+            title: "PayKlik no disponible",
+            detail: "El proveedor no tokenizo la tarjeta guardada (modo CAIDO).",
+            statusCode: StatusCodes.Status503ServiceUnavailable);
+    }
+
+    var (resultado, tarjeta) = boveda.Validar(peticion);
+
+    switch (resultado)
+    {
+        case ResultadoTokenDesdeReferencia.NoExiste:
+            return Results.Problem(
+                title: "Tarjeta no encontrada",
+                detail: "La referencia de tarjeta no existe en la boveda.",
+                statusCode: StatusCodes.Status404NotFound,
+                extensions: new Dictionary<string, object?> { ["codigo"] = "TARJETA_NO_ENCONTRADA" });
+
+        case ResultadoTokenDesdeReferencia.CvvInvalido:
+            return Results.Problem(
+                title: "Tarjeta invalida",
+                detail: "El codigo de seguridad no es valido para esta tarjeta.",
+                statusCode: StatusCodes.Status422UnprocessableEntity,
+                extensions: new Dictionary<string, object?>
+                {
+                    ["codigo"] = "CVV_INVALIDO",
+                    ["errores"] = new[]
+                    {
+                        new ErrorValidacionTarjeta(
+                            "cvv",
+                            tarjeta!.Marca == "AMEX" ? "El CVV debe tener 4 digitos." : "El CVV debe tener 3 digitos.")
+                    }
+                });
+
+        case ResultadoTokenDesdeReferencia.Vencida:
+            return Results.Problem(
+                title: "Tarjeta vencida",
+                detail: "La tarjeta guardada esta vencida.",
+                statusCode: StatusCodes.Status422UnprocessableEntity,
+                extensions: new Dictionary<string, object?>
+                {
+                    ["codigo"] = "TARJETA_VENCIDA",
+                    ["errores"] = new[] { new ErrorValidacionTarjeta("expiracion", "La tarjeta esta vencida.") }
+                });
+    }
+
+    var vigencia = TimeSpan.FromSeconds(Math.Max(1, opciones.Value.VigenciaSegundos));
+    return Results.Json(
+        estado.Tokens.Emitir(tarjeta!.ATarjetaTokenizada(), vigencia),
+        statusCode: StatusCodes.Status201Created);
+});
+
+// Inspeccion de la demo: tarjetas de la boveda. Solo referencia, marca, ultimos
+// cuatro y vencimiento; la boveda no tiene PAN ni CVV.
+app.MapGet("/admin/tarjetas", (BovedaTarjetas boveda) => Results.Ok(boveda.Listar()));
 
 // Inspeccion de la demo: solo token, ultimos cuatro, marca y vigencia. Nunca el PAN.
 app.MapGet("/admin/tokens", (EstadoMock estado) => Results.Ok(estado.Tokens.Listar()));

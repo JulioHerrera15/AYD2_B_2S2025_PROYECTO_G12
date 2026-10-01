@@ -30,6 +30,10 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes;
 /// La orden lo conserva solo hasta emitir CobroSolicitado y no lo devuelve en
 /// ninguna respuesta.
 /// </param>
+/// <param name="CarritoId">
+/// Opcional. Carrito del que sale la orden (el identificador que usa Auth). Si
+/// viene, Inventario adopta las retenciones de stock de ese carrito al reservar.
+/// </param>
 public sealed record CrearOrdenRequest(
     string ClienteId,
     Canal Canal,
@@ -41,7 +45,8 @@ public sealed record CrearOrdenRequest(
     string? UbicacionSolicitadaId = null,
     string? ReceptorCui = null,
     DireccionEntregaData? DireccionEntrega = null,
-    string? TokenMedioPago = null);
+    string? TokenMedioPago = null,
+    string? CarritoId = null);
 
 public sealed record CrearLineaOrdenRequest(
     string Sku,

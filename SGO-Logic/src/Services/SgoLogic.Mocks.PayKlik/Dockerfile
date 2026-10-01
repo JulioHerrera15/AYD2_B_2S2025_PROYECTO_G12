@@ -17,6 +17,9 @@ FROM mcr.microsoft.com/dotnet/aspnet:8.0-alpine AS final
 WORKDIR /app
 
 RUN addgroup -S sgo && adduser -S sgo -G sgo
+# Directorio de la boveda de tarjetas guardadas. docker-compose monta ahi un volumen
+# con nombre; al crearlo vacio hereda este dueno, asi el usuario sgo puede escribir.
+RUN mkdir -p /data && chown sgo:sgo /data
 USER sgo
 
 COPY --from=build /app .

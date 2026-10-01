@@ -3,6 +3,18 @@
 @{
     ViewData["Title"] = "Carrito de Compras";
     var userEmail = Context.Request.Cookies["sgo_user_email"];
+
+    // Segundos que le quedan a la retencion de stock del carrito, calculados con el
+    // reloj del servidor para no depender del reloj del navegador.
+    var tieneItems = Model?.Items != null && Model.Items.Any();
+    var reservaVencida = Model?.TieneReservasVencidas ?? false;
+    int? segundosReserva = null;
+    if (tieneItems && Model!.ReservaExpiraEn is { } expiraEn)
+    {
+        var expiraUtc = expiraEn.Kind == DateTimeKind.Local ? expiraEn.ToUniversalTime() : DateTime.SpecifyKind(expiraEn, DateTimeKind.Utc);
+        segundosReserva = Math.Max(0, (int)Math.Ceiling((expiraUtc - DateTime.UtcNow).TotalSeconds));
+    }
+    var mostrarReserva = tieneItems && (segundosReserva is not null || reservaVencida);
 }
 
 <!-- Header Title -->
@@ -25,13 +37,34 @@
         }
         @if (Model?.Items != null && Model.Items.Any())
         {
-            <a href="/Checkout" class="inline-flex items-center gap-2 bg-secondary text-on-secondary px-5 py-2 rounded-full font-bold text-xs shadow-md hover:bg-secondary/90 transition-all active:scale-95">
-                <span>Ir al Checkout</span>
+            <a href="/Checkout" class="btn-ir-pagar inline-flex items-center gap-2 bg-secondary text-on-secondary px-5 py-2 rounded-full font-bold text-xs shadow-md hover:bg-secondary/90 transition-all active:scale-95">
+                <span>Ir a pagar</span>
                 <span class="material-symbols-outlined text-[16px]">arrow_forward</span>
             </a>
         }
     </div>
 </div>
+
+@if (mostrarReserva)
+{
+    <!-- Retencion de stock del carrito: cuenta regresiva y renovacion -->
+    <div id="reserva-banner" data-segundos="@(segundosReserva ?? 0)" data-vencida="@(reservaVencida ? "true" : "false")"
+         class="mb-6 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border bg-emerald-50 border-emerald-200/70 text-emerald-950 ambient-shadow">
+        <div class="flex items-center gap-3">
+            <span id="reserva-icono" class="material-symbols-outlined text-[22px] text-emerald-700">timer</span>
+            <div class="text-sm">
+                <span id="reserva-texto-activa">Tus productos están apartados por <strong id="reserva-cuenta" class="font-mono">--:--</strong>. Si el tiempo se agota, otro cliente podría llevárselos.</span>
+                <span id="reserva-texto-vencida" class="hidden"><strong>Tu reserva venció.</strong> Renuévala para volver a apartar tus productos antes de pagar.</span>
+            </div>
+        </div>
+        <form method="post" action="/Carrito/RenovarReserva" id="form-renovar" class="hidden m-0">
+            <button type="submit" class="inline-flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-semibold hover:opacity-90 transition-all">
+                <span class="material-symbols-outlined text-[16px]">autorenew</span>
+                Renovar reserva
+            </button>
+        </form>
+    </div>
+}
 
 @if (string.IsNullOrWhiteSpace(userEmail))
 {
@@ -95,6 +128,26 @@
                             </td>
                             <td class="py-4 px-6 text-sm font-medium text-primary">
                                 @item.Descripcion
+                                @if (!string.IsNullOrWhiteSpace(item.UbicacionId))
+                                {
+                                    var nombreUbicacion = item.NombreUbicacion ?? item.UbicacionId;
+                                    <div class="mt-1 text-[11px] font-normal text-text-muted flex items-center gap-1">
+                                        <span class="material-symbols-outlined text-[13px]">location_on</span>
+                                        <span>Apartado en @nombreUbicacion</span>
+                                    </div>
+                                    if (item.EnOtraSucursal == true)
+                                    {
+                                        <div class="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md">
+                                            <span class="material-symbols-outlined text-[13px]">info</span>
+                                            Apartado en @nombreUbicacion porque tu sucursal no tiene suficiente
+                                        </div>
+                                    }
+                                }
+                                <div class="estado-reserva-item mt-1 @(item.ReservaVencida ? "" : "hidden") inline-flex items-center gap-1 text-[11px] font-semibold text-rose-800 bg-rose-100 px-2 py-0.5 rounded-md"
+                                     data-activa="@(item.EstadoReserva == "ACTIVA" ? "true" : "false")">
+                                    <span class="material-symbols-outlined text-[13px]">timer_off</span>
+                                    Reserva vencida
+                                </div>
                             </td>
                             <td class="py-4 px-6 text-center">
                                 <div class="inline-flex items-center gap-1.5 bg-surface-container-low rounded-xl p-1 border border-border-subtle/70">
@@ -163,8 +216,8 @@
                 </div>
             </div>
             <div class="flex items-center gap-3 w-full sm:w-auto justify-end">
-                <a href="/Checkout" id="btn-proceder-checkout" class="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 bg-primary text-on-primary px-8 py-3.5 rounded-full font-bold text-sm shadow-md hover:opacity-95 transition-all active:scale-95">
-                    <span>Proceder al Checkout</span>
+                <a href="/Checkout" id="btn-proceder-checkout" class="btn-ir-pagar w-full sm:w-auto inline-flex items-center justify-center gap-2.5 bg-primary text-on-primary px-8 py-3.5 rounded-full font-bold text-sm shadow-md hover:opacity-95 transition-all active:scale-95">
+                    <span>Ir a pagar</span>
                     <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
                 </a>
             </div>
@@ -188,3 +241,63 @@
         <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
     </a>
 </div>
+
+@if (mostrarReserva)
+{
+    <script>
+        (function () {
+            const banner = document.getElementById('reserva-banner');
+            if (!banner) return;
+
+            const cuenta = document.getElementById('reserva-cuenta');
+            let restantes = parseInt(banner.dataset.segundos, 10) || 0;
+            let vencida = banner.dataset.vencida === 'true';
+
+            function formatear(segundos) {
+                const mm = String(Math.floor(segundos / 60)).padStart(2, '0');
+                const ss = String(segundos % 60).padStart(2, '0');
+                return `${mm}:${ss}`;
+            }
+
+            // Al vencer: los items apartados se marcan "Reserva vencida", "Ir a pagar"
+            // se deshabilita y aparece "Renovar reserva".
+            function marcarVencida() {
+                banner.classList.remove('bg-emerald-50', 'border-emerald-200/70', 'text-emerald-950');
+                banner.classList.add('bg-rose-50', 'border-rose-200/70', 'text-rose-950');
+                document.getElementById('reserva-icono').textContent = 'timer_off';
+                document.getElementById('reserva-icono').classList.replace('text-emerald-700', 'text-rose-700');
+                document.getElementById('reserva-texto-activa').classList.add('hidden');
+                document.getElementById('reserva-texto-vencida').classList.remove('hidden');
+                document.getElementById('form-renovar').classList.remove('hidden');
+
+                document.querySelectorAll('.estado-reserva-item').forEach(el => {
+                    if (el.dataset.activa === 'true') el.classList.remove('hidden');
+                });
+
+                document.querySelectorAll('.btn-ir-pagar').forEach(btn => {
+                    btn.setAttribute('aria-disabled', 'true');
+                    btn.classList.add('opacity-40', 'pointer-events-none');
+                    btn.addEventListener('click', e => e.preventDefault());
+                });
+            }
+
+            if (vencida || restantes <= 0) {
+                cuenta.textContent = '00:00';
+                marcarVencida();
+                return;
+            }
+
+            cuenta.textContent = formatear(restantes);
+            const temporizador = setInterval(() => {
+                restantes -= 1;
+                if (restantes <= 0) {
+                    clearInterval(temporizador);
+                    cuenta.textContent = '00:00';
+                    marcarVencida();
+                    return;
+                }
+                cuenta.textContent = formatear(restantes);
+            }, 1000);
+        })();
+    </script>
+}

@@ -85,8 +85,31 @@ public class EstadoController : Controller
 
         var despacho = await _gateway.ObtenerDespachoOrdenAsync(idLimpio);
         ViewBag.Despacho = despacho;
+        ViewBag.TiendaOrigen = await ResolverTiendaOrigenAsync(orden, despacho);
 
         return View(orden);
+    }
+
+    /// <summary>
+    /// Nombre de la tienda desde la que sale un envio a domicilio, o null si sale de
+    /// un centro de distribucion (lo normal) o aun no se sabe. El origen viene de la
+    /// vista de Consulta de Estado y, si todavia no llego, del propio despacho.
+    /// </summary>
+    private async Task<string?> ResolverTiendaOrigenAsync(OrdenEstadoModel orden, DespachoOrdenModel? despacho)
+    {
+        if (!string.Equals(orden.MetodoEntrega, "DOMICILIO", StringComparison.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        var origenId = orden.UbicacionOrigenId ?? despacho?.UbicacionOrigenId;
+        if (string.IsNullOrWhiteSpace(origenId))
+        {
+            return null;
+        }
+
+        var sucursal = (await _gateway.ObtenerSucursalesAsync()).FirstOrDefault(s => s.Id == origenId);
+        return sucursal is { EsTienda: true } ? sucursal.Nombre : null;
     }
 
     [HttpGet("Estado/Api/{ordenId}")]
@@ -156,6 +179,37 @@ public class EstadoController : Controller
 
         ViewBag.HistorialDespachos = itemsConDespacho;
         ViewBag.TotalOrdenes = historial?.TotalRegistros ?? itemsConDespacho.Count;
+    }
+
+    /// <summary>
+    /// Factura electronica de la orden, legible e imprimible. El dueno de la orden (o
+    /// el personal autorizado) la ve completa; un visitante anonimo o un cliente
+    /// ajeno solo ve serie, numero y estado, sin CUI ni lineas.
+    /// </summary>
+    [HttpGet("Estado/Factura")]
+    public async Task<IActionResult> Factura(string ordenId)
+    {
+        if (string.IsNullOrWhiteSpace(ordenId))
+        {
+            TempData["Error"] = "Identificador de orden requerido.";
+            return RedirectToAction("Index");
+        }
+
+        var idLimpio = ordenId.Trim();
+        var jwt = Request.Cookies["sgo_jwt"];
+        var userEmail = Request.Cookies["sgo_user_email"];
+        var userRole = Request.Cookies["sgo_user_role"] ?? "CLIENTE";
+        var autenticado = !string.IsNullOrWhiteSpace(jwt) && !string.IsNullOrWhiteSpace(userEmail);
+
+        var orden = await _gateway.ObtenerEstadoOrdenAsync(idLimpio);
+        var factura = await _gateway.ObtenerFacturaAsync(idLimpio);
+
+        ViewBag.OrdenId = idLimpio;
+        ViewBag.Orden = orden;
+        ViewBag.Autenticado = autenticado;
+        ViewBag.VistaCompleta = autenticado && PermisosHelper.PuedeVerOrden(orden, userEmail, userRole, jwt);
+
+        return View(factura);
     }
 
     [HttpGet("Estado/Comprobante")]

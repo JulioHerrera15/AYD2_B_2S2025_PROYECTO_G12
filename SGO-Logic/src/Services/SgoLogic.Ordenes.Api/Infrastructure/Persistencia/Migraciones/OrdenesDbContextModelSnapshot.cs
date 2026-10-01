@@ -370,6 +370,11 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
                         .HasColumnType("character varying(20)")
                         .HasColumnName("canal");
 
+                    b.Property<string>("CarritoId")
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("carrito_id");
+
                     b.Property<string>("ClienteId")
                         .IsRequired()
                         .HasMaxLength(64)

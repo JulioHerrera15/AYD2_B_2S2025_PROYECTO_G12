@@ -7,6 +7,7 @@ builder.AddSgoDefaults();
 
 builder.Services.AddControllersWithViews();
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddMemoryCache();
 
 var gatewayUrl = builder.Configuration["ApiGateway:BaseUrl"]
     ?? throw new InvalidOperationException("ApiGateway:BaseUrl no esta configurado");
