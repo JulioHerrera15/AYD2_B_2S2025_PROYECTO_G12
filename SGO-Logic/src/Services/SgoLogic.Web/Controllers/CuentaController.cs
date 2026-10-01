@@ -13,7 +13,7 @@ public class CuentaController : Controller
     }
 
     [HttpGet]
-    public IActionResult Perfil()
+    public async Task<IActionResult> Perfil()
     {
         var userEmail = Request.Cookies["sgo_user_email"];
         if (string.IsNullOrWhiteSpace(userEmail))
@@ -21,9 +21,25 @@ public class CuentaController : Controller
             return RedirectToAction("Login", "Auth", new { returnUrl = "/Cuenta/Perfil" });
         }
 
-        ViewBag.UserName = Request.Cookies["sgo_user_name"] ?? "Usuario MegaStore";
+        var jwt = Request.Cookies["sgo_jwt"];
+        var infoUsuario = await _gateway.ObtenerUsuarioPorEmailAsync(userEmail);
+        var userRole = infoUsuario?.Rol
+            ?? Request.Cookies["sgo_user_role"]
+            ?? (!string.IsNullOrWhiteSpace(jwt) ? PermisosHelper.ObtenerRolDesdeJwt(jwt) : "CLIENTE");
+
+        var userName = infoUsuario?.NombreCompleto
+            ?? Request.Cookies["sgo_user_name"]
+            ?? "Usuario MegaStore";
+
+        ViewBag.UserName = userName;
         ViewBag.UserEmail = userEmail;
-        ViewBag.HasJwt = !string.IsNullOrWhiteSpace(Request.Cookies["sgo_jwt"]);
+        ViewBag.UserRole = userRole;
+        ViewBag.HasJwt = !string.IsNullOrWhiteSpace(jwt);
+        ViewBag.InfoUsuario = infoUsuario;
+
+        // Historial real de ordenes para mostrar estadisticas reales y transparentes
+        var historial = await _gateway.ObtenerHistorialClienteAsync(userEmail, pagina: 1, tamano: 50);
+        ViewBag.Historial = historial;
 
         return View();
     }
@@ -49,6 +65,72 @@ public class CuentaController : Controller
         return View(historial);
     }
 
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Cancelar(string ordenId, int pagina = 1)
+    {
+        // La identidad sale del JWT de la sesion, nunca del formulario: Ordenes
+        // compara este email con el dueno de la orden y responde 403 si no coincide.
+        var jwt = Request.Cookies["sgo_jwt"];
+        var clienteId = PermisosHelper.ObtenerEmailDesdeJwt(jwt);
+        if (string.IsNullOrWhiteSpace(clienteId))
+        {
+            TempData["Error"] = "Tu sesion expiro. Inicia sesion nuevamente para cancelar la orden.";
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Cuenta/Ordenes" });
+        }
+
+        if (string.IsNullOrWhiteSpace(ordenId))
+        {
+            TempData["Error"] = "No se indico la orden a cancelar.";
+            return RedirectToAction(nameof(Ordenes), new { pagina });
+        }
+
+        var (exito, error) = await _gateway.CancelarOrdenAsync(
+            ordenId.Trim(), clienteId, "Cancelada por el cliente desde su historial de pedidos");
+
+        if (exito)
+        {
+            TempData["Exito"] = "Orden cancelada. Los productos regresaron a stock; el estado puede tardar unos segundos en actualizarse.";
+        }
+        else
+        {
+            TempData["Error"] = $"No se pudo cancelar la orden: {error}";
+        }
+
+        return RedirectToAction(nameof(Ordenes), new { pagina });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Factura(string ordenId)
+    {
+        var userEmail = Request.Cookies["sgo_user_email"];
+        if (string.IsNullOrWhiteSpace(userEmail))
+        {
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Cuenta/Ordenes" });
+        }
+
+        // El cliente solo puede descargar facturas de sus propias ordenes.
+        var userRole = Request.Cookies["sgo_user_role"] ?? "CLIENTE";
+        if (!PermisosHelper.EsPersonalAutorizado(userRole, userEmail, Request.Cookies["sgo_jwt"]))
+        {
+            var orden = await _gateway.ObtenerEstadoOrdenAsync(ordenId);
+            if (orden is null || !string.Equals(orden.ClienteId, userEmail, StringComparison.OrdinalIgnoreCase))
+            {
+                return NotFound();
+            }
+        }
+
+        var factura = await _gateway.ObtenerFacturaAsync(ordenId);
+        if (factura is null)
+        {
+            TempData["Error"] = "La factura de esta orden aun no ha sido generada. Intenta de nuevo en unos minutos.";
+            return RedirectToAction(nameof(Ordenes));
+        }
+
+        return File(System.Text.Encoding.UTF8.GetBytes(factura.Xml), "application/xml",
+            $"factura-{factura.Serie}-{factura.NumeroDocumento}.xml");
+    }
+
     [HttpGet]
     public IActionResult Privacidad()
     {
@@ -71,8 +153,9 @@ public class CuentaController : Controller
             return RedirectToAction("Login", "Auth", new { returnUrl = "/Cuenta/Privacidad" });
         }
 
-        var userName = Request.Cookies["sgo_user_name"] ?? "Usuario MegaStore";
-        var rol = PermisosHelper.DeterminarRol(userEmail);
+        var infoUsuario = await _gateway.ObtenerUsuarioPorEmailAsync(userEmail);
+        var userName = infoUsuario?.NombreCompleto ?? Request.Cookies["sgo_user_name"] ?? "Usuario MegaStore";
+        var rol = infoUsuario?.Rol ?? Request.Cookies["sgo_user_role"] ?? PermisosHelper.DeterminarRol(userEmail, Request.Cookies["sgo_jwt"]);
 
         // Consultar datos reales asociados a la cuenta del usuario
         var historial = await _gateway.ObtenerHistorialClienteAsync(userEmail, 1, 100);

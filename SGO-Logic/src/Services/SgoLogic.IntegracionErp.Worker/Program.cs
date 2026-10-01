@@ -45,6 +45,61 @@ app.MapGet("/api/erp/conciliaciones", async (
 	return Results.Ok(resultados);
 });
 
+// Informe de ventas conciliado: cada lote con sus ordenes (trazabilidad) y su
+// ultima conciliacion contra el ERP, mas las ventas que aun no salen en un lote.
+app.MapGet("/api/erp/informe", async (
+	IntegracionErpDbContext contexto,
+	DateTime? desde,
+	DateTime? hasta,
+	CancellationToken cancelacion) =>
+{
+	var consulta = contexto.Lotes.AsNoTracking().Include(x => x.Registros).AsQueryable();
+	if (desde.HasValue) consulta = consulta.Where(x => x.FechaGeneracion >= desde.Value.ToUniversalTime());
+	if (hasta.HasValue) consulta = consulta.Where(x => x.FechaGeneracion < hasta.Value.ToUniversalTime().AddDays(1));
+
+	var lotes = await consulta.OrderByDescending(x => x.Secuencia).Take(500).ToListAsync(cancelacion);
+	var loteIds = lotes.Select(x => x.LoteId).ToList();
+	var conciliaciones = (await contexto.Conciliaciones.AsNoTracking()
+			.Where(x => loteIds.Contains(x.LoteId))
+			.ToListAsync(cancelacion))
+		.GroupBy(x => x.LoteId)
+		.ToDictionary(g => g.Key, g => g.OrderByDescending(x => x.CreadaEn).First());
+
+	var pendientes = await contexto.Ventas.AsNoTracking().Where(x => x.Estado == "PENDIENTE").ToListAsync(cancelacion);
+
+	return Results.Ok(new
+	{
+		generadoEn = DateTime.UtcNow,
+		ventasPendientes = pendientes.Count,
+		montoPendiente = pendientes.Sum(x => x.Monto),
+		lotes = lotes.Select(l =>
+		{
+			conciliaciones.TryGetValue(l.LoteId, out var c);
+			return new
+			{
+				l.LoteId, l.Secuencia, l.FechaGeneracion, l.Formato, l.Estado, l.CantidadRegistros, l.MontoTotal,
+				l.Intentos, l.CodigoHttp, l.EnviadoEn, l.ConfirmadoEn,
+				conciliacion = c is null ? null : new { c.Fecha, c.RegistrosErp, c.MontoErp, c.Conciliada, c.Diferencias, c.CreadaEn },
+				registros = l.Registros.OrderBy(r => r.Fecha).Select(r => new { r.OrdenId, r.Canal, r.Tienda, r.Monto, r.Fecha })
+			};
+		})
+	});
+});
+
+// Ejecuta consolidacion + conciliacion bajo demanda (el temporizador corre cada 24 h).
+app.MapPost("/api/erp/conciliar", async (
+	IErpBatchLock batchLock,
+	ConsolidacionErpService servicio,
+	CancellationToken cancelacion) =>
+{
+	await using var lease = await batchLock.TryAcquireAsync(cancelacion);
+	if (lease is null) return Results.Conflict(new { mensaje = "Ya hay una operacion ERP en curso; intenta en unos segundos." });
+
+	await servicio.ConsolidarYTransferirAsync(cancelacion);
+	await servicio.ConciliarAsync(cancelacion);
+	return Results.Ok(new { mensaje = "Consolidacion y conciliacion ejecutadas." });
+});
+
 app.MapGet("/api/erp/lotes/fallidos", async (
 	IntegracionErpDbContext contexto,
 	CancellationToken cancelacion) =>

@@ -37,8 +37,7 @@ public class EstadoController : Controller
         {
             if (!string.IsNullOrWhiteSpace(ordenId))
             {
-                TempData["Info"] = "Por motivos de privacidad y protección de datos, inicia sesión para rastrear tu orden.";
-                return RedirectToAction("Login", "Auth", new { returnUrl = $"/Estado?ordenId={ordenId.Trim()}" });
+                return RedirectToAction("Comprobante", new { ordenId = ordenId.Trim() });
             }
 
             // Muestra pantalla informativa segura sin buscador arbitrario
@@ -57,7 +56,16 @@ public class EstadoController : Controller
         var idLimpio = ordenId.Trim();
         ViewBag.OrdenId = idLimpio;
 
-        var orden = await _gateway.ObtenerEstadoOrdenAsync(idLimpio);
+        // Tolerancia a consistencia eventual (proyecciones asincronas de CQRS por RabbitMQ):
+        // Reintentar brevemente hasta 4 veces si la orden se acaba de crear y la proyeccion esta en proceso
+        OrdenEstadoModel? orden = null;
+        for (int intento = 0; intento < 4; intento++)
+        {
+            orden = await _gateway.ObtenerEstadoOrdenAsync(idLimpio);
+            if (orden is not null) break;
+            await Task.Delay(300);
+        }
+
         if (orden is null)
         {
             ViewBag.Error = $"No se encontró la orden '{idLimpio}' en el sistema.";
@@ -148,5 +156,37 @@ public class EstadoController : Controller
 
         ViewBag.HistorialDespachos = itemsConDespacho;
         ViewBag.TotalOrdenes = historial?.TotalRegistros ?? itemsConDespacho.Count;
+    }
+
+    [HttpGet("Estado/Comprobante")]
+    public async Task<IActionResult> Comprobante(string ordenId)
+    {
+        if (string.IsNullOrWhiteSpace(ordenId))
+        {
+            TempData["Error"] = "Identificador de orden requerido.";
+            return RedirectToAction("Index");
+        }
+
+        var idLimpio = ordenId.Trim();
+        ViewBag.OrdenId = idLimpio;
+
+        OrdenEstadoModel? orden = null;
+        for (int intento = 0; intento < 5; intento++)
+        {
+            orden = await _gateway.ObtenerEstadoOrdenAsync(idLimpio);
+            if (orden is not null) break;
+            await Task.Delay(300);
+        }
+
+        if (orden is null)
+        {
+            ViewBag.Error = $"No se encontró la orden '{idLimpio}' en el sistema.";
+            return View();
+        }
+
+        var despacho = await _gateway.ObtenerDespachoOrdenAsync(idLimpio);
+        ViewBag.Despacho = despacho;
+
+        return View(orden);
     }
 }

@@ -2,8 +2,16 @@
     ViewData["Title"] = "Mi Perfil - MegaStore";
     var userName = ViewBag.UserName as string ?? "Usuario MegaStore";
     var userEmail = ViewBag.UserEmail as string ?? "usuario@megastore.com";
+    var userRole = ViewBag.UserRole as string ?? "CLIENTE";
     var hasJwt = (bool)(ViewBag.HasJwt ?? false);
     var initial = userEmail.Length > 0 ? userEmail.Substring(0, 1).ToUpper() : "U";
+    var infoUsuario = ViewBag.InfoUsuario as SgoLogic.Web.Services.UsuarioDto;
+    var historial = ViewBag.Historial as SgoLogic.Web.Services.HistorialClienteModel;
+
+    var totalOrdenes = historial?.TotalRegistros ?? historial?.Ordenes?.Count ?? 0;
+    var totalGastado = historial?.Ordenes?.Sum(o => o.Total) ?? 0m;
+    string canalHabitual = totalOrdenes > 0 ? "Omnicanal (Web & POS)" : "Sin compras registradas";
+    var emailVerificado = infoUsuario?.EmailVerificado ?? true;
 }
 
 <div class="w-full max-w-container-max mx-auto flex flex-col gap-8">
@@ -40,26 +48,52 @@
             <h2 class="text-xl font-bold text-primary mb-1">@userName</h2>
             <p class="text-xs text-text-muted font-mono mb-4">@userEmail</p>
 
-            <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 mb-6">
-                <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                Cuenta Verificada (2FA Activo)
-            </span>
+            @if (emailVerificado)
+            {
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200 mb-6">
+                    <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                    Cuenta Verificada (Código OTP)
+                </span>
+            }
+            else
+            {
+                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-100 text-amber-800 border border-amber-200 mb-6">
+                    <span class="w-2 h-2 rounded-full bg-amber-500"></span>
+                    Pendiente de Verificación OTP
+                </span>
+            }
 
             <div class="w-full pt-6 border-t border-border-subtle space-y-3 text-left text-xs">
                 <div class="flex justify-between items-center text-text-muted">
-                    <span>Nivel de Membresía:</span>
-                    <strong class="text-primary font-semibold">Cliente Club Oro</strong>
+                    <span>Rol en el Sistema:</span>
+                    <strong class="text-primary font-bold uppercase px-2 py-0.5 rounded-md bg-surface-container-low border border-border-subtle/70">@userRole</strong>
                 </div>
                 <div class="flex justify-between items-center text-text-muted">
-                    <span>NIT Facturación:</span>
+                    <span>NIT Facturación habitual:</span>
                     <strong class="text-primary font-mono">CF / Consumidor Final</strong>
                 </div>
                 <div class="flex justify-between items-center text-text-muted">
-                    <span>Canal Primario:</span>
-                    <strong class="text-primary">Portal Web & Mobile</strong>
+                    <span>Canal de Compras:</span>
+                    <strong class="text-primary">@canalHabitual</strong>
                 </div>
+                <div class="flex justify-between items-center text-text-muted">
+                    <span>Pedidos Registrados:</span>
+                    <strong class="text-primary font-semibold">@totalOrdenes</strong>
+                </div>
+                <div class="flex justify-between items-center text-text-muted">
+                    <span>Monto Acumulado:</span>
+                    <strong class="text-primary font-semibold">Q @totalGastado.ToString("N2")</strong>
+                </div>
+                @if (infoUsuario != null)
+                {
+                    <div class="flex justify-between items-center text-text-muted">
+                        <span>Miembro desde:</span>
+                        <strong class="text-primary font-mono">@FechaHelper.FormatearSoloFecha(infoUsuario.CreadoEn)</strong>
+                    </div>
+                }
             </div>
         </div>
+
 
         <!-- Security & Privacy Status -->
         <div class="md:col-span-2 space-y-6">

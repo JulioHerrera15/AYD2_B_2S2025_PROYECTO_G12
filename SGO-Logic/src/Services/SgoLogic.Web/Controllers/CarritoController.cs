@@ -49,16 +49,47 @@ public class CarritoController : Controller
     }
 
     [HttpPost]
-    public async Task<IActionResult> Agregar(string sku, string descripcion, int cantidad, decimal precioUnitario)
+    public async Task<IActionResult> Agregar(string sku, string descripcion, int cantidad, decimal precioUnitario, string? returnUrl = null)
     {
+        var isAjax = Request.Headers.XRequestedWith == "XMLHttpRequest" ||
+                     Request.Headers.Accept.ToString().Contains("application/json");
+
         if (EsAdminOStaff())
         {
+            if (isAjax)
+            {
+                return Json(new { exito = false, mensaje = "Las cuentas de administración gestionan la plataforma. Utiliza una cuenta de cliente para comprar." });
+            }
             return RedirectToAction("Index", "Despacho");
         }
 
         EnsureGuestSession();
-        await _gateway.AgregarItemCarritoAsync(new AgregarItemModel(sku, descripcion, cantidad, precioUnitario));
-        return RedirectToAction("Index");
+        var ok = await _gateway.AgregarItemCarritoAsync(new AgregarItemModel(sku, descripcion, cantidad, precioUnitario));
+
+        var carrito = await _gateway.ObtenerCarritoAsync();
+        var totalItems = carrito?.Items?.Sum(i => i.Cantidad) ?? cantidad;
+
+        if (isAjax)
+        {
+            return Json(new
+            {
+                exito = ok,
+                sku,
+                descripcion,
+                cantidad,
+                totalItems,
+                mensaje = ok ? $"Se agregó '{descripcion}' al carrito." : "No se pudo agregar el producto."
+            });
+        }
+
+        TempData["Exito"] = $"Se agregó '{descripcion}' al carrito.";
+
+        if (!string.IsNullOrWhiteSpace(returnUrl))
+        {
+            return LocalRedirect(returnUrl);
+        }
+
+        return RedirectToAction("Index", "Catalogo");
     }
 
     [HttpPost]

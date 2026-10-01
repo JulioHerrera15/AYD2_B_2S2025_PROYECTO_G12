@@ -69,3 +69,17 @@ public sealed record IntentoPagoDto(
         intento.IniciadoEn,
         intento.FinalizadoEn);
 }
+
+/// <summary>Informacion publica de un enlace de reintento para mostrar al cliente antes de ejecutar el cobro.</summary>
+public sealed record EnlaceReintentoInfoDto(
+    string Token,
+    string OrdenId,
+    decimal Monto,
+    string Moneda,
+    bool EstaVigente,
+    bool Usado,
+    DateTime ExpiraEn,
+    string EstadoPago,
+    string? UltimosCuatro,
+    string? Marca,
+    string? ClienteId);

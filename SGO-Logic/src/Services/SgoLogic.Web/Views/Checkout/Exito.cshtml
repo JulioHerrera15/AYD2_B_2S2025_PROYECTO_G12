@@ -58,6 +58,10 @@
                     <span class="text-text-muted">Canal</span>
                     <span class="font-medium text-primary">Web Omnicanal</span>
                 </div>
+                <div class="flex justify-between">
+                    <span class="text-text-muted">Fecha y Hora</span>
+                    <span class="font-medium text-primary">@FechaHelper.Formatear(ViewBag.CreadaEn as DateTime? ?? DateTime.UtcNow)</span>
+                </div>
             </div>
 
             <!-- Orchestration Progress Steps -->
@@ -106,6 +110,10 @@
             <div class="flex justify-between">
                 <span class="text-text-muted">Total a pagar</span>
                 <span class="font-bold text-primary text-sm">Q @total</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-text-muted">Fecha de Registro</span>
+                <span class="font-medium text-primary">@FechaHelper.Formatear(ViewBag.CreadaEn as DateTime? ?? DateTime.UtcNow)</span>
             </div>
             <div class="pt-3 border-t border-border-subtle/40">
                 <span class="font-semibold text-primary block mb-2">¿Qué pasa ahora?</span>

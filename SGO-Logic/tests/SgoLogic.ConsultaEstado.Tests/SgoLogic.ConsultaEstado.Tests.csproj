@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Services\SgoLogic.ConsultaEstado.Api\SgoLogic.ConsultaEstado.Api.csproj" />
+    <ProjectReference Include="..\..\src\Services\SgoLogic.Web\SgoLogic.Web.csproj" />
   </ItemGroup>
 
   <ItemGroup>

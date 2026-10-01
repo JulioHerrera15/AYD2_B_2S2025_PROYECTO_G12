@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using SgoLogic.Web.Services;
 
@@ -50,6 +51,11 @@ public class Vision360Controller : Controller
 
         if (!string.IsNullOrWhiteSpace(targetCliente))
         {
+            var sw = Stopwatch.StartNew();
+
+            // Consultar datos reales de identidad y rol en Auth.Api
+            var infoUsuario = await _gateway.ObtenerUsuarioPorEmailAsync(targetCliente);
+
             // Consultar historial real de órdenes en ConsultaEstado
             var historial = await _gateway.ObtenerHistorialClienteAsync(targetCliente);
 
@@ -61,11 +67,53 @@ public class Vision360Controller : Controller
             var ordenIds = historial?.Ordenes?.Select(o => o.OrdenId).ToHashSet(StringComparer.OrdinalIgnoreCase) ?? new HashSet<string>();
             var incidenciasCliente = todasIncidencias?.Where(i => ordenIds.Contains(i.OrdenId)).ToList() ?? new List<IncidenciaModel>();
 
+            sw.Stop();
+
+            ViewBag.InfoUsuario = infoUsuario;
             ViewBag.Historial = historial;
             ViewBag.Carrito = carrito;
             ViewBag.Incidencias = incidenciasCliente;
+            ViewBag.LatenciaMs = Math.Max(sw.ElapsedMilliseconds, 1);
         }
 
         return View();
     }
+
+    [HttpPost]
+    public async Task<IActionResult> AsignarRol(string email, string nuevoRol)
+    {
+        var jwt = Request.Cookies["sgo_jwt"];
+        var userRole = Request.Cookies["sgo_user_role"];
+        var userEmail = Request.Cookies["sgo_user_email"];
+        if (!PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt))
+        {
+            return Forbid();
+        }
+
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            TempData["Error"] = "El correo del usuario es requerido.";
+            return RedirectToAction("Index");
+        }
+
+        var rolLimpio = string.IsNullOrWhiteSpace(nuevoRol) ? "CLIENTE" : nuevoRol.Trim().ToUpperInvariant();
+        if (rolLimpio != "CLIENTE" && rolLimpio != "OPERADOR" && rolLimpio != "ADMIN")
+        {
+            TempData["Error"] = $"El rol '{nuevoRol}' no es válido. Roles oficiales permitidos: CLIENTE, OPERADOR, ADMIN.";
+            return RedirectToAction("Index", new { email });
+        }
+
+        var (exito, error) = await _gateway.AsignarRolAsync(email.Trim(), rolLimpio);
+        if (!exito)
+        {
+            TempData["Error"] = error ?? "No se pudo actualizar el rol del usuario.";
+        }
+        else
+        {
+            TempData["Exito"] = $"Rol oficial actualizado exitosamente a '{rolLimpio}' para el usuario {email.Trim()}.";
+        }
+
+        return RedirectToAction("Index", new { email = email.Trim() });
+    }
 }
+

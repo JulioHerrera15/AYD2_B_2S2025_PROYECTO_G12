@@ -51,6 +51,12 @@ public sealed class ServicioMapeoPos : IServicioMapeoPos
             normalizada = normalizada[7..];
         }
 
+        // Si tiene sufijo (e.g. 05-OAKLAND), tomar solo la parte numerica
+        if (normalizada.Contains('-'))
+        {
+            normalizada = normalizada[..normalizada.IndexOf('-')];
+        }
+
         // 4. Si viene directamente como T01..T32 o T1..T32
         if (normalizada.StartsWith("T", StringComparison.Ordinal) && int.TryParse(normalizada[1..], out var tNum) && tNum is >= 1 and <= 32)
         {

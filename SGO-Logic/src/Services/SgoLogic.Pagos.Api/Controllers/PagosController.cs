@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using SgoLogic.Contracts.Eventos.Pagos;
 using SgoLogic.Pagos.Api.Application.Pagos;
 using SgoLogic.Pagos.Api.Infrastructure.PayKlik;
 using SgoLogic.Pagos.Api.Infrastructure.Persistencia;
@@ -65,8 +66,57 @@ public sealed class PagosController : ControllerBase
     }
 
     /// <summary>
-    /// Dispara un intento nuevo usando el enlace de reintento. Marca el enlace como
-    /// usado. 404 si no existe, 410 si ya se uso o expiro.
+    /// Consulta los detalles de un enlace de reintento sin consumirlo.
+    /// Devuelve 404 si no existe. Devuelve los metadatos y bandera EstaVigente.
+    /// </summary>
+    [HttpGet("reintentos/{token}")]
+    public async Task<ActionResult<EnlaceReintentoInfoDto>> ObtenerInfoReintento(string token, CancellationToken cancelacion)
+    {
+        var enlace = await _contexto.EnlacesReintento
+            .AsNoTracking()
+            .FirstOrDefaultAsync(e => e.Token == token, cancelacion);
+
+        if (enlace is null)
+        {
+            return Problema(StatusCodes.Status404NotFound, "Enlace de reintento no encontrado",
+                $"No existe el enlace de reintento '{token}'.", "enlace_no_encontrado");
+        }
+
+        var pago = await _contexto.Pagos
+            .AsNoTracking()
+            .Include(p => p.Intentos)
+            .FirstOrDefaultAsync(p => p.OrdenId == enlace.OrdenId, cancelacion);
+
+        var ultimoIntento = pago?.Intentos.OrderByDescending(i => i.IntentoNumero).FirstOrDefault();
+
+        var ahora = DateTime.UtcNow;
+        var ordenYaPagada = pago?.Estado == EstadoPago.APLICADO;
+        var expiro = enlace.ExpiraEn <= ahora;
+
+        var estaVigente = !ordenYaPagada && !expiro && (pago?.Estado == EstadoPago.PENDIENTE || !enlace.Usado);
+        var usado = ordenYaPagada || (enlace.Usado && pago?.Estado != EstadoPago.PENDIENTE);
+
+        var info = new EnlaceReintentoInfoDto(
+            Token: enlace.Token,
+            OrdenId: enlace.OrdenId,
+            Monto: pago?.Monto ?? 0m,
+            Moneda: pago?.Moneda.ToString() ?? "GTQ",
+            EstaVigente: estaVigente,
+            Usado: usado,
+            ExpiraEn: enlace.ExpiraEn,
+            EstadoPago: pago?.Estado.ToString() ?? "PENDIENTE",
+            UltimosCuatro: ultimoIntento?.UltimosCuatro,
+            Marca: ultimoIntento?.Marca,
+            ClienteId: pago?.ClienteId);
+
+        return Ok(info);
+    }
+
+    /// <summary>
+    /// Dispara un intento nuevo usando el enlace de reintento.
+    /// Si el cobro se aplica con exito, marca los enlaces de la orden como usados.
+    /// Si la orden ya estaba pagada, retorna el pago sin duplicar el cobro.
+    /// 404 si no existe, 410 si expiro o si la orden ya no admite reintentos.
     /// </summary>
     [HttpPost("reintentos/{token}")]
     public async Task<ActionResult<PagoDto>> Reintentar(string token, CancellationToken cancelacion)
@@ -80,10 +130,11 @@ public sealed class PagosController : ControllerBase
                 $"No existe el enlace de reintento '{token}'.", "enlace_no_encontrado");
         }
 
-        if (!enlace.EstaVigente(DateTime.UtcNow))
+        var ahora = DateTime.UtcNow;
+        if (enlace.ExpiraEn <= ahora)
         {
             return Problema(StatusCodes.Status410Gone, "Enlace de reintento no vigente",
-                "El enlace de reintento ya se uso o expiro.", "enlace_no_vigente");
+                "El enlace de reintento ha expirado.", "enlace_no_vigente");
         }
 
         var pago = await _contexto.Pagos
@@ -96,7 +147,18 @@ public sealed class PagosController : ControllerBase
                 $"No hay un pago para la orden {enlace.OrdenId}.", "pago_no_encontrado");
         }
 
-        enlace.MarcarUsado();
+        if (pago.Estado == EstadoPago.APLICADO)
+        {
+            enlace.MarcarUsado();
+            await _contexto.SaveChangesAsync(cancelacion);
+            return Ok(PagoDto.Desde(pago));
+        }
+
+        if (enlace.Usado && pago.Estado != EstadoPago.PENDIENTE)
+        {
+            return Problema(StatusCodes.Status410Gone, "Enlace de reintento no vigente",
+                "El enlace de reintento ya se uso.", "enlace_no_vigente");
+        }
 
         var ultimoIntento = pago.Intentos.OrderByDescending(intento => intento.IntentoNumero).FirstOrDefault();
         var solicitud = new SolicitudCobro(
@@ -111,6 +173,23 @@ public sealed class PagosController : ControllerBase
             ultimoIntento?.Marca);
 
         await _servicioCobro.ProcesarCobroAsync(solicitud, cancelacion);
+
+        if (pago.Estado == EstadoPago.APLICADO)
+        {
+            var enlacesOrden = await _contexto.EnlacesReintento
+                .Where(e => e.OrdenId == pago.OrdenId)
+                .ToListAsync(cancelacion);
+
+            foreach (var e in enlacesOrden)
+            {
+                e.MarcarUsado();
+            }
+        }
+        else if (pago.Estado == EstadoPago.RECHAZADO)
+        {
+            enlace.MarcarUsado();
+        }
+
         await _contexto.SaveChangesAsync(cancelacion);
 
         return Ok(PagoDto.Desde(pago));

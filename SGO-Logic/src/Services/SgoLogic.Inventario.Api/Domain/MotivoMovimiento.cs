@@ -10,5 +10,8 @@ public enum MotivoMovimiento
     AJUSTE_MANUAL,
 
     /// <summary>Devolucion que repone unidades en la ubicacion (HU-014).</summary>
-    REINGRESO_DEVOLUCION
+    REINGRESO_DEVOLUCION,
+
+    /// <summary>Salida fisica por entrega de la orden.</summary>
+    DESPACHO
 }

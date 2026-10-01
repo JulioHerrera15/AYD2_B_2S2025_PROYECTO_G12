@@ -278,6 +278,34 @@ public sealed class ServicioDespachoTests
     }
 
     [Fact]
+    public async Task Un_despacho_cancelado_no_admite_ningun_estado()
+    {
+        var inventario = new ClienteInventarioFalso().Con(OrdenId, "CD-07", TipoUbicacion.CENTRO_DISTRIBUCION);
+        var (servicio, _, _, _, _) = Construir(inventario);
+        await servicio.SolicitarAsync(Solicitud(), CancellationToken.None);
+        await servicio.AnularPorOrdenCanceladaAsync(OrdenId, CancellationToken.None);
+
+        var ex = await Assert.ThrowsAsync<ExcepcionDespachoCancelado>(() => servicio.ActualizarEstadoAsync(
+            OrdenId, EstadoDespacho.EN_TRANSITO, null, DateTime.UtcNow, CancellationToken.None));
+
+        Assert.Equal("El despacho fue cancelado", ex.Message);
+    }
+
+    [Fact]
+    public async Task Cancelar_la_orden_no_anula_un_despacho_que_ya_salio_a_ruta()
+    {
+        var inventario = new ClienteInventarioFalso().Con(OrdenId, "CD-07", TipoUbicacion.CENTRO_DISTRIBUCION);
+        var (servicio, despachos, _, _, _) = Construir(inventario);
+        await servicio.SolicitarAsync(Solicitud(), CancellationToken.None);
+        await servicio.ActualizarEstadoAsync(
+            OrdenId, EstadoDespacho.EN_TRANSITO, null, DateTime.UtcNow, CancellationToken.None);
+
+        await servicio.AnularPorOrdenCanceladaAsync(OrdenId, CancellationToken.None);
+
+        Assert.Equal(EstadoDespacho.EN_TRANSITO, despachos.Todos.Single().Estado);
+    }
+
+    [Fact]
     public async Task Consultar_un_despacho_que_no_existe_lo_dice()
     {
         var (servicio, _, _, _, _) = Construir();

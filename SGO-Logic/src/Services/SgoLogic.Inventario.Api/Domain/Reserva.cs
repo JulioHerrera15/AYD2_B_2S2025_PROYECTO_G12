@@ -127,6 +127,12 @@ public sealed partial class Reserva
 
     public bool EstaActiva => Estado == EstadoReserva.ACTIVA;
 
+    /// <summary>
+    /// True mientras la reserva retiene unidades en <see cref="Existencia.CantidadReservada" />:
+    /// ACTIVA (a la espera del cobro) o CONFIRMADA (pagada, a la espera de salir a ruta).
+    /// </summary>
+    public bool RetieneStock => Estado is EstadoReserva.ACTIVA or EstadoReserva.CONFIRMADA;
+
     /// <summary>Devuelve true si el TTL ya vencio en el momento indicado.</summary>
     public bool HaVencido(DateTime ahora) => ahora.ToUniversalTime() >= ExpiraEn;
 
@@ -140,10 +146,56 @@ public sealed partial class Reserva
         }
     }
 
-    /// <summary>Marca la reserva como liberada por compensacion de la saga. Idempotente si ya no esta activa.</summary>
+    /// <summary>
+    /// La orden fue pagada: la reserva deja de estar sujeta al TTL y retiene las
+    /// unidades hasta que salgan a ruta. Solo es valida desde ACTIVA; repetirla
+    /// sobre una reserva ya CONFIRMADA no hace nada.
+    /// </summary>
+    public void Confirmar()
+    {
+        if (Estado == EstadoReserva.CONFIRMADA)
+        {
+            return;
+        }
+
+        if (Estado != EstadoReserva.ACTIVA)
+        {
+            throw new InvalidOperationException(
+                $"La reserva {Id} esta en {Estado} y solo puede confirmarse desde ACTIVA.");
+        }
+
+        Estado = EstadoReserva.CONFIRMADA;
+    }
+
+    /// <summary>
+    /// Marca la reserva como consumida: sus unidades salieron fisicamente del
+    /// almacen. Solo es valida desde ACTIVA o CONFIRMADA; repetirla sobre una
+    /// reserva ya ENTREGADA no hace nada.
+    /// </summary>
+    public void MarcarEntregada()
+    {
+        if (Estado == EstadoReserva.ENTREGADA)
+        {
+            return;
+        }
+
+        if (!RetieneStock)
+        {
+            throw new InvalidOperationException(
+                $"La reserva {Id} esta en {Estado} y ya no retiene unidades que entregar.");
+        }
+
+        Estado = EstadoReserva.ENTREGADA;
+        Secuencia += 1;
+    }
+
+    /// <summary>
+    /// Libera la reserva por compensacion de la saga (cobro fallido, cancelacion del
+    /// cliente). Aplica sobre ACTIVA o CONFIRMADA; en cualquier otro estado no hace nada.
+    /// </summary>
     public void Liberar()
     {
-        if (Estado == EstadoReserva.ACTIVA)
+        if (RetieneStock)
         {
             Estado = EstadoReserva.LIBERADA;
             Secuencia += 1;

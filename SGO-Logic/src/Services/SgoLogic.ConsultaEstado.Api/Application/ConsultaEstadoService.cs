@@ -135,7 +135,7 @@ public sealed class ConsultaEstadoService : IConsultaEstadoService
             Tamano: tamano,
             TotalRegistros: total,
             Ordenes: ordenes.Select(o => new OrdenResumenDto(
-                o.OrdenId, o.NumeroOrden ?? string.Empty, o.Estado ?? "CREADA", o.Total, o.ActualizadaEn, o.ClienteId))
+                o.OrdenId, o.NumeroOrden ?? string.Empty, o.Estado ?? "CREADA", o.Total, o.ActualizadaEn, o.ClienteId, o.CreadaEn))
                 .ToList());
     }
 

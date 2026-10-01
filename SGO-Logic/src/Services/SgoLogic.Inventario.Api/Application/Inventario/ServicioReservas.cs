@@ -125,6 +125,31 @@ public sealed class ServicioReservas
         return ResultadoReservaDto.Confirmada(ReservaDto.Desde(reserva));
     }
 
+    /// <summary>
+    /// La orden fue pagada (OrdenConfirmada): la reserva ACTIVA pasa a CONFIRMADA y
+    /// deja de expirar por TTL, reteniendo las unidades hasta que salgan a ruta. No
+    /// descuenta stock fisico. Idempotente: si ya esta CONFIRMADA o ENTREGADA no
+    /// cambia nada; si ya no retiene stock (EXPIRADA o LIBERADA) tampoco.
+    ///
+    /// Devuelve el estado con el que quedo la reserva, o null si la orden no tiene
+    /// ninguna. No llama a SaveChanges: la transaccion la cierra quien llama.
+    /// </summary>
+    public async Task<EstadoReserva?> ConfirmarAsync(string ordenId, CancellationToken cancelacion)
+    {
+        var reserva = await _reservas.ObtenerPorOrdenAsync(ordenId, cancelacion);
+        if (reserva is null)
+        {
+            return null;
+        }
+
+        if (reserva.Estado == EstadoReserva.ACTIVA)
+        {
+            reserva.Confirmar();
+        }
+
+        return reserva.Estado;
+    }
+
     public async Task<ReservaDto> ObtenerPorOrdenAsync(string ordenId, CancellationToken cancelacion)
     {
         var reserva = await _reservas.ObtenerPorOrdenAsync(ordenId, cancelacion)

@@ -89,6 +89,8 @@ public sealed class ConsultaEstadoOrdenesConsumidor
         var data = Deserializar<OrdenCreadaData>(evt.Data);
         if (!ValidarSequence(evt, ctx, out var vista)) return;
 
+        var fechaCreacion = data.CreadaEn != default ? data.CreadaEn : evt.OccurredAt;
+
         if (vista is null)
         {
             vista = new OrdenVista
@@ -103,9 +105,22 @@ public sealed class ConsultaEstadoOrdenesConsumidor
                 Subtotal = data.Subtotal,
                 Impuestos = data.Impuestos,
                 Total = data.Total,
-                CreadaEn = evt.OccurredAt
+                CreadaEn = fechaCreacion
             };
             ctx.OrdenesVista.Add(vista);
+        }
+        else
+        {
+            vista.NumeroOrden = data.NumeroOrden;
+            vista.ClienteId = data.ClienteId;
+            vista.Canal = data.Canal.ToString();
+            vista.MetodoEntrega = data.MetodoEntrega.ToString();
+            vista.UbicacionSolicitadaId = data.UbicacionSolicitadaId;
+            vista.Moneda = data.Moneda.ToString();
+            vista.Subtotal = data.Subtotal;
+            vista.Impuestos = data.Impuestos;
+            vista.Total = data.Total;
+            vista.CreadaEn = fechaCreacion;
         }
 
         // EVENTO 1: escribe Estado
@@ -165,13 +180,19 @@ public sealed class ConsultaEstadoOrdenesConsumidor
     {
         var data = Deserializar<OrdenCanceladaData>(evt.Data);
         var vista = await ObtenerOCrearVista(evt.AggregateId, ctx, ct);
-        if (!AplicarSequence(evt, vista)) return;
+        // OrdenCancelada comparte sequence con el OrdenEstadoCambiado de la misma
+        // transicion. Se descarta solo si es mas viejo que lo ya aplicado, y no
+        // avanza UltimoSequence: si llegara primero, bloquearia al evento
+        // autoritativo que escribe Estado = CANCELADA / RECHAZADA.
+        if (evt.Sequence < vista.UltimoSequence) return;
 
-        // EVENTO 9: enriquece — NO toca Estado
-        vista.MotivoUltimoCambio = data.Motivo.ToString();
+        // EVENTO 9: enriquece — NO toca Estado. El detalle es el motivo legible de
+        // la transicion (el que ve el cliente); el enum queda como respaldo.
+        vista.MotivoUltimoCambio = string.IsNullOrWhiteSpace(data.Detalle)
+            ? data.Motivo.ToString()
+            : data.Detalle;
         vista.RequiereReembolso = data.RequiereReembolso;
         vista.MontoReembolso = data.MontoReembolso;
-        vista.UltimoSequence = evt.Sequence;
         vista.ActualizadaEn = DateTime.UtcNow;
 
         await ctx.SaveChangesAsync(ct);
