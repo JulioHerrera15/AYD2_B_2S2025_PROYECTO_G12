@@ -147,12 +147,12 @@
                                 </td>
                                 <td class="py-4 px-4">
                                     <span class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold @item.EstadoBadgeClass">
-                                        @item.Estado
+                                        @item.EstadoLabel
                                     </span>
                                 </td>
                                 <td class="py-4 px-4 text-right">
                                     <div class="flex items-center justify-end gap-2">
-                                        @if (item.Estado == "EN_PREPARACION" || item.Estado == "GUIA_ASIGNADA" || item.Estado == "ORIGEN_PENDIENTE" || item.Estado == "GUIA_SOLICITADA")
+                                        @if (item.PuedeEnviarARuta)
                                         {
                                             <form method="post" action="/Despacho/ActualizarEstado" class="inline">
                                                 <input type="hidden" name="ordenId" value="@item.OrdenId" />

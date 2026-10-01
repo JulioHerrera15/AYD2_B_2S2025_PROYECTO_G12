@@ -16,7 +16,7 @@ public class CatalogoController : Controller
 {
     private readonly GatewayClient _gateway;
 
-    private static readonly List<ProductoCatalogo> Productos =
+    public static readonly List<ProductoCatalogo> Productos =
     [
         new("PROD-001", "Lumina Smart Refrigerator Pro", "Línea Blanca", 14999.00m,
             "Refrigeradora inteligente de 28 pies cúbicos, compuerta French Door, panel táctil Wi-Fi y enfriamiento Twin Cooling Plus.",

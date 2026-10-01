@@ -126,6 +126,42 @@ public sealed class ServicioLiberacionReservasTests
     }
 
     [Fact]
+    public async Task Liberar_una_reserva_confirmada_devuelve_las_unidades()
+    {
+        // Cancelacion del cliente despues de pagar: la reserva ya estaba CONFIRMADA.
+        var existencia = ExistenciaConReserva(10, 4);
+        var reserva = ReservaActiva();
+        reserva.Confirmar();
+        var (servicio, _, _, outbox) = Construir(existencia, reserva);
+
+        var libero = await servicio.LiberarAsync(
+            OrdenId, MotivoLiberacionReserva.CANCELACION_CLIENTE, CancellationToken.None);
+
+        Assert.True(libero);
+        Assert.Equal(EstadoReserva.LIBERADA, reserva.Estado);
+        Assert.Equal(0, existencia.CantidadReservada);
+        Assert.Equal(10, existencia.CantidadFisica);
+        Assert.Single(outbox.PorTipo(ReservaInventarioLiberada.EventType));
+    }
+
+    [Fact]
+    public async Task Una_reserva_ya_entregada_no_se_libera()
+    {
+        var existencia = new Existencia(Sku, Ubicacion, TipoUbicacion.CENTRO_DISTRIBUCION, 6);
+        var reserva = ReservaActiva();
+        reserva.MarcarEntregada();
+        var (servicio, _, _, outbox) = Construir(existencia, reserva);
+
+        var libero = await servicio.LiberarAsync(
+            OrdenId, MotivoLiberacionReserva.CANCELACION_CLIENTE, CancellationToken.None);
+
+        Assert.False(libero);
+        Assert.Equal(EstadoReserva.ENTREGADA, reserva.Estado);
+        Assert.Equal(0, existencia.CantidadReservada);
+        Assert.Empty(outbox.Eventos);
+    }
+
+    [Fact]
     public async Task El_mensaje_repetido_no_duplica_la_liberacion()
     {
         var existencia = ExistenciaConReserva(10, 4);

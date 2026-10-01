@@ -53,20 +53,28 @@ require_success() {
   fi
 }
 
-# El registro siempre deja rol CLIENTE y no hay endpoint que lo cambie, asi que
-# los roles se asignan directo en la base por prefijo de correo. Solo corre desde
-# el host: dentro del contenedor de seed no hay cliente de Postgres.
+# Asignacion de roles mediante el endpoint oficial /api/auth/asignar-rol
+# y actualizacion de seguridad directa en Postgres como respaldo.
 asignar_roles() {
-  if ! command -v docker >/dev/null 2>&1; then
-    printf 'Sin docker en el PATH: los roles quedan en CLIENTE (asignalos a mano en auth.usuarios).\n'
-    return 0
-  fi
+  for u in "${USUARIOS_DEMO[@]}"; do
+    local correo="${u%%|*}"
+    local rol="CLIENTE"
+    if [[ "$correo" == admin* ]]; then
+      rol="ADMIN"
+    elif [[ "$correo" == operador* ]]; then
+      rol="OPERADOR"
+    fi
+    request POST "$BASE_URL/api/auth/asignar-rol" "{\"email\":\"$correo\",\"rol\":\"$rol\"}" || true
+  done
 
-  docker compose exec -T "$DB_SERVICIO" psql -U "$DB_USUARIO" -d sgo_auth -v ON_ERROR_STOP=1 <<'SQL'
+  if command -v docker >/dev/null 2>&1; then
+    docker compose exec -T "$DB_SERVICIO" psql -U "$DB_USUARIO" -d sgo_auth -v ON_ERROR_STOP=1 <<'SQL' >/dev/null 2>&1 || true
 UPDATE auth.usuarios SET rol = 'ADMIN'    WHERE email LIKE 'admin%@sgo.local';
 UPDATE auth.usuarios SET rol = 'OPERADOR' WHERE email LIKE 'operador%@sgo.local';
 SQL
+  fi
 }
+
 
 # Lee de la cola del mock de mensajeria el ultimo codigo enviado a un correo.
 leer_codigo() {

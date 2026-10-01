@@ -108,4 +108,65 @@ public sealed class AuthController : ControllerBase
             return Unauthorized(new ProblemDetails { Title = "No autorizado", Detail = ex.Message });
         }
     }
+
+    /// <summary>
+    /// Asigna o actualiza el rol oficial del usuario (CLIENTE, OPERADOR, ADMIN).
+    /// Rechaza cualquier rol ficticio o invalido.
+    /// </summary>
+    [HttpPost("asignar-rol")]
+    [ProducesResponseType<AsignarRolResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AsignarRol([FromBody] AsignarRolRequest request, CancellationToken ct)
+    {
+        try
+        {
+            var resultado = await _auth.AsignarRolAsync(request, ct);
+            return Ok(resultado);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new ProblemDetails { Title = "Solicitud invalida", Detail = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new ProblemDetails { Title = "No encontrado", Detail = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Consulta los datos del usuario registrado por correo electronico.
+    /// </summary>
+    [HttpGet("usuario")]
+    [ProducesResponseType<UsuarioDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> ObtenerUsuario([FromQuery] string email, CancellationToken ct)
+    {
+        try
+        {
+            var usuario = await _auth.ObtenerUsuarioPorEmailAsync(email, ct);
+            return Ok(usuario);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new ProblemDetails { Title = "Solicitud invalida", Detail = ex.Message });
+        }
+        catch (KeyNotFoundException ex)
+        {
+            return NotFound(new ProblemDetails { Title = "No encontrado", Detail = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Lista todos los usuarios registrados en el sistema.
+    /// </summary>
+    [HttpGet("usuarios")]
+    [ProducesResponseType<List<UsuarioDto>>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ListarUsuarios(CancellationToken ct)
+    {
+        var usuarios = await _auth.ListarUsuariosAsync(ct);
+        return Ok(usuarios);
+    }
 }
+

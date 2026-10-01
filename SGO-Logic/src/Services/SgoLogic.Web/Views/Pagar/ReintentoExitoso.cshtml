@@ -1,0 +1,66 @@
+@{
+    ViewData["Title"] = "¡Pago Procesado Exitosamente! - MegaStore";
+    var ordenId = ViewBag.OrdenId as string ?? TempData["OrdenId"] as string ?? "";
+    var monto = TempData["Monto"] as string;
+    var moneda = TempData["Moneda"] as string ?? "GTQ";
+}
+
+<div class="max-w-xl mx-auto text-center py-12 px-4">
+    <!-- Icono de Éxito -->
+    <div class="w-16 h-16 rounded-full bg-secondary-fixed text-on-secondary-fixed flex items-center justify-center mx-auto mb-6 ambient-shadow">
+        <span class="material-symbols-outlined text-3xl" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+    </div>
+
+    <h1 class="text-3xl font-extrabold text-primary tracking-tight mb-2">¡Pago Procesado Exitosamente!</h1>
+    <p class="text-sm text-text-muted mb-8">
+        El cobro de tu orden ha sido confirmado por la pasarela de pagos. Tu pedido continúa su curso normal en la saga de despacho y facturación.
+    </p>
+
+    <!-- Tarjeta Resumen -->
+    <div class="bg-surface-white rounded-2xl p-6 border border-border-subtle/80 ambient-shadow mb-8 text-left">
+        <div class="flex items-center justify-between pb-4 border-b border-border-subtle/40 mb-4">
+            <div>
+                <span class="text-xs text-text-muted block">Identificador de Orden</span>
+                <span class="text-base font-bold font-mono text-primary">@ordenId</span>
+            </div>
+            <span class="bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold px-3 py-1 rounded-full">
+                PAGO APLICADO
+            </span>
+        </div>
+
+        <div class="space-y-3 text-xs">
+            @if (!string.IsNullOrWhiteSpace(monto))
+            {
+                <div class="flex justify-between">
+                    <span class="text-text-muted">Monto Cobrado</span>
+                    <span class="font-bold text-primary text-sm font-mono">@moneda @monto</span>
+                </div>
+            }
+            <div class="flex justify-between">
+                <span class="text-text-muted">Estado del Pedido</span>
+                <span class="font-medium text-emerald-700">Confirmado y en proceso de entrega</span>
+            </div>
+            <div class="flex justify-between">
+                <span class="text-text-muted">Facturación</span>
+                <span class="font-medium text-primary">Documento Tributario Electrónico (SAT FEL)</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Botones de Acción -->
+    <div class="flex flex-col sm:flex-row gap-3 justify-center">
+        <a href="/Estado/Comprobante?ordenId=@ordenId" class="inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-6 py-3.5 rounded-full font-bold text-sm shadow-md hover:opacity-95 transition-all">
+            <span class="material-symbols-outlined text-lg">receipt_long</span>
+            <span>Ver Comprobante SAT FEL</span>
+        </a>
+
+        <a href="/Estado?ordenId=@ordenId" class="inline-flex items-center justify-center gap-2 bg-white border border-border-subtle text-primary px-6 py-3.5 rounded-full font-bold text-sm hover:bg-surface-container-low transition-all">
+            <span class="material-symbols-outlined text-lg">timeline</span>
+            <span>Seguimiento de Orden</span>
+        </a>
+
+        <a href="/" class="inline-flex items-center justify-center gap-2 bg-surface-container-low text-text-muted px-5 py-3.5 rounded-full font-semibold text-sm hover:text-primary transition-all">
+            <span>Volver a la Tienda</span>
+        </a>
+    </div>
+</div>

@@ -39,6 +39,9 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes;
 /// </summary>
 public sealed class ManejadorEventosInventario
 {
+    /// <summary>Motivo visible para el cliente cuando Inventario rechaza la reserva.</summary>
+    public const string MotivoReservaRechazada = "El producto ya fue reservado previamente";
+
     private readonly IRegistroMensajesProcesados _registro;
     private readonly IRepositorioOrdenes _ordenes;
     private readonly IOutboxWriter _outbox;
@@ -91,6 +94,16 @@ public sealed class ManejadorEventosInventario
                 evento.TipoEvento,
                 evento.OrdenId);
             return ResultadoEventoInventario.Ignorado;
+        }
+
+        if (evento.TipoEvento == InventarioReservado.EventType && orden.Estado == EstadoOrden.CANCELADA)
+        {
+            // El cliente cancelo mientras la reserva estaba en camino (la orden no
+            // tenia ReservaId y por eso no se pidio liberar nada). La orden no se
+            // mueve; se pide liberar la reserva que Inventario acaba de crear.
+            _registro.Registrar(evento.MessageId, evento.TipoEvento);
+            await LiberarReservaTardiaAsync(orden, (InventarioReservadoData)evento.Datos, cancelacion);
+            return ResultadoEventoInventario.Aplicado;
         }
 
         if (orden.Estado == estadoDestino)
@@ -204,12 +217,42 @@ public sealed class ManejadorEventosInventario
             orden.Id);
     }
 
+    private async Task LiberarReservaTardiaAsync(
+        Orden orden,
+        InventarioReservadoData datos,
+        CancellationToken cancelacion)
+    {
+        orden.RegistrarReserva(datos.ReservaId, datos.UbicacionId);
+
+        _outbox.Encolar(
+            LiberacionReservaSolicitada.EventType,
+            LiberacionReservaSolicitada.AggregateType,
+            orden.Id,
+            orden.Secuencia,
+            TopologiaMensajeria.ExchangeEventos,
+            LiberacionReservaSolicitada.RoutingKey,
+            new LiberacionReservaSolicitadaData(
+                OrdenId: orden.Id,
+                ReservaId: datos.ReservaId,
+                Motivo: MotivoLiberacionReserva.CANCELACION_CLIENTE,
+                SolicitadaEn: DateTime.UtcNow));
+
+        await _unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
+
+        _logger.LogInformation(
+            "Reserva {ReservaId} llego para la orden {OrdenId} ya cancelada; se pidio su liberacion.",
+            datos.ReservaId,
+            orden.Id);
+    }
+
     private async Task ManejarReservaRechazadaAsync(
         Orden orden,
         EstadoOrden estadoDestino,
         CancellationToken cancelacion)
     {
-        var transicion = orden.TransicionarA(estadoDestino, motivo: "Stock insuficiente", pasoSaga: PasoSaga.RESERVA, esCompensacion: true);
+        // El motivo viaja en OrdenEstadoCambiado y OrdenCancelada hasta ConsultaEstado,
+        // que es lo que ve el cliente: por eso va en lenguaje de cliente.
+        var transicion = orden.TransicionarA(estadoDestino, motivo: MotivoReservaRechazada, pasoSaga: PasoSaga.RESERVA, esCompensacion: true);
 
         _outbox.Encolar(
             OrdenEstadoCambiado.EventType,

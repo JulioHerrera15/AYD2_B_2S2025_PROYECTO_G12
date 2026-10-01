@@ -101,7 +101,8 @@ despacho.MapPost("/{ordenId}/estados", async (
         await unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
         return Results.Ok(resultado);
     }
-    catch (Exception ex) when (ex is ExcepcionDespachoNoEncontrado or ExcepcionTransicionDespachoInvalida or ExcepcionConflictoConcurrencia)
+    catch (Exception ex) when (ex is ExcepcionDespachoNoEncontrado or ExcepcionTransicionDespachoInvalida
+        or ExcepcionDespachoCancelado or ExcepcionConflictoConcurrencia)
     {
         return MapearError(ex);
     }
@@ -210,6 +211,12 @@ static IResult MapearError(Exception ex) => ex switch
         detail: ex.Message,
         statusCode: StatusCodes.Status409Conflict,
         extensions: new Dictionary<string, object?> { ["codigo"] = "transicion_invalida" }),
+
+    ExcepcionDespachoCancelado => Results.Problem(
+        title: "El despacho fue cancelado",
+        detail: ex.Message,
+        statusCode: StatusCodes.Status409Conflict,
+        extensions: new Dictionary<string, object?> { ["codigo"] = "despacho_cancelado" }),
 
     ExcepcionConflictoConcurrencia => Results.Problem(
         title: "Conflicto de concurrencia",

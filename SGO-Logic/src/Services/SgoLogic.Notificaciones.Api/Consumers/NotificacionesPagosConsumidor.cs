@@ -60,10 +60,31 @@ public sealed class NotificacionesPagosConsumidor
         try
         {
             var cliente = servicios.GetRequiredService<IMockMensajeriaClient>();
+            var config = servicios.GetService<Microsoft.Extensions.Configuration.IConfiguration>();
 
             var asunto = $"Pago pendiente para tu orden {data.OrdenId}";
-            var urlReintento = data.EnlaceReintento?.Url ?? "(enlace no disponible)";
             var expiraEn = data.EnlaceReintento?.ExpiraEn.ToString("u") ?? "N/A";
+
+            var basePortal = config?["WebPortal:BaseUrl"] ?? "http://localhost:8092";
+            var urlOriginal = data.EnlaceReintento?.Url;
+            string urlReintento;
+
+            if (!string.IsNullOrWhiteSpace(urlOriginal) && (urlOriginal.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || urlOriginal.StartsWith("https://", StringComparison.OrdinalIgnoreCase)))
+            {
+                urlReintento = urlOriginal;
+            }
+            else if (!string.IsNullOrWhiteSpace(data.EnlaceReintento?.Token))
+            {
+                urlReintento = $"{basePortal.TrimEnd('/')}/Pagar/Reintentar?token={data.EnlaceReintento.Token}";
+            }
+            else if (!string.IsNullOrWhiteSpace(urlOriginal))
+            {
+                urlReintento = $"{basePortal.TrimEnd('/')}/{urlOriginal.TrimStart('/')}";
+            }
+            else
+            {
+                urlReintento = "(enlace no disponible)";
+            }
 
             // El motivo tecnico (data.MotivoFalla) NO va al cliente: puede traer nombres de
             // host, del proveedor o errores de red. Queda en el intento de pago, en el log

@@ -56,6 +56,39 @@ public static class PermisosHelper
     }
 
     /// <summary>
+    /// Email del usuario segun el claim <c>email</c> del JWT emitido por Auth.Api, o
+    /// null si no hay token o no trae el claim. Es la identidad con la que se opera
+    /// sobre recursos del propio cliente (por ejemplo, cancelar una orden).
+    /// </summary>
+    public static string? ObtenerEmailDesdeJwt(string? jwtToken)
+    {
+        var partes = jwtToken?.Split('.');
+        if (partes is null || partes.Length < 2)
+        {
+            return null;
+        }
+
+        try
+        {
+            var payload = partes[1].Replace('-', '+').Replace('_', '/');
+            payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
+
+            using var doc = JsonDocument.Parse(Convert.FromBase64String(payload));
+            if (doc.RootElement.TryGetProperty("email", out var email) && email.ValueKind == JsonValueKind.String)
+            {
+                var valor = email.GetString();
+                return string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
+            }
+        }
+        catch (Exception ex) when (ex is FormatException or JsonException)
+        {
+            // Token corrupto o invalido
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Determina el rol del usuario utilizando prioritariamente el token JWT firmado de la API.
     /// </summary>
     public static string DeterminarRol(string? userEmail, string? jwtToken = null)

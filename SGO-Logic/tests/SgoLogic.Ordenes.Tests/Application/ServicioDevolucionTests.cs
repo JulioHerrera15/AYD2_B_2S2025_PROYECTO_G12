@@ -95,7 +95,8 @@ public sealed class ServicioDevolucionTests
                 outbox,
                 unidad,
                 new GeneradorCorrelativoOrdenFalso(),
-                new PoliticaMediosPago(MediosPago)));
+                new PoliticaMediosPago(MediosPago),
+                new ClienteCarritoFalso()));
         return (servicio, ordenes, outbox, unidad);
     }
 

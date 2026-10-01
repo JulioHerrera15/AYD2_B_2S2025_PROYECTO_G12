@@ -34,7 +34,8 @@ public sealed record OrdenResumenDto(
     string Estado,
     decimal Total,
     DateTime ActualizadaEn,
-    string? ClienteId = null);
+    string? ClienteId = null,
+    DateTime? CreadaEn = null);
 
 public sealed record HistorialOrdenesDto(
     string ClienteId,

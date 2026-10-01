@@ -10,6 +10,9 @@ public interface IAuthService
     Task<RegistroResponse> ReenviarCodigoAsync(string email, CancellationToken ct = default);
     Task<VerificarEmailResponse> VerificarEmailAsync(VerificarEmailRequest request, CancellationToken ct = default);
     Task<LoginResponse> LoginAsync(LoginRequest request, CancellationToken ct = default);
+    Task<AsignarRolResponse> AsignarRolAsync(AsignarRolRequest request, CancellationToken ct = default);
+    Task<UsuarioDto> ObtenerUsuarioPorEmailAsync(string email, CancellationToken ct = default);
+    Task<List<UsuarioDto>> ListarUsuariosAsync(CancellationToken ct = default);
 }
 
 public sealed class AuthService : IAuthService
@@ -172,9 +175,74 @@ public sealed class AuthService : IAuthService
         return _jwt.GenerarToken(usuario);
     }
 
+    public async Task<AsignarRolResponse> AsignarRolAsync(AsignarRolRequest request, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(request.Email))
+            throw new ArgumentException("El correo electronico es requerido.");
+
+        var rolNormalizado = string.IsNullOrWhiteSpace(request.Rol) ? "CLIENTE" : request.Rol.Trim().ToUpperInvariant();
+        if (rolNormalizado != "CLIENTE" && rolNormalizado != "OPERADOR" && rolNormalizado != "ADMIN")
+        {
+            throw new ArgumentException($"El rol '{request.Rol}' no es valido. Roles oficiales del sistema: CLIENTE, OPERADOR, ADMIN.");
+        }
+
+        var emailNormalizado = request.Email.ToLowerInvariant().Trim();
+        var usuario = await _contexto.Usuarios
+            .FirstOrDefaultAsync(u => u.Email == emailNormalizado, ct)
+            ?? throw new KeyNotFoundException($"No se encontro un usuario registrado con el correo {request.Email}.");
+
+        usuario.AsignarRol(rolNormalizado);
+        await _contexto.SaveChangesAsync(ct);
+
+        _logger.LogInformation(
+            "Rol actualizado en base de datos para usuario {Email}: {NuevoRol}",
+            emailNormalizado, rolNormalizado);
+
+        return new AsignarRolResponse(
+            Email: usuario.Email,
+            Rol: usuario.Rol,
+            Mensaje: $"Rol asignado exitosamente: {usuario.Rol}");
+    }
+
+    public async Task<UsuarioDto> ObtenerUsuarioPorEmailAsync(string email, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(email))
+            throw new ArgumentException("El correo electronico es requerido.");
+
+        var emailNormalizado = email.ToLowerInvariant().Trim();
+        var usuario = await _contexto.Usuarios.AsNoTracking()
+            .FirstOrDefaultAsync(u => u.Email == emailNormalizado, ct)
+            ?? throw new KeyNotFoundException($"No se encontro un usuario con el correo {email}.");
+
+        return new UsuarioDto(
+            Id: usuario.Id,
+            Email: usuario.Email,
+            NombreCompleto: usuario.NombreCompleto,
+            Rol: usuario.Rol,
+            EmailVerificado: usuario.EmailVerificado,
+            CreadoEn: usuario.CreadoEn);
+    }
+
+    public async Task<List<UsuarioDto>> ListarUsuariosAsync(CancellationToken ct = default)
+    {
+        var usuarios = await _contexto.Usuarios.AsNoTracking()
+            .OrderByDescending(u => u.CreadoEn)
+            .ToListAsync(ct);
+
+        return usuarios.Select(u => new UsuarioDto(
+            Id: u.Id,
+            Email: u.Email,
+            NombreCompleto: u.NombreCompleto,
+            Rol: u.Rol,
+            EmailVerificado: u.EmailVerificado,
+            CreadoEn: u.CreadoEn
+        )).ToList();
+    }
+
     private static string GenerarCodigo6Digitos()
     {
         // Usa Random criptograficamente seguro
         return Random.Shared.Next(100_000, 999_999).ToString();
     }
 }
+

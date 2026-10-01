@@ -12,6 +12,14 @@ public interface ICarritoService
     Task ActualizarCantidadItemAsync(string clienteOSesionId, string sku, int nuevaCantidad, CancellationToken ct = default);
     Task EliminarItemAsync(string clienteOSesionId, string sku, CancellationToken ct = default);
     Task AsociarAsync(string sesionId, string clienteId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Vacia el carrito completo (borra la clave de Redis). Lo usa el endpoint
+    /// interno que llama Ordenes al confirmar una orden: esa orden ya consumio
+    /// el carrito, sin importar si el cobro posterior queda pendiente o
+    /// exitoso.
+    /// </summary>
+    Task VaciarAsync(string clienteOSesionId, CancellationToken ct = default);
 }
 
 public sealed class CarritoService : ICarritoService
@@ -121,6 +129,12 @@ public sealed class CarritoService : ICarritoService
             await _redis.KeyDeleteAsync(clave);
         else
             await _redis.StringSetAsync(clave, JsonSerializer.Serialize(items), TimeSpan.FromSeconds(_ttlSegundos));
+    }
+
+    public async Task VaciarAsync(string clienteOSesionId, CancellationToken ct = default)
+    {
+        var clave = await ResolverClaveAsync(clienteOSesionId, ct);
+        await _redis.KeyDeleteAsync(clave);
     }
 
     public async Task AsociarAsync(string sesionId, string clienteId, CancellationToken ct = default)

@@ -178,6 +178,13 @@ public sealed class Despacho
     /// </summary>
     public bool ActualizarEstadoEntrega(EstadoDespacho nuevoEstado, string? detalle, DateTime ocurridoEn)
     {
+        // Un despacho anulado por cancelacion de la orden no admite ninguna
+        // transicion: ni siquiera repetir ANULADA por esta via.
+        if (Estado == EstadoDespacho.ANULADA)
+        {
+            throw new ExcepcionDespachoCancelado(OrdenId);
+        }
+
         if (Estado == nuevoEstado)
         {
             return false;
@@ -236,10 +243,17 @@ public sealed class Despacho
         Avanzar();
     }
 
-    /// <summary>La orden se cancelo: el despacho se anula para no dejar guias huerfanas.</summary>
+    /// <summary>
+    /// La orden se cancelo: el despacho se anula (estado cancelado) para no dejar
+    /// guias huerfanas. Solo antes de salir a ruta; un despacho EN_TRANSITO,
+    /// LISTA_PARA_RECOGER o ENTREGADA ya saco las unidades y no se toca.
+    /// </summary>
     public bool Anular()
     {
-        if (Estado is EstadoDespacho.ENTREGADA or EstadoDespacho.ANULADA)
+        if (Estado is EstadoDespacho.EN_TRANSITO
+            or EstadoDespacho.LISTA_PARA_RECOGER
+            or EstadoDespacho.ENTREGADA
+            or EstadoDespacho.ANULADA)
         {
             return false;
         }

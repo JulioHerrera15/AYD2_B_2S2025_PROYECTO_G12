@@ -13,7 +13,9 @@ public sealed record DespachoItemModel(
     string Transportista,
     string? Guia,
     string Estado,
-    string EstadoBadgeClass);
+    string EstadoBadgeClass,
+    string EstadoLabel,
+    bool PuedeEnviarARuta);
 
 public sealed record DespachoViewModel(
     string Filtro,
@@ -92,7 +94,9 @@ public class DespachoController : Controller
             Transportista: item.MetodoEntrega == "RECOGIDA_TIENDA" ? "Flota Interna" : "LogiExpress",
             Guia: item.GuiaId,
             Estado: item.Estado,
-            EstadoBadgeClass: MapearBadgeEstado(item.Estado)
+            EstadoBadgeClass: MapearBadgeEstado(item.Estado),
+            EstadoLabel: item.Estado == EstadoAnulado ? "CANCELADO" : item.Estado,
+            PuedeEnviarARuta: PuedeEnviarARuta(item.Estado, item.MetodoEntrega)
         )).ToList();
 
         var filtrados = filtroNormalizado switch
@@ -154,8 +158,28 @@ public class DespachoController : Controller
         return RedirectToAction("Index");
     }
 
+    /// <summary>Estado de Despacho con el que se representa un despacho cancelado.</summary>
+    private const string EstadoAnulado = "ANULADA";
+
+    /// <summary>
+    /// Estados desde los que el dominio de Despacho (TransicionesEntrega) admite el
+    /// paso a ruta: EN_TRANSITO para domicilio y LISTA_PARA_RECOGER para recogida.
+    /// Un despacho cancelado nunca muestra el boton.
+    /// </summary>
+    private static readonly HashSet<string> OrigenesHaciaEnTransito =
+        new(StringComparer.OrdinalIgnoreCase) { "EN_PREPARACION", "GUIA_ASIGNADA", "GUIA_PENDIENTE", "INCIDENCIA" };
+
+    private static readonly HashSet<string> OrigenesHaciaListaParaRecoger =
+        new(StringComparer.OrdinalIgnoreCase) { "EN_PREPARACION", "RECOGIDA_TIENDA", "INCIDENCIA" };
+
+    private static bool PuedeEnviarARuta(string estado, string metodoEntrega) =>
+        metodoEntrega == "RECOGIDA_TIENDA"
+            ? OrigenesHaciaListaParaRecoger.Contains(estado)
+            : OrigenesHaciaEnTransito.Contains(estado);
+
     private static string MapearBadgeEstado(string estado) => estado switch
     {
+        EstadoAnulado => "bg-gray-100 text-gray-600 border border-gray-300",
         "ENTREGADA" or "LISTA_PARA_RECOGER" => "bg-emerald-100 text-emerald-800 border border-emerald-200",
         "EN_TRANSITO" => "bg-purple-100 text-purple-800 border border-purple-200",
         "EN_PREPARACION" => "bg-amber-100 text-amber-800 border border-amber-200",

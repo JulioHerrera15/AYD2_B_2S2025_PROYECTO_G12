@@ -16,6 +16,14 @@ public sealed record AuthResult(
     DateTime ExpiraEn,
     [property: JsonPropertyName("rol")] string? Rol = "CLIENTE");
 
+public sealed record UsuarioDto(
+    Guid Id,
+    string Email,
+    string NombreCompleto,
+    string Rol,
+    bool EmailVerificado,
+    DateTime CreadoEn);
+
 public sealed record ItemCarritoModel(
     [property: JsonPropertyName("sku")] string Sku,
     [property: JsonPropertyName("descripcion")] string Descripcion,
@@ -99,7 +107,21 @@ public sealed record OrdenHistorialResumenModel(
     string Estado,
     decimal Total,
     DateTime ActualizadaEn,
-    string? ClienteId = null);
+    string? ClienteId = null,
+    DateTime? CreadaEn = null);
+
+public sealed record FacturaModel(string Serie, string NumeroDocumento, string Xml);
+
+// ── Informe de ventas conciliado (Integracion ERP) ───────────────────────────
+public sealed record InformeVentasModel(DateTime GeneradoEn, int VentasPendientes, decimal MontoPendiente, List<LoteInformeModel> Lotes);
+public sealed record LoteInformeModel(
+    string LoteId, long Secuencia, DateTime FechaGeneracion, string Formato, string Estado,
+    int CantidadRegistros, decimal MontoTotal, int Intentos, int? CodigoHttp, DateTime? EnviadoEn, DateTime? ConfirmadoEn,
+    ConciliacionInformeModel? Conciliacion, List<RegistroInformeModel> Registros);
+public sealed record ConciliacionInformeModel(DateTime Fecha, int RegistrosErp, decimal MontoErp, bool Conciliada, string? Diferencias, DateTime CreadaEn);
+public sealed record RegistroInformeModel(string OrdenId, string Canal, string Tienda, decimal Monto, DateTime Fecha);
+public sealed record EventoAuditoriaModel(string EventId, string EventType, DateTime OccurredAt, string TransactionId, string AggregateId, string Source, DateTime FechaRecepcion);
+public sealed record PaginaAuditoriaModel(List<EventoAuditoriaModel> Items, int Total);
 
 public sealed record HistorialClienteModel(
     string ClienteId,
@@ -107,6 +129,32 @@ public sealed record HistorialClienteModel(
     int Tamano,
     int TotalRegistros,
     List<OrdenHistorialResumenModel> Ordenes);
+
+// ── Modelos de Reintento de Pago ─────────────────────────────────────────────
+public sealed record EnlaceReintentoInfoModel(
+    [property: JsonPropertyName("token")] string Token,
+    [property: JsonPropertyName("ordenId")] string OrdenId,
+    [property: JsonPropertyName("monto")] decimal Monto,
+    [property: JsonPropertyName("moneda")] string Moneda,
+    [property: JsonPropertyName("estaVigente")] bool EstaVigente,
+    [property: JsonPropertyName("usado")] bool Usado,
+    [property: JsonPropertyName("expiraEn")] DateTime ExpiraEn,
+    [property: JsonPropertyName("estadoPago")] string EstadoPago,
+    [property: JsonPropertyName("ultimosCuatro")] string? UltimosCuatro,
+    [property: JsonPropertyName("marca")] string? Marca,
+    [property: JsonPropertyName("clienteId")] string? ClienteId);
+
+public sealed record IntentoPagoResultadoModel(
+    [property: JsonPropertyName("intentoNumero")] int IntentoNumero,
+    [property: JsonPropertyName("codigoRespuesta")] string? CodigoRespuesta,
+    [property: JsonPropertyName("mensajeRespuesta")] string? MensajeRespuesta);
+
+public sealed record PagoReintentoResultadoModel(
+    [property: JsonPropertyName("ordenId")] string? OrdenId,
+    [property: JsonPropertyName("estado")] string? Estado,
+    [property: JsonPropertyName("monto")] decimal? Monto,
+    [property: JsonPropertyName("moneda")] string? Moneda,
+    [property: JsonPropertyName("intentos")] List<IntentoPagoResultadoModel>? Intentos = null);
 
 // ── Modelos de Despacho ─────────────────────────────────────────────────────
 public sealed record DespachoOrdenModel(
@@ -336,6 +384,31 @@ public sealed class GatewayClient
         return (false, null, err);
     }
 
+    public async Task<(bool Exito, string? Error)> AsignarRolAsync(string email, string rol, CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var res = await _http.PostAsJsonAsync("/api/auth/asignar-rol", new { Email = email, Rol = rol }, ct);
+        if (res.IsSuccessStatusCode) return (true, null);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
+        return (false, err);
+    }
+
+    public async Task<UsuarioDto?> ObtenerUsuarioPorEmailAsync(string email, CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var res = await _http.GetAsync($"/api/auth/usuario?email={Uri.EscapeDataString(email)}", ct);
+        if (!res.IsSuccessStatusCode) return null;
+        return await res.Content.ReadFromJsonAsync<UsuarioDto>(JsonOptions, ct);
+    }
+
+    public async Task<List<UsuarioDto>> ListarUsuariosAsync(CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var res = await _http.GetAsync("/api/auth/usuarios", ct);
+        if (!res.IsSuccessStatusCode) return new List<UsuarioDto>();
+        return await res.Content.ReadFromJsonAsync<List<UsuarioDto>>(JsonOptions, ct) ?? new List<UsuarioDto>();
+    }
+
     // ── Carrito ────────────────────────────────────────────────────────────────
     public async Task<CarritoModel?> ObtenerCarritoAsync(CancellationToken ct = default)
     {
@@ -397,6 +470,42 @@ public sealed class GatewayClient
         return await res.Content.ReadFromJsonAsync<HistorialClienteModel>(JsonOptions, ct);
     }
 
+    // ── Facturacion ────────────────────────────────────────────────────────────
+    public async Task<FacturaModel?> ObtenerFacturaAsync(string ordenId, CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var res = await _http.GetAsync($"/api/facturacion/documentos/{ordenId}", ct);
+        if (!res.IsSuccessStatusCode) return null;
+        return await res.Content.ReadFromJsonAsync<FacturaModel>(JsonOptions, ct);
+    }
+
+    // ── Informe de ventas / ERP ────────────────────────────────────────────────
+    public async Task<InformeVentasModel?> ObtenerInformeVentasAsync(DateTime? desde, DateTime? hasta, CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var filtros = new List<string>();
+        if (desde.HasValue) filtros.Add($"desde={desde:yyyy-MM-dd}");
+        if (hasta.HasValue) filtros.Add($"hasta={hasta:yyyy-MM-dd}");
+        var res = await _http.GetAsync($"/api/erp/informe?{string.Join('&', filtros)}", ct);
+        if (!res.IsSuccessStatusCode) return null;
+        return await res.Content.ReadFromJsonAsync<InformeVentasModel>(JsonOptions, ct);
+    }
+
+    public async Task<(bool Exito, string? Error)> EjecutarConciliacionAsync(CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var res = await _http.PostAsync("/api/erp/conciliar", null, ct);
+        return res.IsSuccessStatusCode ? (true, null) : (false, await ParseProblemDetailsOrStringAsync(res, ct));
+    }
+
+    public async Task<List<EventoAuditoriaModel>> ObtenerAuditoriaAgregadoAsync(string aggregateId, CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var res = await _http.GetAsync($"/api/auditoria/agregados/{Uri.EscapeDataString(aggregateId)}?tamano=50", ct);
+        if (!res.IsSuccessStatusCode) return new();
+        return (await res.Content.ReadFromJsonAsync<PaginaAuditoriaModel>(JsonOptions, ct))?.Items ?? new();
+    }
+
     // ── Incidencias ────────────────────────────────────────────────────────────
     public async Task<(bool Exito, IncidenciaModel? Incidencia, string? Error)> CrearIncidenciaAsync(CrearIncidenciaModel model, CancellationToken ct = default)
     {
@@ -435,6 +544,24 @@ public sealed class GatewayClient
         }
         var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, null, err);
+    }
+
+    /// <summary>
+    /// Cancelacion de la orden por su cliente via POST /api/ordenes/{id}/cancelar.
+    /// Ordenes valida que <paramref name="clienteId" /> sea el dueno (403) y que el
+    /// estado lo admita (409); el detalle del ProblemDetails vuelve como error.
+    /// </summary>
+    public async Task<(bool Exito, string? Error)> CancelarOrdenAsync(string ordenId, string clienteId, string? motivo = null, CancellationToken ct = default)
+    {
+        SetAuthHeader();
+        var res = await _http.PostAsJsonAsync(
+            $"/api/ordenes/{Uri.EscapeDataString(ordenId)}/cancelar",
+            new { ClienteId = clienteId, Motivo = motivo },
+            JsonOptions,
+            ct);
+        if (res.IsSuccessStatusCode) return (true, null);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
+        return (false, err);
     }
 
     // ── Despacho ────────────────────────────────────────────────────────────────
@@ -526,4 +653,81 @@ public sealed class GatewayClient
         var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, err);
     }
+
+    public async Task<(bool Exito, string? MensajeId, string? Error)> EnviarSmsAsync(string telefono, string mensaje, CancellationToken ct = default)
+    {
+        try
+        {
+            var payload = new { Destinatario = telefono, Asunto = "MegaStore Comprobante", Cuerpo = mensaje };
+            var res = await _http.PostAsJsonAsync("/api/mensajes/sms", payload, JsonOptions, ct);
+            if (res.IsSuccessStatusCode)
+            {
+                var doc = await res.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(cancellationToken: ct);
+                var id = doc.TryGetProperty("mensajeId", out var idProp) ? idProp.GetString() : null;
+                return (true, id, null);
+            }
+            var err = await ParseProblemDetailsOrStringAsync(res, ct);
+            return (false, null, err);
+        }
+        catch (Exception ex)
+        {
+            return (false, null, ex.Message);
+        }
+    }
+
+    public async Task<(bool Exito, EnlaceReintentoInfoModel? Info, string? Error)> ObtenerReintentoPagoAsync(string token, CancellationToken ct = default)
+    {
+        try
+        {
+            var res = await _http.GetAsync($"/api/pagos/reintentos/{Uri.EscapeDataString(token)}", ct);
+            if (res.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return (false, null, "El enlace de pago no existe o no fue encontrado.");
+            }
+
+            if (!res.IsSuccessStatusCode)
+            {
+                var err = await ParseProblemDetailsOrStringAsync(res, ct);
+                return (false, null, err);
+            }
+
+            var info = await res.Content.ReadFromJsonAsync<EnlaceReintentoInfoModel>(JsonOptions, ct);
+            return (true, info, null);
+        }
+        catch (Exception ex)
+        {
+            return (false, null, ex.Message);
+        }
+    }
+
+    public async Task<(bool Exito, PagoReintentoResultadoModel? Pago, string? Error)> EjecutarReintentoPagoAsync(string token, CancellationToken ct = default)
+    {
+        try
+        {
+            var res = await _http.PostAsync($"/api/pagos/reintentos/{Uri.EscapeDataString(token)}", null, ct);
+            if (res.StatusCode == System.Net.HttpStatusCode.Gone)
+            {
+                return (false, null, "El enlace de reintento ya se utilizó o ha expirado.");
+            }
+
+            if (res.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return (false, null, "El enlace de reintento no fue encontrado.");
+            }
+
+            if (!res.IsSuccessStatusCode)
+            {
+                var err = await ParseProblemDetailsOrStringAsync(res, ct);
+                return (false, null, err);
+            }
+
+            var pago = await res.Content.ReadFromJsonAsync<PagoReintentoResultadoModel>(JsonOptions, ct);
+            return (true, pago, null);
+        }
+        catch (Exception ex)
+        {
+            return (false, null, ex.Message);
+        }
+    }
 }
+

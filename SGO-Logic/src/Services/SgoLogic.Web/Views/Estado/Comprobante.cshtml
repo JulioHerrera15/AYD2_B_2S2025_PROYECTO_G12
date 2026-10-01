@@ -1,0 +1,184 @@
+@model SgoLogic.Web.Services.OrdenEstadoModel?
+@{
+    ViewData["Title"] = Model != null ? $"Ticket Digital — Orden {Model.NumeroOrden ?? Model.OrdenId}" : "Comprobante No Encontrado";
+    var despacho = ViewBag.Despacho as SgoLogic.Web.Services.DespachoOrdenModel;
+    var ordenId = ViewBag.OrdenId as string ?? Model?.OrdenId ?? "";
+    var total = Model?.Total ?? 0m;
+    var baseImponible = Math.Round(total / 1.12m, 2);
+    var iva = total - baseImponible;
+    var fechaEmision = FechaHelper.Formatear(Model?.CreadaEn ?? Model?.ActualizadaEn ?? DateTime.UtcNow);
+}
+
+<div class="max-w-xl mx-auto py-6 px-4">
+    @if (Model == null)
+    {
+        <div class="bg-surface-white rounded-3xl p-8 border border-border-subtle/70 ambient-shadow text-center">
+            <div class="w-16 h-16 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-4">
+                <span class="material-symbols-outlined text-[32px]">receipt_long</span>
+            </div>
+            <h1 class="text-xl font-bold text-primary mb-2">Comprobante No Disponible</h1>
+            <p class="text-xs text-text-muted mb-6">
+                @(ViewBag.Error ?? "No se encontró el comprobante digital para la orden solicitada.")
+            </p>
+            <a href="/" class="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-xl text-xs font-bold hover:opacity-90 transition-all">
+                <span class="material-symbols-outlined text-[18px]">home</span>
+                <span>Ir al Inicio</span>
+            </a>
+        </div>
+    }
+    else
+    {
+        <!-- Ticket Container -->
+        <div class="bg-surface-white rounded-3xl border border-border-subtle/80 ambient-shadow overflow-hidden">
+            <!-- Header Ticket -->
+            <div class="bg-primary text-on-primary p-6 sm:p-8 text-center relative">
+                <div class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/10 text-white text-[11px] font-semibold mb-3">
+                    <span class="material-symbols-outlined text-[15px]">verified</span>
+                    <span>Comprobante Oficial MegaStore &bull; Venta Omnicanal</span>
+                </div>
+                <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight mb-1">MegaStore Guatemala</h1>
+                <p class="text-xs text-white/80">Soluciones de Comercio Electrónico y Retail Omnicanal</p>
+                <div class="mt-4 pt-4 border-t border-white/15 flex items-center justify-between text-xs text-white/90">
+                    <span>Fecha: <strong>@fechaEmision</strong></span>
+                    <span>Ticket: <strong>@(Model.NumeroOrden ?? Model.OrdenId)</strong></span>
+                </div>
+            </div>
+
+            <!-- Body Ticket -->
+            <div class="p-6 sm:p-8 space-y-6">
+                <!-- Status Badge -->
+                <div class="flex items-center justify-between p-3.5 rounded-2xl bg-surface-container-low border border-border-subtle/50">
+                    <div class="flex items-center gap-2.5">
+                        <span class="material-symbols-outlined text-secondary text-[22px]">check_circle</span>
+                        <div>
+                            <div class="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Estado de la Compra</div>
+                            <div class="text-xs font-bold text-primary">@Model.Estado</div>
+                        </div>
+                    </div>
+                    <span class="px-3 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800">
+                        PAGADO & CERTIFICADO
+                    </span>
+                </div>
+
+                <!-- Detalles de la Transacción -->
+                <div class="grid grid-cols-2 gap-3 text-xs">
+                    <div class="p-3 rounded-xl bg-surface-container-lowest border border-border-subtle/50">
+                        <div class="text-[10px] text-text-muted font-medium uppercase">Canal de Venta</div>
+                        <div class="font-bold text-primary mt-0.5">@(Model.Canal ?? "TIENDA")</div>
+                    </div>
+                    <div class="p-3 rounded-xl bg-surface-container-lowest border border-border-subtle/50">
+                        <div class="text-[10px] text-text-muted font-medium uppercase">Método Entrega</div>
+                        <div class="font-bold text-primary mt-0.5">@(Model.MetodoEntrega ?? "RECOGIDA_TIENDA")</div>
+                    </div>
+                    <div class="p-3 rounded-xl bg-surface-container-lowest border border-border-subtle/50 col-span-2">
+                        <div class="text-[10px] text-text-muted font-medium uppercase">Identificador de Orden (ID Transaccional)</div>
+                        <div class="font-mono font-bold text-primary mt-0.5 text-[11px] select-all">@Model.OrdenId</div>
+                    </div>
+                </div>
+
+                <!-- Resumen Financiero -->
+                <div class="border-t border-dashed border-border-subtle/90 pt-4 space-y-2 text-xs">
+                    <div class="flex justify-between text-text-muted">
+                        <span>Base Imponible (Sin IVA)</span>
+                        <span>Q @baseImponible.ToString("N2")</span>
+                    </div>
+                    <div class="flex justify-between text-text-muted">
+                        <span>Impuesto al Valor Agregado (IVA 12%)</span>
+                        <span>Q @iva.ToString("N2")</span>
+                    </div>
+                    <div class="flex justify-between items-baseline pt-2 border-t border-border-subtle text-base font-extrabold text-primary">
+                        <span>Total Pagado</span>
+                        <span class="text-xl text-primary font-black">Q @total.ToString("N2")</span>
+                    </div>
+                </div>
+
+                <!-- Certificación SAT FEL -->
+                <div class="p-4 rounded-2xl bg-surface-container-lowest border border-border-subtle/70 space-y-1.5 text-[11px]">
+                    <div class="flex items-center gap-1.5 text-secondary font-bold">
+                        <span class="material-symbols-outlined text-[16px]">receipt</span>
+                        <span>Certificación Tributaria SAT FEL</span>
+                    </div>
+                    <div class="text-text-muted flex justify-between">
+                        <span>Autorización DTE:</span>
+                        <span class="font-mono font-bold text-primary">@(Model.DocumentoFiscalId ?? "SAT-FEL-AUTO-2026")</span>
+                    </div>
+                    <div class="text-text-muted flex justify-between">
+                        <span>Emisor:</span>
+                        <span class="font-bold text-primary">MegaStore S.A. &bull; NIT: 10293847-5</span>
+                    </div>
+                    <div class="text-text-muted flex justify-between">
+                        <span>Receptor:</span>
+                        <span class="font-bold text-primary">Consumidor Final (CF)</span>
+                    </div>
+                </div>
+
+                @if (despacho != null && !string.IsNullOrWhiteSpace(despacho.GuiaId))
+                {
+                    <!-- Logística y Despacho -->
+                    <div class="p-4 rounded-2xl bg-secondary-fixed/30 border border-secondary/20 space-y-1 text-xs">
+                        <div class="flex items-center justify-between">
+                            <span class="font-bold text-on-secondary-fixed flex items-center gap-1">
+                                <span class="material-symbols-outlined text-[16px]">local_shipping</span>
+                                Guía LogiExpress:
+                            </span>
+                            <span class="font-mono font-bold text-secondary">@despacho.GuiaId</span>
+                        </div>
+                        <div class="text-[11px] text-text-muted">
+                            Estado: <strong class="text-primary">@despacho.Estado</strong>
+                        </div>
+                    </div>
+                }
+
+                <!-- Botones de Acción -->
+                <div class="pt-4 border-t border-border-subtle space-y-2">
+                    <div class="grid grid-cols-2 gap-2">
+                        <button onclick="window.print()"
+                                class="w-full bg-surface-container-low hover:bg-surface-variant text-primary py-2.5 px-3 rounded-xl text-xs font-bold transition-all border border-border-subtle flex items-center justify-center gap-1.5 shadow-sm">
+                            <span class="material-symbols-outlined text-[18px]">print</span>
+                            <span>Imprimir Ticket</span>
+                        </button>
+                        <button onclick="copiarEnlaceComprobante()" id="btn-copiar-link"
+                                class="w-full bg-surface-container-low hover:bg-surface-variant text-primary py-2.5 px-3 rounded-xl text-xs font-bold transition-all border border-border-subtle flex items-center justify-center gap-1.5 shadow-sm">
+                            <span class="material-symbols-outlined text-[18px]" id="icono-copiar">content_copy</span>
+                            <span id="texto-copiar">Copiar Link</span>
+                        </button>
+                    </div>
+
+                    @{
+                        var mensajeShare = Uri.EscapeDataString($"MegaStore: Hola! Te comparto el comprobante oficial de la orden {Model.NumeroOrden ?? Model.OrdenId} por Q {total:N2}. Puedes verificar el ticket digital aqui: {Context.Request.Scheme}://{Context.Request.Host}/Estado/Comprobante?ordenId={Model.OrdenId}");
+                    }
+                    <a href="https://wa.me/?text=@mensajeShare" target="_blank" rel="noopener noreferrer"
+                       class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-3 px-4 rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-2">
+                        <span class="material-symbols-outlined text-[18px]">chat</span>
+                        <span>Compartir por WhatsApp</span>
+                    </a>
+                </div>
+
+                <div class="text-center pt-2">
+                    <a href="/Estado?ordenId=@Model.OrdenId" class="text-[11px] text-secondary hover:underline font-semibold">
+                        Ver tracking completo de orden &rarr;
+                    </a>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<script>
+    function copiarEnlaceComprobante() {
+        const url = window.location.href;
+        navigator.clipboard.writeText(url).then(() => {
+            const btn = document.getElementById('btn-copiar-link');
+            const txt = document.getElementById('texto-copiar');
+            const ico = document.getElementById('icono-copiar');
+            txt.textContent = '¡Copiado!';
+            ico.textContent = 'check';
+            btn.classList.add('bg-emerald-100', 'text-emerald-800');
+            setTimeout(() => {
+                txt.textContent = 'Copiar Link';
+                ico.textContent = 'content_copy';
+                btn.classList.remove('bg-emerald-100', 'text-emerald-800');
+            }, 2500);
+        });
+    }
+</script>

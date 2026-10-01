@@ -223,7 +223,7 @@ else if (Model == null)
                                     @(ord.NumeroOrden ?? ord.OrdenId)
                                 </td>
                                 <td class="py-4 px-4 text-text-muted whitespace-nowrap">
-                                    @ord.ActualizadaEn.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                    @FechaHelper.Formatear(ord.CreadaEn ?? ord.ActualizadaEn)
                                 </td>
                                 @if (isStaff)
                                 {
@@ -352,6 +352,9 @@ else
                         <span class="text-[10px] text-text-muted font-mono" id="sync-status">Sincronizado</span>
                     </div>
                     <h2 class="text-xl sm:text-2xl font-bold text-primary tracking-tight font-mono">@(Model.NumeroOrden ?? Model.OrdenId)</h2>
+                    <div class="text-xs text-text-muted mt-1">
+                        Fecha: <span class="font-medium text-primary">@FechaHelper.Formatear(Model.CreadaEn ?? Model.ActualizadaEn)</span>
+                    </div>
                 </div>
             </div>
 
@@ -517,6 +520,10 @@ else
                     <div class="flex justify-between">
                         <span class="text-text-muted">Total:</span>
                         <span class="font-bold text-primary">@(Model.Moneda ?? "GTQ") @(Model.Total?.ToString("F2") ?? "0.00")</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span class="text-text-muted">Fecha Creación:</span>
+                        <span class="font-medium text-primary">@FechaHelper.Formatear(Model.CreadaEn ?? Model.ActualizadaEn)</span>
                     </div>
                     <div class="flex justify-between">
                         <span class="text-text-muted">Canal:</span>
@@ -686,7 +693,7 @@ else
                             @foreach (var inc in Model.Incidencias)
                             {
                                 <tr>
-                                    <td class="py-3 px-4 text-text-muted whitespace-nowrap">@inc.CreadaEn.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td class="py-3 px-4 text-text-muted whitespace-nowrap">@FechaHelper.Formatear(inc.CreadaEn)</td>
                                     <td class="py-3 px-4 text-primary font-medium">@inc.Descripcion</td>
                                     <td class="py-3 px-4">
                                         <span class="px-2.5 py-1 rounded-full text-[11px] font-bold @(inc.Estado == "RESUELTA" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">

@@ -1,69 +1,189 @@
 @model SgoLogic.Web.Services.CarritoModel?
 @{
-    ViewData["Title"] = "OmniPOS - Recuperación de Carrito Web";
+    ViewData["Title"] = "OmniPOS — Terminal de Ventas y Mostrador";
     var subtotal = Model?.Items?.Sum(i => i.Subtotal) ?? 0m;
-    var descuento = subtotal > 0 ? 150.00m : 0m;
-    var subtotalConDescuento = Math.Max(0, subtotal - descuento);
-    var iva = Math.Round(subtotalConDescuento * 0.12m / 1.12m, 2);
+    var total = subtotal;
+    var iva = Math.Round(total * 0.12m / 1.12m, 2);
+    var subtotalNeto = total - iva;
+
+    var tiendaActiva = ViewBag.TiendaActiva as SgoLogic.Web.Controllers.TiendaPosOpcion
+        ?? new SgoLogic.Web.Controllers.TiendaPosOpcion("TIENDA-01-CENTRAL", "MegaStore Central — Zona 10, Guatemala (POS T01)", "T01", 400, "Guatemala");
+
+    var tiendasDisponibles = ViewBag.TiendasDisponibles as List<SgoLogic.Web.Controllers.TiendaPosOpcion>
+        ?? new List<SgoLogic.Web.Controllers.TiendaPosOpcion> { tiendaActiva };
+
+    var catalogo = ViewBag.Catalogo as List<SgoLogic.Web.Controllers.ProductoCatalogo>
+        ?? new List<SgoLogic.Web.Controllers.ProductoCatalogo>();
 }
 
-<div class="w-full max-w-container-max mx-auto flex flex-col gap-8">
-    <!-- Header OmniPOS -->
-    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-border-subtle">
+<div class="w-full max-w-container-max mx-auto flex flex-col gap-6">
+    @if (TempData["WhatsAppUrl"] is string waUrl)
+    {
+        <div class="bg-gradient-to-r from-emerald-50 via-teal-50 to-emerald-50 border border-emerald-300 rounded-3xl p-5 md:p-6 ambient-shadow">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-start gap-3.5">
+                    <div class="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center flex-shrink-0 shadow-md">
+                        <span class="material-symbols-outlined text-[26px]">chat</span>
+                    </div>
+                    <div>
+                        <div class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-200/80 text-emerald-900 text-[10px] font-bold uppercase tracking-wider mb-1">
+                            <span class="material-symbols-outlined text-[14px]">check</span>
+                            <span>Comprobante Despachado por SMS &bull; Listo para WhatsApp</span>
+                        </div>
+                        <h3 class="text-base font-bold text-emerald-950">Venta POS Finalizada con Éxito</h3>
+                        <p class="text-xs text-emerald-800 mt-0.5">
+                            Se envió un SMS a <strong>@(TempData["TelefonoNotificado"] ?? "el cliente")</strong> con el enlace al ticket digital. También puedes abrir WhatsApp directamente con un clic.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-2 sm:self-center">
+                    <a href="@waUrl" target="_blank" rel="noopener noreferrer"
+                       class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-4 rounded-xl text-xs transition-all shadow-md flex items-center gap-2">
+                        <span class="material-symbols-outlined text-[18px]">open_in_new</span>
+                        <span>Abrir en WhatsApp</span>
+                    </a>
+                    @if (TempData["ComprobanteUrl"] is string compUrl)
+                    {
+                        <a href="@compUrl" target="_blank"
+                           class="bg-surface-white hover:bg-surface-container-low text-primary border border-border-subtle font-bold py-2.5 px-3.5 rounded-xl text-xs transition-all shadow-sm flex items-center gap-1.5">
+                            <span class="material-symbols-outlined text-[18px]">receipt</span>
+                            <span>Ver Ticket Digital</span>
+                        </a>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    <!-- Header OmniPOS Dinamico -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-border-subtle">
         <div>
             <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold mb-2">
                 <span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">point_of_sale</span>
-                Terminal 01 &bull; Tienda Central Zona 10
+                <span>@tiendaActiva.Nombre</span>
+                <span class="opacity-75 font-normal">&bull; @tiendaActiva.Pais</span>
             </div>
-            <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight">OmniPOS — Recuperación de Carrito</h1>
-            <p class="text-xs sm:text-sm text-text-muted">Recupera una sesión de compra iniciada en la web o app móvil para cerrarla presencialmente.</p>
+            <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight">OmniPOS — Terminal de Ventas en Mostrador</h1>
+            <p class="text-xs sm:text-sm text-text-muted">Caja registradora presencial y recuperador de carritos omnicanal en tiempo real.</p>
         </div>
 
-        <div class="flex items-center gap-3">
-            <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-green-100 text-green-800 border border-green-200">
-                <span class="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                Redis Sincronizado
+        <div class="flex flex-wrap items-center gap-3">
+            <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full @(tiendaActiva.StockDisponible > 0 ? "bg-green-100 text-green-800 border-green-200" : "bg-amber-100 text-amber-800 border-amber-200")">
+                <span class="w-2 h-2 rounded-full @(tiendaActiva.StockDisponible > 0 ? "bg-green-500 animate-pulse" : "bg-amber-500")"></span>
+                Terminal POS @(tiendaActiva.PosInstanciaId)@(tiendaActiva.StockDisponible > 0 ? " disponible" : " sin existencias")
+            </span>
+            <span class="inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-full bg-surface-container-low text-text-muted border border-border-subtle">
+                <span class="material-symbols-outlined text-[15px]">database</span>
+                Redis Activo
             </span>
         </div>
     </div>
 
-    <!-- Omnichannel Search Bar -->
-    <div class="max-w-2xl mx-auto w-full">
-        <form asp-action="Index" method="get" class="relative flex items-center bg-surface-white rounded-2xl border-2 border-border-subtle focus-within:border-secondary p-2 ambient-shadow transition-all">
-            <span class="material-symbols-outlined text-text-muted ml-3 text-[22px]">search</span>
-            <input type="text" name="busqueda" value="@ViewBag.Busqueda"
-                   placeholder="Buscar carrito web por correo del cliente o ID..."
-                   class="w-full px-3 py-2.5 text-sm bg-transparent border-none outline-none text-primary placeholder:text-text-muted" />
-            <button type="submit"
-                    class="bg-primary text-on-primary font-semibold text-xs px-5 py-2.5 rounded-xl hover:opacity-90 active:scale-95 transition-all">
-                Buscar Carrito
-            </button>
-        </form>
-
-        <div class="flex items-center justify-center gap-2 text-xs text-text-muted mt-2">
-            <span>Búsqueda en tiempo real por correo del cliente o número de orden registrada</span>
+    <!-- Barra de Herramientas: Cambio de Terminal y Busqueda Omnicanal -->
+    <div class="grid grid-cols-1 md:grid-cols-12 gap-4">
+        <!-- Selector rapido de Sucursal / Terminal -->
+        <div class="md:col-span-5 bg-surface-white rounded-2xl p-3 border border-border-subtle/80 ambient-shadow flex items-center gap-3">
+            <span class="material-symbols-outlined text-secondary ml-1 text-[22px]">store</span>
+            <form asp-action="Index" method="get" class="flex-1 flex items-center gap-2">
+                <input type="hidden" name="busqueda" value="@ViewBag.Busqueda" />
+                <div class="flex-1">
+                    <label class="block text-[10px] font-semibold text-text-muted uppercase tracking-wider">Terminal Asignado</label>
+                    <select name="tiendaId" onchange="this.form.submit()" class="w-full bg-transparent text-xs font-bold text-primary focus:outline-none cursor-pointer">
+                        @foreach (var grupo in tiendasDisponibles.GroupBy(t => t.Pais))
+                        {
+                            <optgroup label="@grupo.Key">
+                                @foreach (var t in grupo)
+                                {
+                                    if (t.UbicacionId == tiendaActiva.UbicacionId)
+                                    {
+                                        <option value="@t.UbicacionId" selected>@t.Nombre</option>
+                                    }
+                                    else
+                                    {
+                                        <option value="@t.UbicacionId">@t.Nombre</option>
+                                    }
+                                }
+                            </optgroup>
+                        }
+                    </select>
+                </div>
+            </form>
         </div>
+
+        <!-- Buscador de Carrito de Cliente Omnicanal -->
+        <div class="md:col-span-7">
+            <form asp-action="Index" method="get" class="relative flex items-center bg-surface-white rounded-2xl border-2 border-border-subtle focus-within:border-secondary p-1.5 ambient-shadow transition-all">
+                <input type="hidden" name="tiendaId" value="@tiendaActiva.UbicacionId" />
+                <span class="material-symbols-outlined text-text-muted ml-2 text-[20px]">search</span>
+                <input type="text" name="busqueda" value="@ViewBag.Busqueda"
+                       placeholder="Recuperar carrito web por correo del cliente o número de orden..."
+                       class="w-full px-3 py-2 text-xs bg-transparent border-none outline-none text-primary placeholder:text-text-muted" />
+                <button type="submit"
+                        class="bg-primary text-on-primary font-semibold text-xs px-4 py-2 rounded-xl hover:opacity-90 active:scale-95 transition-all whitespace-nowrap">
+                    Buscar Cliente
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Panel de Agregar Articulo Directo al Ticket (Venta Presencial en Mostrador) -->
+    <div class="bg-surface-white rounded-2xl p-4 border border-border-subtle/80 ambient-shadow">
+        <div class="flex items-center gap-2 mb-3">
+            <span class="material-symbols-outlined text-primary text-[20px]">barcode_scanner</span>
+            <h2 class="text-xs font-bold text-primary uppercase tracking-wider">Venta en Mostrador — Agregar Producto al Ticket</h2>
+        </div>
+
+        <form asp-action="AgregarItem" method="post" class="grid grid-cols-1 sm:grid-cols-12 gap-3 items-end">
+            <input type="hidden" name="clienteId" value="@(ViewBag.Busqueda ?? "")" />
+            <input type="hidden" name="tiendaId" value="@tiendaActiva.UbicacionId" />
+
+            <div class="sm:col-span-8">
+                <label class="block text-[11px] font-semibold text-text-muted mb-1">Producto del Catálogo</label>
+                <select name="sku" required class="w-full bg-surface-container-low border border-border-subtle/80 rounded-xl px-3 py-2 text-xs font-medium text-primary focus:outline-none focus:ring-2 focus:ring-secondary">
+                    <option value="">-- Seleccionar producto para escanear/cobrar --</option>
+                    @foreach (var p in catalogo)
+                    {
+                        <option value="@p.Sku">@p.Nombre (@p.Sku) — Q @p.PrecioUnitario.ToString("N2")</option>
+                    }
+                </select>
+            </div>
+
+            <div class="sm:col-span-2">
+                <label class="block text-[11px] font-semibold text-text-muted mb-1">Cantidad</label>
+                <input type="number" name="cantidad" value="1" min="1" max="99" required
+                       class="w-full bg-surface-container-low border border-border-subtle/80 rounded-xl px-3 py-2 text-xs font-semibold text-primary focus:outline-none focus:ring-2 focus:ring-secondary text-center" />
+            </div>
+
+            <div class="sm:col-span-2">
+                <button type="submit"
+                        class="w-full bg-secondary text-on-secondary py-2 px-3 rounded-xl text-xs font-bold hover:opacity-90 active:scale-95 transition-all flex items-center justify-center gap-1.5 shadow-sm">
+                    <span class="material-symbols-outlined text-[16px]">add_shopping_cart</span>
+                    <span>Cobrar Ítem</span>
+                </button>
+            </div>
+        </form>
     </div>
 
     @if (ViewBag.ExitoBusqueda != null)
     {
-        <div class="bg-emerald-50 text-emerald-800 border border-emerald-200 p-4 rounded-2xl flex items-center justify-center gap-2.5 text-sm font-medium ambient-shadow max-w-2xl mx-auto">
-            <span class="material-symbols-outlined text-emerald-600 text-[20px]">check_circle</span>
+        <div class="bg-emerald-50 text-emerald-800 border border-emerald-200 p-3.5 rounded-2xl flex items-center gap-2.5 text-xs font-medium ambient-shadow">
+            <span class="material-symbols-outlined text-emerald-600 text-[18px]">check_circle</span>
             <span>@ViewBag.ExitoBusqueda</span>
         </div>
     }
 
     @if (ViewBag.Mensaje != null)
     {
-        <div class="bg-surface-container-low text-on-surface-variant border border-border-subtle p-4 rounded-2xl flex items-center justify-center gap-2.5 text-sm ambient-shadow max-w-2xl mx-auto">
-            <span class="material-symbols-outlined text-secondary text-[20px]">info</span>
+        <div class="bg-surface-container-low text-on-surface-variant border border-border-subtle p-3.5 rounded-2xl flex items-center gap-2.5 text-xs ambient-shadow">
+            <span class="material-symbols-outlined text-secondary text-[18px]">info</span>
             <span>@ViewBag.Mensaje</span>
         </div>
     }
 
     @if (ViewBag.OrdenEncontrada is SgoLogic.Web.Services.OrdenEstadoModel orden)
     {
-        <div class="bg-surface-white rounded-3xl p-6 md:p-8 border border-border-subtle/80 ambient-shadow max-w-3xl mx-auto">
+        <div class="bg-surface-white rounded-3xl p-6 border border-border-subtle/80 ambient-shadow">
             <div class="flex flex-col sm:flex-row sm:items-center justify-between pb-4 mb-4 border-b border-border-subtle/60 gap-3">
                 <div class="flex items-center gap-3">
                     <div class="w-10 h-10 rounded-xl bg-surface-container-low text-primary flex items-center justify-center font-bold">
@@ -71,7 +191,7 @@
                     </div>
                     <div>
                         <span class="text-xs font-semibold uppercase tracking-wider text-text-muted">Orden Consultada en POS</span>
-                        <h3 class="text-lg font-bold text-primary tracking-tight">@orden.OrdenId</h3>
+                        <h3 class="text-base font-bold text-primary tracking-tight">@orden.OrdenId</h3>
                     </div>
                 </div>
                 <span class="px-3 py-1 rounded-full text-xs font-bold bg-surface-container-low text-primary border border-border-subtle/60 self-start sm:self-auto">
@@ -79,7 +199,7 @@
                 </span>
             </div>
 
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs mb-6">
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-4 text-xs mb-4">
                 <div class="bg-surface-container-low/50 p-3 rounded-xl">
                     <span class="text-text-muted block mb-0.5">Correlativo</span>
                     <span class="font-bold text-primary text-sm">@(orden.NumeroOrden ?? "N/A")</span>
@@ -98,16 +218,13 @@
                 </div>
             </div>
 
-            @if (!string.IsNullOrWhiteSpace(orden.MotivoUltimoCambio))
-            {
-                <div class="mb-6 p-3.5 rounded-xl border @(orden.Estado == "RECHAZADA" ? "bg-error-container/60 border-error/30 text-on-error-container" : "bg-surface-container-low border-border-subtle text-primary") text-xs">
-                    <strong>Motivo de Estado:</strong> @orden.MotivoUltimoCambio
-                </div>
-            }
-
-            <div class="flex items-center justify-end gap-3">
-                <a href="/Estado?ordenId=@orden.OrdenId" class="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-full text-xs font-semibold hover:opacity-90 transition-all">
-                    <span>Ver Trazabilidad Completa en Consulta de Estado</span>
+            <div class="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-border-subtle/50">
+                <a href="/Estado/Comprobante?ordenId=@orden.OrdenId" target="_blank" class="inline-flex items-center gap-1.5 text-secondary hover:underline text-xs font-semibold">
+                    <span class="material-symbols-outlined text-[16px]">receipt</span>
+                    <span>Ver Comprobante Digital Público</span>
+                </a>
+                <a href="/Estado?ordenId=@orden.OrdenId" class="inline-flex items-center gap-1.5 bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-semibold hover:opacity-90 transition-all">
+                    <span>Ver Trazabilidad Completa</span>
                     <span class="material-symbols-outlined text-[15px]">arrow_forward</span>
                 </a>
             </div>
@@ -117,151 +234,237 @@
     <!-- Content: Products & POS Summary -->
     @if (Model?.Items != null && Model.Items.Count > 0)
     {
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-            <!-- Left: Recovered Items (7 cols) -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <!-- Left: Current Ticket Items (7 cols) -->
             <div class="lg:col-span-7 flex flex-col gap-4">
                 <div class="flex items-center justify-between">
-                    <h2 class="text-lg font-bold text-primary flex items-center gap-2">
-                        <span>Artículos del Cliente</span>
+                    <h2 class="text-base font-bold text-primary flex items-center gap-2">
+                        <span>Líneas en Ticket Actual</span>
                         <span class="text-xs font-semibold bg-surface-container-low px-2.5 py-0.5 rounded-full text-text-muted">
-                            @Model.Items.Count items
+                            @Model.Items.Count artículos
                         </span>
                     </h2>
-                    <span class="text-xs text-secondary font-medium flex items-center gap-1">
-                        <span class="material-symbols-outlined text-[16px]">cloud_done</span>
-                        Recuperado desde Redis
-                    </span>
+
+                    <form asp-action="LimpiarTicket" method="post">
+                        <input type="hidden" name="clienteId" value="@(ViewBag.Busqueda ?? "")" />
+                        <input type="hidden" name="tiendaId" value="@tiendaActiva.UbicacionId" />
+                        <button type="submit" class="text-xs font-medium text-red-600 hover:text-red-700 hover:underline flex items-center gap-1">
+                            <span class="material-symbols-outlined text-[15px]">delete_sweep</span>
+                            <span>Reiniciar Ticket</span>
+                        </button>
+                    </form>
                 </div>
 
-                <div class="space-y-3">
+                <div class="space-y-2.5">
                     @foreach (var item in Model.Items)
                     {
-                        <div class="bg-surface-white rounded-2xl p-4 border border-border-subtle/60 ambient-shadow flex items-center gap-4 hover:border-primary/30 transition-colors">
-                            <div class="w-16 h-16 rounded-xl bg-surface-container-low flex items-center justify-center flex-shrink-0 text-text-muted">
-                                <span class="material-symbols-outlined text-[28px]">devices</span>
+                        <div class="bg-surface-white rounded-2xl p-3.5 border border-border-subtle/60 ambient-shadow flex items-center gap-3.5 hover:border-primary/30 transition-colors">
+                            <div class="w-12 h-12 rounded-xl bg-surface-container-low flex items-center justify-center flex-shrink-0 text-text-muted">
+                                <span class="material-symbols-outlined text-[24px]">inventory_2</span>
                             </div>
                             <div class="flex-1 min-w-0">
-                                <div class="flex items-start justify-between gap-2 mb-1">
-                                    <h3 class="text-sm font-bold text-primary truncate">@item.Descripcion</h3>
-                                    <span class="text-sm font-bold text-primary">Q @item.Subtotal.ToString("N2")</span>
+                                <div class="flex items-start justify-between gap-2 mb-0.5">
+                                    <h3 class="text-xs font-bold text-primary truncate">@item.Descripcion</h3>
+                                    <span class="text-xs font-bold text-primary">Q @item.Subtotal.ToString("N2")</span>
                                 </div>
-                                <div class="flex items-center gap-3 text-xs text-text-muted">
-                                    <span class="font-mono bg-surface-container-low px-2 py-0.5 rounded text-[11px]">@item.Sku</span>
-                                    <span>Cantidad: <strong class="text-primary font-semibold">@item.Cantidad</strong></span>
+                                <div class="flex items-center gap-2.5 text-[11px] text-text-muted">
+                                    <span class="font-mono bg-surface-container-low px-1.5 py-0.5 rounded text-[10px]">@item.Sku</span>
+                                    <span>Cant: <strong class="text-primary font-semibold">@item.Cantidad</strong></span>
                                     <span>&bull;</span>
                                     <span>Q @item.PrecioUnitario.ToString("N2") c/u</span>
                                 </div>
                             </div>
+
+                            <form asp-action="EliminarItem" method="post" class="flex-shrink-0">
+                                <input type="hidden" name="sku" value="@item.Sku" />
+                                <input type="hidden" name="clienteId" value="@(ViewBag.Busqueda ?? "")" />
+                                <input type="hidden" name="tiendaId" value="@tiendaActiva.UbicacionId" />
+                                <button type="submit" title="Quitar del ticket" class="p-1.5 text-text-muted hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors">
+                                    <span class="material-symbols-outlined text-[18px]">close</span>
+                                </button>
+                            </form>
                         </div>
                     }
                 </div>
 
-                <!-- Client Identification Notice -->
-                <div class="bg-surface-container-low/70 rounded-2xl p-4 border border-border-subtle/50 flex items-center gap-3">
-                    <span class="material-symbols-outlined text-secondary text-[24px]">verified</span>
-                    <div class="text-xs">
-                        <span class="font-semibold text-primary block">Identidad Omnicanal Verificada</span>
-                        <span class="text-text-muted">Sesión asociada al cliente: <code class="font-mono text-primary">@(ViewBag.Busqueda ?? "Sesión Activa")</code></span>
+                <!-- Aviso de asociacion de sesion -->
+                <div class="bg-surface-container-low/70 rounded-2xl p-3.5 border border-border-subtle/50 flex items-center gap-2.5 text-xs">
+                    <span class="material-symbols-outlined text-secondary text-[20px]">badge</span>
+                    <div>
+                        <span class="font-semibold text-primary block">Titular del Ticket POS</span>
+                        <span class="text-text-muted">Cliente asociado: <code class="font-mono text-primary font-semibold">@(ViewBag.Busqueda ?? "Cliente en Mostrador (Walk-in)")</code></span>
                     </div>
                 </div>
             </div>
 
-            <!-- Right: POS Action Panel (5 cols) -->
+            <!-- Right: POS Register & Payment Form (5 cols) -->
             <div class="lg:col-span-5">
-                <div class="bg-surface-white rounded-2xl p-6 border border-border-subtle/60 ambient-shadow sticky top-28">
-                    <!-- Badge status -->
-                    <div class="flex items-center justify-between pb-4 border-b border-border-subtle/40 mb-4">
-                        <div class="text-xs font-semibold text-text-muted uppercase tracking-wider">Resumen de Venta POS</div>
-                        <span class="inline-flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed">
-                            <span class="w-1.5 h-1.5 rounded-full bg-secondary"></span>
-                            Sincronizado en Redis
+                <div class="bg-surface-white rounded-2xl p-5 border border-border-subtle/60 ambient-shadow sticky top-24">
+                    <div class="flex items-center justify-between pb-3.5 border-b border-border-subtle/40 mb-3.5">
+                        <div class="text-xs font-bold text-text-muted uppercase tracking-wider">Comprobante de Caja</div>
+                        <span class="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed">
+                            Terminal @tiendaActiva.PosInstanciaId
                         </span>
                     </div>
 
-                    <!-- Financial breakdown -->
-                    <div class="space-y-2.5 text-xs mb-6">
+                    <!-- Desglose financiero real (Sin descuentos falsos ni quemados) -->
+                    <div class="space-y-2 text-xs mb-5">
                         <div class="flex justify-between text-text-muted">
-                            <span>Subtotal Catálogo</span>
-                            <span class="font-medium text-primary">Q @subtotal.ToString("N2")</span>
-                        </div>
-                        <div class="flex justify-between text-green-700">
-                            <span>Descuento Omnicanal (POS)</span>
-                            <span class="font-medium">- Q @descuento.ToString("N2")</span>
+                            <span>Subtotal Neto (sin IVA)</span>
+                            <span class="font-medium text-primary">Q @subtotalNeto.ToString("N2")</span>
                         </div>
                         <div class="flex justify-between text-text-muted">
-                            <span>IVA (12% incluido)</span>
-                            <span>Q @iva.ToString("N2")</span>
+                            <span>IVA 12% SAT FEL (Incluido)</span>
+                            <span class="font-medium text-primary">Q @iva.ToString("N2")</span>
                         </div>
-                        <div class="flex justify-between text-base font-bold text-primary pt-3 border-t border-border-subtle/80">
+                        <div class="flex justify-between text-base font-bold text-primary pt-2.5 border-t border-border-subtle/80">
                             <span>Total a Cobrar</span>
-                            <span>Q @subtotalConDescuento.ToString("N2")</span>
+                            <span class="text-secondary font-extrabold text-lg">Q @total.ToString("N2")</span>
                         </div>
                     </div>
 
-                    <!-- Payment processing form -->
+                    <!-- Formulario de Cobro en Terminal -->
                     <form asp-action="Cobrar" method="post" class="space-y-4">
                         <input type="hidden" name="clienteId" value="@(ViewBag.Busqueda ?? "")" />
+                        <input type="hidden" name="tiendaId" value="@tiendaActiva.UbicacionId" />
 
                         <div>
-                            <label class="block text-xs font-semibold text-primary mb-1.5">Sucursal / Terminal POS</label>
-                            <select name="tiendaId" class="w-full bg-surface-container-low border border-border-subtle/80 rounded-xl px-3 py-2 text-xs font-medium text-primary focus:outline-none focus:ring-2 focus:ring-secondary">
-                                <option value="TIENDA-01-CENTRAL" selected>MegaStore Central — Zona 10 (POS T01)</option>
-                                <option value="TIENDA-02-MIRAFLORES">MegaStore Miraflores — Zona 11 (POS T02)</option>
-                                <option value="TIENDA-03-PORTALES">MegaStore Portales — Zona 17 (POS T03)</option>
-                                <option value="TIENDA-04-PRADERA">MegaStore Pradera Concepción (POS T04)</option>
-                            </select>
+                            <label class="block text-xs font-semibold text-primary mb-1.5">Sucursal Emisora POS</label>
+                            <input type="text" readonly value="@tiendaActiva.Nombre"
+                                   class="w-full bg-surface-container-low border border-border-subtle/80 rounded-xl px-3 py-2 text-xs font-semibold text-primary" />
                         </div>
 
                         <div>
-                            <label class="block text-xs font-semibold text-primary mb-2">Método de Cobro en Caja</label>
+                            <label class="block text-xs font-semibold text-primary mb-2">Forma de Pago en Caja</label>
                             <div class="grid grid-cols-2 gap-2 text-xs">
-                                <label class="flex items-center gap-2 p-3 rounded-xl border border-border-subtle bg-surface-container-low/40 cursor-pointer hover:bg-surface-container-low transition-colors">
+                                <label class="flex items-center gap-2 p-2.5 rounded-xl border border-border-subtle bg-surface-container-low/40 cursor-pointer hover:bg-surface-container-low transition-colors">
                                     <input type="radio" name="medioPago" value="EFECTIVO" checked class="text-primary focus:ring-primary h-3.5 w-3.5" />
-                                    <span class="font-semibold text-primary">Efectivo</span>
+                                    <div>
+                                        <span class="font-semibold text-primary block">Efectivo</span>
+                                        <span class="text-[10px] text-text-muted">Cobro directo</span>
+                                    </div>
                                 </label>
-                                <label class="flex items-center gap-2 p-3 rounded-xl border border-border-subtle bg-surface-container-low/40 cursor-pointer hover:bg-surface-container-low transition-colors">
+                                <label class="flex items-center gap-2 p-2.5 rounded-xl border border-border-subtle bg-surface-container-low/40 cursor-pointer hover:bg-surface-container-low transition-colors">
                                     <input type="radio" name="medioPago" value="TARJETA_CREDITO_DEBITO" class="text-primary focus:ring-primary h-3.5 w-3.5" />
-                                    <span class="font-semibold text-primary">Tarjeta POS</span>
+                                    <div>
+                                        <span class="font-semibold text-primary block">Tarjeta POS</span>
+                                        <span class="text-[10px] text-text-muted">Terminal bancario</span>
+                                    </div>
                                 </label>
                             </div>
                         </div>
 
                         <button type="submit"
-                                class="w-full bg-primary text-on-primary py-3 px-4 rounded-xl text-sm font-semibold hover:opacity-90 active:scale-[0.98] transition-all shadow-sm flex items-center justify-center gap-2">
+                                class="w-full bg-primary text-on-primary py-3 px-4 rounded-xl text-sm font-bold hover:opacity-90 active:scale-[0.98] transition-all shadow-md flex items-center justify-center gap-2">
                             <span class="material-symbols-outlined text-[19px]">point_of_sale</span>
-                            Completar Venta en Tienda (POS)
+                            <span>Finalizar Cobro en Mostrador</span>
                         </button>
                     </form>
 
-                    <!-- Enlace de pago alternativo omnicanal -->
-                    <form asp-action="EnviarLinkPago" method="post" class="mt-3">
-                        <input type="hidden" name="clienteId" value="@(ViewBag.Busqueda ?? "")" />
-                        <button type="submit"
-                                class="w-full bg-surface-container-low text-primary py-2.5 px-4 rounded-xl text-xs font-semibold hover:bg-surface-variant transition-colors border border-border-subtle/60 flex items-center justify-center gap-2">
-                            <span class="material-symbols-outlined text-[17px]">sms</span>
-                            Enviar Enlace de Pago por SMS / WhatsApp
-                        </button>
-                    </form>
+                    <!-- Cobro con Comprobante SMS / WhatsApp -->
+                    <button type="button" onclick="abrirModalNotificacion()"
+                            class="w-full mt-3 bg-emerald-50 text-emerald-800 border border-emerald-300 hover:bg-emerald-100 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm">
+                        <span class="material-symbols-outlined text-[17px]">chat</span>
+                        <span>Cobrar y Enviar Comprobante (SMS / WhatsApp)</span>
+                    </button>
                 </div>
             </div>
         </div>
     }
     else
     {
-        <!-- Empty / Search State -->
-        <div class="bg-surface-white rounded-3xl p-12 border border-border-subtle/60 text-center ambient-shadow max-w-xl mx-auto">
-            <div class="w-16 h-16 rounded-full bg-surface-container-low text-text-muted flex items-center justify-center mx-auto mb-4">
-                <span class="material-symbols-outlined text-3xl">shopping_cart_checkout</span>
+        <!-- Estado Vacío: Invitar a vender en mostrador o buscar cliente -->
+        <div class="bg-surface-white rounded-3xl p-10 border border-border-subtle/60 text-center ambient-shadow max-w-xl mx-auto">
+            <div class="w-14 h-14 rounded-full bg-surface-container-low text-text-muted flex items-center justify-center mx-auto mb-3">
+                <span class="material-symbols-outlined text-2xl">point_of_sale</span>
             </div>
-            <h3 class="text-base font-bold text-primary mb-1">Ningún Carrito Seleccionado</h3>
-            <p class="text-xs text-text-muted max-w-sm mx-auto mb-6">
-                Ingresa el correo o NIT del cliente arriba para recuperar su carrito iniciado en la tienda online o app móvil.
+            <h3 class="text-sm font-bold text-primary mb-1">Ticket de Caja Vacío en @tiendaActiva.Nombre</h3>
+            <p class="text-xs text-text-muted max-w-sm mx-auto mb-5">
+                Usa el selector superior de "Venta en Mostrador" para escanear y agregar productos al ticket, o busca un cliente web por correo.
             </p>
-            <div class="flex flex-wrap items-center justify-center gap-3">
-                <a href="/Catalogo" class="px-5 py-2.5 rounded-full text-xs font-semibold bg-primary text-on-primary hover:opacity-90 transition-opacity">
-                    Ver Catálogo Comercial &rarr;
-                </a>
-            </div>
         </div>
     }
 </div>
+
+<!-- Modal de Notificación de Comprobante por SMS y WhatsApp -->
+<div id="modal-notificacion-pos" class="fixed inset-0 z-50 bg-primary/40 backdrop-blur-sm hidden items-center justify-center p-4">
+    <div class="bg-surface-white rounded-3xl p-6 sm:p-8 max-w-md w-full border border-border-subtle/80 shadow-2xl ambient-shadow">
+        <div class="flex items-center justify-between pb-4 mb-4 border-b border-border-subtle">
+            <div class="flex items-center gap-2.5">
+                <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
+                    <span class="material-symbols-outlined text-[22px]">send_to_mobile</span>
+                </div>
+                <div>
+                    <h3 class="text-sm font-bold text-primary">Comprobante SMS & WhatsApp</h3>
+                    <p class="text-[11px] text-text-muted">Ticket digital oficial MegaStore</p>
+                </div>
+            </div>
+            <button type="button" onclick="cerrarModalNotificacion()" class="text-text-muted hover:text-primary transition-colors">
+                <span class="material-symbols-outlined text-[22px]">close</span>
+            </button>
+        </div>
+
+        <form asp-action="CobrarConComprobante" method="post" class="space-y-4">
+            <input type="hidden" name="clienteId" value="@(ViewBag.Busqueda ?? "")" />
+            <input type="hidden" name="tiendaId" value="@tiendaActiva.UbicacionId" />
+            <input type="hidden" id="modal-medio-pago" name="medioPago" value="BILLETERA_DIGITAL" />
+
+            <div>
+                <label class="block text-xs font-bold text-primary mb-1">
+                    Número de Teléfono / WhatsApp
+                </label>
+                <div class="relative">
+                    <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-text-muted">
+                        <span class="material-symbols-outlined text-[18px]">phone</span>
+                    </span>
+                    <input type="tel" name="telefono" value="+502 5555 1234" required
+                           class="w-full pl-9 pr-3 py-2.5 bg-surface-container-low border border-border-subtle/80 rounded-xl text-xs font-semibold text-primary focus:outline-none focus:ring-2 focus:ring-secondary"
+                           placeholder="+502 5555 1234" />
+                </div>
+                <p class="text-[11px] text-text-muted mt-1.5 leading-relaxed">
+                    Se enviará un SMS real al proveedor de mensajería (<code>mock-mensajeria</code>) y se preparará el enlace directo para WhatsApp con el link del comprobante digital.
+                </p>
+            </div>
+
+            <div class="p-3 rounded-2xl bg-surface-container-lowest border border-border-subtle/70 text-xs flex justify-between items-center">
+                <span class="text-text-muted">Total a Cobrar en Ticket:</span>
+                <span class="text-base font-extrabold text-primary">Q @total.ToString("N2")</span>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3 pt-2">
+                <button type="button" onclick="cerrarModalNotificacion()"
+                        class="w-full bg-surface-container-low hover:bg-surface-variant text-primary py-2.5 px-3 rounded-xl text-xs font-semibold transition-colors">
+                    Cancelar
+                </button>
+                <button type="submit"
+                        class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2.5 px-4 rounded-xl text-xs font-bold transition-all shadow-md flex items-center justify-center gap-1.5">
+                    <span class="material-symbols-outlined text-[17px]">check</span>
+                    <span>Cobrar & Enviar</span>
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function abrirModalNotificacion() {
+        const modal = document.getElementById('modal-notificacion-pos');
+        if (modal) {
+            const selMedio = document.querySelector('input[name="medioPago"]:checked');
+            const modalMedio = document.getElementById('modal-medio-pago');
+            if (selMedio && modalMedio) {
+                modalMedio.value = selMedio.value;
+            }
+            modal.classList.remove('hidden');
+            modal.classList.add('flex');
+        }
+    }
+
+    function cerrarModalNotificacion() {
+        const modal = document.getElementById('modal-notificacion-pos');
+        if (modal) {
+            modal.classList.remove('flex');
+            modal.classList.add('hidden');
+        }
+    }
+</script>

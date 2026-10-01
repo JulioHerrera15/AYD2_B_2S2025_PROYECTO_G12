@@ -34,6 +34,7 @@ builder.Services.AddScoped<ServicioExistencias>();
 builder.Services.AddScoped<ServicioExpiracionReservas>();
 builder.Services.AddScoped<ServicioLiberacionReservas>();
 builder.Services.AddScoped<ServicioReingresoStock>();
+builder.Services.AddScoped<ServicioConsumoEntrega>();
 
 builder.Services.AddHostedService<OrdenesEventosConsumidor>();
 
@@ -107,6 +108,31 @@ inventario.MapGet("/reservas/{ordenId}", async (
         return Results.Ok(await servicio.ObtenerPorOrdenAsync(ordenId, cancelacion));
     }
     catch (ExcepcionReservaNoEncontrada ex)
+    {
+        return MapearError(ex);
+    }
+});
+
+inventario.MapPost("/reservas/{ordenId}/consumir", async (
+    string ordenId,
+    ServicioConsumoEntrega servicio,
+    IUnidadDeTrabajo unidadDeTrabajo,
+    CancellationToken cancelacion) =>
+{
+    try
+    {
+        // Misma logica que el consumidor de despacho: solo consume reservas ACTIVA o
+        // CONFIRMADA, idempotente sobre ENTREGADA. Un unico SaveChanges.
+        var consumido = await servicio.ConsumirAsync(ordenId, cancelacion);
+        if (!consumido)
+        {
+            return Results.NotFound(new { ordenId, consumido = false });
+        }
+
+        await unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
+        return Results.Ok(new { ordenId, consumido = true });
+    }
+    catch (Exception ex) when (ex is ExcepcionConflictoConcurrencia or ExcepcionConsumoReservaInconsistente)
     {
         return MapearError(ex);
     }
@@ -204,6 +230,12 @@ static IResult MapearError(Exception ex) => ex switch
         detail: ex.Message,
         statusCode: StatusCodes.Status409Conflict,
         extensions: new Dictionary<string, object?> { ["codigo"] = "conflicto_concurrencia" }),
+
+    ExcepcionConsumoReservaInconsistente => Results.Problem(
+        title: "Reserva inconsistente",
+        detail: ex.Message,
+        statusCode: StatusCodes.Status409Conflict,
+        extensions: new Dictionary<string, object?> { ["codigo"] = "reserva_inconsistente" }),
 
     _ => Results.Problem(
         title: "Error interno",

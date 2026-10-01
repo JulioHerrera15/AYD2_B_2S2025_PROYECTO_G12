@@ -61,3 +61,21 @@ public sealed record AsociarCarritoRequest(
 public sealed record ActualizarCantidadRequest(
     int Cantidad);
 
+// ── Gestion de Roles y Usuarios ──────────────────────────────────────────────
+
+public sealed record AsignarRolRequest(
+    string Email,
+    string Rol);
+
+public sealed record AsignarRolResponse(
+    string Email,
+    string Rol,
+    string Mensaje);
+
+public sealed record UsuarioDto(
+    Guid Id,
+    string Email,
+    string NombreCompleto,
+    string Rol,
+    bool EmailVerificado,
+    DateTime CreadoEn);

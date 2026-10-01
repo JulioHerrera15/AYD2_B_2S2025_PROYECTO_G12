@@ -28,6 +28,31 @@ public sealed class MaquinaEstadosOrdenTests
         Assert.Equal(1400.00m, orden.Total);
     }
 
+    [Theory]
+    [InlineData(EstadoOrden.CREADA)]
+    [InlineData(EstadoOrden.RESERVA_SOLICITADA)]
+    [InlineData(EstadoOrden.INVENTARIO_RESERVADO)]
+    [InlineData(EstadoOrden.PAGO_PENDIENTE)]
+    [InlineData(EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL)]
+    [InlineData(EstadoOrden.CONFIRMADA)]
+    [InlineData(EstadoOrden.DESPACHO_SOLICITADO)]
+    [InlineData(EstadoOrden.EN_PREPARACION)]
+    public void La_cancelacion_del_cliente_es_valida_antes_de_salir_a_ruta(EstadoOrden desde)
+    {
+        Assert.True(MaquinaEstadosOrden.EsTransicionValida(desde, EstadoOrden.CANCELADA));
+    }
+
+    [Theory]
+    [InlineData(EstadoOrden.EN_TRANSITO)]
+    [InlineData(EstadoOrden.LISTA_PARA_RECOGER)]
+    [InlineData(EstadoOrden.ENTREGADA)]
+    [InlineData(EstadoOrden.CANCELADA)]
+    [InlineData(EstadoOrden.RECHAZADA)]
+    public void No_se_cancela_una_orden_en_ruta_entregada_o_ya_cerrada(EstadoOrden desde)
+    {
+        Assert.False(MaquinaEstadosOrden.EsTransicionValida(desde, EstadoOrden.CANCELADA));
+    }
+
     [Fact]
     public void Camino_feliz_completo_llega_a_ENTREGADA()
     {
