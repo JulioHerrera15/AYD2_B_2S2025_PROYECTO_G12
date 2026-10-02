@@ -25,4 +25,9 @@ public static class CodigosMotivoCredito
     public const string AntiguedadInsuficiente = "ANTIGUEDAD_INSUFICIENTE";
     public const string DevolucionesExcesivas = "DEVOLUCIONES_EXCESIVAS";
     public const string PuntajeInsuficiente = "PUNTAJE_INSUFICIENTE";
+
+    // Motivos que solo aparecen al evaluar una compra concreta (bloque 2).
+    public const string CupoInsuficiente = "CUPO_INSUFICIENTE";
+    public const string LineaBloqueada = "LINEA_BLOQUEADA";
+    public const string OrdenCancelada = "ORDEN_CANCELADA";
 }

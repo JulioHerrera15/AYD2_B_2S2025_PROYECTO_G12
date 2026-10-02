@@ -29,4 +29,5 @@ public sealed record OrdenCanceladaData(
     string? DocumentoFiscalId,
     Moneda? Moneda,
     decimal? MontoReembolso,
-    DateTime CanceladaEn);
+    DateTime CanceladaEn,
+    MedioPago? MedioPago = null);

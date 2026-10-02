@@ -5,8 +5,9 @@ namespace SgoLogic.Credito.Api.Application;
 
 /// <summary>
 /// Consulta de oferta de credito y vista "Mi credito". Solo lectura sobre el perfil
-/// precalculado: una consulta sin seguimiento, sin recalcular y sin llamar a otros
-/// servicios, para que el checkout pueda preguntar en cada carga sin costo.
+/// precalculado: la oferta es una consulta sin seguimiento, sin recalcular y sin
+/// llamar a otros servicios, para que el checkout pueda preguntar en cada carga sin
+/// costo. "Mi credito" agrega una segunda consulta con las compras a credito.
 /// </summary>
 public sealed class ServicioElegibilidad
 {
@@ -79,6 +80,22 @@ public sealed class ServicioElegibilidad
 
         var nivel = resumen?.Elegible == true ? resumen.Nivel : NivelCredito.NO_CALIFICA;
 
+        var compras = (await _consultas.ListarComprasAsync(ServicioPerfilCrediticio.NormalizarCliente(clienteId), cancelacion))
+            .OrderBy(compra => compra.Estado == EstadoCuentaPorCobrar.VIGENTE ? 0 : 1)
+            .ThenBy(compra => compra.Estado == EstadoCuentaPorCobrar.VIGENTE ? compra.VenceEn : DateTime.MaxValue)
+            .ThenByDescending(compra => compra.EmitidaEn)
+            .Select(compra => new CompraCreditoDto(
+                compra.NumeroOrden,
+                compra.OrdenId,
+                compra.MontoOriginal,
+                compra.SaldoPendiente,
+                compra.EmitidaEn,
+                compra.VenceEn,
+                compra.Estado == EstadoCuentaPorCobrar.VIGENTE ? (compra.VenceEn.Date - ahora.Date).Days : null,
+                compra.Estado.ToString(),
+                CatalogoMensajesCredito.EtiquetaEstadoCompra(compra.Estado)))
+            .ToArray();
+
         return new MiCreditoDto(
             situacion.Estado,
             nivel.ToString(),
@@ -92,7 +109,8 @@ public sealed class ServicioElegibilidad
             resumen?.Moneda ?? _politica.Moneda,
             _politica.PlazoDias,
             resumen is null ? null : Max(resumen.CalculadoEn, resumen.ActualizadoLineaEn),
-            factores);
+            factores,
+            compras);
     }
 
     private sealed record SituacionCredito(

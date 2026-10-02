@@ -140,6 +140,164 @@ namespace SgoLogic.Credito.Api.Infrastructure.Persistencia.Migraciones
                     b.ToTable("outbox_messages", "public");
                 });
 
+            modelBuilder.Entity("SgoLogic.Credito.Api.Domain.CuentaPorCobrar", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime?>("AnuladaEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("anulada_en");
+
+                    b.Property<string>("ClienteId")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("cliente_id");
+
+                    b.Property<DateTime>("EmitidaEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("emitida_en");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("estado");
+
+                    b.Property<string>("Moneda")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("moneda");
+
+                    b.Property<decimal>("MontoOriginal")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("monto_original");
+
+                    b.Property<string>("MotivoAnulacion")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("motivo_anulacion");
+
+                    b.Property<string>("NumeroOrden")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("numero_orden");
+
+                    b.Property<string>("OrdenId")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("orden_id");
+
+                    b.Property<decimal>("SaldoPendiente")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("saldo_pendiente");
+
+                    b.Property<DateTime>("VenceEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("vence_en");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClienteId")
+                        .HasDatabaseName("ix_cuenta_por_cobrar_cliente_id");
+
+                    b.HasIndex("OrdenId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_cuenta_por_cobrar_orden_id");
+
+                    b.ToTable("cuenta_por_cobrar", "credito", t =>
+                        {
+                            t.HasCheckConstraint("ck_cuenta_por_cobrar_monto_positivo", "monto_original > 0");
+
+                            t.HasCheckConstraint("ck_cuenta_por_cobrar_saldo_no_negativo", "saldo_pendiente >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("SgoLogic.Credito.Api.Domain.DecisionCredito", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ClienteId")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("cliente_id");
+
+                    b.Property<string>("CodigoMotivo")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("codigo_motivo");
+
+                    b.Property<DateTime>("DecididoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("decidido_en");
+
+                    b.Property<decimal>("DisponibleAntes")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("disponible_antes");
+
+                    b.Property<decimal>("LimiteAprobado")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("limite_aprobado");
+
+                    b.Property<decimal>("Monto")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("monto");
+
+                    b.Property<string>("Nivel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("nivel");
+
+                    b.Property<string>("OrdenId")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("orden_id");
+
+                    b.Property<int>("Puntaje")
+                        .HasColumnType("integer")
+                        .HasColumnName("puntaje");
+
+                    b.Property<string>("Resultado")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("resultado");
+
+                    b.Property<string>("VersionPolitica")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("version_politica");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrdenId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_decision_credito_orden_id");
+
+                    b.ToTable("decision_credito", "credito");
+                });
+
             modelBuilder.Entity("SgoLogic.Credito.Api.Domain.HistorialCliente", b =>
                 {
                     b.Property<string>("ClienteId")

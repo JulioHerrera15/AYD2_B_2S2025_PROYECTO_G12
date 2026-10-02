@@ -4,5 +4,6 @@ public enum MedioPago
 {
     TARJETA,
     TRANSFERENCIA,
-    BILLETERA_DIGITAL
+    BILLETERA_DIGITAL,
+    CREDITO
 }
