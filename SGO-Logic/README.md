@@ -19,6 +19,7 @@ Los 12 contextos delimitados de la sección 6.1 del DDA corresponden a estos ser
 | Órdenes | `ordenes-api` | 8083 | Ciclo de vida de la orden y orquestación de la saga (ADR-016); devoluciones. |
 | Inventario | `inventario-api` | 8094 | Existencias por ubicación, reservas con TTL, liberación por compensación y reingreso por devolución (ADR-022). |
 | Pagos | `pagos-api` | 8085 | Cobro contra PayKlik con disyuntor y reintento, reembolsos. |
+| Crédito | `credito-api` | 8099 | Perfil crediticio precalculado desde el historial del ERP y oferta "Compra ahora, paga en 30 días". |
 | Facturación | `facturacion-api` | 8087 | Documento fiscal y certificación asíncrona ante la SAT, nota de crédito. |
 | Auditoría | `auditoria-worker` | 8093 | Bitácora append-only de todos los eventos del bus, en su propia instancia de base de datos. |
 | Consulta de Estado | `consulta-estado-api` | 8091 | Modelo de lectura de las órdenes en Redis con respaldo en PostgreSQL; incidencias. |

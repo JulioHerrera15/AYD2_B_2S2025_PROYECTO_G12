@@ -39,6 +39,8 @@ scrape_configs:
         labels: { servicio: inventario-api }
       - targets: ["pagos-api:8080"]
         labels: { servicio: pagos-api }
+      - targets: ["credito-api:8080"]
+        labels: { servicio: credito-api }
       - targets: ["facturacion-api:8080"]
         labels: { servicio: facturacion-api }
       - targets: ["notificaciones-api:8080"]

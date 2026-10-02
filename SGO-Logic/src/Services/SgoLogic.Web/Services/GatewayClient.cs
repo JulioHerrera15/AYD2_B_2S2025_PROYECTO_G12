@@ -156,6 +156,60 @@ public sealed record TarjetaGuardadaModel(
 /// Cuerpo de POST /api/pagos/tokens. Lleva PAN y CVV hacia Pagos (no a PayKlik):
 /// <see cref="ToString" /> no los imprime y la Web nunca lo registra.
 /// </summary>
+// ── Mi credito (Credito) ────────────────────────────────────────────────────
+/// <summary>Un factor del perfil explicado al cliente. Valoracion: FAVORABLE, ACEPTABLE o A_MEJORAR.</summary>
+public sealed record FactorCreditoModel(string Nombre, string Valoracion, string Descripcion)
+{
+    /// <summary>Texto de la valoracion para mostrar; la vista nunca imprime el codigo.</summary>
+    [JsonIgnore]
+    public string ValoracionTexto => Valoracion switch
+    {
+        "FAVORABLE" => "Favorable",
+        "ACEPTABLE" => "Aceptable",
+        _ => "Por mejorar"
+    };
+}
+
+/// <summary>Respuesta de GET /api/credito/mi-credito. No trae puntaje.</summary>
+public sealed record MiCreditoModel(
+    string Estado,
+    string Nivel,
+    string EtiquetaNivel,
+    string Titulo,
+    string Mensaje,
+    string Recomendacion,
+    decimal LimiteAprobado,
+    decimal SaldoUtilizado,
+    decimal Disponible,
+    string Moneda,
+    int PlazoDias,
+    DateTime? ActualizadoEn,
+    List<FactorCreditoModel>? Factores)
+{
+    /// <summary>El cliente tiene una linea activa con limite: la vista muestra montos.</summary>
+    [JsonIgnore]
+    public bool TieneCredito =>
+        (Estado is "DISPONIBLE" or "CUPO_INSUFICIENTE") && LimiteAprobado > 0m;
+
+    /// <summary>Porcentaje del limite ya utilizado, de 0 a 100.</summary>
+    [JsonIgnore]
+    public int PorcentajeUtilizado =>
+        LimiteAprobado <= 0m ? 0 : (int)Math.Clamp(Math.Round(SaldoUtilizado * 100m / LimiteAprobado), 0m, 100m);
+}
+
+public enum EstadoConsultaCredito
+{
+    Ok,
+    SesionInvalida,
+    NoDisponible
+}
+
+/// <summary>
+/// Resultado de consultar Mi credito. Nunca lanza: distingue datos correctos, sesion
+/// no valida (401) y servicio no disponible (timeout, error de red o 5xx).
+/// </summary>
+public sealed record ResultadoMiCreditoModel(EstadoConsultaCredito Estado, MiCreditoModel? Credito = null);
+
 public sealed record SolicitudTokenPagoModel(
     string? Numero,
     int? MesExp,
@@ -439,6 +493,7 @@ public sealed class GatewayClient
     private const string ClaveCacheProductos = "inventario:productos";
     private static readonly TimeSpan VigenciaCacheSucursales = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan VigenciaCacheProductos = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan LimiteMiCredito = TimeSpan.FromSeconds(2);
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -927,6 +982,40 @@ public sealed class GatewayClient
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
         {
             return (false, "No pudimos comunicarnos con el servicio de pagos.");
+        }
+    }
+
+    // Credito toma el cliente del JWT de la sesion; la Web no manda ningun identificador.
+    /// <summary>
+    /// Mi credito (GET /api/credito/mi-credito) con limite propio de 2 segundos, para
+    /// que una caida de Credito no frene la pagina. No lanza excepciones.
+    /// </summary>
+    public async Task<ResultadoMiCreditoModel> ObtenerMiCreditoAsync(CancellationToken ct = default)
+    {
+        using var limite = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        limite.CancelAfter(LimiteMiCredito);
+
+        try
+        {
+            using var res = await _http.GetAsync("/api/credito/mi-credito", limite.Token);
+            if (res.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                return new ResultadoMiCreditoModel(EstadoConsultaCredito.SesionInvalida);
+            }
+
+            if (!res.IsSuccessStatusCode)
+            {
+                return new ResultadoMiCreditoModel(EstadoConsultaCredito.NoDisponible);
+            }
+
+            var credito = await res.Content.ReadFromJsonAsync<MiCreditoModel>(JsonOptions, limite.Token);
+            return credito is null
+                ? new ResultadoMiCreditoModel(EstadoConsultaCredito.NoDisponible)
+                : new ResultadoMiCreditoModel(EstadoConsultaCredito.Ok, credito);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException or NotSupportedException)
+        {
+            return new ResultadoMiCreditoModel(EstadoConsultaCredito.NoDisponible);
         }
     }
 
