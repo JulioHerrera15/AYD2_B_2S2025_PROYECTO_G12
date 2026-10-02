@@ -151,4 +151,45 @@ public sealed class CarritoServiceTests
         Assert.Equal(ClienteInventarioCarritoFalso.CuerpoSinStock, contenido.Content);
         Assert.Equal(0, almacen.Escrituras);
     }
+
+    // ── B1: el precio y la descripcion salen de Inventario ────────────────────
+
+    [Fact]
+    public async Task Agregar_item_ignora_el_precio_y_la_descripcion_que_manda_el_cliente()
+    {
+        var (servicio, almacen, inventario) = Construir();
+
+        await servicio.AgregarItemAsync(Sesion, new AgregarItemRequest("PROD-104", "Producto barato", 1, 0.01m, TiendaCentral));
+
+        var item = Assert.Single(almacen.Contenido(Clave)!, i => i.Sku == "PROD-104");
+        Assert.Equal(2199.00m, item.PrecioUnitario);
+        Assert.Equal("Deshumidificador Inteligente 30L", item.Descripcion);
+        Assert.Contains("PROD-104", inventario.ConsultasProducto);
+    }
+
+    [Fact]
+    public async Task Actualizar_cantidad_refresca_el_precio_vigente_de_Inventario()
+    {
+        var (servicio, almacen, inventario) = Construir();
+        inventario.Productos["PROD-105"] = inventario.Productos["PROD-105"] with { Precio = 749.00m };
+
+        await servicio.ActualizarCantidadItemAsync(Sesion, "PROD-105", 2);
+
+        var item = Assert.Single(almacen.Contenido(Clave)!);
+        Assert.Equal(2, item.Cantidad);
+        Assert.Equal(749.00m, item.PrecioUnitario);
+    }
+
+    [Fact]
+    public async Task POST_items_con_sku_que_no_existe_en_Inventario_responde_404_y_no_retiene_stock()
+    {
+        var (servicio, almacen, inventario) = Construir();
+
+        var resultado = await Controlador(servicio).AgregarItem(Agregar("SKU-INEXISTENTE"), CancellationToken.None);
+
+        var noEncontrado = Assert.IsType<NotFoundObjectResult>(resultado);
+        Assert.Equal(StatusCodes.Status404NotFound, noEncontrado.StatusCode);
+        Assert.Empty(inventario.Retenciones);
+        Assert.Equal(0, almacen.Escrituras);
+    }
 }

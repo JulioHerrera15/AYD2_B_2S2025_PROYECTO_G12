@@ -250,7 +250,7 @@ public class CuentaController : Controller
             politicaResguardoYRetencion = new
             {
                 facturacionSat = "Las facturas tributarias electronicas (DTE) se conservan inmutables por 5 anos conforme al Codigo Tributario.",
-                tarjetasBancarias = "Cero datos de tarjetas o CVV almacenados en MegaStore (Aislamiento PCI-DSS RES-08 via tokenizacion PayKlik).",
+                tarjetasBancarias = "Numero y CVV solo cifrados (AES-GCM) en la boveda transitoria de Pagos hasta el cobro o el vencimiento del token; nunca en logs ni eventos (RES-08).",
                 bitacoraAuditoria = "Trazabilidad forense inmutable append-only sin permisos de modificacion (ADR-006 / EAC-03)."
             }
         };

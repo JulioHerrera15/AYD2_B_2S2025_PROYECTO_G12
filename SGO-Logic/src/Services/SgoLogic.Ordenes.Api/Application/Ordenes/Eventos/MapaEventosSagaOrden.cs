@@ -104,7 +104,7 @@ public static class MapaEventosSagaOrden
                 Monto: orden.Total,
                 MedioPago: orden.MedioPago,
                 // El token cruza hacia Pagos solo aqui y la orden lo suelta al
-                // tomarlo. Ultimos cuatro y marca los resuelve PayKlik al cobrar.
+                // tomarlo. Ultimos cuatro y marca los resuelve Pagos desde su boveda.
                 TokenMedioPago: orden.TomarTokenMedioPago(),
                 UltimosCuatro: null,
                 Marca: null,
@@ -209,7 +209,8 @@ public static class MapaEventosSagaOrden
                 Lineas: orden.Lineas
                     .Select(linea => new DespachoLineaData(linea.Sku, linea.Descripcion, linea.Cantidad))
                     .ToList(),
-                SolicitadoEn: transicion.CambiadoEn));
+                SolicitadoEn: transicion.CambiadoEn,
+                ClienteId: orden.ClienteId));
 
     private static void EmitirOrdenCancelada(Orden orden, TransicionOrden transicion, IOutboxWriter outbox)
     {

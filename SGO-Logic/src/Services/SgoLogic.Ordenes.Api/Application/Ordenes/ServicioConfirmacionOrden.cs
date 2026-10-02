@@ -34,6 +34,7 @@ public sealed class ServicioConfirmacionOrden
     private readonly IGeneradorCorrelativoOrden _generadorCorrelativo;
     private readonly PoliticaMediosPago _politicaMediosPago;
     private readonly IClienteCarrito _carrito;
+    private readonly ICatalogoProductos _catalogo;
 
     public ServicioConfirmacionOrden(
         IRepositorioOrdenes ordenes,
@@ -41,7 +42,8 @@ public sealed class ServicioConfirmacionOrden
         IUnidadDeTrabajo unidadDeTrabajo,
         IGeneradorCorrelativoOrden generadorCorrelativo,
         PoliticaMediosPago politicaMediosPago,
-        IClienteCarrito carrito)
+        IClienteCarrito carrito,
+        ICatalogoProductos catalogo)
     {
         _ordenes = ordenes;
         _outbox = outbox;
@@ -49,6 +51,41 @@ public sealed class ServicioConfirmacionOrden
         _generadorCorrelativo = generadorCorrelativo;
         _politicaMediosPago = politicaMediosPago;
         _carrito = carrito;
+        _catalogo = catalogo;
+    }
+
+    /// <summary>
+    /// Compara cada linea con el catalogo de Inventario. Lanza
+    /// <see cref="ExcepcionPrecioNoValido" /> con el primer SKU que no exista, este
+    /// inactivo o no tenga el precio vigente; deja subir
+    /// <see cref="ExcepcionCatalogoNoDisponible" /> si Inventario no responde.
+    /// </summary>
+    private async Task ValidarPreciosAsync(IReadOnlyList<CrearLineaOrdenRequest> lineas, CancellationToken cancelacion)
+    {
+        foreach (var linea in lineas)
+        {
+            if (string.IsNullOrWhiteSpace(linea.Sku))
+            {
+                // La entidad LineaOrden rechaza el SKU vacio con su propio mensaje (400).
+                continue;
+            }
+
+            var sku = linea.Sku.Trim();
+            var producto = await _catalogo.ObtenerAsync(sku, cancelacion);
+
+            if (producto is null || !producto.Activo)
+            {
+                throw new ExcepcionPrecioNoValido(sku, $"El producto '{sku}' no existe o no esta disponible para la venta.");
+            }
+
+            if (decimal.Round(linea.PrecioUnitario, 2) != producto.Precio)
+            {
+                throw new ExcepcionPrecioNoValido(
+                    sku,
+                    $"El precio unitario de '{sku}' no coincide con el precio vigente del catalogo.",
+                    producto.Precio);
+            }
+        }
     }
 
     /// <summary>
@@ -76,7 +113,7 @@ public sealed class ServicioConfirmacionOrden
             throw new ExcepcionMedioPagoNoHabilitado(solicitud.Canal, medioPago);
         }
 
-        // ADR-010: la tarjeta se cobra con el token que PayKlik emitio en el navegador.
+        // ADR-010: la tarjeta se cobra con el token que emitio la boveda de Pagos.
         // Aqui solo se exige y se conserva hasta CobroSolicitado; ningun dato de
         // tarjeta llega a este servicio. Para los medios sin token se ignora.
         var requiereToken = _politicaMediosPago.RequiereToken(medioPago);
@@ -85,7 +122,14 @@ public sealed class ServicioConfirmacionOrden
             throw new ExcepcionTokenMedioPagoRequerido(medioPago);
         }
 
-        var lineas = (solicitud.Lineas ?? Array.Empty<CrearLineaOrdenRequest>())
+        var lineasSolicitadas = solicitud.Lineas ?? Array.Empty<CrearLineaOrdenRequest>();
+
+        // B1: el precio no lo decide quien llama. Cada linea se compara con el catalogo
+        // de Inventario antes de crear nada; un SKU desconocido, inactivo o con otro
+        // precio rechaza la orden completa (422), e Inventario caido la rechaza (503).
+        await ValidarPreciosAsync(lineasSolicitadas, cancelacion);
+
+        var lineas = lineasSolicitadas
             .Select(linea => new LineaOrden(linea.Sku, linea.Descripcion, linea.Cantidad, linea.PrecioUnitario))
             .ToList();
 

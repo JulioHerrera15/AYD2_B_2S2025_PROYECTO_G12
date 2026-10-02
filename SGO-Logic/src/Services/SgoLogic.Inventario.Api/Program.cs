@@ -31,6 +31,8 @@ builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
 builder.Services.AddScoped<IGeneradorCorrelativoReserva, GeneradorCorrelativoReserva>();
 builder.Services.AddScoped<IRepositorioSucursales, RepositorioSucursales>();
 builder.Services.AddScoped<IRepositorioReservasCarrito, RepositorioReservasCarrito>();
+builder.Services.AddScoped<IRepositorioProductos, RepositorioProductos>();
+builder.Services.AddScoped<ServicioProductos>();
 builder.Services.AddScoped<ServicioReservas>();
 builder.Services.AddScoped<ServicioExistencias>();
 builder.Services.AddScoped<ServicioExpiracionReservas>();
@@ -260,6 +262,51 @@ inventario.MapGet("/sucursales", async (
     ServicioSucursales servicio,
     CancellationToken cancelacion) =>
     Results.Ok(await servicio.ListarActivasAsync(cancelacion)));
+
+// Catalogo de productos: la fuente del precio (B1). Lo leen la Web (catalogo), Auth
+// (carrito) y Ordenes (validacion de la orden). Las lecturas tienen ruta anonima en el
+// Gateway; el alta/actualizacion la usan los scripts de prueba para registrar sus SKUs.
+inventario.MapGet("/productos", async (
+    ServicioProductos servicio,
+    CancellationToken cancelacion) =>
+    Results.Ok(await servicio.ListarActivosAsync(cancelacion)));
+
+inventario.MapGet("/productos/{sku}", async (
+    string sku,
+    ServicioProductos servicio,
+    CancellationToken cancelacion) =>
+{
+    var producto = await servicio.ObtenerAsync(sku, cancelacion);
+    return producto is null
+        ? Results.Problem(
+            title: "Producto no encontrado",
+            detail: $"No existe el producto '{sku}'.",
+            statusCode: StatusCodes.Status404NotFound,
+            extensions: new Dictionary<string, object?> { ["codigo"] = "producto_no_encontrado" })
+        : Results.Ok(producto);
+});
+
+inventario.MapPut("/productos/{sku}", async (
+    string sku,
+    RegistrarProductoRequest solicitud,
+    ServicioProductos servicio,
+    CancellationToken cancelacion) =>
+{
+    try
+    {
+        var (producto, creado) = await servicio.RegistrarAsync(sku, solicitud, cancelacion);
+        return creado
+            ? Results.Created($"/api/inventario/productos/{producto.Sku}", producto)
+            : Results.Ok(producto);
+    }
+    catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
+    {
+        return Results.Problem(
+            title: "Solicitud invalida",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status400BadRequest);
+    }
+});
 
 inventario.MapGet("/ubicaciones", async (
     ServicioExistencias servicio,

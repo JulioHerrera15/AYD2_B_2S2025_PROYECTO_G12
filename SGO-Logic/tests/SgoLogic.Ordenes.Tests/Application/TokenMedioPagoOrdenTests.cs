@@ -46,7 +46,8 @@ public sealed class TokenMedioPagoOrdenTests
                 Unidad,
                 new GeneradorCorrelativoOrdenFalso(),
                 new PoliticaMediosPago(MediosPago),
-                new ClienteCarritoFalso());
+                new ClienteCarritoFalso(),
+                new CatalogoProductosFalso());
 
             Inventario = new ManejadorEventosInventario(
                 new RegistroMensajesProcesadosFalso(),

@@ -4,19 +4,9 @@ using System.Text.Json;
 namespace SgoLogic.Mocks.PayKlik;
 
 /// <summary>
-/// Peticion de POST /v1/tarjetas/tokens: genera un token de un solo uso a partir de
-/// una tarjeta guardada en la boveda. El CVV solo vive en esta peticion: se valida y
-/// se descarta, nunca se guarda ni se registra. <see cref="ToString" /> no lo imprime.
-/// </summary>
-public sealed record PeticionTokenDesdeReferencia(string? ReferenciaTarjeta, string? Cvv)
-{
-    public override string ToString() => nameof(PeticionTokenDesdeReferencia) + " { datos de tarjeta omitidos }";
-}
-
-/// <summary>
 /// Lo que la boveda guarda de una tarjeta: referencia opaca persistente, marca,
 /// ultimos cuatro y vencimiento. Ni PAN ni CVV: para simular un cargo el mock solo
-/// necesita los ultimos cuatro y la marca, igual que con un token.
+/// necesita los ultimos cuatro y la marca.
 /// </summary>
 public sealed class TarjetaBoveda
 {
@@ -27,7 +17,7 @@ public sealed class TarjetaBoveda
     public int AnioExpiracion { get; set; }
     public DateTime GuardadaEn { get; set; }
 
-    public TarjetaTokenizada ATarjetaTokenizada() => new(UltimosCuatro, Marca, MesExpiracion, AnioExpiracion);
+    public ResumenTarjeta AResumen() => new(UltimosCuatro, Marca, MesExpiracion, AnioExpiracion);
 }
 
 /// <summary>Tarjeta de la boveda tal como la lista GET /admin/tarjetas. Nunca el PAN.</summary>
@@ -46,17 +36,17 @@ public sealed class BovedaOptions
     public string? RutaArchivo { get; set; }
 }
 
-public enum ResultadoTokenDesdeReferencia
+public enum ResultadoValidacionReferencia
 {
-    Emitido,
+    Valida,
     NoExiste,
     CvvInvalido,
     Vencida
 }
 
 /// <summary>
-/// Boveda de tarjetas guardadas del mock. Cada vez que se tokeniza con guardar=true
-/// se agrega una entrada con una referencia nueva (card_pk_...); la tienda decide si
+/// Boveda de tarjetas guardadas del mock. Cada cargo aprobado con guardar=true agrega
+/// una entrada con una referencia nueva (card_pk_...); la tienda decide si
 /// la reemplaza en su propio registro. Thread-safe y persistida en disco si hay ruta.
 /// </summary>
 public sealed class BovedaTarjetas
@@ -73,7 +63,7 @@ public sealed class BovedaTarjetas
         CargarDesdeDisco();
     }
 
-    public string Guardar(TarjetaTokenizada tarjeta)
+    public string Guardar(ResumenTarjeta tarjeta)
     {
         var entrada = new TarjetaBoveda
         {
@@ -108,29 +98,29 @@ public sealed class BovedaTarjetas
     }
 
     /// <summary>
-    /// Valida la peticion contra la boveda: la referencia existe, el CVV tiene el largo
+    /// Valida un cargo con tarjeta guardada: la referencia existe, el CVV tiene el largo
     /// de la marca (4 para AMEX, 3 para las demas) y la tarjeta no esta vencida.
     /// </summary>
-    public (ResultadoTokenDesdeReferencia Resultado, TarjetaBoveda? Tarjeta) Validar(PeticionTokenDesdeReferencia peticion)
+    public (ResultadoValidacionReferencia Resultado, TarjetaBoveda? Tarjeta) Validar(string? referenciaTarjeta, string? cvv)
     {
-        var tarjeta = Obtener(peticion.ReferenciaTarjeta);
+        var tarjeta = Obtener(referenciaTarjeta);
         if (tarjeta is null)
         {
-            return (ResultadoTokenDesdeReferencia.NoExiste, null);
+            return (ResultadoValidacionReferencia.NoExiste, null);
         }
 
-        if (!CvvValido(tarjeta.Marca, peticion.Cvv))
+        if (!CvvValido(tarjeta.Marca, cvv))
         {
-            return (ResultadoTokenDesdeReferencia.CvvInvalido, tarjeta);
+            return (ResultadoValidacionReferencia.CvvInvalido, tarjeta);
         }
 
         var ahora = _reloj();
         if (tarjeta.AnioExpiracion * 12 + tarjeta.MesExpiracion < ahora.Year * 12 + ahora.Month)
         {
-            return (ResultadoTokenDesdeReferencia.Vencida, tarjeta);
+            return (ResultadoValidacionReferencia.Vencida, tarjeta);
         }
 
-        return (ResultadoTokenDesdeReferencia.Emitido, tarjeta);
+        return (ResultadoValidacionReferencia.Valida, tarjeta);
     }
 
     /// <summary>CVV de 4 digitos para American Express y de 3 para las demas marcas.</summary>

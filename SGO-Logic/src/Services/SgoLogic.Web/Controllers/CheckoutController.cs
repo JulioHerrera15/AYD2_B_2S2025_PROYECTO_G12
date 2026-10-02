@@ -70,11 +70,34 @@ public class CheckoutController : Controller
             : Array.Empty<TarjetaGuardadaModel>();
     }
 
-    // ── Tarjetas guardadas (AJAX desde el checkout) ───────────────────────────
-    // El cliente lo determina Pagos con el JWT de la sesion. El CVV solo pasa por
-    // aqui hacia Pagos y PayKlik: no se guarda, no se registra y no vuelve en la respuesta.
+    // ── Tokenizacion (AJAX desde el checkout) ─────────────────────────────────
+    // El navegador ya no habla con PayKlik: manda la tarjeta a la Web, la Web la pasa
+    // a Pagos (POST /api/pagos/tokens) y Pagos la valida, la cifra y devuelve un token.
+    // El PAN y el CVV no se guardan, no se registran y no vuelven en la respuesta.
 
-    /// <summary>Token de un solo uso para pagar con una tarjeta guardada. Misma forma que la tokenizacion directa.</summary>
+    /// <summary>
+    /// Tokeniza una tarjeta nueva en Pagos. 200 con {token, marca, ultimos4, expiraEn};
+    /// 422 con {errores:{campo:mensaje}} para mostrarlos debajo de cada campo. Con
+    /// sesion, guardar=true pide guardar la tarjeta cuando el cobro se apruebe.
+    /// </summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Tokenizar(
+        string? numero,
+        int? mesExp,
+        int? anioExp,
+        string? cvv,
+        string? titular,
+        bool guardar = false)
+    {
+        var autenticado = !string.IsNullOrWhiteSpace(Request.Cookies["sgo_jwt"]);
+        var resultado = await _gateway.TokenizarTarjetaAsync(
+            new SolicitudTokenPagoModel(numero, mesExp, anioExp, cvv, titular, guardar && autenticado));
+
+        return RespuestaTokenizacion(resultado, "No pudimos validar tu tarjeta en este momento. Intenta de nuevo en unos momentos.");
+    }
+
+    /// <summary>Token de la boveda de Pagos para pagar con una tarjeta guardada. Misma forma que Tokenizar.</summary>
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> TokenTarjetaGuardada(Guid id, string? cvv)
@@ -84,39 +107,29 @@ public class CheckoutController : Controller
             return StatusCode(StatusCodes.Status401Unauthorized, new { mensaje = "Inicia sesión para usar tus tarjetas guardadas." });
         }
 
-        var (token, status, error) = await _gateway.ObtenerTokenTarjetaAsync(id, cvv ?? string.Empty);
-        if (token is not null)
+        var resultado = await _gateway.ObtenerTokenTarjetaAsync(id, cvv ?? string.Empty);
+        return RespuestaTokenizacion(resultado, "No se pudo usar la tarjeta guardada.");
+    }
+
+    private IActionResult RespuestaTokenizacion(ResultadoTokenPagoModel resultado, string mensajePorDefecto)
+    {
+        if (resultado.Token is not null)
         {
-            return Json(token);
+            return Json(resultado.Token);
+        }
+
+        if (resultado.Status == StatusCodes.Status422UnprocessableEntity)
+        {
+            return UnprocessableEntity(new
+            {
+                mensaje = resultado.Mensaje ?? "Revisa los datos de la tarjeta.",
+                errores = resultado.Errores ?? new Dictionary<string, string>()
+            });
         }
 
         return StatusCode(
-            status is >= 400 and < 600 ? status : StatusCodes.Status502BadGateway,
-            new { mensaje = error ?? "No se pudo usar la tarjeta guardada." });
-    }
-
-    /// <summary>Guarda la tarjeta que PayKlik acaba de tokenizar con guardar=true.</summary>
-    [HttpPost]
-    [ValidateAntiForgeryToken]
-    public async Task<IActionResult> GuardarTarjeta(
-        string referenciaTarjeta,
-        string marca,
-        string ultimos4,
-        int mesExp,
-        int anioExp,
-        string? titular)
-    {
-        if (string.IsNullOrWhiteSpace(Request.Cookies["sgo_jwt"]))
-        {
-            return StatusCode(StatusCodes.Status401Unauthorized, new { mensaje = "Inicia sesión para guardar tus tarjetas." });
-        }
-
-        var (exito, error) = await _gateway.GuardarTarjetaAsync(
-            new GuardarTarjetaModel(referenciaTarjeta, marca, ultimos4, mesExp, anioExp, titular));
-
-        return exito
-            ? Json(new { exito = true })
-            : StatusCode(StatusCodes.Status502BadGateway, new { exito = false, mensaje = error });
+            resultado.Status is >= 400 and < 600 ? resultado.Status : StatusCodes.Status502BadGateway,
+            new { mensaje = resultado.Mensaje ?? mensajePorDefecto });
     }
 
     [HttpPost]
@@ -302,7 +315,8 @@ public class CheckoutController : Controller
             );
         }
 
-        // Regla PCI-DSS (RES-08 / ADR-010): Si es TARJETA, tokenMedioPago es obligatorio
+        // Regla PCI-DSS (RES-08 / ADR-010): con TARJETA el token de la boveda de Pagos es
+        // obligatorio; la orden nunca lleva el numero ni el CVV.
         if (medioPagoFinal == "TARJETA" && string.IsNullOrWhiteSpace(tokenMedioPago))
         {
             ViewBag.Error = "Valida tu tarjeta antes de confirmar el pedido.";

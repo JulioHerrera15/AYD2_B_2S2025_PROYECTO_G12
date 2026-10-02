@@ -51,6 +51,13 @@ public sealed class Despacho
 
     public string ReservaId { get; private set; }
 
+    /// <summary>
+    /// Email del cliente de la orden, tal como llega en DespachoSolicitado. Solo se usa
+    /// para que PedidoListoParaRecoger diga a quien avisar. Nulo en despachos creados
+    /// antes de que el evento lo trajera.
+    /// </summary>
+    public string? ClienteId { get; private set; }
+
     public MetodoEntrega MetodoEntrega { get; private set; }
 
     /// <summary>Nulo hasta que se determina el origen.</summary>
@@ -124,6 +131,13 @@ public sealed class Despacho
             direccionEntrega,
             materializadas,
             creadoEn ?? DateTime.UtcNow);
+    }
+
+    /// <summary>Guarda el cliente de la orden (null o vacio lo deja sin cliente).</summary>
+    public void RegistrarCliente(string? clienteId)
+    {
+        var limpio = clienteId?.Trim();
+        ClienteId = string.IsNullOrEmpty(limpio) ? null : limpio;
     }
 
     /// <summary>

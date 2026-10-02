@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -5,6 +6,7 @@ using Microsoft.Extensions.Options;
 using SgoLogic.Contracts.Enumeraciones;
 using SgoLogic.Contracts.Eventos.Pagos;
 using SgoLogic.Pagos.Api.Application.Pagos;
+using SgoLogic.Pagos.Api.Application.Tokens;
 using SgoLogic.Pagos.Api.Controllers;
 using SgoLogic.Pagos.Api.Domain;
 using SgoLogic.Pagos.Api.Infrastructure.PayKlik;
@@ -38,12 +40,125 @@ public sealed class PagosControllerTests
                 Outbox,
                 Options.Create(new PayKlikOptions { MaxReintentos = 0, BackoffBaseMs = 0 }),
                 Options.Create(new ReintentoOptions { ExpiracionMinutos = 60 }),
+                BovedaPruebas.Cifrador,
                 NullLogger<ServicioCobro>.Instance);
+
+            var tokens = new ServicioTokensPago(
+                new RepositorioTokensPago(contexto),
+                new RepositorioTarjetasGuardadas(contexto),
+                BovedaPruebas.Cifrador,
+                Options.Create(new BovedaOptions()),
+                NullLogger<ServicioTokensPago>.Instance);
 
             var disyuntor = new DisyuntorPayKlik(Options.Create(new PayKlikOptions()));
 
-            return new PagosController(contexto, servicioCobro, disyuntor);
+            return new PagosController(contexto, servicioCobro, tokens, disyuntor);
         }
+    }
+
+    /// <summary>Pago PENDIENTE con un intento fallido hecho con <paramref name="token" /> y un enlace vigente.</summary>
+    private static async Task<EnlaceReintento> SembrarPendienteAsync(PagosDbContext contexto, TokenPago token, string clienteId = ClienteId)
+    {
+        var pago = new Pago(OrdenId, clienteId, Canal.WEB, Moneda.GTQ, 500.00m, MedioPago.TARJETA);
+        pago.MarcarPendiente();
+        var intento = pago.RegistrarIntento(MedioPago.TARJETA, token.Id, token.Ultimos4, token.Marca.ToString());
+        intento.MarcarFallido("PROVEEDOR_5XX", "PayKlik respondio 503.", 10, DateTime.UtcNow);
+        var enlace = pago.GenerarEnlaceReintento(TimeSpan.FromHours(1));
+
+        contexto.Pagos.Add(pago);
+        contexto.Intentos.Add(intento);
+        contexto.EnlacesReintento.Add(enlace);
+        contexto.TokensPago.Add(token);
+        await contexto.SaveChangesAsync();
+        return enlace;
+    }
+
+    // ── A5: reintento con token interno vigente o vencido ──────────────────────
+
+    [Fact]
+    public async Task Reintentar_con_el_token_vigente_cobra_sin_pedir_datos()
+    {
+        var escenario = new Escenario();
+        await using var contexto = escenario.NuevoContexto();
+        var enlace = await SembrarPendienteAsync(contexto, BovedaPruebas.TokenNuevo("tok_vigente"));
+        var controller = escenario.CrearController(contexto, ClientePayKlikFalso.ApruebaComoPayKlik());
+
+        var info = Assert.IsType<EnlaceReintentoInfoDto>(
+            Assert.IsType<OkObjectResult>((await controller.ObtenerInfoReintento(enlace.Token, CancellationToken.None)).Result).Value);
+        Assert.Equal(DatosRequeridosReintento.Ninguno, info.DatosRequeridos);
+
+        var resultado = await controller.Reintentar(enlace.Token, null, CancellationToken.None);
+
+        var pagoDto = Assert.IsType<PagoDto>(Assert.IsType<OkObjectResult>(resultado.Result).Value);
+        Assert.Equal(EstadoPago.APLICADO, pagoDto.Estado);
+    }
+
+    [Fact]
+    public async Task Reintentar_con_token_vencido_pide_la_tarjeta_completa_sin_cobrar_ni_rechazar_el_pago()
+    {
+        var escenario = new Escenario();
+        await using var contexto = escenario.NuevoContexto();
+        var enlace = await SembrarPendienteAsync(contexto, BovedaPruebas.TokenVencido("tok_vencido"));
+        var payklik = ClientePayKlikFalso.ApruebaComoPayKlik();
+        var controller = escenario.CrearController(contexto, payklik);
+
+        var info = Assert.IsType<EnlaceReintentoInfoDto>(
+            Assert.IsType<OkObjectResult>((await controller.ObtenerInfoReintento(enlace.Token, CancellationToken.None)).Result).Value);
+        Assert.Equal(DatosRequeridosReintento.Tarjeta, info.DatosRequeridos);
+
+        var resultado = await controller.Reintentar(enlace.Token, null, CancellationToken.None);
+
+        var problema = Assert.IsType<ObjectResult>(resultado.Result);
+        Assert.Equal(StatusCodes.Status422UnprocessableEntity, problema.StatusCode);
+        var detalle = Assert.IsType<ProblemDetails>(problema.Value);
+        Assert.Equal("datos_tarjeta_requeridos", detalle.Extensions["codigo"]);
+        Assert.Equal(DatosRequeridosReintento.Tarjeta, detalle.Extensions["datosRequeridos"]);
+
+        Assert.Empty(payklik.Peticiones);
+        Assert.Equal(EstadoPago.PENDIENTE, (await contexto.Pagos.SingleAsync()).Estado);
+    }
+
+    [Fact]
+    public async Task Reintentar_con_un_token_nuevo_en_el_cuerpo_cobra_con_esa_tarjeta()
+    {
+        var escenario = new Escenario();
+        await using var contexto = escenario.NuevoContexto();
+        var enlace = await SembrarPendienteAsync(contexto, BovedaPruebas.TokenVencido("tok_vencido"));
+        contexto.TokensPago.Add(BovedaPruebas.TokenNuevo("tok_nuevo", numero: "5555555555554444"));
+        await contexto.SaveChangesAsync();
+        var payklik = ClientePayKlikFalso.ApruebaComoPayKlik();
+        var controller = escenario.CrearController(contexto, payklik);
+
+        var resultado = await controller.Reintentar(enlace.Token, new ReintentoPagoRequest("tok_nuevo", null), CancellationToken.None);
+
+        var pagoDto = Assert.IsType<PagoDto>(Assert.IsType<OkObjectResult>(resultado.Result).Value);
+        Assert.Equal(EstadoPago.APLICADO, pagoDto.Estado);
+        Assert.Equal("5555555555554444", Assert.Single(payklik.Peticiones).Tarjeta!.Numero);
+    }
+
+    [Fact]
+    public async Task Reintentar_con_token_vencido_de_tarjeta_guardada_pide_solo_el_CVV_y_cobra_con_el()
+    {
+        var escenario = new Escenario();
+        await using var contexto = escenario.NuevoContexto();
+        var tarjeta = new TarjetaGuardada(ClienteId, "card_pk_guardada", MarcaTarjeta.VISA, "4242", 12, DateTime.UtcNow.Year + 2, "Ana Lopez", DateTime.UtcNow);
+        contexto.TarjetasGuardadas.Add(tarjeta);
+        var vencido = BovedaPruebas.TokenGuardada("tok_guardada_vencida", tarjeta, creadoEn: DateTime.UtcNow.AddMinutes(-31));
+        var enlace = await SembrarPendienteAsync(contexto, vencido);
+        var payklik = ClientePayKlikFalso.Aprueba();
+        var controller = escenario.CrearController(contexto, payklik);
+
+        var info = Assert.IsType<EnlaceReintentoInfoDto>(
+            Assert.IsType<OkObjectResult>((await controller.ObtenerInfoReintento(enlace.Token, CancellationToken.None)).Result).Value);
+        Assert.Equal(DatosRequeridosReintento.Cvv, info.DatosRequeridos);
+
+        var resultado = await controller.Reintentar(enlace.Token, new ReintentoPagoRequest(null, "987"), CancellationToken.None);
+
+        var pagoDto = Assert.IsType<PagoDto>(Assert.IsType<OkObjectResult>(resultado.Result).Value);
+        Assert.Equal(EstadoPago.APLICADO, pagoDto.Estado);
+        var peticion = Assert.Single(payklik.Peticiones);
+        Assert.Equal("card_pk_guardada", peticion.ReferenciaTarjeta);
+        Assert.Equal("987", peticion.Cvv);
     }
 
     [Fact]
@@ -114,13 +229,14 @@ public sealed class PagosControllerTests
 
         contexto.Pagos.Add(pago);
         contexto.Intentos.Add(intento);
+        contexto.TokensPago.Add(BovedaPruebas.TokenNuevo(intento.TokenMedioPago!));
         contexto.EnlacesReintento.Add(enlace);
         await contexto.SaveChangesAsync();
 
         // El proveedor vuelve a fallar con timeout
         var controller = escenario.CrearController(contexto, ClientePayKlikFalso.Timeout());
 
-        var resultado = await controller.Reintentar(enlace.Token, CancellationToken.None);
+        var resultado = await controller.Reintentar(enlace.Token, null, CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(resultado.Result);
         var pagoDto = Assert.IsType<PagoDto>(okResult.Value);
@@ -149,12 +265,13 @@ public sealed class PagosControllerTests
 
         contexto.Pagos.Add(pago);
         contexto.Intentos.Add(intento);
+        contexto.TokensPago.Add(BovedaPruebas.TokenNuevo(intento.TokenMedioPago!));
         contexto.EnlacesReintento.AddRange(enlace1, enlace2);
         await contexto.SaveChangesAsync();
 
         var controller = escenario.CrearController(contexto, ClientePayKlikFalso.Aprueba());
 
-        var resultado = await controller.Reintentar(enlace1.Token, CancellationToken.None);
+        var resultado = await controller.Reintentar(enlace1.Token, null, CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(resultado.Result);
         var pagoDto = Assert.IsType<PagoDto>(okResult.Value);
@@ -182,7 +299,7 @@ public sealed class PagosControllerTests
         // El cliente de PayKlik fallaria si fuera invocado
         var controller = escenario.CrearController(contexto, ClientePayKlikFalso.Timeout());
 
-        var resultado = await controller.Reintentar(enlace.Token, CancellationToken.None);
+        var resultado = await controller.Reintentar(enlace.Token, null, CancellationToken.None);
 
         var okResult = Assert.IsType<OkObjectResult>(resultado.Result);
         var pagoDto = Assert.IsType<PagoDto>(okResult.Value);

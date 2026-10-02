@@ -8,28 +8,31 @@
 # Tres bloques independientes, cada uno con sus propios chequeos:
 #
 #   1) RES-08 — ningun PAN, CVV ni fecha de vencimiento de tarjeta se persiste
-#      en ninguna base ni aparece en los logs. Desde que PayKlik tokeniza de
-#      verdad (ADR-010): tokeniza una tarjeta de prueba contra el mock
-#      (POST /v1/tokens, el unico punto de todo el sistema que ve un PAN/CVV,
-#      y corre dentro del proceso del mock), genera una orden real con ese
-#      token y con un marcador de texto libre reconocible, y barre las tres
-#      instancias de Postgres (db-operacional, db-finanzas, db-auditoria) y
-#      los logs de todos los contenedores. Complementa (no duplica) los tests
-#      ya existentes en tests/SgoLogic.Pagos.Tests/Application/ServicioCobroTests.cs
-#      CobroTokenizadoTests.cs y Infrastructure/TokenizacionMockTests.cs:
-#      esos prueban la FORMA de los tipos y el comportamiento contra un EF
-#      Core InMemory/doble de PayKlik, en tiempo de compilacion o con dobles;
-#      este bloque prueba el CONTENIDO real de las bases y del mock real
-#      corriendo, de punta a punta.
+#      en claro en ninguna base ni aparece en los logs. Desde la tokenizacion
+#      interna (boveda transitoria de Pagos): tokeniza una tarjeta de prueba en
+#      Pagos (POST /api/pagos/tokens), genera una orden real con ese token y con
+#      un marcador de texto libre reconocible, y barre las tres instancias de
+#      Postgres (db-operacional, db-finanzas, db-auditoria) y los logs de todos
+#      los contenedores. La tabla pagos.token_pago SI guarda PAN y CVV, pero
+#      cifrados con AES-GCM en datos_cifrados (bytea): eso se acepta, y el
+#      chequeo 1.3b verifica que ahi no aparezcan en claro, que ninguna otra
+#      columna del token los tenga y que el token del cobro quede CONSUMIDO y
+#      sin datos. Complementa (no duplica) los tests de
+#      tests/SgoLogic.Pagos.Tests (CobroTokenizadoTests, CobroBovedaTests,
+#      CifradorAesGcmTests, ServicioTokensPagoTests): esos prueban la FORMA de
+#      los tipos y el comportamiento con EF Core InMemory y dobles; este bloque
+#      prueba el CONTENIDO real de las bases corriendo, de punta a punta.
 #   2) Validacion de JWT — el unico endpoint protegido por [Authorize] en todo
 #      el sistema (POST /api/carrito/asociar) rechaza sin token, con token
 #      malformado, expirado y firmado con otra clave, y acepta uno valido.
-#      Ademas confirma y reporta (no corrige) que el API Gateway no exige
-#      autenticacion en ninguna ruta, ni siquiera pagos o facturacion. ADR-020
-#      (2026-09-21) ya documenta la decision de validar el JWT en el borde con
-#      una bandera Gateway:ExigirJwt por defecto apagada, pero esa bandera y
-#      su validacion todavia no existen en el codigo (ver SEGURIDAD.md) — el
-#      comportamiento medido aqui sigue siendo el de sin ninguna proteccion.
+#      Ademas mide las rutas del API Gateway segun la bandera Gateway:ExigirJwt
+#      (ADR-020), que ya existe en ApiGateway/Program.cs y aplica la politica
+#      RequireAuthenticatedUser a ordenes, pagos, facturacion, inventario,
+#      auditoria, despacho y erp. Con la bandera apagada (GATEWAY_EXIGIR_JWT=
+#      false, el valor por defecto) esas rutas responden sin token y se reporta
+#      como informativo; con la bandera encendida deben responder 401 y, si no,
+#      es un hallazgo bloqueante. POST /api/pagos/tokens y los reintentos de
+#      pago quedan anonimos a proposito en ambos casos (los invitados pagan).
 #   3) Permisos de Auditoria — reusa la evidencia ya demostrada por
 #      PermisosInmutabilidadTests (rol restringido sin UPDATE/DELETE, trigger
 #      que bloquea incluso al dueno) contra la base real, sin reimplementar
@@ -44,9 +47,9 @@
 #                token invalido).
 #   INCOMPLETO — una o mas consultas/pasos no se pudieron evaluar.
 #
-# El hallazgo del gateway sin autenticacion es una excepcion deliberada: se
-# reporta siempre, por separado, y NO participa en el dictamen — ya se sabe
-# que existe, no se corrige aqui (ver documentacion/docs/SEGURIDAD.md).
+# Con Gateway:ExigirJwt apagado, las rutas abiertas del gateway se reportan por
+# separado y NO participan en el dictamen: es la configuracion por defecto del
+# MVP, documentada en ADR-020. Con la bandera encendida si participan.
 #
 # Requiere el stack de docker compose arriba (docker compose up -d) y curl,
 # psql (via los contenedores) y python3 en la maquina que corre el script.
@@ -170,7 +173,7 @@ echo ""
 echo "--- Bloque 1: RES-08 (no persistencia de PAN/CVV) ---"
 
 RUN_ID="segsweep-$(date +%s)"
-PAYKLIK_URL="${PAYKLIK_URL:-http://localhost:8084}"
+PAGOS_URL="${PAGOS_URL:-http://localhost:8085}"
 PAN_PRUEBA="4111111111111111"
 CVV_PRUEBA="123"
 MES_EXPIRACION=12
@@ -183,35 +186,29 @@ SKU_CANARIO="SKU-SEGURIDAD-${RUN_ID}"
 
 echo "PAN de prueba (Visa de prueba estandar, no real) usado para tokenizar Y como canario de texto libre: ${PAN_PRUEBA}"
 
-# --- 1.0a Tokenizar una tarjeta de prueba contra PayKlik, igual que lo haria
-# el navegador (ADR-010, ADR-020 en README/tokenizacion): POST /v1/tokens es
-# el UNICO punto de todo el sistema que ve el PAN/CVV, y corre dentro del
-# proceso del mock, nunca dentro de SGO-Logic. Complementa (no duplica) los
-# tests unitarios de Angel en
-# tests/SgoLogic.Pagos.Tests/Infrastructure/TokenizacionMockTests.cs
-# y tests/SgoLogic.Pagos.Tests/Application/CobroTokenizadoTests.cs, que
-# prueban lo mismo contra un EF Core InMemory y un doble de PayKlik: este
-# bloque lo prueba contra el sistema real, de punta a punta, con Postgres de
-# verdad y el mock corriendo en su propio contenedor.
+# --- 1.0a Tokenizar una tarjeta de prueba en la boveda de Pagos, igual que lo
+# hace el checkout a traves de la Web (POST /api/pagos/tokens). Pagos valida la
+# tarjeta y guarda PAN y CVV cifrados (AES-GCM) en pagos.token_pago hasta el
+# cobro; PayKlik solo los recibe al cobrar, servidor a servidor.
 TOKEN_OK=1
 TOKEN_PAGO=""
-if llamar_http POST "${PAYKLIK_URL}/v1/tokens" "{\"numeroTarjeta\":\"${PAN_PRUEBA}\",\"cvv\":\"${CVV_PRUEBA}\",\"mesExpiracion\":${MES_EXPIRACION},\"anioExpiracion\":${ANIO_EXPIRACION}}"; then
+if llamar_http POST "${PAGOS_URL}/api/pagos/tokens" "{\"numero\":\"${PAN_PRUEBA}\",\"mesExp\":${MES_EXPIRACION},\"anioExp\":${ANIO_EXPIRACION},\"cvv\":\"${CVV_PRUEBA}\",\"titular\":\"Cliente Seguridad\",\"guardar\":false}"; then
   TOKEN_PAGO=$(extraer_campo "$HTTP_BODY" "token")
-  TOKEN_ULTIMOS_CUATRO=$(extraer_campo "$HTTP_BODY" "ultimosCuatro")
+  TOKEN_ULTIMOS_CUATRO=$(extraer_campo "$HTTP_BODY" "ultimos4")
   TOKEN_MARCA=$(extraer_campo "$HTTP_BODY" "marca")
   if [ -z "$TOKEN_PAGO" ]; then
     TOKEN_OK=0
-    echo "ADVERTENCIA: POST /v1/tokens respondio ${HTTP_CODE} pero sin campo 'token' en el cuerpo." >&2
+    echo "ADVERTENCIA: POST /api/pagos/tokens respondio ${HTTP_CODE} pero sin campo 'token' en el cuerpo." >&2
     reportar_fallo_http "tokenizar tarjeta de prueba"
   fi
 else
   TOKEN_OK=0
-  reportar_fallo_http "tokenizar tarjeta de prueba contra ${PAYKLIK_URL}/v1/tokens"
+  reportar_fallo_http "tokenizar tarjeta de prueba contra ${PAGOS_URL}/api/pagos/tokens"
 fi
 if [ "$TOKEN_OK" -eq 1 ]; then
-  echo "Tarjeta tokenizada contra PayKlik: token=${TOKEN_PAGO} ultimosCuatro=${TOKEN_ULTIMOS_CUATRO} marca=${TOKEN_MARCA}"
+  echo "Tarjeta tokenizada en la boveda de Pagos: token=${TOKEN_PAGO} ultimos4=${TOKEN_ULTIMOS_CUATRO} marca=${TOKEN_MARCA}"
 else
-  FALLAS_EJECUCION+=("tokenizacion de tarjeta de prueba contra PayKlik")
+  FALLAS_EJECUCION+=("tokenizacion de tarjeta de prueba en la boveda de Pagos")
 fi
 
 # --- 1.0b Confirmar que TARJETA sin token se sigue rechazando (limite duro:
@@ -254,6 +251,16 @@ if [ "$CANARIO_OK" -eq 1 ]; then
       "{\"sku\":\"${SKU_CANARIO}\",\"ubicacionId\":\"CD-01\",\"tipoUbicacion\":\"CENTRO_DISTRIBUCION\",\"cantidadFisica\":10}"; then
     CANARIO_OK=0
     reportar_fallo_http "sembrar existencias del SKU canario"
+  fi
+fi
+
+# Ordenes valida el precio de cada linea contra el catalogo de Inventario: el
+# SKU canario se registra con el precio que lleva la orden.
+if [ "$CANARIO_OK" -eq 1 ]; then
+  if ! llamar_http PUT "${GATEWAY}/api/inventario/productos/${SKU_CANARIO}" \
+      '{"nombre":"Producto canario RES-08","categoria":"Pruebas","precio":100.0,"icono":"inventory_2","activo":true}'; then
+    CANARIO_OK=0
+    reportar_fallo_http "registrar el SKU canario en el catalogo"
   fi
 fi
 
@@ -382,7 +389,9 @@ barrer_contenedor db-auditoria "$USUARIO_AUDITORIA_OWNER" "$CLAVE_AUDITORIA_OWNE
 # digitos con forma de tarjeta en pagos.pago/intento_pago; lo primero se
 # verifica aqui: CUALQUIER aparicion del marcador dentro de la base sgo_pagos
 # (sin importar la tabla) SI es un hallazgo real, porque Pagos solo deberia
-# ver el token opaco, nunca el texto libre de la orden. Todo lo demas
+# ver el token opaco, nunca el texto libre de la orden; el barrido incluye
+# las columnas de texto de pagos.token_pago (titular, ultimos4, marca), y la
+# columna cifrada datos_cifrados (bytea) se revisa aparte en 1.3b. Todo lo demas
 # (Facturacion, Despacho, Auditoria, outbox, ERP, etc.) es propagacion
 # esperada y se reporta como informativo.
 CONTROL_POSITIVO_ORDENES=0
@@ -443,10 +452,49 @@ if [ "$TOTAL_PAN_SHAPED" -gt 0 ]; then
   HALLAZGOS_BLOQUEANTES+=("Se encontraron ${TOTAL_PAN_SHAPED} valor(es) con forma de numero de tarjeta (13-19 digitos seguidos) en pagos.pago/intento_pago — ver ${TMP_DIR}/pan_shaped_pagos.txt")
 fi
 
+# --- 1.3b Boveda transitoria (pagos.token_pago). datos_cifrados guarda PAN y
+# CVV cifrados con AES-GCM: se acepta, pero se verifica que el PAN de prueba
+# no aparezca en claro en ese bytea (ni solo ni en el formato "PAN<salto>CVV"
+# que se cifra), que ninguna columna de texto del token tenga una corrida de
+# 13-19 digitos y que el token usado en la orden canario haya quedado
+# CONSUMIDO y sin datos cifrados tras el cobro.
+consulta_boveda_en_claro() {
+  psql_en db-finanzas "$USUARIO_FINANZAS" "$CLAVE_FINANZAS" sgo_pagos -c "
+    SELECT id, 'datos_cifrados contiene el PAN en claro' FROM pagos.token_pago
+      WHERE datos_cifrados IS NOT NULL
+        AND (position(convert_to('${PAN_PRUEBA}', 'UTF8') IN datos_cifrados) > 0
+             OR position(convert_to('${PAN_PRUEBA}' || chr(10) || '${CVV_PRUEBA}', 'UTF8') IN datos_cifrados) > 0)
+    UNION ALL
+    SELECT id, 'columna de texto con forma de numero de tarjeta' FROM pagos.token_pago
+      WHERE coalesce(titular, '') ~ '[0-9]{13,19}' OR coalesce(cliente_id, '') ~ '[0-9]{13,19}'
+         OR coalesce(marca, '') ~ '[0-9]{13,19}' OR id ~ '[0-9]{13,19}';
+  " | tr -d '\r' | sed '/^$/d'
+}
+ejecutar consulta_boveda_en_claro "$TMP_DIR/boveda_en_claro.txt" "pagos.token_pago sin PAN/CVV en claro" || true
+TOTAL_BOVEDA_EN_CLARO=$(wc -l < "$TMP_DIR/boveda_en_claro.txt" | tr -d ' ')
+if [ "$TOTAL_BOVEDA_EN_CLARO" -gt 0 ]; then
+  HALLAZGOS_BLOQUEANTES+=("La boveda pagos.token_pago tiene ${TOTAL_BOVEDA_EN_CLARO} fila(s) con PAN/CVV en claro — ver ${TMP_DIR}/boveda_en_claro.txt")
+fi
+echo "Filas de pagos.token_pago con PAN/CVV en claro: ${TOTAL_BOVEDA_EN_CLARO}"
+
+if [ "$CANARIO_OK" -eq 1 ] && [ "$TOKEN_OK" -eq 1 ]; then
+  consulta_token_canario() {
+    psql_en db-finanzas "$USUARIO_FINANZAS" "$CLAVE_FINANZAS" sgo_pagos -c "
+      SELECT estado, (datos_cifrados IS NULL)::text FROM pagos.token_pago WHERE id = '${TOKEN_PAGO}';
+    " | tr -d '\r'
+  }
+  if ejecutar consulta_token_canario "$TMP_DIR/token_canario.txt" "estado del token de la orden canario"; then
+    IFS='|' read -r ESTADO_TOKEN SIN_DATOS_TOKEN < "$TMP_DIR/token_canario.txt"
+    echo "Token de la orden canario en la boveda: estado=${ESTADO_TOKEN:-<no existe>} sin_datos_cifrados=${SIN_DATOS_TOKEN:-?}"
+    if [ "$ESTADO_TOKEN" != "CONSUMIDO" ] || [ "$SIN_DATOS_TOKEN" != "true" ]; then
+      HALLAZGOS_BLOQUEANTES+=("El token ${TOKEN_PAGO} de la orden canario quedo en estado ${ESTADO_TOKEN:-desconocido} (sin datos cifrados: ${SIN_DATOS_TOKEN:-?}); tras un cobro con respuesta definitiva debe quedar CONSUMIDO y sin datos")
+    fi
+  fi
+fi
+
 # --- 1.4 Confirmar que Pagos resolvio la tarjeta REAL tokenizada (no un
-# valor fijo de mock): ahora que hay una tarjeta de verdad detras del token,
-# ultimos_cuatro y marca deben coincidir exactamente con lo que devolvio
-# POST /v1/tokens en 1.0a, no con cualquier valor.
+# valor fijo de mock): ultimos_cuatro y marca deben coincidir exactamente con
+# lo que devolvio POST /api/pagos/tokens en 1.0a, no con cualquier valor.
 if [ "$CANARIO_OK" -eq 1 ] && [ "$TOKEN_OK" -eq 1 ]; then
   consulta_intento_canario() {
     psql_en db-finanzas "$USUARIO_FINANZAS" "$CLAVE_FINANZAS" sgo_pagos -c "
@@ -463,7 +511,7 @@ if [ "$CANARIO_OK" -eq 1 ] && [ "$TOKEN_OK" -eq 1 ]; then
       HALLAZGOS_BLOQUEANTES+=("pagos.intento_pago quedo con ultimos_cuatro=${ULTIMOS_EN_INTENTO}/marca=${MARCA_EN_INTENTO}, pero la tokenizacion real devolvio ultimos_cuatro=${TOKEN_ULTIMOS_CUATRO}/marca=${TOKEN_MARCA} — Pagos no esta resolviendo la tarjeta tokenizada de verdad")
     fi
     if [ "$TOKEN_EN_INTENTO" != "$TOKEN_PAGO" ]; then
-      HALLAZGOS_BLOQUEANTES+=("pagos.intento_pago.token_medio_pago (${TOKEN_EN_INTENTO}) no coincide con el token emitido por PayKlik (${TOKEN_PAGO})")
+      HALLAZGOS_BLOQUEANTES+=("pagos.intento_pago.token_medio_pago (${TOKEN_EN_INTENTO}) no coincide con el token emitido por la boveda de Pagos (${TOKEN_PAGO})")
     fi
   fi
 fi
@@ -663,20 +711,37 @@ else
 fi
 
 echo ""
-echo "Hallazgo a reportar (no se corrige aqui): exposicion del resto de las rutas"
-echo "sin exigir ningun token, vía el API Gateway."
-RUTAS_SIN_AUTORIZACION=(
+# Gateway:ExigirJwt (ADR-020) ya existe en ApiGateway/Program.cs. Se lee del
+# contenedor del gateway para saber que esperar de las rutas protegidas.
+EXIGIR_JWT="$(leer_env api-gateway Gateway__ExigirJwt 2>/dev/null | tr '[:upper:]' '[:lower:]')"
+echo "Gateway:ExigirJwt en el contenedor del gateway: ${EXIGIR_JWT:-<sin valor, equivale a false>}"
+RUTAS_PROTEGIDAS=(
   "GET|${GATEWAY}/api/pagos/ordenes/orden-inexistente-${RUN_ID}"
   "GET|${GATEWAY}/api/facturacion/documentos/orden-inexistente-${RUN_ID}"
   "GET|${GATEWAY}/api/inventario/existencias"
   "POST|${GATEWAY}/api/ordenes"
 )
-for ruta in "${RUTAS_SIN_AUTORIZACION[@]}"; do
+for ruta in "${RUTAS_PROTEGIDAS[@]}"; do
   metodo="${ruta%%|*}"; url="${ruta##*|}"
   codigo=$(curl -s -o /dev/null -w "%{http_code}" -X "$metodo" "$url" -H "Content-Type: application/json" -d '{}')
-  echo "  ${metodo} ${url#$GATEWAY} sin token -> ${codigo} (no es 401/403: la ruta no exige autenticacion)"
-  HALLAZGOS_INFORMATIVOS+=("${metodo} ${url#$GATEWAY} respondio ${codigo} sin ningun token (esperado dado el hallazgo confirmado; no es un chequeo bloqueante)")
+  if [ "$EXIGIR_JWT" = "true" ]; then
+    echo "  ${metodo} ${url#$GATEWAY} sin token -> ${codigo} (con ExigirJwt=true se espera 401)"
+    if [ "$codigo" != "401" ]; then
+      HALLAZGOS_BLOQUEANTES+=("${metodo} ${url#$GATEWAY} respondio ${codigo} sin token con Gateway:ExigirJwt=true; se esperaba 401")
+    fi
+  else
+    echo "  ${metodo} ${url#$GATEWAY} sin token -> ${codigo} (ExigirJwt apagado: la ruta no exige autenticacion)"
+    HALLAZGOS_INFORMATIVOS+=("${metodo} ${url#$GATEWAY} respondio ${codigo} sin ningun token porque Gateway:ExigirJwt esta apagado (configuracion por defecto del MVP; no es un chequeo bloqueante)")
+  fi
 done
+
+# La tokenizacion queda anonima a proposito (los invitados pagan): sin token no
+# debe responder 401 ni con la bandera encendida. Un cuerpo vacio da 422.
+codigo_tokens=$(curl -s -o /dev/null -w "%{http_code}" -X POST "${GATEWAY}/api/pagos/tokens" -H "Content-Type: application/json" -d '{}')
+echo "  POST /api/pagos/tokens sin token -> ${codigo_tokens} (se espera 422, nunca 401)"
+if [ "$codigo_tokens" = "401" ] || [ "$codigo_tokens" = "403" ]; then
+  HALLAZGOS_BLOQUEANTES+=("POST /api/pagos/tokens respondio ${codigo_tokens} sin token: los invitados no podrian pagar")
+fi
 
 echo ""
 

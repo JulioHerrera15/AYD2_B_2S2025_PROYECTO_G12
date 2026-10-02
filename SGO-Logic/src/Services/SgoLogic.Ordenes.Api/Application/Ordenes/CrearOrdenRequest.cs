@@ -23,10 +23,10 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes;
 /// manda a LogiExpress al pedir la guia.
 /// </param>
 /// <param name="TokenMedioPago">
-/// Token opaco que PayKlik emitio al tokenizar la tarjeta (POST /v1/tokens, llamado
-/// directo desde el navegador). Obligatorio cuando el medio de pago es TARJETA;
-/// para transferencia o billetera no aplica y se ignora. NUNCA es el numero de
-/// tarjeta, el CVV ni el vencimiento: esos datos no entran a SGO-Logic (ADR-010).
+/// Token opaco de la boveda transitoria de Pagos (POST /api/pagos/tokens, via la
+/// Web). Obligatorio cuando el medio de pago es TARJETA; para transferencia o
+/// billetera no aplica y se ignora. NUNCA es el numero de tarjeta, el CVV ni el
+/// vencimiento: esos datos solo existen cifrados dentro de Pagos (ADR-010).
 /// La orden lo conserva solo hasta emitir CobroSolicitado y no lo devuelve en
 /// ninguna respuesta.
 /// </param>

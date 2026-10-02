@@ -11,22 +11,22 @@ public sealed class BovedaMockTests
 {
     private static readonly DateTime Ahora = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
 
-    private static TarjetaTokenizada Tokenizar(string numero, string cvv, int mes = 12, int anio = 2030) =>
-        ValidadorTarjeta.Validar(new PeticionTokenizacion(numero, cvv, mes, anio, Guardar: true), Ahora).Tarjeta!;
+    private static ResumenTarjeta Tokenizar(string numero, string cvv, int mes = 12, int anio = 2030) =>
+        ValidadorTarjeta.Validar(new DatosTarjetaCargo(numero, mes, anio, cvv, "Ana Lopez"), Ahora).Tarjeta!;
 
     [Theory]
     [InlineData("4111111111111111", "123", "VISA")]
     [InlineData("5555555555554444", "123", "MASTERCARD")]
     [InlineData("378282246310005", "1234", "AMEX")]
-    public void Las_tarjetas_de_prueba_se_guardan_y_su_referencia_emite_con_el_CVV_correcto(string numero, string cvv, string marca)
+    public void Las_tarjetas_de_prueba_se_guardan_y_su_referencia_cobra_con_el_CVV_correcto(string numero, string cvv, string marca)
     {
         var boveda = new BovedaTarjetas(() => Ahora, rutaArchivo: null);
         var referencia = boveda.Guardar(Tokenizar(numero, cvv));
 
-        var (resultado, tarjeta) = boveda.Validar(new PeticionTokenDesdeReferencia(referencia, cvv));
+        var (resultado, tarjeta) = boveda.Validar(referencia, cvv);
 
         Assert.StartsWith("card_pk_", referencia);
-        Assert.Equal(ResultadoTokenDesdeReferencia.Emitido, resultado);
+        Assert.Equal(ResultadoValidacionReferencia.Valida, resultado);
         Assert.Equal(marca, tarjeta!.Marca);
         Assert.Equal(numero[^4..], tarjeta.UltimosCuatro);
     }
@@ -40,9 +40,9 @@ public sealed class BovedaMockTests
         var boveda = new BovedaTarjetas(() => Ahora, rutaArchivo: null);
         var referencia = boveda.Guardar(Tokenizar(numero, cvvAlTokenizar));
 
-        var (resultado, _) = boveda.Validar(new PeticionTokenDesdeReferencia(referencia, cvvAlUsar));
+        var (resultado, _) = boveda.Validar(referencia, cvvAlUsar);
 
-        Assert.Equal(ResultadoTokenDesdeReferencia.CvvInvalido, resultado);
+        Assert.Equal(ResultadoValidacionReferencia.CvvInvalido, resultado);
     }
 
     [Fact]
@@ -50,23 +50,23 @@ public sealed class BovedaMockTests
     {
         var boveda = new BovedaTarjetas(() => Ahora, rutaArchivo: null);
 
-        var (resultado, tarjeta) = boveda.Validar(new PeticionTokenDesdeReferencia("card_pk_noexiste", "123"));
+        var (resultado, tarjeta) = boveda.Validar("card_pk_noexiste", "123");
 
-        Assert.Equal(ResultadoTokenDesdeReferencia.NoExiste, resultado);
+        Assert.Equal(ResultadoValidacionReferencia.NoExiste, resultado);
         Assert.Null(tarjeta);
     }
 
     [Fact]
-    public void Una_tarjeta_guardada_que_ya_vencio_no_emite_token()
+    public void Una_tarjeta_guardada_que_ya_vencio_no_se_puede_cobrar()
     {
         var reloj = Ahora;
         var boveda = new BovedaTarjetas(() => reloj, rutaArchivo: null);
         var referencia = boveda.Guardar(Tokenizar("4111111111111111", "123", mes: 10, anio: 2026));
 
         reloj = new DateTime(2026, 11, 1, 0, 0, 0, DateTimeKind.Utc);
-        var (resultado, _) = boveda.Validar(new PeticionTokenDesdeReferencia(referencia, "123"));
+        var (resultado, _) = boveda.Validar(referencia, "123");
 
-        Assert.Equal(ResultadoTokenDesdeReferencia.Vencida, resultado);
+        Assert.Equal(ResultadoValidacionReferencia.Vencida, resultado);
     }
 
     [Fact]
@@ -89,11 +89,5 @@ public sealed class BovedaMockTests
         {
             File.Delete(ruta);
         }
-    }
-
-    [Fact]
-    public void La_peticion_desde_referencia_no_imprime_el_CVV()
-    {
-        Assert.DoesNotContain("4321", new PeticionTokenDesdeReferencia("card_pk_x", "4321").ToString());
     }
 }

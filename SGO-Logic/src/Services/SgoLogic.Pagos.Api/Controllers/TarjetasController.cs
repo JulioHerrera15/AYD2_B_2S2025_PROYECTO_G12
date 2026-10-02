@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using SgoLogic.Pagos.Api.Application.Tarjetas;
+using SgoLogic.Pagos.Api.Application.Tokens;
 
 namespace SgoLogic.Pagos.Api.Controllers;
 
@@ -10,8 +11,8 @@ namespace SgoLogic.Pagos.Api.Controllers;
 /// email del JWT (el mismo identificador que usa Ordenes), nunca de la ruta ni del
 /// cuerpo: no hay forma de listar, usar o borrar tarjetas de otro.
 ///
-/// Ningun endpoint devuelve la referencia de PayKlik, y el CVV de
-/// POST {id}/token solo se reenvia a PayKlik: no se guarda ni se registra.
+/// Ningun endpoint devuelve la referencia de PayKlik. El CVV de POST {id}/token
+/// queda cifrado en la boveda transitoria hasta el cobro: no se registra.
 /// </summary>
 [ApiController]
 [Authorize]
@@ -19,10 +20,12 @@ namespace SgoLogic.Pagos.Api.Controllers;
 public sealed class TarjetasController : ControllerBase
 {
     private readonly ServicioTarjetasGuardadas _servicio;
+    private readonly ServicioTokensPago _tokens;
 
-    public TarjetasController(ServicioTarjetasGuardadas servicio)
+    public TarjetasController(ServicioTarjetasGuardadas servicio, ServicioTokensPago tokens)
     {
         _servicio = servicio;
+        _tokens = tokens;
     }
 
     /// <summary>Tarjetas activas del cliente, con la propiedad calculada vencida.</summary>
@@ -79,14 +82,14 @@ public sealed class TarjetasController : ControllerBase
     }
 
     /// <summary>
-    /// Token de un solo uso de PayKlik para pagar con la tarjeta guardada. Misma forma
-    /// que la tokenizacion directa. 404 si no es del cliente, 422 si esta vencida o el
-    /// CVV no es valido, 410 si PayKlik ya no la reconoce (queda desactivada).
+    /// Token de la boveda transitoria para pagar con la tarjeta guardada (no llama a
+    /// PayKlik). Misma forma que POST /api/pagos/tokens. 404 si no es del cliente, 422
+    /// con {errores:{campo:mensaje}} si esta vencida o el CVV no es valido para la marca.
     /// </summary>
     [HttpPost("{id:guid}/token")]
-    public async Task<ActionResult<TokenTarjetaDto>> Token(
+    public async Task<IActionResult> Token(
         Guid id,
-        [FromBody] SolicitarTokenTarjetaRequest solicitud,
+        [FromBody] SolicitarTokenTarjetaRequest? solicitud,
         CancellationToken cancelacion)
     {
         var clienteId = ClienteId();
@@ -95,17 +98,14 @@ public sealed class TarjetasController : ControllerBase
             return SinCliente();
         }
 
-        var resultado = await _servicio.ObtenerTokenAsync(clienteId, id, solicitud?.Cvv, cancelacion);
+        var resultado = await _tokens.TokenizarTarjetaGuardadaAsync(clienteId, id, solicitud?.Cvv, cancelacion);
 
         return resultado.Estado switch
         {
-            EstadoTokenTarjeta.Emitido => StatusCode(StatusCodes.Status201Created, resultado.Token),
-            EstadoTokenTarjeta.NoEncontrada => NoEncontrada(),
-            EstadoTokenTarjeta.Vencida => Problema(StatusCodes.Status422UnprocessableEntity, "Tarjeta vencida", resultado.Mensaje!, "tarjeta_vencida"),
-            EstadoTokenTarjeta.CvvInvalido => Problema(StatusCodes.Status422UnprocessableEntity, "Codigo de seguridad invalido", resultado.Mensaje!, "cvv_invalido"),
-            EstadoTokenTarjeta.YaNoValida => Problema(StatusCodes.Status410Gone, "Tarjeta no valida", resultado.Mensaje!, "tarjeta_no_valida"),
-            EstadoTokenTarjeta.RechazadaPorProveedor => Problema(StatusCodes.Status422UnprocessableEntity, "Tarjeta rechazada", resultado.Mensaje!, "tarjeta_rechazada"),
-            _ => Problema(StatusCodes.Status503ServiceUnavailable, "PayKlik no disponible", resultado.Mensaje!, "proveedor_no_disponible")
+            EstadoTokenTarjetaGuardada.Emitido => StatusCode(StatusCodes.Status201Created, resultado.Token),
+            EstadoTokenTarjetaGuardada.NoEncontrada => NoEncontrada(),
+            EstadoTokenTarjetaGuardada.Vencida => UnprocessableEntity(new { errores = new Dictionary<string, string> { ["anioExp"] = resultado.Mensaje! } }),
+            _ => UnprocessableEntity(new { errores = new Dictionary<string, string> { ["cvv"] = resultado.Mensaje! } })
         };
     }
 

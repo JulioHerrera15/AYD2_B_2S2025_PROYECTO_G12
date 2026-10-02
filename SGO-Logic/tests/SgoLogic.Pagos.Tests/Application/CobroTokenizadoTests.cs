@@ -9,7 +9,6 @@ using Microsoft.Extensions.Options;
 using SgoLogic.BuildingBlocks.Serialization;
 using SgoLogic.Contracts.Enumeraciones;
 using SgoLogic.Contracts.Eventos.Pagos;
-using SgoLogic.Mocks.PayKlik;
 using SgoLogic.Pagos.Api.Application.Pagos;
 using SgoLogic.Pagos.Api.Domain;
 using SgoLogic.Pagos.Api.Infrastructure.PayKlik;
@@ -20,16 +19,16 @@ using Xunit;
 namespace SgoLogic.Pagos.Tests.Application;
 
 /// <summary>
-/// Pruebas del cobro con tokenizacion (ADR-010, RES-08, EV-25). Cubren tres cosas:
-/// que un cobro tokenizado no deja numero de tarjeta ni CVV en lo que Pagos persiste
-/// ni en lo que publica; que un token que PayKlik declara invalido se rechaza sin
+/// Pruebas del cobro con tokenizacion interna (ADR-010, RES-08, EV-25, A4). Cubren:
+/// que un cobro tokenizado no deja numero de tarjeta ni CVV en claro en lo que Pagos
+/// persiste ni en lo que publica; que los datos que PayKlik no acepta se rechazan sin
 /// contar como falla del proveedor; y que un cobro con TARJETA sin token se rechaza
 /// antes de llamar a PayKlik.
 /// </summary>
 public sealed class CobroTokenizadoTests
 {
-    private const string Pan = "4242424242424242";
-    private const string Cvv = "731";
+    private const string Pan = BovedaPruebas.PanVisa;
+    private const string Cvv = BovedaPruebas.Cvv;
     private const int MesExpiracion = 12;
 
     private static readonly int AnioExpiracion = DateTime.UtcNow.Year + 3;
@@ -45,18 +44,9 @@ public sealed class CobroTokenizadoTests
         1400.00m,
         medioPago,
         TokenMedioPago: token,
-        // Ordenes no conoce ultimos cuatro ni marca: los resuelve PayKlik al cobrar.
+        // Ordenes no conoce ultimos cuatro ni marca: los resuelve Pagos desde el token.
         UltimosCuatro: null,
         Marca: null);
-
-    /// <summary>Tokeniza la tarjeta como lo hace el mock: el PAN y el CVV se validan y se descartan.</summary>
-    private static string Tokenizar(AlmacenTokens almacen)
-    {
-        var validacion = ValidadorTarjeta.Validar(
-            new PeticionTokenizacion(Pan, Cvv, MesExpiracion, AnioExpiracion), DateTime.UtcNow);
-        Assert.True(validacion.EsValida);
-        return almacen.Emitir(validacion.Tarjeta!, TimeSpan.FromMinutes(15)).Token;
-    }
 
     private sealed class Escenario
     {
@@ -69,12 +59,22 @@ public sealed class CobroTokenizadoTests
                 .UseInMemoryDatabase(_baseDatos)
                 .Options);
 
+        /// <summary>Guarda en la boveda tokens vigentes de la tarjeta de prueba y devuelve sus ids.</summary>
+        public string[] SembrarTokens(params string[] ids)
+        {
+            using var contexto = NuevoContexto();
+            contexto.TokensPago.AddRange(ids.Select(id => BovedaPruebas.TokenNuevo(id, anioExp: AnioExpiracion)));
+            contexto.SaveChanges();
+            return ids;
+        }
+
         public ServicioCobro Servicio(PagosDbContext contexto, IClientePayKlik payklik, PayKlikOptions? opciones = null) => new(
             contexto,
             payklik,
             Outbox,
             Options.Create(opciones ?? new PayKlikOptions { MaxReintentos = 0, BackoffBaseMs = 0 }),
             Options.Create(new ReintentoOptions { ExpiracionMinutos = 60 }),
+            BovedaPruebas.Cifrador,
             NullLogger<ServicioCobro>.Instance);
     }
 
@@ -85,10 +85,9 @@ public sealed class CobroTokenizadoTests
     [Fact]
     public async Task Un_cobro_tokenizado_persiste_token_ultimos_cuatro_y_marca_de_la_tarjeta_real()
     {
-        var almacen = new AlmacenTokens();
-        var token = Tokenizar(almacen);
-        var payklik = ClientePayKlikFalso.ResuelveTokens(almacen);
         var escenario = new Escenario();
+        var token = escenario.SembrarTokens("tok_cobro_feliz")[0];
+        var payklik = ClientePayKlikFalso.ApruebaComoPayKlik();
 
         await using (var contexto = escenario.NuevoContexto())
         {
@@ -106,8 +105,19 @@ public sealed class CobroTokenizadoTests
         Assert.Equal("4242", intento.UltimosCuatro);
         Assert.Equal("VISA", intento.Marca);
 
-        // Hacia PayKlik viajo el token, y nada mas que sirva para identificar la tarjeta.
-        Assert.Equal(token, Assert.Single(payklik.Peticiones).TokenMedioPago);
+        // Hacia PayKlik viajaron los datos descifrados en memoria (A4), con el
+        // titular y el vencimiento que guardo el token.
+        var peticion = Assert.Single(payklik.Peticiones);
+        Assert.Equal(Pan, peticion.Tarjeta!.Numero);
+        Assert.Equal(Cvv, peticion.Tarjeta.Cvv);
+        Assert.Equal(MesExpiracion, peticion.Tarjeta.MesExp);
+        Assert.Null(peticion.ReferenciaTarjeta);
+        Assert.DoesNotContain(Pan, peticion.ToString());
+
+        // El token quedo CONSUMIDO y sin datos cifrados.
+        var tokenPersistido = await verificacion.TokensPago.SingleAsync(t => t.Id == token);
+        Assert.Equal(EstadoTokenPago.CONSUMIDO, tokenPersistido.Estado);
+        Assert.Null(tokenPersistido.DatosCifrados);
 
         var data = Assert.IsType<PagoAplicadoData>(Assert.Single(escenario.Outbox.PorTipo(PagoAplicado.EventType)).Data);
         Assert.Equal("4242", data.UltimosCuatro);
@@ -121,13 +131,12 @@ public sealed class CobroTokenizadoTests
     [Fact]
     public async Task Un_cobro_tokenizado_no_deja_PAN_ni_CVV_en_la_entidad_persistida_ni_en_el_payload_del_outbox()
     {
-        var almacen = new AlmacenTokens();
-        var token = Tokenizar(almacen);
         var escenario = new Escenario();
+        var token = escenario.SembrarTokens("tok_sin_pan")[0];
 
         await using (var contexto = escenario.NuevoContexto())
         {
-            await escenario.Servicio(contexto, ClientePayKlikFalso.ResuelveTokens(almacen))
+            await escenario.Servicio(contexto, ClientePayKlikFalso.ApruebaComoPayKlik())
                 .ProcesarCobroAsync(Solicitud("ORD-2026-000001", token), CancellationToken.None);
             await contexto.SaveChangesAsync();
         }
@@ -150,6 +159,25 @@ public sealed class CobroTokenizadoTests
             Assert.NotEmpty(propiedadesPublicadas);
             VerificarSinDatosDeTarjeta($"payload de {evento.EventType}", propiedadesPublicadas, token);
         }
+
+        // Y la boveda transitoria: tras el cobro el token ya no conserva nada que
+        // sirva para reconstruir la tarjeta.
+        var tokenPersistido = await verificacion.TokensPago.SingleAsync();
+        VerificarSinDatosDeTarjeta("token de la boveda", RecorrerObjeto(tokenPersistido).ToList(), token);
+        Assert.Null(tokenPersistido.DatosCifrados);
+    }
+
+    [Fact]
+    public void Un_token_vigente_solo_guarda_PAN_y_CVV_cifrados_nunca_en_claro()
+    {
+        var token = BovedaPruebas.TokenNuevo("tok_cifrado", anioExp: AnioExpiracion);
+
+        Assert.NotNull(token.DatosCifrados);
+        var crudo = Encoding.UTF8.GetString(token.DatosCifrados!);
+        Assert.DoesNotContain(Pan, crudo);
+        Assert.False(ContienePan(crudo));
+        Assert.DoesNotContain(Pan, Convert.ToHexString(token.DatosCifrados!), StringComparison.OrdinalIgnoreCase);
+        VerificarSinDatosDeTarjeta("token de la boveda", RecorrerObjeto(token).ToList(), token.Id);
     }
 
     [Fact]
@@ -187,12 +215,15 @@ public sealed class CobroTokenizadoTests
     [Fact]
     public void Los_datos_del_evento_de_solicitud_de_cobro_y_de_resultado_no_tienen_campos_de_tarjeta()
     {
+        // PeticionCargoPayKlik queda fuera a proposito: desde A4 lleva los datos de la
+        // tarjeta hacia PayKlik, descifrados solo en memoria durante el cobro, y su
+        // ToString no los imprime (ver la prueba del cobro feliz).
         var tipos = new[]
         {
             typeof(SgoLogic.Contracts.Eventos.Ordenes.CobroSolicitadoData),
             typeof(PagoAplicadoData), typeof(PagoRechazadoData), typeof(PagoPendienteData),
-            typeof(SolicitudCobro), typeof(PeticionCargoPayKlik), typeof(ResultadoPayKlik),
-            typeof(Pago), typeof(IntentoPago), typeof(EnlaceReintento)
+            typeof(SolicitudCobro), typeof(ResultadoPayKlik),
+            typeof(Pago), typeof(IntentoPago), typeof(EnlaceReintento), typeof(TokenPago)
         };
 
         foreach (var tipo in tipos)
@@ -227,23 +258,24 @@ public sealed class CobroTokenizadoTests
     }
 
     // ------------------------------------------------------------------
-    // Token invalido: rechazo distinguible, sin reintento, sin disyuntor
+    // Datos no aceptados por PayKlik: rechazo distinguible, sin reintento, sin disyuntor
     // ------------------------------------------------------------------
 
     [Theory]
-    [InlineData(CodigosToken.Invalido)]
-    [InlineData(CodigosToken.Vencido)]
-    [InlineData(CodigosToken.YaUsado)]
-    public async Task Un_token_no_valido_rechaza_el_pago_con_su_codigo_sin_reintentar_y_sin_generar_enlace(string codigo)
+    [InlineData(CodigosToken.TarjetaInvalida)]
+    [InlineData(CodigosToken.CvvInvalido)]
+    [InlineData(CodigosToken.TarjetaVencida)]
+    public async Task Datos_que_PayKlik_no_acepta_rechazan_el_pago_con_su_codigo_sin_reintentar_y_sin_generar_enlace(string codigo)
     {
         var escenario = new Escenario();
+        var token = escenario.SembrarTokens("tok_pk_x")[0];
         var payklik = ClientePayKlikFalso.TokenNoValido(codigo);
 
         await using (var contexto = escenario.NuevoContexto())
         {
-            // MaxReintentos = 2: un token invalido igual no debe reintentarse.
+            // MaxReintentos = 2: un medio de pago rechazado igual no debe reintentarse.
             await escenario.Servicio(contexto, payklik, new PayKlikOptions { MaxReintentos = 2, BackoffBaseMs = 0 })
-                .ProcesarCobroAsync(Solicitud("ORD-2026-000001", "tok_pk_x"), CancellationToken.None);
+                .ProcesarCobroAsync(Solicitud("ORD-2026-000001", token), CancellationToken.None);
             await contexto.SaveChangesAsync();
         }
 
@@ -264,15 +296,16 @@ public sealed class CobroTokenizadoTests
     }
 
     [Fact]
-    public async Task Un_rechazo_por_fondos_y_un_token_invalido_se_distinguen_por_el_codigo_de_respuesta()
+    public async Task Un_rechazo_por_fondos_y_una_tarjeta_invalida_se_distinguen_por_el_codigo_de_respuesta()
     {
         var escenario = new Escenario();
+        escenario.SembrarTokens("tok_pk_a", "tok_pk_b");
 
         await using (var contexto = escenario.NuevoContexto())
         {
             await escenario.Servicio(contexto, ClientePayKlikFalso.Rechaza())
                 .ProcesarCobroAsync(Solicitud("ORD-2026-000001", "tok_pk_a"), CancellationToken.None);
-            await escenario.Servicio(contexto, ClientePayKlikFalso.TokenNoValido(CodigosToken.Invalido))
+            await escenario.Servicio(contexto, ClientePayKlikFalso.TokenNoValido(CodigosToken.TarjetaInvalida))
                 .ProcesarCobroAsync(Solicitud("ORD-2026-000002", "tok_pk_b"), CancellationToken.None);
             await contexto.SaveChangesAsync();
         }
@@ -282,16 +315,15 @@ public sealed class CobroTokenizadoTests
             .ToDictionary(d => d.OrdenId, d => d.CodigoRespuesta);
 
         Assert.Equal("51", codigos["ORD-2026-000001"]);
-        Assert.Equal(CodigosToken.Invalido, codigos["ORD-2026-000002"]);
+        Assert.Equal(CodigosToken.TarjetaInvalida, codigos["ORD-2026-000002"]);
     }
 
     [Fact]
     public async Task Un_token_ya_usado_no_se_puede_cobrar_en_otra_orden()
     {
-        var almacen = new AlmacenTokens();
-        var token = Tokenizar(almacen);
-        var payklik = ClientePayKlikFalso.ResuelveTokens(almacen);
         var escenario = new Escenario();
+        var token = escenario.SembrarTokens("tok_una_vez")[0];
+        var payklik = ClientePayKlikFalso.ApruebaComoPayKlik();
 
         await using (var contexto = escenario.NuevoContexto())
         {
@@ -304,14 +336,18 @@ public sealed class CobroTokenizadoTests
             Assert.Equal(EstadoPago.RECHAZADO, segundo.Estado);
             Assert.Equal(CodigosToken.YaUsado, Assert.Single(segundo.Intentos).CodigoRespuesta);
         }
+
+        // El segundo cobro se rechazo en Pagos, sin volver a llamar a PayKlik.
+        Assert.Single(payklik.Peticiones);
     }
 
     [Fact]
-    public async Task Un_token_invalido_no_abre_el_disyuntor_ni_cuenta_como_falla_del_proveedor()
+    public async Task Una_tarjeta_que_PayKlik_rechaza_no_abre_el_disyuntor_ni_cuenta_como_falla_del_proveedor()
     {
         var disyuntor = NuevoDisyuntor();
-        var manejador = new ManejadorHttpFalso(_ => RespuestaTokenNoValido(CodigosToken.Invalido));
+        var manejador = new ManejadorHttpFalso(_ => RespuestaTokenNoValido(CodigosToken.TarjetaInvalida));
         var escenario = new Escenario();
+        escenario.SembrarTokens(Enumerable.Range(1, 10).Select(i => $"tok_invalido_{i}").ToArray());
 
         await using var contexto = escenario.NuevoContexto();
         var servicio = escenario.Servicio(
@@ -324,7 +360,7 @@ public sealed class CobroTokenizadoTests
         for (var i = 1; i <= 10; i++)
         {
             var pago = await servicio.ProcesarCobroAsync(
-                Solicitud($"ORD-2026-{i:D6}", "tok_pk_invalido"), CancellationToken.None);
+                Solicitud($"ORD-2026-{i:D6}", $"tok_invalido_{i}"), CancellationToken.None);
             Assert.Equal(EstadoPago.RECHAZADO, pago.Estado);
         }
 
@@ -343,11 +379,12 @@ public sealed class CobroTokenizadoTests
     public async Task Control_las_caidas_del_proveedor_si_abren_el_disyuntor_con_el_mismo_montaje()
     {
         // Mismo montaje que la prueba anterior, pero el proveedor responde 503. Demuestra
-        // que la prueba de arriba tiene dientes: si el token invalido contara como falla,
+        // que la prueba de arriba tiene dientes: si la tarjeta rechazada contara como falla,
         // el circuito estaria abierto.
         var disyuntor = NuevoDisyuntor();
         var manejador = new ManejadorHttpFalso(_ => new HttpResponseMessage(HttpStatusCode.ServiceUnavailable));
         var escenario = new Escenario();
+        escenario.SembrarTokens("tok_caida_1", "tok_caida_2", "tok_caida_3");
 
         await using var contexto = escenario.NuevoContexto();
         var servicio = escenario.Servicio(
@@ -357,7 +394,7 @@ public sealed class CobroTokenizadoTests
 
         for (var i = 1; i <= 3; i++)
         {
-            await servicio.ProcesarCobroAsync(Solicitud($"ORD-2026-{i:D6}", "tok_pk_x"), CancellationToken.None);
+            await servicio.ProcesarCobroAsync(Solicitud($"ORD-2026-{i:D6}", $"tok_caida_{i}"), CancellationToken.None);
         }
 
         Assert.Equal("ABIERTO", disyuntor.Salud().Estado);

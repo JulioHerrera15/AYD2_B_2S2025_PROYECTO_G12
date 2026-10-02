@@ -1,4 +1,4 @@
--- Existencias del catalogo web (PROD-001..008) en los CD y las cuatro tiendas,
+-- Existencias del catalogo web (PROD-001..008) en los dos CD y las 32 tiendas,
 -- su movimiento de carga inicial y una reserva por cada orden sembrada.
 -- Las reservas de ordenes pagadas que aun no salen a ruta (ORD-...04 y 05) quedan
 -- CONFIRMADAS y la de pago pendiente (ORD-...06) ACTIVA: las tres retienen stock

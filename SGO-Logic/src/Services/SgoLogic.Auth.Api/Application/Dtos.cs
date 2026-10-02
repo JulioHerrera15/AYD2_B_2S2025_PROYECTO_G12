@@ -64,12 +64,14 @@ public sealed record CarritoDto(
     DateTime? ReservaExpiraEn = null,
     string? CarritoId = null);
 
+/// <param name="Descripcion">Se ignora: la descripcion sale del catalogo de Inventario. Se conserva por compatibilidad.</param>
+/// <param name="PrecioUnitario">Se ignora: el precio sale del catalogo de Inventario. Se conserva por compatibilidad.</param>
 /// <param name="UbicacionPreferidaId">Sucursal elegida por el cliente: Inventario intenta apartar ahi primero.</param>
 public sealed record AgregarItemRequest(
     string Sku,
-    string Descripcion,
+    string? Descripcion,
     int Cantidad,
-    decimal PrecioUnitario,
+    decimal? PrecioUnitario,
     string? UbicacionPreferidaId = null);
 
 public sealed record AsociarCarritoRequest(

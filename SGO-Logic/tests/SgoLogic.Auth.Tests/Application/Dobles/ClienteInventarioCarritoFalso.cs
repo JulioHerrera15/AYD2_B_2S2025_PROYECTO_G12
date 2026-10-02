@@ -67,6 +67,28 @@ public sealed class ClienteInventarioCarritoFalso : IClienteInventarioCarrito
         return Task.FromResult(new RetencionesCarritoInventario(carritoId, null, Array.Empty<LineaRetencionInventario>()));
     }
 
+    /// <summary>Catalogo de Inventario: la fuente del precio y la descripcion del item.</summary>
+    public Dictionary<string, ProductoInventario> Productos { get; } = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["PROD-104"] = new ProductoInventario("PROD-104", "Deshumidificador Inteligente 30L", "Climatización", 2199.00m, "humidity_percentage", true),
+        ["PROD-105"] = new ProductoInventario("PROD-105", "Cámara de Seguridad Wi-Fi 2K", "Hogar Inteligente", 699.00m, "videocam", true)
+    };
+
+    public List<string> ConsultasProducto { get; } = new();
+
+    public Task<ProductoInventario?> ObtenerProductoAsync(string sku, CancellationToken ct = default)
+    {
+        ConsultasProducto.Add(sku);
+
+        // Solo la caida afecta la consulta del catalogo; el 409 es de las retenciones.
+        if (Caido)
+        {
+            throw new ExcepcionInventarioNoDisponible("Inventario no respondio.", new HttpRequestException("connection refused"));
+        }
+
+        return Task.FromResult(Productos.TryGetValue(sku, out var producto) ? producto : null);
+    }
+
     private void Fallar()
     {
         if (Caido)

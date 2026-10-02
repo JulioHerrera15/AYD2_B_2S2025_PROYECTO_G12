@@ -143,9 +143,9 @@ asignar_roles
 printf 'Cargando existencias de demo y catalogo web\n'
 for existencia in \
   '{"sku":"SKU-DEMO-001","ubicacionId":"CD-CENTRAL","tipoUbicacion":"CENTRO_DISTRIBUCION","cantidadFisica":100}' \
-  '{"sku":"SKU-DEMO-001","ubicacionId":"TIENDA-001","tipoUbicacion":"TIENDA","cantidadFisica":20}' \
+  '{"sku":"SKU-DEMO-001","ubicacionId":"TIENDA-01-CENTRAL","tipoUbicacion":"TIENDA","cantidadFisica":20}' \
   '{"sku":"SKU-DEMO-002","ubicacionId":"CD-CENTRAL","tipoUbicacion":"CENTRO_DISTRIBUCION","cantidadFisica":75}' \
-  '{"sku":"SKU-DEMO-003","ubicacionId":"TIENDA-001","tipoUbicacion":"TIENDA","cantidadFisica":40}'; do
+  '{"sku":"SKU-DEMO-003","ubicacionId":"TIENDA-01-CENTRAL","tipoUbicacion":"TIENDA","cantidadFisica":40}'; do
   request PUT "$BASE_URL/api/inventario/existencias" "$existencia"
   if [[ "$HTTP_CODE" != "200" ]]; then
     printf 'ERROR existencias %s: %s\n' "$HTTP_CODE" "$HTTP_BODY" >&2
@@ -154,13 +154,24 @@ for existencia in \
   printf '  OK %s\n' "$existencia"
 done
 
+# PROD-001..008 en las tiendas 01..04 solo se crean si todavia no existen: si el
+# seed de datos (scripts/seed/sql/02-inventario.sql) ya las cargo, se respetan sus
+# excepciones de stock bajo (PROD-001 en Portales = 3, PROD-005 en Pradera = 0) en
+# lugar de pisarlas en cada 'docker compose up'.
 for sku in PROD-001 PROD-002 PROD-003 PROD-004 PROD-005 PROD-006 PROD-007 PROD-008; do
   for cd in CD-01 CD-CENTRAL; do
     request PUT "$BASE_URL/api/inventario/existencias" \
       "{\"sku\":\"$sku\",\"ubicacionId\":\"$cd\",\"tipoUbicacion\":\"CENTRO_DISTRIBUCION\",\"cantidadFisica\":100}"
     printf '  OK %s en %s\n' "$sku" "$cd"
   done
+
+  request GET "$BASE_URL/api/inventario/existencias/$sku"
+  existentes="$HTTP_BODY"
   for tienda in TIENDA-01-CENTRAL TIENDA-02-MIRAFLORES TIENDA-03-PORTALES TIENDA-04-PRADERA; do
+    if [[ "$existentes" == *"\"ubicacionId\":\"$tienda\""* ]]; then
+      printf '  SE CONSERVA %s en %s\n' "$sku" "$tienda"
+      continue
+    fi
     request PUT "$BASE_URL/api/inventario/existencias" \
       "{\"sku\":\"$sku\",\"ubicacionId\":\"$tienda\",\"tipoUbicacion\":\"TIENDA\",\"cantidadFisica\":50}"
     printf '  OK %s en %s\n' "$sku" "$tienda"

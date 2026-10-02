@@ -35,9 +35,21 @@ public class PagarController : Controller
         return View("Reintentar", info);
     }
 
+    /// <summary>
+    /// Ejecuta el reintento. Si el token de la tarjeta sigue vigente se cobra sin pedir
+    /// nada. Si vencio, la pagina pide de nuevo los datos: solo el CVV si era una
+    /// tarjeta guardada (Pagos emite un token nuevo desde ella) o la tarjeta completa,
+    /// que se tokeniza en Pagos antes de reintentar. Los datos no se registran.
+    /// </summary>
     [HttpPost("/Pagar/Reintentar")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> ProcesarReintento([FromForm] string token, CancellationToken ct)
+    public async Task<IActionResult> ProcesarReintento(
+        [FromForm] string token,
+        [FromForm] string? numero,
+        [FromForm] string? vencimiento,
+        [FromForm] string? cvv,
+        [FromForm] string? titular,
+        CancellationToken ct)
     {
         if (string.IsNullOrWhiteSpace(token))
         {
@@ -45,10 +57,37 @@ public class PagarController : Controller
             return View("Reintentar", null);
         }
 
-        var (exito, pago, error) = await _gateway.EjecutarReintentoPagoAsync(token, ct);
-        if (!exito || pago is null)
+        string? tokenMedioPago = null;
+        string? cvvGuardada = null;
+
+        if (!string.IsNullOrWhiteSpace(numero))
         {
-            ViewBag.Error = error ?? "Ocurrió un error al procesar el reintento de pago.";
+            var (mes, anio) = ParsearVencimiento(vencimiento);
+            var tokenizacion = await _gateway.TokenizarTarjetaAsync(
+                new SolicitudTokenPagoModel(numero, mes, anio, cvv, titular, Guardar: false), ct);
+
+            if (tokenizacion.Token is null)
+            {
+                return await VolverConDatosAsync(token, tokenizacion.Mensaje, tokenizacion.Errores, ct);
+            }
+
+            tokenMedioPago = tokenizacion.Token.Token;
+        }
+        else if (!string.IsNullOrWhiteSpace(cvv))
+        {
+            cvvGuardada = cvv;
+        }
+
+        var resultado = await _gateway.EjecutarReintentoPagoAsync(token, tokenMedioPago, cvvGuardada, ct);
+        if (!resultado.Exito && (resultado.DatosRequeridos is not null || resultado.Errores is not null))
+        {
+            return await VolverConDatosAsync(token, resultado.Error, resultado.Errores, ct);
+        }
+
+        var pago = resultado.Pago;
+        if (!resultado.Exito || pago is null)
+        {
+            ViewBag.Error = resultado.Error ?? "Ocurrió un error al procesar el reintento de pago.";
             var (_, infoRecargada, _) = await _gateway.ObtenerReintentoPagoAsync(token, ct);
             ViewBag.Token = token;
             return View("Reintentar", infoRecargada);
@@ -88,6 +127,29 @@ public class PagarController : Controller
         var (_, infoPendiente, _) = await _gateway.ObtenerReintentoPagoAsync(token, ct);
         ViewBag.Token = token;
         return View("Reintentar", infoPendiente);
+    }
+
+    /// <summary>Vuelve a la pagina con el formulario de datos y los errores por campo.</summary>
+    private async Task<IActionResult> VolverConDatosAsync(
+        string token,
+        string? mensaje,
+        Dictionary<string, string>? errores,
+        CancellationToken ct)
+    {
+        var (_, info, _) = await _gateway.ObtenerReintentoPagoAsync(token, ct);
+        ViewBag.Token = token;
+        ViewBag.Advertencia = mensaje ?? "Revisa los datos de tu tarjeta.";
+        ViewBag.ErroresTarjeta = errores ?? new Dictionary<string, string>();
+        return View("Reintentar", info);
+    }
+
+    /// <summary>"MM/AA" o "MM/AAAA" a mes y anio; null en lo que no se pueda leer (lo valida Pagos).</summary>
+    private static (int? Mes, int? Anio) ParsearVencimiento(string? vencimiento)
+    {
+        var partes = (vencimiento ?? string.Empty).Split('/', StringSplitOptions.TrimEntries);
+        int? mes = partes.Length > 0 && int.TryParse(partes[0], out var m) ? m : null;
+        int? anio = partes.Length > 1 && int.TryParse(partes[1], out var a) ? a : null;
+        return (mes, anio);
     }
 
     [HttpGet("/Pagar/Exito")]

@@ -4,6 +4,7 @@
     var error = ViewBag.Error as string;
     var advertencia = ViewBag.Advertencia as string;
     var token = ViewBag.Token as string ?? Model?.Token;
+    var erroresTarjeta = ViewBag.ErroresTarjeta as Dictionary<string, string> ?? new Dictionary<string, string>();
 }
 
 <div class="max-w-2xl mx-auto py-8 px-4 sm:px-6">
@@ -230,9 +231,71 @@
                 </div>
 
                 <!-- Formulario de Reintento -->
-                <form asp-action="ProcesarReintento" method="post" id="form-reintentar" onsubmit="deshabilitarBoton()">
+                <form asp-action="ProcesarReintento" method="post" id="form-reintentar" onsubmit="deshabilitarBoton()" autocomplete="off">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="token" value="@Model.Token" />
+
+                    @if (Model.DatosRequeridos == "CVV")
+                    {
+                        <!-- El token vencio, pero la tarjeta guardada sigue activa: solo el CVV -->
+                        <div class="mb-5 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-left">
+                            <p class="text-xs text-amber-900 mb-3">
+                                La validación de tu tarjeta @(Model.Marca) •••• @(Model.UltimosCuatro) venció. Escribe de nuevo su código de seguridad.
+                            </p>
+                            <label for="cvv" class="block text-xs font-semibold text-on-surface-variant mb-1">Código de seguridad</label>
+                            <input id="cvv" name="cvv" type="password" inputmode="numeric" maxlength="4" required autocomplete="cc-csc"
+                                   class="w-40 px-3.5 py-2.5 rounded-xl border border-border-subtle bg-white text-sm text-primary font-mono" />
+                            @if (erroresTarjeta.TryGetValue("cvv", out var errorCvv))
+                            {
+                                <p class="mt-1 text-[11px] font-semibold text-error">@errorCvv</p>
+                            }
+                        </div>
+                    }
+                    else if (Model.DatosRequeridos == "TARJETA")
+                    {
+                        <!-- El token vencio: la tarjeta completa, que Pagos valida y tokeniza -->
+                        <div class="mb-5 p-4 rounded-2xl bg-amber-50 border border-amber-200 text-left grid grid-cols-1 sm:grid-cols-2 gap-3">
+                            <p class="sm:col-span-2 text-xs text-amber-900">
+                                La validación de tu tarjeta venció por seguridad. Ingresa de nuevo los datos para completar el pago.
+                            </p>
+                            <div class="sm:col-span-2">
+                                <label for="numero" class="block text-xs font-semibold text-on-surface-variant mb-1">Número de tarjeta</label>
+                                <input id="numero" name="numero" type="text" inputmode="numeric" maxlength="23" required autocomplete="cc-number"
+                                       class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-white text-sm text-primary font-mono tracking-widest" />
+                                @if (erroresTarjeta.TryGetValue("numero", out var errorNumero))
+                                {
+                                    <p class="mt-1 text-[11px] font-semibold text-error">@errorNumero</p>
+                                }
+                            </div>
+                            <div>
+                                <label for="vencimiento" class="block text-xs font-semibold text-on-surface-variant mb-1">Vencimiento (MM/AA)</label>
+                                <input id="vencimiento" name="vencimiento" type="text" inputmode="numeric" maxlength="7" placeholder="MM/AA" required autocomplete="cc-exp"
+                                       class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-white text-sm text-primary font-mono" />
+                                @if (erroresTarjeta.TryGetValue("mesExp", out var errorMes) || erroresTarjeta.TryGetValue("anioExp", out errorMes))
+                                {
+                                    <p class="mt-1 text-[11px] font-semibold text-error">@errorMes</p>
+                                }
+                            </div>
+                            <div>
+                                <label for="cvv-nueva" class="block text-xs font-semibold text-on-surface-variant mb-1">Código de seguridad</label>
+                                <input id="cvv-nueva" name="cvv" type="password" inputmode="numeric" maxlength="4" required autocomplete="cc-csc"
+                                       class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-white text-sm text-primary font-mono" />
+                                @if (erroresTarjeta.TryGetValue("cvv", out var errorCvvNueva))
+                                {
+                                    <p class="mt-1 text-[11px] font-semibold text-error">@errorCvvNueva</p>
+                                }
+                            </div>
+                            <div class="sm:col-span-2">
+                                <label for="titular" class="block text-xs font-semibold text-on-surface-variant mb-1">Nombre del titular</label>
+                                <input id="titular" name="titular" type="text" maxlength="60" required autocomplete="cc-name"
+                                       class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-white text-sm text-primary" />
+                                @if (erroresTarjeta.TryGetValue("titular", out var errorTitular))
+                                {
+                                    <p class="mt-1 text-[11px] font-semibold text-error">@errorTitular</p>
+                                }
+                            </div>
+                        </div>
+                    }
 
                     <button type="submit" id="btn-reintentar" class="w-full inline-flex items-center justify-center gap-2.5 bg-primary text-on-primary py-4 px-6 rounded-2xl font-bold text-sm shadow-md hover:opacity-95 active:scale-[0.99] transition-all cursor-pointer">
                         <span class="material-symbols-outlined text-lg" id="icono-btn">check_circle</span>

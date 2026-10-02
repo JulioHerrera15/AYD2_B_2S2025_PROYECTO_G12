@@ -18,6 +18,7 @@ NOTIF="http://localhost:8090"
 MOCK="http://localhost:8089"
 ORDENES="http://localhost:8083"
 INV="http://localhost:8094"
+PAGOS="http://localhost:8085"
 WEB="http://localhost:8092"
 
 PASS=0
@@ -179,33 +180,35 @@ code=$(get_code "$r")
 resultado "HU-007 Carrito invitado GET => 200" "$code" "200"
 
 log "  2.2 Agregar item al carrito invitado"
-r=$(do_req POST "$AUTH/api/carrito/items" '{"sku":"SKU-TEST-001","descripcion":"Producto suite","cantidad":2,"precioUnitario":"50.00"}' "" "$SESSION_ID")
+# Desde B1 el carrito solo acepta SKUs del catalogo de Inventario y toma de ahi el
+# precio (el precioUnitario que se manda se ignora): se usan PROD-002 y PROD-003.
+r=$(do_req POST "$AUTH/api/carrito/items" '{"sku":"PROD-002","descripcion":"Producto suite","cantidad":2,"precioUnitario":"50.00"}' "" "$SESSION_ID")
 code=$(get_code "$r")
 resultado "HU-007 Agregar item invitado => 204" "$code" "204"
 
 log "  2.3 Verificar carrito con item"
 r=$(do_req GET "$AUTH/api/carrito" "" "" "$SESSION_ID")
 code=$(get_code "$r"); body=$(get_body "$r")
-resultado "HU-007 Carrito con items => 200" "$code" "200" "$body" "SKU-TEST-001"
+resultado "HU-007 Carrito con items => 200" "$code" "200" "$body" "PROD-002"
 
 log "  2.4 Agregar segundo item"
-r=$(do_req POST "$AUTH/api/carrito/items" '{"sku":"SKU-TEST-002","descripcion":"Producto 2","cantidad":1,"precioUnitario":"100.00"}' "" "$SESSION_ID")
+r=$(do_req POST "$AUTH/api/carrito/items" '{"sku":"PROD-003","descripcion":"Producto 2","cantidad":1,"precioUnitario":"100.00"}' "" "$SESSION_ID")
 code=$(get_code "$r")
 resultado "HU-007 Agregar segundo item => 204" "$code" "204"
 
 log "  2.5 Eliminar item por SKU"
-r=$(do_req DELETE "$AUTH/api/carrito/items/SKU-TEST-002" "" "" "$SESSION_ID")
+r=$(do_req DELETE "$AUTH/api/carrito/items/PROD-003" "" "" "$SESSION_ID")
 code=$(get_code "$r")
 resultado "HU-007 Eliminar item => 204" "$code" "204"
 
-log "  2.6 Verificar que SKU-TEST-002 fue eliminado"
+log "  2.6 Verificar que PROD-003 fue eliminado"
 r=$(do_req GET "$AUTH/api/carrito" "" "" "$SESSION_ID")
 code=$(get_code "$r"); body=$(get_body "$r")
-resultado "HU-007 Carrito con 1 item tras delete" "$code" "200" "$body" "SKU-TEST-001"
-if echo "$body" | grep -q "SKU-TEST-002"; then
-  FAIL=$((FAIL+1)); log "  [FAIL] SKU-TEST-002 todavia existe en carrito"
+resultado "HU-007 Carrito con 1 item tras delete" "$code" "200" "$body" "PROD-002"
+if echo "$body" | grep -q "PROD-003"; then
+  FAIL=$((FAIL+1)); log "  [FAIL] PROD-003 todavia existe en carrito"
 else
-  PASS=$((PASS+1)); log "  [PASS] SKU-TEST-002 correctamente eliminado"
+  PASS=$((PASS+1)); log "  [PASS] PROD-003 correctamente eliminado"
 fi
 
 log "  2.7 Asociar carrito invitado al usuario autenticado"
@@ -216,7 +219,7 @@ if [ -n "$JWT" ]; then
 
   r=$(do_req GET "$AUTH/api/carrito" "" "$JWT")
   code=$(get_code "$r"); body=$(get_body "$r")
-  resultado "HU-007 Carrito autenticado tiene items migrados" "$code" "200" "$body" "SKU-TEST-001"
+  resultado "HU-007 Carrito autenticado tiene items migrados" "$code" "200" "$body" "PROD-002"
 else
   aviso "JWT no disponible - saltando asociar carrito"
 fi
@@ -224,7 +227,7 @@ fi
 log "  2.8 Carrito via Gateway (multi-canal)"
 r=$(do_req GET "$GW/api/carrito" "" "$JWT")
 code=$(get_code "$r"); body=$(get_body "$r")
-resultado "HU-007 Carrito via Gateway => 200" "$code" "200" "$body" "SKU-TEST-001"
+resultado "HU-007 Carrito via Gateway => 200" "$code" "200" "$body" "PROD-002"
 
 # =============================================================================
 seccion "BLOQUE 3: HU-010 - Consulta de Estado (Redis + fallback)"
@@ -236,11 +239,17 @@ r=$(do_req PUT "$INV/api/inventario/existencias" "{\"sku\":\"${SKU_ESTADO}\",\"u
 code=$(get_code "$r")
 resultado "HU-010 Sembrar inventario" "$code" "200"
 
+# Ordenes valida el precio contra el catalogo de Inventario: el SKU de la suite se
+# registra con el precio que lleva la orden.
+r=$(do_req PUT "$INV/api/inventario/productos/${SKU_ESTADO}" '{"nombre":"Suite test","categoria":"Pruebas","precio":100.0,"icono":"inventory_2","activo":true}')
+code=$(get_code "$r")
+resultado "B1 Registrar producto en el catalogo => 201" "$code" "201"
+
 log "  3.2 Crear orden via Gateway"
 CLIENTE_ESTADO="cliente-suite-$(date +%s)"
-token_resp=$(curl -s -X POST "http://localhost:8084/v1/tokens" -H "Content-Type: application/json" -d '{"numeroTarjeta":"4111111111111111","mesExpiracion":12,"anioExpiracion":2028,"cvv":"123"}')
-TOKEN_PK=$(echo "$token_resp" | python3 -c "import sys,json; print(json.load(sys.stdin).get('token',''))" 2>/dev/null)
-[ -z "$TOKEN_PK" ] && TOKEN_PK="tok_pk_suite_test_12345"
+# La tarjeta se tokeniza en la boveda de Pagos (no en PayKlik): solo el token llega a Ordenes.
+token_resp=$(curl -s -X POST "$PAGOS/api/pagos/tokens" -H "Content-Type: application/json" -d "{\"numero\":\"4111111111111111\",\"mesExp\":12,\"anioExp\":$(( $(date +%Y) + 3 )),\"cvv\":\"123\",\"titular\":\"Cliente Suite\",\"guardar\":false}")
+TOKEN_PK=$(json_field "$token_resp" "token")
 orden_body="{\"clienteId\":\"${CLIENTE_ESTADO}\",\"canal\":\"WEB\",\"metodoEntrega\":\"DOMICILIO\",\"moneda\":\"GTQ\",\"medioPago\":\"TARJETA\",\"tokenMedioPago\":\"${TOKEN_PK}\",\"impuestos\":12.0,\"lineas\":[{\"sku\":\"${SKU_ESTADO}\",\"descripcion\":\"Suite test\",\"cantidad\":1,\"precioUnitario\":100.0}]}"
 r=$(do_req POST "$GW/api/ordenes" "$orden_body")
 code=$(get_code "$r"); body=$(get_body "$r")

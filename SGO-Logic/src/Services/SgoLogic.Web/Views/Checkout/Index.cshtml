@@ -250,13 +250,14 @@
                                 </div>
                             }
 
-                            <!-- Solo el CVV: el resto ya lo conoce PayKlik por la referencia guardada -->
+                            <!-- Solo el CVV: el resto ya lo conoce Pagos por la tarjeta guardada -->
                             <div id="cvv-guardada-panel" class="hidden">
                                 <label for="cvv-guardada" class="block text-xs font-semibold text-on-surface-variant mb-1">Código de seguridad</label>
                                 <input id="cvv-guardada" type="password" inputmode="numeric" maxlength="3"
                                        placeholder="3 dígitos" autocomplete="cc-csc"
-                                       oninput="this.value = this.value.replace(/\D/g, ''); actualizarBotonConfirmar();"
+                                       oninput="this.value = this.value.replace(/\D/g, ''); limpiarErrorCampo('cvv-guardada'); actualizarBotonConfirmar();"
                                        class="w-40 px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary font-mono" />
+                                <p id="error-cvv-guardada" class="hidden mt-1 text-[11px] font-semibold text-error" role="alert"></p>
                             </div>
 
                             <button type="button" id="btn-agregar-tarjeta" onclick="abrirNuevaTarjeta()"
@@ -274,40 +275,44 @@
                                     <label for="pan-input" class="block text-xs font-semibold text-on-surface-variant">Número de tarjeta</label>
                                     <span id="card-brand-badge" class="hidden text-[11px] font-bold px-2 py-0.5 rounded"></span>
                                 </div>
-                                <input id="pan-input" type="text" inputmode="numeric" maxlength="19"
+                                <input id="pan-input" type="text" inputmode="numeric" maxlength="23"
                                        placeholder="0000 0000 0000 0000" autocomplete="cc-number"
-                                       oninput="formatearPan(this)"
+                                       oninput="formatearPan(this); limpiarErrorCampo('numero');"
                                        class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary tracking-widest font-mono" />
+                                <p id="error-numero" class="hidden mt-1 text-[11px] font-semibold text-error" role="alert"></p>
                             </div>
                             <div>
                                 <label for="exp-input" class="block text-xs font-semibold text-on-surface-variant mb-1">Vencimiento</label>
                                 <input id="exp-input" type="text" inputmode="numeric" maxlength="5"
                                        placeholder="MM/AA" autocomplete="cc-exp"
-                                       oninput="formatearExp(this)"
+                                       oninput="formatearExp(this); limpiarErrorCampo('vencimiento');"
                                        class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary font-mono" />
+                                <p id="error-vencimiento" class="hidden mt-1 text-[11px] font-semibold text-error" role="alert"></p>
                             </div>
                             <div>
                                 <label for="cvv-input" class="block text-xs font-semibold text-on-surface-variant mb-1">Código de seguridad</label>
                                 <input id="cvv-input" type="password" inputmode="numeric" maxlength="4"
                                        placeholder="3 o 4 dígitos" autocomplete="cc-csc"
+                                       oninput="this.value = this.value.replace(/\D/g, ''); limpiarErrorCampo('cvv');"
                                        class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary font-mono" />
+                                <p id="error-cvv" class="hidden mt-1 text-[11px] font-semibold text-error" role="alert"></p>
+                            </div>
+                            <div class="sm:col-span-2">
+                                <label for="titular-input" class="block text-xs font-semibold text-on-surface-variant mb-1">Nombre del titular (como aparece en la tarjeta)</label>
+                                <input id="titular-input" type="text" maxlength="60" autocomplete="cc-name" value="@ViewBag.UserName"
+                                       oninput="limpiarErrorCampo('titular');"
+                                       class="w-full px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary" />
+                                <p id="error-titular" class="hidden mt-1 text-[11px] font-semibold text-error" role="alert"></p>
                             </div>
                         </div>
 
                         @if (autenticado)
                         {
-                            <div class="flex flex-col gap-2">
-                                <label class="flex items-center gap-2 text-xs text-on-surface-variant cursor-pointer">
-                                    <input type="checkbox" id="chk-guardar-tarjeta" checked onchange="document.getElementById('titular-panel').classList.toggle('hidden', !this.checked)"
-                                           class="rounded text-primary focus:ring-primary h-4 w-4" />
-                                    Guardar esta tarjeta para futuras compras
-                                </label>
-                                <div id="titular-panel">
-                                    <label for="titular-input" class="block text-xs font-semibold text-on-surface-variant mb-1">Nombre del titular</label>
-                                    <input id="titular-input" type="text" maxlength="120" autocomplete="cc-name" value="@ViewBag.UserName"
-                                           class="w-full sm:w-2/3 px-3.5 py-2.5 rounded-xl border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary" />
-                                </div>
-                            </div>
+                            <label class="flex items-center gap-2 text-xs text-on-surface-variant cursor-pointer">
+                                <input type="checkbox" id="chk-guardar-tarjeta" checked
+                                       class="rounded text-primary focus:ring-primary h-4 w-4" />
+                                Guardar esta tarjeta para futuras compras (se guarda cuando el cobro se aprueba)
+                            </label>
                         }
                         else
                         {
@@ -339,14 +344,13 @@
 
                     <!-- Mensajes de validación / error -->
                     <div id="tokenizacion-status" class="hidden text-xs font-semibold" role="status" aria-live="polite"></div>
-                    <div id="aviso-guardar-tarjeta" class="hidden text-[11px] text-text-muted" role="status" aria-live="polite"></div>
 
-                    <!-- Campo oculto que recibirá el token de PayKlik -->
+                    <!-- Campo oculto que recibirá el token de la boveda de Pagos -->
                     <input type="hidden" id="token-medio-pago" name="tokenMedioPago" />
 
                     <p class="flex items-center gap-1.5 text-[11px] text-text-muted">
                         <span class="material-symbols-outlined text-[14px]">lock</span>
-                        Tus datos de tarjeta viajan cifrados directamente al procesador de pagos. Nunca los almacenamos.
+                        Tus datos de tarjeta se guardan cifrados solo mientras se procesa el cobro y se borran al terminar.
                     </p>
                 </div>
 
@@ -432,21 +436,23 @@
 </div>
 
 <script>
-    // Endpoint de tokenizacion de PayKlik. El navegador le envia la tarjeta directo:
-    // el numero y el CVV nunca pasan por SgoLogic.Web ni por el gateway (RES-08).
-    const URL_TOKENIZACION = 'http://localhost:8084/v1/tokens';
+    // Tokenizacion: el navegador manda la tarjeta a la Web (/Checkout/Tokenizar), que
+    // la pasa a Pagos. Pagos la valida (es la autoridad), la cifra en su boveda
+    // transitoria y devuelve un token opaco. El navegador ya no habla con PayKlik.
+    // La validacion de aqui abajo solo da respuesta inmediata.
+    const URL_TOKENIZACION = '/Checkout/Tokenizar';
     const TIEMPO_ESPERA_TOKENIZACION_MS = 10000;
 
-    // El token de PayKlik es de un solo uso y vence (VigenciaSegundos, 900 s por
-    // defecto). Pagos lo consume al cobrar, unos segundos despues de confirmar,
-    // asi que se da por vencido con este margen para no enviar uno a punto de expirar.
+    // El token vence (PAGOS_TOKEN_TTL_MINUTOS, 30 por defecto). Se da por vencido con
+    // este margen para no enviar uno a punto de expirar.
     const MARGEN_VENCIMIENTO_MS = 60000;
+    const VIGENCIA_TOKEN_POR_DEFECTO_MS = 30 * 60000;
 
     // { token, marca, ultimosCuatro, venceLocalMs } o null si no hay tarjeta validada.
     let tarjetaValidada = null;
 
     // Tarjetas guardadas: 'guardada' paga con una tarjeta de la lista (solo pide el
-    // CVV y el token lo emite PayKlik via Pagos); 'nueva' es el formulario de siempre.
+    // CVV y el token lo emite la boveda de Pagos); 'nueva' es el formulario de siempre.
     const USUARIO_AUTENTICADO = @(autenticado ? "true" : "false");
     const INICIA_CON_GUARDADA = @(hayTarjetas && tarjetaPreseleccionada is not null ? "true" : "false");
     let modoTarjeta = INICIA_CON_GUARDADA ? 'guardada' : 'nueva';
@@ -474,6 +480,87 @@
 
     function largoCvv(marca) {
         return marca === 'AMEX' ? 4 : 3;
+    }
+
+    // Longitudes validas por marca (las mismas que valida Pagos).
+    const LONGITUDES_MARCA = { VISA: [13, 16, 19], MASTERCARD: [16], AMEX: [15] };
+
+    // Errores por campo: numero, vencimiento (mesExp/anioExp), cvv, titular y cvv-guardada.
+    const CAMPO_ERROR = { numero: 'numero', mesExp: 'vencimiento', anioExp: 'vencimiento', vencimiento: 'vencimiento', cvv: 'cvv', titular: 'titular' };
+
+    function mostrarErrorCampo(campo, texto) {
+        const el = document.getElementById('error-' + campo);
+        if (!el) return;
+        el.textContent = texto;
+        el.classList.remove('hidden');
+    }
+
+    function limpiarErrorCampo(campo) {
+        const el = document.getElementById('error-' + campo);
+        if (el) {
+            el.textContent = '';
+            el.classList.add('hidden');
+        }
+    }
+
+    function limpiarErroresTarjeta() {
+        ['numero', 'vencimiento', 'cvv', 'titular', 'cvv-guardada'].forEach(limpiarErrorCampo);
+    }
+
+    // Pinta los errores {campo: mensaje} que devuelve Pagos (422) debajo de cada campo.
+    function mostrarErroresServidor(errores, campoCvv) {
+        let alguno = false;
+        Object.entries(errores ?? {}).forEach(([campo, mensaje]) => {
+            const destino = campo === 'cvv' && campoCvv ? campoCvv : (CAMPO_ERROR[campo] ?? null);
+            if (destino) {
+                mostrarErrorCampo(destino, mensaje);
+                alguno = true;
+            }
+        });
+        return alguno;
+    }
+
+    // Validacion local equivalente a la de Pagos: Luhn, longitud por marca,
+    // vencimiento (vale hasta el ultimo dia del mes), CVV por marca y titular.
+    function validarTarjetaLocal(pan, mes, anio, cvv, titular) {
+        const errores = {};
+        const marca = detectarMarca(pan);
+
+        if (!pan) errores.numero = 'El número de tarjeta es obligatorio.';
+        else if (!/^\d+$/.test(pan)) errores.numero = 'El número de tarjeta solo admite dígitos.';
+        else if (!marca) errores.numero = 'Marca no soportada. Se admiten VISA, MASTERCARD y AMEX.';
+        else if (!LONGITUDES_MARCA[marca].includes(pan.length)) errores.numero = `Longitud inválida para una tarjeta ${marca}.`;
+        else if (!validarLuhn(pan)) errores.numero = 'El número de tarjeta no es válido.';
+
+        if (isNaN(mes) || isNaN(anio)) {
+            errores.vencimiento = 'Revisa el vencimiento. Usa el formato MM/AA, por ejemplo 12/28.';
+        } else if (mes < 1 || mes > 12) {
+            errores.vencimiento = 'El mes de vencimiento debe estar entre 1 y 12.';
+        } else {
+            const anioCompleto = anio < 100 ? 2000 + anio : anio;
+            const hoy = new Date();
+            if (anioCompleto * 12 + mes < hoy.getFullYear() * 12 + (hoy.getMonth() + 1)) {
+                errores.vencimiento = 'La tarjeta está vencida.';
+            }
+        }
+
+        if (!cvv) errores.cvv = 'El código de seguridad es obligatorio.';
+        else if (!new RegExp(`^\\d{${largoCvv(marca)}}$`).test(cvv)) errores.cvv = `El código de seguridad debe tener ${largoCvv(marca)} dígitos.`;
+
+        const titularLimpio = (titular ?? '').trim().replace(/\s+/g, ' ');
+        if (!titularLimpio) errores.titular = 'El nombre del titular es obligatorio.';
+        else if (titularLimpio.length < 2 || titularLimpio.length > 60) errores.titular = 'El nombre del titular debe tener entre 2 y 60 caracteres.';
+        else if (!/^[\p{L} ]+$/u.test(titularLimpio)) errores.titular = 'El nombre del titular solo admite letras y espacios.';
+
+        return errores;
+    }
+
+    // Milisegundos que le quedan al token segun su expiraEn, acotados para no
+    // depender de que el reloj del navegador coincida con el de Pagos.
+    function vigenciaTokenMs(expiraEn) {
+        const restante = Date.parse(expiraEn) - Date.now();
+        if (isNaN(restante)) return VIGENCIA_TOKEN_POR_DEFECTO_MS;
+        return Math.min(Math.max(restante, MARGEN_VENCIMIENTO_MS * 2), VIGENCIA_TOKEN_POR_DEFECTO_MS);
     }
 
     function ajustarCvv(input, marca) {
@@ -602,7 +689,7 @@
 
     // ── Formateo automático y detección de marca ──────────────────────────────
     function formatearPan(input) {
-        let val = input.value.replace(/\D/g, '').substring(0, 16);
+        let val = input.value.replace(/\D/g, '').substring(0, 19);
         let formatted = val.match(/.{1,4}/g)?.join(' ') || val;
         input.value = formatted;
 
@@ -712,37 +799,33 @@
         }
     }, 5000);
 
-    // ── Paso 1: validar la tarjeta (tokenizar contra PayKlik) ─────────────────
+    // ── Paso 1: validar la tarjeta (tokenizar en Pagos via la Web) ────────────
     async function validarTarjeta() {
         const btn = document.getElementById('btn-validar');
         const btnTexto = document.getElementById('btn-validar-texto');
 
-        const pan = document.getElementById('pan-input').value.replace(/\s/g, '');
-        const cvv = document.getElementById('cvv-input').value;
+        const pan = document.getElementById('pan-input').value.replace(/[\s-]/g, '');
+        const cvv = document.getElementById('cvv-input').value.trim();
         const exp = document.getElementById('exp-input').value; // formato MM/AA
-
-        if (!pan || !cvv || !exp || !exp.includes('/')) {
-            mostrarEstado('error', 'Completa el número de tarjeta, el vencimiento y el código de seguridad.');
-            return;
-        }
-
-        if (pan.length < 13 || !validarLuhn(pan)) {
-            mostrarEstado('error', 'El número de tarjeta no es válido. Revisa los dígitos.');
-            return;
-        }
+        const titular = document.getElementById('titular-input').value;
 
         const [mesStr, anioStr] = exp.split('/');
-        const mesExpiracion = parseInt(mesStr, 10);
-        const anioExpiracion = parseInt(anioStr, 10);
+        const mesExp = parseInt(mesStr, 10);
+        const anioExp = parseInt(anioStr, 10);
 
-        if (isNaN(mesExpiracion) || isNaN(anioExpiracion) || mesExpiracion < 1 || mesExpiracion > 12) {
-            mostrarEstado('error', 'Revisa el vencimiento. Usa el formato MM/AA, por ejemplo 12/28.');
+        limpiarErroresTarjeta();
+        ocultarEstado();
+
+        const erroresLocales = validarTarjetaLocal(pan, mesExp, anioExp, cvv, titular);
+        if (Object.keys(erroresLocales).length > 0) {
+            mostrarErroresServidor(erroresLocales);
+            mostrarEstado('error', 'Revisa los datos marcados de la tarjeta.');
             return;
         }
 
         btn.disabled = true;
         btnTexto.textContent = 'Validando…';
-        mostrarEstado('info', 'Validando tu tarjeta con el procesador de pagos…');
+        mostrarEstado('info', 'Validando tu tarjeta…');
 
         const cancelador = new AbortController();
         const temporizador = setTimeout(() => cancelador.abort(), TIEMPO_ESPERA_TOKENIZACION_MS);
@@ -753,37 +836,41 @@
                 const guardar = USUARIO_AUTENTICADO && document.getElementById('chk-guardar-tarjeta')?.checked === true;
                 res = await fetch(URL_TOKENIZACION, {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ numeroTarjeta: pan, cvv, mesExpiracion, anioExpiracion, guardar }),
+                    headers: { 'RequestVerificationToken': tokenAntiforgery(), 'Accept': 'application/json' },
+                    body: new URLSearchParams({
+                        numero: pan,
+                        mesExp: String(mesExp),
+                        anioExp: String(anioExp),
+                        cvv,
+                        titular,
+                        guardar: String(guardar)
+                    }),
                     signal: cancelador.signal
                 });
             } catch {
-                // Sin respuesta: el procesador esta caido, inalcanzable o tardo demasiado.
-                throw new Error('PROVEEDOR_NO_DISPONIBLE');
+                throw new Error('SERVICIO_NO_DISPONIBLE');
             }
 
+            const cuerpo = await res.json().catch(() => ({}));
+
             if (res.status === 422) {
-                const problema = await res.json().catch(() => ({}));
-                const motivos = (problema.errores ?? []).map(e => e.motivo).filter(Boolean);
-                mostrarEstado('error', 'La tarjeta no fue aceptada: ' + (motivos.join(' ') || 'revisa los datos e intenta de nuevo.'));
+                // Pagos es la autoridad: sus errores van debajo de cada campo.
+                const conCampos = mostrarErroresServidor(cuerpo.errores);
+                mostrarEstado('error', conCampos ? 'Revisa los datos marcados de la tarjeta.' : (cuerpo.mensaje || 'La tarjeta no fue aceptada.'));
                 return;
             }
 
             if (!res.ok) {
-                throw new Error('PROVEEDOR_NO_DISPONIBLE');
+                throw new Error('SERVICIO_NO_DISPONIBLE');
             }
 
-            const respuesta = await res.json();
-
-            // La vigencia se toma en segundos desde ahora (no de VenceEn) para no
-            // depender de que el reloj del navegador coincida con el del procesador.
             tarjetaValidada = {
-                token: respuesta.token,
-                marca: respuesta.marca,
-                ultimosCuatro: respuesta.ultimosCuatro,
-                venceLocalMs: Date.now() + (respuesta.vigenciaSegundos ?? 900) * 1000
+                token: cuerpo.token,
+                marca: cuerpo.marca,
+                ultimosCuatro: cuerpo.ultimos4,
+                venceLocalMs: Date.now() + vigenciaTokenMs(cuerpo.expiraEn)
             };
-            document.getElementById('token-medio-pago').value = respuesta.token;
+            document.getElementById('token-medio-pago').value = cuerpo.token;
 
             // Con el token emitido, los datos de la tarjeta ya no hacen falta en la pagina.
             document.getElementById('pan-input').value = '';
@@ -791,21 +878,15 @@
             document.getElementById('exp-input').value = '';
             document.getElementById('card-brand-badge').className = 'hidden';
 
-            document.getElementById('validada-marca').textContent = respuesta.marca;
-            document.getElementById('validada-ultimos').textContent = respuesta.ultimosCuatro;
+            document.getElementById('validada-marca').textContent = cuerpo.marca;
+            document.getElementById('validada-ultimos').textContent = cuerpo.ultimos4;
             document.getElementById('tarjeta-captura').classList.add('hidden');
             document.getElementById('tarjeta-validada').classList.remove('hidden');
             ocultarEstado();
             actualizarBotonConfirmar();
-
-            // PayKlik la guardo en su boveda: se registra en la cuenta antes de pagar.
-            // Si falla, el pago sigue igual con el token ya emitido.
-            if (respuesta.referenciaTarjeta) {
-                await guardarTarjeta(respuesta);
-            }
         } catch (err) {
-            console.error('Error validando la tarjeta:', err);
-            mostrarEstado('error', 'No pudimos comunicarnos con el procesador de pagos. Tu carrito sigue guardado: intenta validar la tarjeta de nuevo en unos momentos.');
+            console.error('Error validando la tarjeta:', err.message);
+            mostrarEstado('error', 'No pudimos validar tu tarjeta en este momento. Tu carrito sigue guardado: intenta de nuevo en unos momentos.');
             btnTexto.textContent = 'Reintentar validación';
         } finally {
             clearTimeout(temporizador);
@@ -816,43 +897,18 @@
         }
     }
 
-    async function guardarTarjeta(respuesta) {
-        const aviso = document.getElementById('aviso-guardar-tarjeta');
-        const datos = new URLSearchParams({
-            referenciaTarjeta: respuesta.referenciaTarjeta,
-            marca: respuesta.marca,
-            ultimos4: respuesta.ultimosCuatro,
-            mesExp: respuesta.mesExpiracion,
-            anioExp: respuesta.anioExpiracion,
-            titular: document.getElementById('titular-input')?.value ?? ''
-        });
-
-        try {
-            const res = await fetch('/Checkout/GuardarTarjeta', {
-                method: 'POST',
-                headers: { 'RequestVerificationToken': tokenAntiforgery() },
-                body: datos
-            });
-            aviso.textContent = res.ok
-                ? 'Guardamos tu tarjeta para tus próximas compras.'
-                : 'No pudimos guardar tu tarjeta; tu pago continúa normalmente.';
-        } catch {
-            aviso.textContent = 'No pudimos guardar tu tarjeta; tu pago continúa normalmente.';
-        }
-        aviso.classList.remove('hidden');
-    }
-
-    // Tarjeta guardada: pide a Pagos un token de un solo uso con el CVV escrito y lo
-    // deja en el mismo lugar que la tokenizacion directa (mismo timer de vencimiento).
+    // Tarjeta guardada: pide a Pagos un token con el CVV escrito y lo deja en el mismo
+    // lugar que la tokenizacion de una tarjeta nueva (mismo timer de vencimiento).
     async function obtenerTokenTarjetaGuardada() {
         const radio = radioGuardadaSeleccionado();
         const cvvInput = document.getElementById('cvv-guardada');
+        limpiarErrorCampo('cvv-guardada');
         if (!radio || !cvvGuardadaCompleto()) {
-            mostrarEstado('error', `Escribe los ${radio ? largoCvv(radio.dataset.marca) : 3} dígitos del código de seguridad.`);
+            mostrarErrorCampo('cvv-guardada', `Escribe los ${radio ? largoCvv(radio.dataset.marca) : 3} dígitos del código de seguridad.`);
             return false;
         }
 
-        mostrarEstado('info', 'Validando tu tarjeta con el procesador de pagos…');
+        mostrarEstado('info', 'Validando tu tarjeta…');
         const datos = new URLSearchParams({ id: radio.value, cvv: cvvInput.value });
         cvvInput.value = '';
 
@@ -864,16 +920,17 @@
                 body: datos
             });
         } catch {
-            mostrarEstado('error', 'No pudimos comunicarnos con el procesador de pagos. Intenta de nuevo en unos momentos.');
+            mostrarEstado('error', 'No pudimos validar tu tarjeta en este momento. Intenta de nuevo en unos momentos.');
             actualizarBotonConfirmar();
             return false;
         }
 
         const cuerpo = await res.json().catch(() => ({}));
         if (!res.ok) {
-            mostrarEstado('error', cuerpo.mensaje || 'No se pudo usar la tarjeta guardada.');
-            // 410: PayKlik ya no la reconoce y Pagos la desactivo.
-            if (res.status === 410) quitarTarjetaDeLaLista(radio.value);
+            const conCampos = res.status === 422 && mostrarErroresServidor(cuerpo.errores, 'cvv-guardada');
+            mostrarEstado('error', conCampos ? 'Revisa el código de seguridad.' : (cuerpo.mensaje || 'No se pudo usar la tarjeta guardada.'));
+            // 404: la tarjeta ya no existe o no es del cliente.
+            if (res.status === 404) quitarTarjetaDeLaLista(radio.value);
             actualizarBotonConfirmar();
             return false;
         }
@@ -881,8 +938,8 @@
         tarjetaValidada = {
             token: cuerpo.token,
             marca: cuerpo.marca,
-            ultimosCuatro: cuerpo.ultimosCuatro,
-            venceLocalMs: Date.now() + (cuerpo.vigenciaSegundos ?? 900) * 1000
+            ultimosCuatro: cuerpo.ultimos4,
+            venceLocalMs: Date.now() + vigenciaTokenMs(cuerpo.expiraEn)
         };
         document.getElementById('token-medio-pago').value = cuerpo.token;
         ocultarEstado();

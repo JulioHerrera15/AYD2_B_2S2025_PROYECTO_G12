@@ -4,6 +4,7 @@ using SgoLogic.BuildingBlocks.Messaging;
 using SgoLogic.Notificaciones.Api.Application;
 using SgoLogic.Notificaciones.Api.Consumers;
 using SgoLogic.Notificaciones.Api.Infrastructure;
+using SgoLogic.Notificaciones.Api.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,7 +14,7 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
-// ── Base de datos (solo para tabla mensajes_procesados) ───────────────────────
+// ── Base de datos (mensajes_procesados y notificacion_pendiente) ──────────────
 builder.Services.AddDbContext<NotificacionesDbContext>(opciones =>
     opciones.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
 
@@ -28,6 +29,13 @@ builder.Services.AddHttpClient<IMockMensajeriaClient, MockMensajeriaClient>(http
     http.BaseAddress = new Uri(mockUrl);
     http.Timeout = TimeSpan.FromSeconds(10);
 });
+
+// ── Envio con reintentos (B3) ─────────────────────────────────────────────────
+// Un envio fallido queda en notificacion_pendiente y el worker lo reintenta con
+// backoff exponencial (10 s, 20 s, ... hasta 6 reintentos; luego FALLIDA).
+builder.Services.AddScoped<IRepositorioNotificacionesPendientes, RepositorioNotificacionesPendientes>();
+builder.Services.AddScoped<ServicioNotificaciones>();
+builder.Services.AddHostedService<ReintentoNotificacionesWorker>();
 
 // ── Consumidores de eventos ───────────────────────────────────────────────────
 builder.Services.AddHostedService<NotificacionesOrdenesConsumidor>();
