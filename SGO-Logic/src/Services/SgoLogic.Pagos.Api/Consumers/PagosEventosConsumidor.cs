@@ -186,7 +186,7 @@ public sealed class PagosEventosConsumidor : BackgroundService
             datos.UltimosCuatro,
             datos.Marca);
 
-        await servicio.ProcesarCobroAsync(solicitud, cancelacion);
+        await servicio.ProcesarSolicitudAsync(solicitud, cancelacion);
     }
 
     private static async Task ManejarDevolucionAsync(

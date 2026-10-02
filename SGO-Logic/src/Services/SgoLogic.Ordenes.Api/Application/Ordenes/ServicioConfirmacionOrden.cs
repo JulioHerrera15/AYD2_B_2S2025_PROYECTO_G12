@@ -277,8 +277,9 @@ public sealed class ServicioConfirmacionOrden
     /// que el pedido salga a ruta y fuera de la ventana del cobro:
     /// <list type="bullet">
     ///   <item>Otro cliente: <see cref="ExcepcionOrdenAjena" /> (403).</item>
-    ///   <item>COBRO_SOLICITADO o PAGO_APLICADO: el resultado del cobro esta por
-    ///   llegar; <see cref="ExcepcionCancelacionNoPermitida" /> transitoria (409).</item>
+    ///   <item>COBRO_SOLICITADO o PAGO_APLICADO, o en la ruta de credito
+    ///   EVALUACION_CREDITO_SOLICITADA o CREDITO_APROBADO: el resultado del pago esta
+    ///   por llegar; <see cref="ExcepcionCancelacionNoPermitida" /> transitoria (409).</item>
     ///   <item>EN_TRANSITO o posterior, o ya cancelada/rechazada:
     ///   <see cref="ExcepcionCancelacionNoPermitida" /> definitiva (409).</item>
     /// </list>
@@ -303,7 +304,7 @@ public sealed class ServicioConfirmacionOrden
             throw new ExcepcionOrdenAjena(ordenId);
         }
 
-        if (orden.Estado is EstadoOrden.COBRO_SOLICITADO or EstadoOrden.PAGO_APLICADO)
+        if (EstadosConPagoEnCurso.Contains(orden.Estado))
         {
             throw new ExcepcionCancelacionNoPermitida(ordenId, orden.Estado, pagoEnCurso: true);
         }
@@ -330,8 +331,21 @@ public sealed class ServicioConfirmacionOrden
     }
 
     /// <summary>
+    /// Estados en los que el pago se esta resolviendo: cancelar ahora competiria con
+    /// la respuesta de Pagos o de Credito. Mismo trato para las dos rutas.
+    /// </summary>
+    private static readonly IReadOnlySet<EstadoOrden> EstadosConPagoEnCurso = new HashSet<EstadoOrden>
+    {
+        EstadoOrden.COBRO_SOLICITADO,
+        EstadoOrden.PAGO_APLICADO,
+        EstadoOrden.EVALUACION_CREDITO_SOLICITADA,
+        EstadoOrden.CREDITO_APROBADO
+    };
+
+    /// <summary>
     /// Estados previos a la salida a ruta desde los que el cliente puede cancelar.
-    /// COBRO_SOLICITADO y PAGO_APLICADO quedan fuera porque el cobro esta en curso.
+    /// Los de <see cref="EstadosConPagoEnCurso" /> quedan fuera. Una orden a credito
+    /// confirmada si se puede cancelar: Credito anula el cargo al consumir OrdenCancelada.
     /// </summary>
     private static readonly IReadOnlySet<EstadoOrden> EstadosCancelablesPorCliente = new HashSet<EstadoOrden>
     {

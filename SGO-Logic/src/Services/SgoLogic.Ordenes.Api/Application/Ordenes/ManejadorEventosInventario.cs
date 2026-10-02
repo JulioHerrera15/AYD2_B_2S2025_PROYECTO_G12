@@ -16,12 +16,15 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes;
 /// <list type="bullet">
 ///   <item><see cref="InventarioReservadoData" />: la orden pasa de
 ///   RESERVA_SOLICITADA a INVENTARIO_RESERVADO y, en la misma transaccion, avanza
-///   a COBRO_SOLICITADO emitiendo <c>CobroSolicitado</c>. Persiste el
+///   a COBRO_SOLICITADO emitiendo <c>CobroSolicitado</c>, o, si la orden se paga
+///   con CREDITO, a EVALUACION_CREDITO_SOLICITADA emitiendo
+///   <c>EvaluacionCreditoSolicitada</c> (nunca ambos). Persiste el
 ///   <see cref="Orden.ReservaId" /> real.</item>
 ///   <item><see cref="ReservaInventarioRechazadaData" />: la orden pasa de
 ///   RESERVA_SOLICITADA a RECHAZADA (motivo STOCK_INSUFICIENTE). No se cobra.</item>
-///   <item><see cref="ReservaInventarioExpiradaData" />: la orden pasa de
-///   RESERVA_SOLICITADA a CANCELADA_RESERVA_VENCIDA.</item>
+///   <item><see cref="ReservaInventarioExpiradaData" />: la orden pasa a
+///   CANCELADA_RESERVA_VENCIDA desde cualquier estado que lo admita, incluida
+///   EVALUACION_CREDITO_SOLICITADA (Credito tardo mas que el TTL de la reserva).</item>
 /// </list>
 ///
 /// La transicion RESERVA_SOLICITADA → INVENTARIO_RESERVADO → COBRO_SOLICITADO se
@@ -187,7 +190,13 @@ public sealed class ManejadorEventosInventario
 
         MapaEventosSagaOrden.Encolar(orden, transicion1, _outbox);
 
-        var transicion2 = orden.TransicionarA(EstadoOrden.COBRO_SOLICITADO, pasoSaga: PasoSaga.COBRO);
+        // Bifurcacion de la saga por medio de pago: credito a 30 dias pide la
+        // evaluacion a Credito; cualquier otro medio sigue al cobro como siempre.
+        var siguiente = orden.MedioPago == MedioPago.CREDITO
+            ? EstadoOrden.EVALUACION_CREDITO_SOLICITADA
+            : EstadoOrden.COBRO_SOLICITADO;
+
+        var transicion2 = orden.TransicionarA(siguiente, pasoSaga: PasoSaga.COBRO);
 
         _outbox.Encolar(
             OrdenEstadoCambiado.EventType,
@@ -212,9 +221,10 @@ public sealed class ManejadorEventosInventario
         await _unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
 
         _logger.LogInformation(
-            "Reserva {ReservaId} confirmada para la orden {OrdenId}; avance a INVENTARIO_RESERVADO y COBRO_SOLICITADO.",
+            "Reserva {ReservaId} confirmada para la orden {OrdenId}; avance a INVENTARIO_RESERVADO y {Siguiente}.",
             datos.ReservaId,
-            orden.Id);
+            orden.Id,
+            siguiente);
     }
 
     private async Task LiberarReservaTardiaAsync(

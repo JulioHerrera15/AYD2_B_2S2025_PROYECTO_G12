@@ -28,4 +28,14 @@ public interface IRepositorioOrdenes
 
     /// <summary>Registra una devolucion en la unidad de trabajo.</summary>
     Task AgregarDevolucionAsync(Devolucion devolucion, CancellationToken cancelacion);
+
+    /// <summary>
+    /// Ids de las ordenes en EVALUACION_CREDITO_SOLICITADA cuya ultima transicion es
+    /// anterior o igual a <paramref name="limite" />, las mas viejas primero. Solo
+    /// lectura: el timeout carga cada orden por separado antes de moverla.
+    /// </summary>
+    Task<IReadOnlyList<string>> ListarEvaluacionesCreditoVencidasAsync(
+        DateTime limite,
+        int maximo,
+        CancellationToken cancelacion);
 }

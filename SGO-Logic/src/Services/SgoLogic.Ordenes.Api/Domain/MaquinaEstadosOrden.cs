@@ -25,8 +25,20 @@ public static class MaquinaEstadosOrden
 
             [EstadoOrden.INVENTARIO_RESERVADO] = Conjunto(
                 EstadoOrden.COBRO_SOLICITADO,
+                EstadoOrden.EVALUACION_CREDITO_SOLICITADA,
                 EstadoOrden.CANCELADA_RESERVA_VENCIDA,
                 EstadoOrden.CANCELADA),
+
+            // Ruta de credito a 30 dias: reemplaza COBRO_SOLICITADO..PAGO_APLICADO.
+            // RECHAZADA cubre tanto el rechazo de Credito como el timeout de la saga.
+            [EstadoOrden.EVALUACION_CREDITO_SOLICITADA] = Conjunto(
+                EstadoOrden.CREDITO_APROBADO,
+                EstadoOrden.RECHAZADA,
+                EstadoOrden.CANCELADA_RESERVA_VENCIDA,
+                EstadoOrden.CANCELADA),
+
+            [EstadoOrden.CREDITO_APROBADO] = Conjunto(
+                EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL),
 
             [EstadoOrden.COBRO_SOLICITADO] = Conjunto(
                 EstadoOrden.PAGO_APLICADO,
