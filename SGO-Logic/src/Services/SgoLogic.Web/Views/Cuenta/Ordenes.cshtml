@@ -5,7 +5,8 @@
     var totalRegistros = Model?.TotalRegistros ?? Model?.Ordenes?.Count ?? 0;
     var paginaActual = Model?.Pagina ?? 1;
     // Estados previos a la salida a ruta desde los que Ordenes admite la cancelacion
-    // del cliente (COBRO_SOLICITADO y PAGO_APLICADO quedan fuera: cobro en curso).
+    // del cliente (COBRO_SOLICITADO y PAGO_APLICADO quedan fuera: cobro en curso; igual
+    // EVALUACION_CREDITO_SOLICITADA y CREDITO_APROBADO en la ruta de credito).
     var estadosCancelables = new HashSet<string>
     {
         "CREADA", "RESERVA_SOLICITADA", "INVENTARIO_RESERVADO", "PAGO_PENDIENTE",
@@ -83,6 +84,8 @@
                                 "LISTA_PARA_RECOGER" => "bg-sky-100 text-sky-800 border-sky-300",
                                 "ENTREGADA" => "bg-green-100 text-green-800 border-green-300",
                                 "CANCELADA" => "bg-rose-100 text-rose-800 border-rose-300",
+                                "EVALUACION_CREDITO_SOLICITADA" => "bg-amber-100 text-amber-800 border-amber-300",
+                                "CREDITO_APROBADO" => "bg-emerald-100 text-emerald-800 border-emerald-300",
                                 _ => "bg-surface-container-low text-text-muted border-border-subtle"
                             };
 
@@ -99,7 +102,7 @@
                                 <td class="py-4 px-6">
                                     <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border @badgeClass">
                                         <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
-                                        @orden.Estado
+                                        @SgoLogic.Web.Services.EtiquetasEstadoOrden.Etiqueta(orden.Estado)
                                     </span>
                                 </td>
                                 <td class="py-4 px-6 font-bold text-primary text-sm">

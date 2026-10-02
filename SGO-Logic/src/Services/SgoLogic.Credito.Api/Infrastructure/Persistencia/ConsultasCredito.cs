@@ -43,4 +43,17 @@ public sealed class ConsultasCredito : IConsultasCredito
              linea == null ? null : (DateTime?)linea.ActualizadoEn,
              historial == null ? null : (DateTime?)historial.ClienteDesde))
         .FirstOrDefaultAsync(cancelacion);
+
+    public async Task<IReadOnlyList<CompraCredito>> ListarComprasAsync(string clienteId, CancellationToken cancelacion) =>
+        await _contexto.CuentasPorCobrar.AsNoTracking()
+            .Where(cuenta => cuenta.ClienteId == clienteId)
+            .Select(cuenta => new CompraCredito(
+                cuenta.OrdenId,
+                cuenta.NumeroOrden,
+                cuenta.MontoOriginal,
+                cuenta.SaldoPendiente,
+                cuenta.EmitidaEn,
+                cuenta.VenceEn,
+                cuenta.Estado))
+            .ToListAsync(cancelacion);
 }

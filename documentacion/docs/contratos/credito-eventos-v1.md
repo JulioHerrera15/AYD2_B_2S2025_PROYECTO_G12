@@ -4,22 +4,28 @@
 **Curso:** Análisis y Diseño de Sistemas 2, Sección B
 **Contexto:** Crédito ("Compra ahora, paga en 30 días")
 **Servicio:** `credito-api` (puerto 8099 en el host, base `sgo_credito` en `db-finanzas`, esquema `credito`)
-**Estado:** bloque 1 de 4 (perfil, política, oferta y "Mi crédito")
+**Estado:** bloques 1 y 2 de 4 (perfil, política, oferta, "Mi crédito" y evaluación dentro de la saga)
 **Fecha:** 2026-10-02
 **Depende de:** `sgo-eventos-envelope-v1.md`
 
 ---
 
-## 1. Alcance de este bloque
+## 1. Alcance
 
 Crédito mantiene un **perfil crediticio precalculado** por cliente a partir del
 historial comercial que entrega el ERP. La consulta de oferta solo lee ese perfil:
 no recalcula ni llama a otro servicio, así que el checkout puede consultarla en
 cada carga sin costo.
 
-Fuera de este bloque: cargo y abono a la línea (saldo utilizado), el medio de pago
-`CREDITO` en la saga de Órdenes, el checkout y el bloqueo de líneas. Hasta
-entonces `saldoUtilizado` es 0 y el estado `BLOQUEADA` no se usa.
+**Bloque 2.** La saga de la orden tiene una segunda ruta de pago: con
+`medioPago = CREDITO`, Órdenes pide la evaluación (`EvaluacionCreditoSolicitada`)
+en lugar del cobro. Crédito aprueba (aparta el monto en la línea y emite una
+cuenta por cobrar a 30 días) o rechaza, y anula el cargo si la orden se cancela.
+Estados, transiciones y timeout del lado de Órdenes: `ordenes-eventos-v1.md`,
+secciones 2.3 y 7.13.
+
+Fuera de estos bloques: el pago de la cuenta por cobrar (abono), el vencimiento
+(`PAGADA`, `VENCIDA`) y el bloqueo de líneas (`BLOQUEADA` existe pero no se usa).
 
 El cliente se identifica siempre por su **email en minúsculas**, el mismo
 identificador que usan Órdenes y Pagos.
@@ -90,6 +96,92 @@ Se emite **solo si cambió** el puntaje, el nivel, la elegibilidad, el motivo o 
 límite. Un recálculo con el mismo resultado no emite nada. Hoy no tiene
 consumidores además de Auditoría (por `#`).
 
+### 2.3 Eventos consumidos de Órdenes (bloque 2)
+
+Cola propia `credito.ordenes` (quorum, con dead letter), `EventConsumerBase`
+tipado a `JsonElement` y despacho por `eventType`; deduplicación por `eventId` en
+`credito.mensajes_procesados`.
+
+| Routing key | Evento | Qué hace Crédito |
+|---|---|---|
+| `ordenes.credito.evaluacion-solicitada` | `EvaluacionCreditoSolicitada` (evento 13 de Órdenes) | Evalúa la compra (sección 4.4). |
+| `ordenes.orden.cancelada` | `OrdenCancelada` (evento 9 de Órdenes) | Si `medioPago = CREDITO`, anula el cargo (sección 4.5). Cualquier otro medio se ignora. |
+
+En esta cola los servicios confirman su propia transacción, porque ante un choque
+de `Version` de la línea releen y reintentan; la marca de procesado se guarda
+después. Una redelivery entre ambos pasos es inofensiva: la decisión es única por
+orden y anular una cuenta ya anulada no hace nada.
+
+### 2.4 `CreditoAprobado`
+
+| Campo del envelope | Valor |
+|---|---|
+| `eventType` | `CreditoAprobado` |
+| `routingKey` | `credito.evaluacion.aprobada` |
+| `aggregateType` | `EvaluacionCredito` |
+| `aggregateId` | `ordenId` |
+| `source` | `credito` |
+
+| Campo de `data` | Tipo | Descripción |
+|---|---|---|
+| `ordenId` | string | |
+| `clienteId` | string | Email en minúsculas. |
+| `cargoId` | string | Id de la cuenta por cobrar (32 hex). Órdenes guarda `"CRE-" + cargoId` en `pagoId`. |
+| `decisionId` | string | Id de la decisión (32 hex). |
+| `monto` | decimal | Total de la orden. |
+| `moneda` | string | `GTQ`. |
+| `fechaVencimiento` | fecha | `emitidaEn` + 30 días. |
+| `limiteAprobado` | decimal | Límite de la línea. |
+| `disponibleRestante` | decimal | Disponible después de apartar el monto. |
+| `decididoEn` | fecha | |
+
+Lo consume Órdenes (cola `ordenes.credito`): `CREDITO_APROBADO` y
+`CONFIRMADA_PENDIENTE_FISCAL` en la misma transacción.
+
+### 2.5 `CreditoRechazado`
+
+| Campo del envelope | Valor |
+|---|---|
+| `eventType` | `CreditoRechazado` |
+| `routingKey` | `credito.evaluacion.rechazada` |
+| `aggregateType` | `EvaluacionCredito` |
+| `aggregateId` | `ordenId` |
+| `source` | `credito` |
+
+| Campo de `data` | Tipo | Descripción |
+|---|---|---|
+| `ordenId` | string | |
+| `clienteId` | string | |
+| `decisionId` | string | |
+| `codigoMotivo` | string | Sección 4.4. Uso interno; no se muestra al cliente. |
+| `mensajeCliente` | string | Texto llano de `CatalogoMensajesCredito` (mensaje + recomendación). Órdenes lo usa como detalle visible del rechazo. |
+| `decididoEn` | fecha | |
+
+Lo consume Órdenes: `RECHAZADA` como compensación, con `LiberacionReservaSolicitada`
+(`CREDITO_RECHAZADO`).
+
+### 2.6 `CargoCreditoAnulado`
+
+| Campo del envelope | Valor |
+|---|---|
+| `eventType` | `CargoCreditoAnulado` |
+| `routingKey` | `credito.cargo.anulado` |
+| `aggregateType` | `CuentaPorCobrar` |
+| `aggregateId` | `ordenId` |
+| `source` | `credito` |
+
+| Campo de `data` | Tipo | Descripción |
+|---|---|---|
+| `ordenId` | string | |
+| `clienteId` | string | |
+| `cargoId` | string | |
+| `monto` | decimal | Monto devuelto al disponible. |
+| `moneda` | string | |
+| `motivo` | string | `Orden cancelada (<MotivoCancelacion>)`. |
+| `anuladoEn` | fecha | |
+
+Hoy solo lo registra Auditoría.
+
 ## 3. Endpoints
 
 ### 3.1 `GET /api/credito/elegibilidad?monto={decimal opcional}`
@@ -135,8 +227,13 @@ llano, sin códigos internos, sin hablar de puntaje.
 Mismo enrutamiento y misma regla de identidad. Respuesta 200 (`MiCreditoDto`, sin
 puntaje): `estado`, `nivel`, `etiquetaNivel`, `titulo`, `mensaje`,
 `recomendacion`, `limiteAprobado`, `saldoUtilizado`, `disponible`, `moneda`,
-`plazoDias`, `actualizadoEn` y `factores[]` con `nombre`, `valoracion` y
-`descripcion`.
+`plazoDias`, `actualizadoEn`, `factores[]` con `nombre`, `valoracion` y
+`descripcion`, y (bloque 2) `compras[]` con `numeroOrden`, `ordenId`, `monto`,
+`saldoPendiente`, `emitidaEn`, `venceEn`, `diasRestantes` (solo vigentes),
+`estado` (`VIGENTE`, `PAGADA`, `VENCIDA`, `ANULADA`) y `etiquetaEstado` ("Por
+pagar", "Pagada", "Vencida", "Anulada"). Primero las vigentes, de la más próxima
+a vencer; después el resto, de la más reciente. `saldoUtilizado` y `disponible`
+son reales: suben al aprobar y bajan al anular.
 
 Los cuatro factores para el cliente agrupan los de la política: "Pagos a tiempo"
 (puntualidad), "Monto de tus compras" (monto), "Tiempo y frecuencia como cliente"
@@ -157,6 +254,14 @@ con la misma lógica que el consumidor y responde 200 con `clienteId`, `aplicado
 `puntaje`, `nivel`, `elegible`, `codigoMotivo`, `limiteAprobado`, `moneda`,
 `versionPolitica`, `fechaCorteHistorial` y `calculadoEn`. 400 si el cuerpo falta,
 no trae cliente o trae valores negativos.
+
+### 3.4 `POST /interno/credito/demo/reiniciar`
+
+Mismas condiciones que 3.3 (`Credito:EndpointsInternos=true`, no enrutado por el
+gateway). Borra todas las cuentas por cobrar y decisiones y deja el
+`saldoUtilizado` de todas las líneas en 0, sin tocar perfiles, historiales ni
+límites. Responde 200 con `cuentasBorradas`, `decisionesBorradas` y
+`lineasReiniciadas`. Para repetir pruebas y demos.
 
 ## 4. Política `2026.10-v1`
 
@@ -203,6 +308,57 @@ Puntaje = suma redondeada a entero con `MidpointRounding.AwayFromZero`.
 
 Plazo: 30 días. La línea conserva `saldoUtilizado` al recalcular;
 `disponible = limiteAprobado - saldoUtilizado`, nunca menor que 0.
+
+### 4.4 Evaluación de una compra (bloque 2)
+
+Idempotente por `ordenId`: si ya hay decisión para la orden no se hace nada (salvo
+el caso `ANULADA_SIN_CARGO` de 4.5). Se aprueba solo si el perfil es elegible, la
+línea está `ACTIVA` y el disponible cubre el monto. Si no, el primer impedimento
+define `codigoMotivo`:
+
+| Código | Cuándo |
+|---|---|
+| `SIN_HISTORIAL` | El cliente no tiene perfil. |
+| Motivo del perfil | `INCIDENTE_GRAVE`, `ANTIGUEDAD_INSUFICIENTE`, `DEVOLUCIONES_EXCESIVAS` o `PUNTAJE_INSUFICIENTE` (sección 4.1). |
+| `LINEA_BLOQUEADA` | La línea está `BLOQUEADA` (reservado). |
+| `CUPO_INSUFICIENTE` | Sin línea activa, o el disponible no cubre el monto. |
+| `ORDEN_CANCELADA` | La orden se canceló antes de que llegara la evaluación. |
+
+Aprobar es una sola transacción: suma el monto a `saldoUtilizado`, crea la cuenta
+por cobrar (`VIGENTE`, vence a los 30 días), guarda la decisión `APROBADA` y
+escribe `CreditoAprobado` en el outbox. Rechazar guarda la decisión `RECHAZADA` y
+escribe `CreditoRechazado`.
+
+**Concurrencia.** Dos compras simultáneas del mismo cliente compiten por la
+`Version` de la línea. La que pierde recibe un choque de concurrencia, descarta lo
+pendiente, relee el saldo y se reevalúa (hasta 5 intentos). Entre las dos nunca
+superan el límite.
+
+### 4.5 Anulación del cargo (bloque 2)
+
+Al consumir `OrdenCancelada` con `medioPago = CREDITO`:
+
+- Si hay cuenta `VIGENTE`: pasa a `ANULADA`, el saldo pendiente vuelve al
+  disponible de la línea y se emite `CargoCreditoAnulado`. Anular dos veces no
+  libera dos veces.
+- Si no hay decisión todavía (la orden se canceló o rechazó antes de que Crédito
+  la evaluara): se guarda una decisión `ANULADA_SIN_CARGO`. Una evaluación que
+  llegue después se rechaza con `ORDEN_CANCELADA` sin apartar cupo, y la decisión
+  pasa a `RECHAZADA`.
+- Si la decisión fue un rechazo: no hay nada que devolver.
+
+Así se cubre el timeout de la saga: si Crédito estaba caído, al volver procesa en
+orden la evaluación (aprueba y aparta) y luego la cancelación del rechazo por
+timeout (anula y devuelve), y el saldo termina igual que antes.
+
+### 4.6 Tablas del bloque 2
+
+| Tabla | Clave | Contenido |
+|---|---|---|
+| `credito.cuenta_por_cobrar` | `id`; `orden_id` único | `numero_orden`, `cliente_id`, `monto_original`, `saldo_pendiente`, `moneda`, `emitida_en`, `vence_en`, `estado` (`VIGENTE`, `PAGADA`, `VENCIDA`, `ANULADA`), `anulada_en`, `motivo_anulacion`, `version`. |
+| `credito.decision_credito` | `id`; `orden_id` único | `cliente_id`, `monto`, `resultado` (`APROBADA`, `RECHAZADA`, `ANULADA_SIN_CARGO`), `codigo_motivo`, `puntaje`, `nivel`, `limite_aprobado`, `disponible_antes`, `version_politica`, `decidido_en`. Sustento auditable de cada solicitud. |
+
+Migración `CuentasPorCobrarYDecisiones`.
 
 ## 5. Contrato para Integración ERP y mock ERP (pendiente, lo implementa su dueño)
 
@@ -297,6 +453,11 @@ clientes iniciales.
 | `Auth:JwtSecret` | vacío (todo 401) | `${JWT_SECRET}` |
 | `Outbox:Source` | `credito` | `credito` |
 
-Métricas propias en `/metrics`: `credito_consultas_elegibilidad_total{estado}` y
-`credito_perfiles_recalculados_total`, además de las transversales de outbox y
-consumo.
+`Credito:EndpointsInternos` habilita los dos endpoints internos (3.3 y 3.4). En
+Órdenes, `Credito:TimeoutEvaluacionSegundos` (30) fija el timeout de la
+evaluación y `Auth:JwtSecret` la validación del JWT para órdenes a crédito.
+
+Métricas propias en `/metrics`: `credito_consultas_elegibilidad_total{estado}`,
+`credito_perfiles_recalculados_total`, `credito_evaluaciones_total{resultado}` y
+`credito_cargos_anulados_total`, además de las transversales de outbox y consumo.
+Órdenes expone `ordenes_credito_timeouts_total`.

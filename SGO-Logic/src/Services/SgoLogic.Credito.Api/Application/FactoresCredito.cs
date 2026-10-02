@@ -46,6 +46,22 @@ public static class FactoresCredito
                 opciones.PuntosDevoluciones + opciones.PuntosIncidentes)
         };
 
+    /// <summary>Los mismos cuatro factores leidos directamente del perfil.</summary>
+    public static IReadOnlyList<FactorEvaluado> Desde(PerfilCrediticio perfil, PoliticaCreditoOptions opciones) =>
+        new[]
+        {
+            new FactorEvaluado(FactorCliente.PagosATiempo, perfil.PuntosPuntualidad, opciones.PuntosPuntualidad),
+            new FactorEvaluado(FactorCliente.MontoCompras, perfil.PuntosMonto, opciones.PuntosMonto),
+            new FactorEvaluado(
+                FactorCliente.TiempoYFrecuencia,
+                perfil.PuntosAntiguedad + perfil.PuntosFrecuencia,
+                opciones.PuntosAntiguedad + opciones.PuntosFrecuencia),
+            new FactorEvaluado(
+                FactorCliente.DevolucionesYReclamos,
+                perfil.PuntosDevoluciones + perfil.PuntosIncidentes,
+                opciones.PuntosDevoluciones + opciones.PuntosIncidentes)
+        };
+
     /// <summary>El factor con menor proporcion de puntos; ante empate, el primero de la lista.</summary>
     public static FactorCliente MasDebil(IReadOnlyList<FactorEvaluado> factores)
     {

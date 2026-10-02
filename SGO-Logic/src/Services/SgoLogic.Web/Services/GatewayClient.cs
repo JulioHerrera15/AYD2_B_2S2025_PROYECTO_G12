@@ -184,7 +184,8 @@ public sealed record MiCreditoModel(
     string Moneda,
     int PlazoDias,
     DateTime? ActualizadoEn,
-    List<FactorCreditoModel>? Factores)
+    List<FactorCreditoModel>? Factores,
+    List<CompraCreditoModel>? Compras = null)
 {
     /// <summary>El cliente tiene una linea activa con limite: la vista muestra montos.</summary>
     [JsonIgnore]
@@ -209,6 +210,59 @@ public enum EstadoConsultaCredito
 /// no valida (401) y servicio no disponible (timeout, error de red o 5xx).
 /// </summary>
 public sealed record ResultadoMiCreditoModel(EstadoConsultaCredito Estado, MiCreditoModel? Credito = null);
+
+/// <summary>Una compra a credito. EtiquetaEstado es lo que se muestra; Estado es el codigo.</summary>
+public sealed record CompraCreditoModel(
+    string NumeroOrden,
+    string OrdenId,
+    decimal Monto,
+    decimal SaldoPendiente,
+    DateTime EmitidaEn,
+    DateTime VenceEn,
+    int? DiasRestantes,
+    string Estado,
+    string EtiquetaEstado)
+{
+    [JsonIgnore]
+    public bool EsVigente => string.Equals(Estado, "VIGENTE", StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>Respuesta de GET /api/credito/elegibilidad. No trae puntaje.</summary>
+public sealed record OfertaCreditoModel(
+    string Estado,
+    bool Ofrecer,
+    string? CodigoMotivo,
+    string Titulo,
+    string Mensaje,
+    string Recomendacion,
+    decimal LimiteAprobado,
+    decimal Disponible,
+    decimal? MontoSolicitado,
+    string Moneda,
+    int PlazoDias,
+    DateTime? FechaPagoEstimada,
+    DateTime? CalculadoEn);
+
+/// <summary>
+/// Resultado de consultar la oferta de credito. Nunca lanza: datos, sin sesion (401)
+/// o servicio no disponible (timeout, red, 5xx o cualquier otra respuesta).
+/// </summary>
+public sealed record ResultadoOfertaCreditoModel(EstadoConsultaCredito Estado, OfertaCreditoModel? Oferta = null);
+
+/// <summary>Linea de una orden tal como la devuelve Ordenes (GET /api/ordenes/{id}).</summary>
+public sealed record LineaOrdenModel(string Sku, string Descripcion, int Cantidad, decimal PrecioUnitario);
+
+/// <summary>Lo que la Web necesita de una orden de Ordenes para rearmar el carrito.</summary>
+public sealed record OrdenDetalleModel(
+    string Id,
+    string NumeroOrden,
+    string ClienteId,
+    string Estado,
+    string MedioPago,
+    List<LineaOrdenModel>? Lineas);
+
+/// <summary>Resultado de crear una orden con el codigo HTTP, para distinguir 401 y 403.</summary>
+public sealed record ResultadoCrearOrdenModel(bool Exito, int Status, OrdenCreadaModel? Orden, string? Error);
 
 public sealed record SolicitudTokenPagoModel(
     string? Numero,
@@ -267,7 +321,8 @@ public sealed record OrdenEstadoModel(
     string? ClienteId = null,
     string? UbicacionOrigenId = null,
     string? SerieDocumentoFiscal = null,
-    string? NumeroDocumentoFiscal = null);
+    string? NumeroDocumentoFiscal = null,
+    string? EstadoAnterior = null);
 
 public sealed record CrearIncidenciaModel(string OrdenId, string Descripcion);
 
@@ -494,6 +549,7 @@ public sealed class GatewayClient
     private static readonly TimeSpan VigenciaCacheSucursales = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan VigenciaCacheProductos = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan LimiteMiCredito = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan LimiteOfertaCredito = TimeSpan.FromSeconds(1);
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -867,14 +923,36 @@ public sealed class GatewayClient
     // ── Órdenes y Checkout ─────────────────────────────────────────────────────
     public async Task<(bool Exito, OrdenCreadaModel? Orden, string? Error)> CrearOrdenAsync(CrearOrdenModel model, CancellationToken ct = default)
     {
+        var resultado = await CrearOrdenConEstadoAsync(model, ct);
+        return (resultado.Exito, resultado.Orden, resultado.Error);
+    }
+
+    /// <summary>Igual que <see cref="CrearOrdenAsync" />, pero conserva el codigo HTTP (401/403 en ordenes a credito).</summary>
+    public async Task<ResultadoCrearOrdenModel> CrearOrdenConEstadoAsync(CrearOrdenModel model, CancellationToken ct = default)
+    {
         var res = await _http.PostAsJsonAsync("/api/ordenes", model, JsonOptions, ct);
         if (res.IsSuccessStatusCode)
         {
             var orden = await res.Content.ReadFromJsonAsync<OrdenCreadaModel>(JsonOptions, ct);
-            return (true, orden, null);
+            return new ResultadoCrearOrdenModel(true, (int)res.StatusCode, orden, null);
         }
         var err = await ParseProblemDetailsOrStringAsync(res, ct);
-        return (false, null, err);
+        return new ResultadoCrearOrdenModel(false, (int)res.StatusCode, null, err);
+    }
+
+    /// <summary>Orden de Ordenes con sus lineas (GET /api/ordenes/{id}); null si no responde.</summary>
+    public async Task<OrdenDetalleModel?> ObtenerOrdenAsync(string ordenId, CancellationToken ct = default)
+    {
+        try
+        {
+            var res = await _http.GetAsync($"/api/ordenes/{Uri.EscapeDataString(ordenId)}", ct);
+            if (!res.IsSuccessStatusCode) return null;
+            return await res.Content.ReadFromJsonAsync<OrdenDetalleModel>(JsonOptions, ct);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            return null;
+        }
     }
 
     public async Task<(bool Exito, OrdenCreadaModel? Orden, string? Error)> ConfirmarOrdenAsync(string ordenId, string? motivo = null, CancellationToken ct = default)
@@ -986,6 +1064,40 @@ public sealed class GatewayClient
     }
 
     // Credito toma el cliente del JWT de la sesion; la Web no manda ningun identificador.
+    /// <summary>
+    /// Oferta de credito para el total de la compra (GET /api/credito/elegibilidad)
+    /// con limite propio de 1 segundo: el checkout no espera a Credito. No lanza.
+    /// </summary>
+    public async Task<ResultadoOfertaCreditoModel> ConsultarOfertaCreditoAsync(decimal monto, CancellationToken ct = default)
+    {
+        using var limite = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        limite.CancelAfter(LimiteOfertaCredito);
+
+        try
+        {
+            var montoTexto = monto.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture);
+            using var res = await _http.GetAsync($"/api/credito/elegibilidad?monto={montoTexto}", limite.Token);
+            if (res.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                return new ResultadoOfertaCreditoModel(EstadoConsultaCredito.SesionInvalida);
+            }
+
+            if (!res.IsSuccessStatusCode)
+            {
+                return new ResultadoOfertaCreditoModel(EstadoConsultaCredito.NoDisponible);
+            }
+
+            var oferta = await res.Content.ReadFromJsonAsync<OfertaCreditoModel>(JsonOptions, limite.Token);
+            return oferta is null
+                ? new ResultadoOfertaCreditoModel(EstadoConsultaCredito.NoDisponible)
+                : new ResultadoOfertaCreditoModel(EstadoConsultaCredito.Ok, oferta);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException or NotSupportedException)
+        {
+            return new ResultadoOfertaCreditoModel(EstadoConsultaCredito.NoDisponible);
+        }
+    }
+
     /// <summary>
     /// Mi credito (GET /api/credito/mi-credito) con limite propio de 2 segundos, para
     /// que una caida de Credito no frene la pagina. No lanza excepciones.

@@ -13,6 +13,10 @@ public sealed class AlmacenCreditoFalso : IRepositorioCredito, IConsultasCredito
     public List<HistorialCliente> Historiales { get; } = new();
     public List<PerfilCrediticio> Perfiles { get; } = new();
     public List<LineaCredito> Lineas { get; } = new();
+    public List<DecisionCredito> Decisiones { get; } = new();
+    public List<CuentaPorCobrar> Cuentas { get; } = new();
+
+    public int Descartes { get; private set; }
 
     public int Guardados { get; private set; }
 
@@ -37,11 +41,42 @@ public sealed class AlmacenCreditoFalso : IRepositorioCredito, IConsultasCredito
 
     public Task<bool> HayHistorialesAsync(CancellationToken cancelacion) => Task.FromResult(Historiales.Count > 0);
 
+    public Task<DecisionCredito?> ObtenerDecisionAsync(string ordenId, CancellationToken cancelacion) =>
+        Task.FromResult(Decisiones.FirstOrDefault(d => d.OrdenId == ordenId));
+
+    public Task<CuentaPorCobrar?> ObtenerCuentaPorOrdenAsync(string ordenId, CancellationToken cancelacion) =>
+        Task.FromResult(Cuentas.FirstOrDefault(c => c.OrdenId == ordenId));
+
+    public void AgregarDecision(DecisionCredito decision) => Decisiones.Add(decision);
+
+    public void AgregarCuenta(CuentaPorCobrar cuenta) => Cuentas.Add(cuenta);
+
     public Task GuardarCambiosAsync(CancellationToken cancelacion)
     {
         Guardados++;
         return Task.CompletedTask;
     }
+
+    public void DescartarCambios() => Descartes++;
+
+    public Task<ResultadoReinicioDemo> ReiniciarDemoAsync(DateTime ahora, CancellationToken cancelacion)
+    {
+        var resultado = new ResultadoReinicioDemo(Cuentas.Count, Decisiones.Count, Lineas.Count);
+        Cuentas.Clear();
+        Decisiones.Clear();
+        foreach (var linea in Lineas)
+        {
+            linea.ReiniciarSaldo(ahora);
+        }
+
+        return Task.FromResult(resultado);
+    }
+
+    public Task<IReadOnlyList<CompraCredito>> ListarComprasAsync(string clienteId, CancellationToken cancelacion) =>
+        Task.FromResult<IReadOnlyList<CompraCredito>>(Cuentas
+            .Where(c => c.ClienteId == clienteId)
+            .Select(c => new CompraCredito(c.OrdenId, c.NumeroOrden, c.MontoOriginal, c.SaldoPendiente, c.EmitidaEn, c.VenceEn, c.Estado))
+            .ToList());
 
     public Task<ResumenCredito?> ObtenerResumenAsync(string clienteId, CancellationToken cancelacion)
     {

@@ -30,7 +30,8 @@ public sealed record OrdenConfirmadaData(
     string PagoId,
     string? DocumentoFiscalId,
     IReadOnlyList<OrdenConfirmadaLineaData> Lineas,
-    DateTime ConfirmadaEn);
+    DateTime ConfirmadaEn,
+    MedioPago? MedioPago = null);
 
 public sealed record OrdenConfirmadaLineaData(
     string Sku,

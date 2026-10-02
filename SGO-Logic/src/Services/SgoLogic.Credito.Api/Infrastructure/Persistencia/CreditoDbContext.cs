@@ -25,6 +25,10 @@ public sealed class CreditoDbContext : DbContext
 
     public DbSet<LineaCredito> Lineas => Set<LineaCredito>();
 
+    public DbSet<CuentaPorCobrar> CuentasPorCobrar => Set<CuentaPorCobrar>();
+
+    public DbSet<DecisionCredito> Decisiones => Set<DecisionCredito>();
+
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     public DbSet<MensajeProcesado> MensajesProcesados => Set<MensajeProcesado>();

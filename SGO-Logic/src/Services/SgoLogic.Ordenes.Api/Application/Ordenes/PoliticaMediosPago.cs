@@ -33,7 +33,7 @@ public sealed class PoliticaMediosPago
 
     /// <summary>
     /// Indica si el medio de pago se cobra con un token de tarjeta emitido por el
-    /// proveedor (ADR-010). Solo TARJETA: transferencia y billetera no llevan token.
+    /// proveedor (ADR-010). Solo TARJETA: transferencia, billetera y credito no llevan token.
     /// </summary>
     public bool RequiereToken(MedioPago medioPago) => medioPago == MedioPago.TARJETA;
 }

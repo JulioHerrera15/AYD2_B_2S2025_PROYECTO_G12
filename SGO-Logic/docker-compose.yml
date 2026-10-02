@@ -141,6 +141,10 @@ services:
       Outbox__BatchSize: ${OUTBOX_BATCH_SIZE}
       # Validacion de precios de la orden contra el catalogo de Inventario (red interna).
       Inventario__BaseUrl: http://inventario-api:8080
+      # Ordenes a credito: el email del JWT de Auth debe coincidir con el clienteId.
+      Auth__JwtSecret: ${JWT_SECRET}
+      # Segundos maximos esperando la respuesta de Credito antes de rechazar la orden.
+      Credito__TimeoutEvaluacionSegundos: "30"
     ports:
       - "8083:8080"
     depends_on:

@@ -106,6 +106,28 @@ public static class CatalogoMensajesCredito
         }
     }
 
+    /// <summary>La orden se cancelo antes de que pudieramos confirmar el credito.</summary>
+    public static MensajeCredito OrdenCancelada() =>
+        new(
+            "Tu pedido fue cancelado",
+            "Tu pedido se canceló antes de confirmar el crédito. No se realizó ningún cargo.",
+            "Si todavía quieres estos productos, puedes hacer un pedido nuevo.");
+
+    /// <summary>
+    /// Texto unico que viaja en CreditoRechazado.mensajeCliente y que Ordenes muestra
+    /// como detalle del rechazo: que paso y que puede hacer el cliente.
+    /// </summary>
+    public static string MensajeRechazo(MensajeCredito mensaje) => $"{mensaje.Mensaje} {mensaje.Recomendacion}";
+
+    /// <summary>Etiqueta legible del estado de una compra a credito.</summary>
+    public static string EtiquetaEstadoCompra(EstadoCuentaPorCobrar estado) => estado switch
+    {
+        EstadoCuentaPorCobrar.VIGENTE => "Por pagar",
+        EstadoCuentaPorCobrar.PAGADA => "Pagada",
+        EstadoCuentaPorCobrar.VENCIDA => "Vencida",
+        _ => "Anulada"
+    };
+
     public static string NombreFactor(FactorCliente factor) => factor switch
     {
         FactorCliente.PagosATiempo => "Pagos a tiempo",

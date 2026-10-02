@@ -1,6 +1,7 @@
 @{
     ViewData["Title"] = "Tu pedido";
     var confirmada = ViewBag.Confirmada as bool? ?? true;
+    var credito = ViewBag.Credito as bool? ?? false;
     var total = ((decimal)ViewBag.Total).ToString("N2");
 }
 
@@ -18,8 +19,16 @@
         <div class="w-16 h-16 rounded-full bg-surface-container-low text-primary flex items-center justify-center mx-auto mb-6 ambient-shadow">
             <span class="material-symbols-outlined text-3xl animate-spin">progress_activity</span>
         </div>
-        <h1 class="text-3xl font-bold text-primary tracking-tight mb-2">Estamos procesando tu pago</h1>
-        <p class="text-sm text-text-muted mb-6">Tu pedido <span class="font-mono font-semibold text-primary">@ViewBag.NumeroOrden</span> ya quedó registrado. Esto toma solo unos segundos; no cierres esta página.</p>
+        @if (credito)
+        {
+            <h1 class="text-3xl font-bold text-primary tracking-tight mb-2">Estamos confirmando tu crédito. Toma solo unos segundos.</h1>
+            <p class="text-sm text-text-muted mb-6">Tu pedido <span class="font-mono font-semibold text-primary">@ViewBag.NumeroOrden</span> ya quedó registrado; no cierres esta página.</p>
+        }
+        else
+        {
+            <h1 class="text-3xl font-bold text-primary tracking-tight mb-2">Estamos procesando tu pago</h1>
+            <p class="text-sm text-text-muted mb-6">Tu pedido <span class="font-mono font-semibold text-primary">@ViewBag.NumeroOrden</span> ya quedó registrado. Esto toma solo unos segundos; no cierres esta página.</p>
+        }
     </div>
 
     <!-- Cobro exitoso -->
@@ -51,7 +60,7 @@
                     <span class="font-mono text-primary text-[11px]">@ViewBag.OrdenId</span>
                 </div>
                 <div class="flex justify-between">
-                    <span class="text-text-muted">Total Pagado</span>
+                    <span class="text-text-muted">@(credito ? "Total a pagar con crédito" : "Total Pagado")</span>
                     <span class="font-bold text-primary text-sm">Q @total</span>
                 </div>
                 <div class="flex justify-between">
@@ -78,7 +87,7 @@
                     </div>
                     <div class="flex items-center gap-2.5 text-xs text-text-muted">
                         <span class="material-symbols-outlined text-green-600 text-[18px]">check</span>
-                        <span>Cobro procesado a través de PayKlik</span>
+                        <span>@(credito ? "Crédito aprobado: pagas dentro de 30 días desde Mi crédito" : "Cobro procesado a través de PayKlik")</span>
                     </div>
                     <div class="flex items-center gap-2.5 text-xs text-text-muted">
                         <span class="material-symbols-outlined text-secondary text-[18px]">hourglass_top</span>
@@ -138,6 +147,25 @@
             Algunos productos de tu pedido <span class="font-mono font-semibold text-primary">@ViewBag.NumeroOrden</span> ya no tienen existencias.
             No se realizó ningún cobro.
         </p>
+    </div>
+
+    <!-- Credito rechazado (o sin respuesta a tiempo): no hubo cargo -->
+    <div id="resultado-rechazado-credito" class="hidden">
+        <div class="w-16 h-16 rounded-full bg-error-container text-on-error-container flex items-center justify-center mx-auto mb-6 ambient-shadow">
+            <span class="material-symbols-outlined text-3xl">account_balance_wallet</span>
+        </div>
+        <h1 class="text-3xl font-bold text-primary tracking-tight mb-2">No pudimos aprobar tu compra a crédito</h1>
+        <p id="resultado-rechazado-credito-detalle" class="text-sm text-text-muted mb-2"></p>
+        <p class="text-sm font-semibold text-primary mb-6">No se realizó ningún cargo por el pedido <span class="font-mono">@ViewBag.NumeroOrden</span>.</p>
+        <form method="post" action="/Checkout/PagarConTarjeta" class="mb-6">
+            @Html.AntiForgeryToken()
+            <input type="hidden" name="ordenId" value="@ViewBag.OrdenId" />
+            <button type="submit"
+                    class="inline-flex items-center justify-center gap-2 bg-primary text-on-primary px-6 py-3 rounded-full text-sm font-semibold hover:opacity-90 active:scale-95 transition-all shadow-sm">
+                <span class="material-symbols-outlined text-[18px]">credit_card</span>
+                Pagar con tarjeta
+            </button>
+        </form>
     </div>
 
     <!-- Pedido cancelado -->
@@ -200,7 +228,8 @@
             const INTERVALO_MS = 2000;
             // Pagos espera hasta 5 s por PayKlik y reintenta una vez con backoff antes
             // de dejar el pago PENDIENTE; 45 s cubren eso mas la reserva y la proyeccion.
-            const ESPERA_MAXIMA_MS = 45000;
+            // Con credito, Ordenes espera hasta 30 s la respuesta de Credito antes de rechazar.
+            const ESPERA_MAXIMA_MS = @(credito ? 60000 : 45000);
             const inicio = Date.now();
 
             // Estados de EstadoOrden agrupados por el desenlace que ve el cliente.
@@ -208,6 +237,8 @@
                               'EN_PREPARACION', 'EN_TRANSITO', 'LISTA_PARA_RECOGER', 'ENTREGADA',
                               'DEVOLUCION_EN_PROCESO', 'DEVUELTA'];
             const PENDIENTES = ['PAGO_PENDIENTE'];
+            // EVALUACION_CREDITO_SOLICITADA y CREDITO_APROBADO: la ruta de credito sigue en
+            // curso y se mantiene "Estamos confirmando tu credito".
             const RECHAZADOS = ['RECHAZADA'];
             const CANCELADOS = ['CANCELADA', 'CANCELADA_RESERVA_VENCIDA'];
             // CREADA, RESERVA_SOLICITADA, INVENTARIO_RESERVADO y COBRO_SOLICITADO: la saga sigue.
@@ -237,7 +268,15 @@
 
                 if (EXITOSOS.includes(estado)) return mostrar('resultado-exitoso');
                 if (PENDIENTES.includes(estado)) return mostrar('resultado-pendiente');
-                if (RECHAZADOS.includes(estado)) return mostrar('resultado-rechazado');
+                if (RECHAZADOS.includes(estado)) {
+                    // Rechazo de credito: la transicion viene de la evaluacion; el detalle es el texto para el cliente.
+                    if (orden?.estadoAnterior === 'EVALUACION_CREDITO_SOLICITADA') {
+                        document.getElementById('resultado-rechazado-credito-detalle').textContent =
+                            orden.motivoUltimoCambio || 'No pudimos aprobar tu compra a crédito.';
+                        return mostrar('resultado-rechazado-credito');
+                    }
+                    return mostrar('resultado-rechazado');
+                }
                 if (CANCELADOS.includes(estado)) {
                     if (estado === 'CANCELADA_RESERVA_VENCIDA') {
                         document.getElementById('resultado-cancelado-motivo').textContent =
@@ -248,6 +287,7 @@
                     return mostrar('resultado-cancelado');
                 }
 
+                // Saga en curso (incluida la evaluacion de credito): se sigue mostrando el bloque de espera.
                 if (Date.now() - inicio >= ESPERA_MAXIMA_MS) return mostrar('resultado-en-curso');
                 setTimeout(consultar, INTERVALO_MS);
             }

@@ -55,7 +55,23 @@ public sealed record MiCreditoDto(
     string Moneda,
     int PlazoDias,
     DateTime? ActualizadoEn,
-    IReadOnlyList<FactorCreditoDto> Factores);
+    IReadOnlyList<FactorCreditoDto> Factores,
+    IReadOnlyList<CompraCreditoDto> Compras);
+
+/// <summary>
+/// Una compra a credito del cliente. Estado es el codigo (VIGENTE, PAGADA, VENCIDA,
+/// ANULADA); EtiquetaEstado es lo que se muestra. DiasRestantes solo para VIGENTE.
+/// </summary>
+public sealed record CompraCreditoDto(
+    string NumeroOrden,
+    string OrdenId,
+    decimal Monto,
+    decimal SaldoPendiente,
+    DateTime EmitidaEn,
+    DateTime VenceEn,
+    int? DiasRestantes,
+    string Estado,
+    string EtiquetaEstado);
 
 /// <summary>
 /// Resultado de aplicar un historial. Aplicado es false si se ignoro por traer una

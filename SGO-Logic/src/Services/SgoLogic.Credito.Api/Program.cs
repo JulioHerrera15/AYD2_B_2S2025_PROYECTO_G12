@@ -68,7 +68,13 @@ builder.Services.AddScoped<IRepositorioCredito, RepositorioCredito>();
 builder.Services.AddScoped<IConsultasCredito, ConsultasCredito>();
 builder.Services.AddScoped<ServicioPerfilCrediticio>();
 builder.Services.AddScoped<ServicioElegibilidad>();
+builder.Services.AddScoped<ServicioEvaluacionCredito>();
+builder.Services.AddScoped<ServicioAnulacionCargos>();
+builder.Services.AddScoped<ServicioDemoCredito>();
 builder.Services.AddHostedService<HistorialClienteErpConsumidor>();
+
+// Bloque 2: evaluacion de compras a credito dentro de la saga y anulacion de cargos.
+builder.Services.AddHostedService<OrdenesCreditoConsumidor>();
 
 var app = builder.Build();
 

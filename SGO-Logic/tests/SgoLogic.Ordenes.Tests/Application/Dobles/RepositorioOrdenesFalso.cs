@@ -70,4 +70,20 @@ public sealed class RepositorioOrdenesFalso : IRepositorioOrdenes
         lista.Add(devolucion);
         return Task.CompletedTask;
     }
+
+    public Task<IReadOnlyList<string>> ListarEvaluacionesCreditoVencidasAsync(
+        DateTime limite,
+        int maximo,
+        CancellationToken cancelacion)
+    {
+        var resultado = _porId.Values
+            .Where(o => o.Estado == SgoLogic.Contracts.Enumeraciones.EstadoOrden.EVALUACION_CREDITO_SOLICITADA)
+            .Select(o => new { o.Id, UltimoCambio = o.Transiciones.Max(t => t.CambiadoEn) })
+            .Where(fila => fila.UltimoCambio <= limite)
+            .OrderBy(fila => fila.UltimoCambio)
+            .Select(fila => fila.Id)
+            .Take(maximo)
+            .ToList();
+        return Task.FromResult<IReadOnlyList<string>>(resultado);
+    }
 }
