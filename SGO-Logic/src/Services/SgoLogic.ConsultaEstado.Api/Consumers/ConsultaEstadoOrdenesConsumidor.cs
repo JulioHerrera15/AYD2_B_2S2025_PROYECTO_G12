@@ -53,7 +53,9 @@ public sealed class ConsultaEstadoOrdenesConsumidor
         // Eventos de Despacho para enriquecer la vista (HU-020)
         // IMPORTANTE: estos eventos NO escriben el campo Estado — solo DespachoId/GuiaDespacho/EstadoDespacho
         new BindingCola(TopologiaMensajeria.ExchangeEventos, DespachoEstadoActualizado.RoutingKey),
-        new BindingCola(TopologiaMensajeria.ExchangeEventos, PedidoListoParaRecoger.RoutingKey)
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, PedidoListoParaRecoger.RoutingKey),
+        // Origen del despacho: desde que tienda o centro de distribucion sale el pedido
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, OrigenDespachoDeterminado.RoutingKey)
     ];
 
     protected override async Task ManejarAsync(
@@ -74,6 +76,7 @@ public sealed class ConsultaEstadoOrdenesConsumidor
             // Eventos de Despacho — enriquecen la vista sin tocar Estado
             DespachoEstadoActualizado.EventType   => ManejarDespachoEstadoActualizado(evento, contexto, cancelacion),
             PedidoListoParaRecoger.EventType      => ManejarPedidoListoParaRecoger(evento, contexto, cancelacion),
+            OrigenDespachoDeterminado.EventType   => ManejarOrigenDespachoDeterminado(evento, contexto, cancelacion),
             // Eventos que no impactan la vista de estado se ackean sin procesar
             _ => Task.CompletedTask
         });
@@ -89,6 +92,8 @@ public sealed class ConsultaEstadoOrdenesConsumidor
         var data = Deserializar<OrdenCreadaData>(evt.Data);
         if (!ValidarSequence(evt, ctx, out var vista)) return;
 
+        var fechaCreacion = data.CreadaEn != default ? data.CreadaEn : evt.OccurredAt;
+
         if (vista is null)
         {
             vista = new OrdenVista
@@ -103,9 +108,22 @@ public sealed class ConsultaEstadoOrdenesConsumidor
                 Subtotal = data.Subtotal,
                 Impuestos = data.Impuestos,
                 Total = data.Total,
-                CreadaEn = evt.OccurredAt
+                CreadaEn = fechaCreacion
             };
             ctx.OrdenesVista.Add(vista);
+        }
+        else
+        {
+            vista.NumeroOrden = data.NumeroOrden;
+            vista.ClienteId = data.ClienteId;
+            vista.Canal = data.Canal.ToString();
+            vista.MetodoEntrega = data.MetodoEntrega.ToString();
+            vista.UbicacionSolicitadaId = data.UbicacionSolicitadaId;
+            vista.Moneda = data.Moneda.ToString();
+            vista.Subtotal = data.Subtotal;
+            vista.Impuestos = data.Impuestos;
+            vista.Total = data.Total;
+            vista.CreadaEn = fechaCreacion;
         }
 
         // EVENTO 1: escribe Estado
@@ -165,13 +183,19 @@ public sealed class ConsultaEstadoOrdenesConsumidor
     {
         var data = Deserializar<OrdenCanceladaData>(evt.Data);
         var vista = await ObtenerOCrearVista(evt.AggregateId, ctx, ct);
-        if (!AplicarSequence(evt, vista)) return;
+        // OrdenCancelada comparte sequence con el OrdenEstadoCambiado de la misma
+        // transicion. Se descarta solo si es mas viejo que lo ya aplicado, y no
+        // avanza UltimoSequence: si llegara primero, bloquearia al evento
+        // autoritativo que escribe Estado = CANCELADA / RECHAZADA.
+        if (evt.Sequence < vista.UltimoSequence) return;
 
-        // EVENTO 9: enriquece — NO toca Estado
-        vista.MotivoUltimoCambio = data.Motivo.ToString();
+        // EVENTO 9: enriquece — NO toca Estado. El detalle es el motivo legible de
+        // la transicion (el que ve el cliente); el enum queda como respaldo.
+        vista.MotivoUltimoCambio = string.IsNullOrWhiteSpace(data.Detalle)
+            ? data.Motivo.ToString()
+            : data.Detalle;
         vista.RequiereReembolso = data.RequiereReembolso;
         vista.MontoReembolso = data.MontoReembolso;
-        vista.UltimoSequence = evt.Sequence;
         vista.ActualizadaEn = DateTime.UtcNow;
 
         await ctx.SaveChangesAsync(ct);
@@ -292,6 +316,34 @@ public sealed class ConsultaEstadoOrdenesConsumidor
         _logger.LogInformation(
             "Vista orden {OrdenId} enriquecida con estado despacho {EstadoDespacho} (Despacho {DespachoId})",
             data.OrdenId, data.EstadoNuevo, data.DespachoId);
+    }
+
+    /// <summary>
+    /// Evento 1 del contrato Despacho: Despacho resolvio desde que ubicacion sale el
+    /// pedido (la misma donde Inventario desconto las unidades). Enriquece
+    /// UbicacionOrigenId para que el rastreo pueda decir "este envio sale desde la
+    /// tienda X". NUNCA escribe el campo Estado de la orden.
+    /// </summary>
+    private async Task ManejarOrigenDespachoDeterminado(
+        IntegrationEvent<JsonElement> evt,
+        ConsultaEstadoDbContext ctx,
+        CancellationToken ct)
+    {
+        var data = Deserializar<OrigenDespachoDeterminadoData>(evt.Data);
+        var vista = await ObtenerOCrearVista(data.OrdenId, ctx, ct);
+
+        // Mismo criterio que los demas eventos de Despacho: su aggregateId es otro, asi
+        // que no compite por UltimoSequence; el ultimo origen determinado gana.
+        vista.DespachoId = data.DespachoId;
+        vista.UbicacionOrigenId = data.UbicacionOrigenId;
+        vista.ActualizadaEn = DateTime.UtcNow;
+
+        await ctx.SaveChangesAsync(ct);
+        await ActualizarRedis(vista, ct);
+
+        _logger.LogInformation(
+            "Vista orden {OrdenId} enriquecida con origen de despacho {UbicacionOrigenId} ({TipoUbicacion})",
+            data.OrdenId, data.UbicacionOrigenId, data.TipoUbicacionOrigen);
     }
 
     /// <summary>

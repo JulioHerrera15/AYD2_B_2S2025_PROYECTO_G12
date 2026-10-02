@@ -1,6 +1,7 @@
 using System.Net.Http.Headers;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using Microsoft.Extensions.Caching.Memory;
 using SgoLogic.BuildingBlocks.Serialization;
 
 namespace SgoLogic.Web.Services;
@@ -16,26 +17,183 @@ public sealed record AuthResult(
     DateTime ExpiraEn,
     [property: JsonPropertyName("rol")] string? Rol = "CLIENTE");
 
+public sealed record UsuarioDto(
+    Guid Id,
+    string Email,
+    string NombreCompleto,
+    string Rol,
+    bool EmailVerificado,
+    DateTime CreadoEn);
+
 public sealed record ItemCarritoModel(
     [property: JsonPropertyName("sku")] string Sku,
     [property: JsonPropertyName("descripcion")] string Descripcion,
     [property: JsonPropertyName("cantidad")] int Cantidad,
-    [property: JsonPropertyName("precioUnitario")] decimal PrecioUnitario)
+    [property: JsonPropertyName("precioUnitario")] decimal PrecioUnitario,
+    [property: JsonPropertyName("ubicacionId")] string? UbicacionId = null,
+    [property: JsonPropertyName("nombreUbicacion")] string? NombreUbicacion = null,
+    [property: JsonPropertyName("expiraEn")] DateTime? ExpiraEn = null,
+    [property: JsonPropertyName("estadoReserva")] string? EstadoReserva = null,
+    [property: JsonPropertyName("enOtraSucursal")] bool? EnOtraSucursal = null)
 {
     [JsonIgnore]
     public decimal Subtotal => Cantidad * PrecioUnitario;
+
+    /// <summary>La retencion de stock de este item ya vencio segun Inventario.</summary>
+    [JsonIgnore]
+    public bool ReservaVencida => string.Equals(EstadoReserva, "EXPIRADA", StringComparison.OrdinalIgnoreCase);
 }
 
+/// <param name="CarritoIdReserva">
+/// Identificador con el que Inventario retiene el stock del carrito (cart:{usuarioId}
+/// o guest:{sesionId}). Es el que viaja como carritoId al crear la orden.
+/// </param>
 public sealed record CarritoModel(
     [property: JsonPropertyName("clienteOSesionId")] string? ClienteOSesionId = null,
     [property: JsonPropertyName("items")] List<ItemCarritoModel>? Items = null,
-    [property: JsonPropertyName("total")] decimal Total = 0m)
+    [property: JsonPropertyName("total")] decimal Total = 0m,
+    [property: JsonPropertyName("reservaExpiraEn")] DateTime? ReservaExpiraEn = null,
+    [property: JsonPropertyName("carritoId")] string? CarritoIdReserva = null)
 {
     [JsonIgnore]
-    public string CarritoId => ClienteOSesionId ?? string.Empty;
+    public string CarritoId => CarritoIdReserva ?? ClienteOSesionId ?? string.Empty;
+
+    [JsonIgnore]
+    public bool TieneReservasVencidas => Items?.Any(item => item.ReservaVencida) ?? false;
 }
 
-public sealed record AgregarItemModel(string Sku, string Descripcion, int Cantidad, decimal PrecioUnitario);
+public sealed record AgregarItemModel(
+    string Sku,
+    string Descripcion,
+    int Cantidad,
+    decimal PrecioUnitario,
+    string? UbicacionPreferidaId = null);
+
+/// <summary>
+/// Resultado de una operacion sobre el carrito. Si Inventario rechazo por falta de
+/// stock (409) o no respondio (503), <see cref="Mensaje" /> trae el texto para el
+/// cliente y <see cref="SucursalCercana" /> la tienda donde si hay, si Inventario la sugirio.
+/// </summary>
+public sealed record ResultadoCarritoModel(
+    bool Exito,
+    int Status,
+    string? Mensaje = null,
+    SucursalCercanaModel? SucursalCercana = null);
+
+// ── Sucursales (Inventario) ─────────────────────────────────────────────────
+public sealed record SucursalModel(
+    string Id,
+    string Nombre,
+    string TipoUbicacion,
+    string Departamento,
+    string Municipio,
+    double? Latitud,
+    double? Longitud,
+    bool Activa)
+{
+    [JsonIgnore]
+    public bool EsTienda => string.Equals(TipoUbicacion, "TIENDA", StringComparison.OrdinalIgnoreCase);
+}
+
+public sealed record SucursalCercanaModel(
+    [property: JsonPropertyName("sku")] string? Sku,
+    [property: JsonPropertyName("desde")] string? Desde,
+    [property: JsonPropertyName("ubicacionId")] string UbicacionId,
+    [property: JsonPropertyName("nombre")] string Nombre,
+    [property: JsonPropertyName("departamento")] string? Departamento,
+    [property: JsonPropertyName("municipio")] string? Municipio,
+    [property: JsonPropertyName("disponible")] int Disponible,
+    [property: JsonPropertyName("distanciaKm")] double? DistanciaKm);
+
+public sealed record LineaSimulacionModel(string Sku, int Cantidad);
+
+/// <summary>Producto del catalogo de Inventario (GET /api/inventario/productos). Su precio es el que vale.</summary>
+public sealed record ProductoInventarioModel(
+    string Sku,
+    string Nombre,
+    string Categoria,
+    decimal Precio,
+    string Icono,
+    bool Activo,
+    string? Descripcion = null,
+    string? Etiqueta = null);
+
+// ── Tarjetas guardadas (Pagos) ──────────────────────────────────────────────
+/// <summary>
+/// Tarjeta guardada del cliente. Solo metadatos para mostrarla: Pagos nunca expone
+/// la referencia de PayKlik, y la Web no conserva el numero completo ni el CVV.
+/// </summary>
+public sealed record TarjetaGuardadaModel(
+    Guid Id,
+    string Marca,
+    string Ultimos4,
+    int MesExp,
+    int AnioExp,
+    string Titular,
+    string Enmascarado,
+    bool Vencida,
+    DateTime CreadaEn,
+    DateTime? UltimoUsoEn)
+{
+    [JsonIgnore]
+    public string VenceTexto => $"{MesExp:00}/{AnioExp % 100:00}";
+
+    [JsonIgnore]
+    public bool EsAmex => string.Equals(Marca, "AMEX", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>Clase de Font Awesome del logo de la marca.</summary>
+    [JsonIgnore]
+    public string IconoMarca => Marca.ToUpperInvariant() switch
+    {
+        "VISA" => "fa-brands fa-cc-visa",
+        "MASTERCARD" => "fa-brands fa-cc-mastercard",
+        "AMEX" => "fa-brands fa-cc-amex",
+        _ => "fa-solid fa-credit-card"
+    };
+}
+
+/// <summary>
+/// Cuerpo de POST /api/pagos/tokens. Lleva PAN y CVV hacia Pagos (no a PayKlik):
+/// <see cref="ToString" /> no los imprime y la Web nunca lo registra.
+/// </summary>
+public sealed record SolicitudTokenPagoModel(
+    string? Numero,
+    int? MesExp,
+    int? AnioExp,
+    string? Cvv,
+    string? Titular,
+    bool Guardar)
+{
+    public override string ToString() => nameof(SolicitudTokenPagoModel) + " { datos de tarjeta omitidos }";
+}
+
+/// <summary>Token de la boveda de Pagos: lo que el checkout manda como tokenMedioPago.</summary>
+public sealed record TokenPagoModel(string Token, string Marca, string Ultimos4, DateTime ExpiraEn);
+
+/// <summary>Desenlace de tokenizar: el token, o el status con errores por campo (422) o un mensaje.</summary>
+public sealed record ResultadoTokenPagoModel(
+    TokenPagoModel? Token,
+    int Status,
+    Dictionary<string, string>? Errores,
+    string? Mensaje)
+{
+    public static ResultadoTokenPagoModel Falla(int status, string mensaje) => new(null, status, null, mensaje);
+}
+
+public sealed record SimularReservaModel(
+    string? CarritoId,
+    string MetodoEntrega,
+    string? UbicacionPreferidaId,
+    string? UbicacionReferenciaId,
+    List<LineaSimulacionModel> Lineas);
+
+public sealed record SimulacionReservaModel(
+    [property: JsonPropertyName("factible")] bool Factible,
+    [property: JsonPropertyName("ubicacionId")] string? UbicacionId,
+    [property: JsonPropertyName("nombreUbicacion")] string? NombreUbicacion,
+    [property: JsonPropertyName("tipoUbicacion")] string? TipoUbicacion,
+    [property: JsonPropertyName("esOtraSucursal")] bool EsOtraSucursal,
+    [property: JsonPropertyName("motivo")] string? Motivo);
 
 public sealed record IncidenciaModel(Guid Id, string OrdenId, string Descripcion, string Estado, string? Resolucion, DateTime CreadaEn);
 public sealed record OrdenEstadoModel(
@@ -52,7 +210,10 @@ public sealed record OrdenEstadoModel(
     DateTime? ActualizadaEn,
     List<IncidenciaModel>? Incidencias,
     string? MotivoUltimoCambio = null,
-    string? ClienteId = null);
+    string? ClienteId = null,
+    string? UbicacionOrigenId = null,
+    string? SerieDocumentoFiscal = null,
+    string? NumeroDocumentoFiscal = null);
 
 public sealed record CrearIncidenciaModel(string OrdenId, string Descripcion);
 
@@ -77,7 +238,8 @@ public sealed record CrearOrdenModel(
     string? UbicacionSolicitadaId = null,
     string? ReceptorCui = null,
     DireccionEntregaModel? DireccionEntrega = null,
-    string? TokenMedioPago = null);
+    string? TokenMedioPago = null,
+    string? CarritoId = null);
 
 public sealed record OrdenCreadaModel(
     string Id,
@@ -99,7 +261,55 @@ public sealed record OrdenHistorialResumenModel(
     string Estado,
     decimal Total,
     DateTime ActualizadaEn,
-    string? ClienteId = null);
+    string? ClienteId = null,
+    DateTime? CreadaEn = null);
+
+/// <summary>
+/// Documento fiscal (FACTURA) de una orden tal como lo expone Facturacion en
+/// GET /api/facturacion/documentos/{ordenId}. Estado es PENDIENTE, CERTIFICADO o ALERTA.
+/// </summary>
+public sealed record FacturaModel(
+    string Serie,
+    string NumeroDocumento,
+    string Xml,
+    string? NumeroAutorizacion = null,
+    string? Folio = null,
+    DateTime? CertificadoEn = null,
+    string? Estado = null,
+    string? NombreReceptor = null,
+    decimal Subtotal = 0m,
+    decimal Impuestos = 0m,
+    decimal Total = 0m,
+    List<FacturaLineaModel>? Lineas = null,
+    string? CuiReceptor = null,
+    string? Moneda = null)
+{
+    [JsonIgnore]
+    public bool EstaCertificada => string.Equals(Estado, "CERTIFICADO", StringComparison.OrdinalIgnoreCase);
+}
+
+public sealed record FacturaLineaModel(
+    int NumeroLinea,
+    string Sku,
+    string Descripcion,
+    int Cantidad,
+    decimal PrecioUnitario,
+    decimal Impuesto)
+{
+    [JsonIgnore]
+    public decimal Subtotal => Cantidad * PrecioUnitario;
+}
+
+// ── Informe de ventas conciliado (Integracion ERP) ───────────────────────────
+public sealed record InformeVentasModel(DateTime GeneradoEn, int VentasPendientes, decimal MontoPendiente, List<LoteInformeModel> Lotes);
+public sealed record LoteInformeModel(
+    string LoteId, long Secuencia, DateTime FechaGeneracion, string Formato, string Estado,
+    int CantidadRegistros, decimal MontoTotal, int Intentos, int? CodigoHttp, DateTime? EnviadoEn, DateTime? ConfirmadoEn,
+    ConciliacionInformeModel? Conciliacion, List<RegistroInformeModel> Registros);
+public sealed record ConciliacionInformeModel(DateTime Fecha, int RegistrosErp, decimal MontoErp, bool Conciliada, string? Diferencias, DateTime CreadaEn);
+public sealed record RegistroInformeModel(string OrdenId, string Canal, string Tienda, decimal Monto, DateTime Fecha);
+public sealed record EventoAuditoriaModel(string EventId, string EventType, DateTime OccurredAt, string TransactionId, string AggregateId, string Source, DateTime FechaRecepcion);
+public sealed record PaginaAuditoriaModel(List<EventoAuditoriaModel> Items, int Total);
 
 public sealed record HistorialClienteModel(
     string ClienteId,
@@ -107,6 +317,50 @@ public sealed record HistorialClienteModel(
     int Tamano,
     int TotalRegistros,
     List<OrdenHistorialResumenModel> Ordenes);
+
+// ── Modelos de Reintento de Pago ─────────────────────────────────────────────
+public sealed record EnlaceReintentoInfoModel(
+    [property: JsonPropertyName("token")] string Token,
+    [property: JsonPropertyName("ordenId")] string OrdenId,
+    [property: JsonPropertyName("monto")] decimal Monto,
+    [property: JsonPropertyName("moneda")] string Moneda,
+    [property: JsonPropertyName("estaVigente")] bool EstaVigente,
+    [property: JsonPropertyName("usado")] bool Usado,
+    [property: JsonPropertyName("expiraEn")] DateTime ExpiraEn,
+    [property: JsonPropertyName("estadoPago")] string EstadoPago,
+    [property: JsonPropertyName("ultimosCuatro")] string? UltimosCuatro,
+    [property: JsonPropertyName("marca")] string? Marca,
+    [property: JsonPropertyName("clienteId")] string? ClienteId,
+    [property: JsonPropertyName("datosRequeridos")] string? DatosRequeridos = "NINGUNO")
+{
+    /// <summary>El token del ultimo intento vencio: hay que volver a escribir la tarjeta o el CVV.</summary>
+    [JsonIgnore]
+    public bool PideDatos => DatosRequeridos is "CVV" or "TARJETA";
+}
+
+/// <summary>
+/// Desenlace de POST /api/pagos/reintentos/{token}. Si Pagos pide datos de tarjeta
+/// (422 datos_tarjeta_requeridos) <see cref="DatosRequeridos" /> dice cuales; si los
+/// datos enviados no son validos vienen en <see cref="Errores" />.
+/// </summary>
+public sealed record ResultadoReintentoModel(
+    bool Exito,
+    PagoReintentoResultadoModel? Pago,
+    string? Error,
+    string? DatosRequeridos = null,
+    Dictionary<string, string>? Errores = null);
+
+public sealed record IntentoPagoResultadoModel(
+    [property: JsonPropertyName("intentoNumero")] int IntentoNumero,
+    [property: JsonPropertyName("codigoRespuesta")] string? CodigoRespuesta,
+    [property: JsonPropertyName("mensajeRespuesta")] string? MensajeRespuesta);
+
+public sealed record PagoReintentoResultadoModel(
+    [property: JsonPropertyName("ordenId")] string? OrdenId,
+    [property: JsonPropertyName("estado")] string? Estado,
+    [property: JsonPropertyName("monto")] decimal? Monto,
+    [property: JsonPropertyName("moneda")] string? Moneda,
+    [property: JsonPropertyName("intentos")] List<IntentoPagoResultadoModel>? Intentos = null);
 
 // ── Modelos de Despacho ─────────────────────────────────────────────────────
 public sealed record DespachoOrdenModel(
@@ -170,10 +424,21 @@ public sealed record ExistenciaUbicacionDto(
     public int CantidadDisponible => Disponible;
 }
 
+/// <summary>
+/// Cliente tipado hacia el API Gateway. No modifica DefaultRequestHeaders: los
+/// encabezados de la sesion (Authorization y X-Session-Id) los agrega
+/// <see cref="EncabezadosSesionHandler" /> a cada mensaje, asi que es seguro llamarlo
+/// en paralelo (Task.WhenAll).
+/// </summary>
 public sealed class GatewayClient
 {
     private readonly HttpClient _http;
-    private readonly IHttpContextAccessor _httpContextAccessor;
+    private readonly IMemoryCache _cache;
+
+    private const string ClaveCacheSucursales = "inventario:sucursales";
+    private const string ClaveCacheProductos = "inventario:productos";
+    private static readonly TimeSpan VigenciaCacheSucursales = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan VigenciaCacheProductos = TimeSpan.FromMinutes(5);
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -181,37 +446,10 @@ public sealed class GatewayClient
         Converters = { new JsonStringEnumConverter(), new DecimalComoTextoConverter() }
     };
 
-    public GatewayClient(HttpClient http, IHttpContextAccessor httpContextAccessor)
+    public GatewayClient(HttpClient http, IMemoryCache cache)
     {
         _http = http;
-        _httpContextAccessor = httpContextAccessor;
-    }
-
-    private void SetAuthHeader(string? explicitToken = null)
-    {
-        var token = explicitToken
-            ?? _httpContextAccessor.HttpContext?.Request.Cookies["sgo_jwt"]
-            ?? _httpContextAccessor.HttpContext?.Items["sgo_jwt"] as string;
-
-        if (!string.IsNullOrWhiteSpace(token))
-        {
-            _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        }
-        else
-        {
-            _http.DefaultRequestHeaders.Authorization = null;
-        }
-
-        var guestId = _httpContextAccessor.HttpContext?.Request.Cookies["sgo_guest_id"]
-            ?? _httpContextAccessor.HttpContext?.Items["sgo_guest_id"] as string;
-
-        if (_http.DefaultRequestHeaders.Contains("X-Session-Id"))
-            _http.DefaultRequestHeaders.Remove("X-Session-Id");
-
-        if (!string.IsNullOrWhiteSpace(guestId))
-        {
-            _http.DefaultRequestHeaders.Add("X-Session-Id", guestId);
-        }
+        _cache = cache;
     }
 
     private static async Task<string> ParseProblemDetailsOrStringAsync(HttpResponseMessage response, CancellationToken ct)
@@ -336,10 +574,31 @@ public sealed class GatewayClient
         return (false, null, err);
     }
 
+    public async Task<(bool Exito, string? Error)> AsignarRolAsync(string email, string rol, CancellationToken ct = default)
+    {
+        var res = await _http.PostAsJsonAsync("/api/auth/asignar-rol", new { Email = email, Rol = rol }, ct);
+        if (res.IsSuccessStatusCode) return (true, null);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
+        return (false, err);
+    }
+
+    public async Task<UsuarioDto?> ObtenerUsuarioPorEmailAsync(string email, CancellationToken ct = default)
+    {
+        var res = await _http.GetAsync($"/api/auth/usuario?email={Uri.EscapeDataString(email)}", ct);
+        if (!res.IsSuccessStatusCode) return null;
+        return await res.Content.ReadFromJsonAsync<UsuarioDto>(JsonOptions, ct);
+    }
+
+    public async Task<List<UsuarioDto>> ListarUsuariosAsync(CancellationToken ct = default)
+    {
+        var res = await _http.GetAsync("/api/auth/usuarios", ct);
+        if (!res.IsSuccessStatusCode) return new List<UsuarioDto>();
+        return await res.Content.ReadFromJsonAsync<List<UsuarioDto>>(JsonOptions, ct) ?? new List<UsuarioDto>();
+    }
+
     // ── Carrito ────────────────────────────────────────────────────────────────
     public async Task<CarritoModel?> ObtenerCarritoAsync(CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.GetAsync("/api/carrito", ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<CarritoModel>(JsonOptions, ct);
@@ -347,38 +606,146 @@ public sealed class GatewayClient
 
     public async Task<CarritoModel?> ObtenerCarritoPorIdAsync(string sesionOClienteId, CancellationToken ct = default)
     {
+        // El carrito que se consulta es el del identificador indicado, no el de quien
+        // navega: sin el JWT de la sesion, Auth resuelve por X-Session-Id.
         using var req = new HttpRequestMessage(HttpMethod.Get, "/api/carrito");
-        req.Headers.Add("X-Session-Id", sesionOClienteId);
+        req.Headers.Add(EncabezadosSesionHandler.EncabezadoSesion, sesionOClienteId);
+        req.Options.Set(EncabezadosSesionHandler.SinSesion, true);
         var res = await _http.SendAsync(req, ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<CarritoModel>(JsonOptions, ct);
     }
 
-    public async Task<bool> AgregarItemCarritoAsync(AgregarItemModel model, CancellationToken ct = default)
+    public async Task<ResultadoCarritoModel> AgregarItemCarritoAsync(AgregarItemModel model, CancellationToken ct = default)
     {
-        SetAuthHeader();
-        var res = await _http.PostAsJsonAsync("/api/carrito/items", model, ct);
-        return res.IsSuccessStatusCode;
+        return await EjecutarCarritoAsync(() => _http.PostAsJsonAsync("/api/carrito/items", model, ct), ct);
     }
 
-    public async Task<bool> ActualizarCantidadItemCarritoAsync(string sku, int cantidad, CancellationToken ct = default)
+    public async Task<ResultadoCarritoModel> ActualizarCantidadItemCarritoAsync(
+        string sku,
+        int cantidad,
+        string? ubicacionPreferidaId = null,
+        CancellationToken ct = default)
     {
-        SetAuthHeader();
-        var res = await _http.PutAsJsonAsync($"/api/carrito/items/{sku}", new { Cantidad = cantidad }, ct);
-        return res.IsSuccessStatusCode;
+        return await EjecutarCarritoAsync(
+            () => _http.PutAsJsonAsync(
+                $"/api/carrito/items/{Uri.EscapeDataString(sku)}",
+                new { Cantidad = cantidad, UbicacionPreferidaId = ubicacionPreferidaId },
+                ct),
+            ct);
     }
 
-    public async Task<bool> EliminarItemCarritoAsync(string sku, CancellationToken ct = default)
+    public async Task<ResultadoCarritoModel> EliminarItemCarritoAsync(string sku, CancellationToken ct = default)
     {
-        SetAuthHeader();
-        var res = await _http.DeleteAsync($"/api/carrito/items/{sku}", ct);
-        return res.IsSuccessStatusCode;
+        return await EjecutarCarritoAsync(() => _http.DeleteAsync($"/api/carrito/items/{Uri.EscapeDataString(sku)}", ct), ct);
     }
 
+    /// <summary>Pide a Auth que reactive o extienda la retencion de stock de todo el carrito.</summary>
+    public async Task<(ResultadoCarritoModel Resultado, CarritoModel? Carrito)> RenovarReservaCarritoAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var res = await _http.PostAsync("/api/carrito/reserva/renovar", null, ct);
+            if (res.IsSuccessStatusCode)
+            {
+                var carrito = await res.Content.ReadFromJsonAsync<CarritoModel>(JsonOptions, ct);
+                return (new ResultadoCarritoModel(true, (int)res.StatusCode), carrito);
+            }
+
+            return (await LeerRechazoCarritoAsync(res, ct), null);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            return (SinRespuestaCarrito(), null);
+        }
+    }
+
+    private static async Task<ResultadoCarritoModel> EjecutarCarritoAsync(Func<Task<HttpResponseMessage>> llamada, CancellationToken ct)
+    {
+        try
+        {
+            var res = await llamada();
+            return res.IsSuccessStatusCode
+                ? new ResultadoCarritoModel(true, (int)res.StatusCode)
+                : await LeerRechazoCarritoAsync(res, ct);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            return SinRespuestaCarrito();
+        }
+    }
+
+    private static ResultadoCarritoModel SinRespuestaCarrito() =>
+        new(false, StatusCodes.Status503ServiceUnavailable,
+            "No pudimos comunicarnos con el servicio de carrito. Intenta de nuevo en unos momentos.");
+
+    /// <summary>
+    /// Lee el cuerpo de un rechazo del carrito. El 409 de falta de stock viaja tal
+    /// cual lo arma Inventario: {sku, disponible, mensaje, sucursalCercana?}.
+    /// </summary>
+    private static async Task<ResultadoCarritoModel> LeerRechazoCarritoAsync(HttpResponseMessage res, CancellationToken ct)
+    {
+        var status = (int)res.StatusCode;
+        var raw = await res.Content.ReadAsStringAsync(ct);
+
+        string? mensaje = null;
+        SucursalCercanaModel? cercana = null;
+
+        try
+        {
+            if (!string.IsNullOrWhiteSpace(raw) && raw.TrimStart().StartsWith('{'))
+            {
+                using var doc = JsonDocument.Parse(raw);
+                var raiz = doc.RootElement;
+
+                if (raiz.TryGetProperty("mensaje", out var mensajeProp) && mensajeProp.ValueKind == JsonValueKind.String)
+                {
+                    mensaje = mensajeProp.GetString();
+                }
+                else if (raiz.TryGetProperty("detail", out var detalleProp) && detalleProp.ValueKind == JsonValueKind.String)
+                {
+                    mensaje = detalleProp.GetString();
+                }
+
+                if (raiz.TryGetProperty("sucursalCercana", out var cercanaProp) && cercanaProp.ValueKind == JsonValueKind.Object)
+                {
+                    cercana = cercanaProp.Deserialize<SucursalCercanaModel>(JsonOptions);
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Cuerpo no JSON: se usa el mensaje generico de abajo.
+        }
+
+        mensaje ??= status switch
+        {
+            StatusCodes.Status409Conflict => "No hay unidades suficientes de este producto.",
+            StatusCodes.Status503ServiceUnavailable => "El inventario no esta disponible en este momento. Tu carrito no se modifico.",
+            _ => $"No se pudo actualizar el carrito (codigo {status})."
+        };
+
+        return new ResultadoCarritoModel(false, status, mensaje, cercana);
+    }
+
+    /// <summary>
+    /// Asocia el carrito de invitado a la cuenta. <paramref name="token" /> es el JWT
+    /// recien emitido en el login, cuando la cookie todavia no viaja en la peticion;
+    /// sin el, el handler usa el de la sesion.
+    /// </summary>
     public async Task<bool> AsociarCarritoAsync(string guestSessionId, string? token = null, CancellationToken ct = default)
     {
-        SetAuthHeader(token);
-        var res = await _http.PostAsJsonAsync("/api/carrito/asociar", new { SesionId = guestSessionId }, ct);
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/carrito/asociar")
+        {
+            Content = JsonContent.Create(new { SesionId = guestSessionId })
+        };
+
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        var res = await _http.SendAsync(req, ct);
         return res.IsSuccessStatusCode;
     }
 
@@ -397,6 +764,38 @@ public sealed class GatewayClient
         return await res.Content.ReadFromJsonAsync<HistorialClienteModel>(JsonOptions, ct);
     }
 
+    // ── Facturacion ────────────────────────────────────────────────────────────
+    public async Task<FacturaModel?> ObtenerFacturaAsync(string ordenId, CancellationToken ct = default)
+    {
+        var res = await _http.GetAsync($"/api/facturacion/documentos/{ordenId}", ct);
+        if (!res.IsSuccessStatusCode) return null;
+        return await res.Content.ReadFromJsonAsync<FacturaModel>(JsonOptions, ct);
+    }
+
+    // ── Informe de ventas / ERP ────────────────────────────────────────────────
+    public async Task<InformeVentasModel?> ObtenerInformeVentasAsync(DateTime? desde, DateTime? hasta, CancellationToken ct = default)
+    {
+        var filtros = new List<string>();
+        if (desde.HasValue) filtros.Add($"desde={desde:yyyy-MM-dd}");
+        if (hasta.HasValue) filtros.Add($"hasta={hasta:yyyy-MM-dd}");
+        var res = await _http.GetAsync($"/api/erp/informe?{string.Join('&', filtros)}", ct);
+        if (!res.IsSuccessStatusCode) return null;
+        return await res.Content.ReadFromJsonAsync<InformeVentasModel>(JsonOptions, ct);
+    }
+
+    public async Task<(bool Exito, string? Error)> EjecutarConciliacionAsync(CancellationToken ct = default)
+    {
+        var res = await _http.PostAsync("/api/erp/conciliar", null, ct);
+        return res.IsSuccessStatusCode ? (true, null) : (false, await ParseProblemDetailsOrStringAsync(res, ct));
+    }
+
+    public async Task<List<EventoAuditoriaModel>> ObtenerAuditoriaAgregadoAsync(string aggregateId, CancellationToken ct = default)
+    {
+        var res = await _http.GetAsync($"/api/auditoria/agregados/{Uri.EscapeDataString(aggregateId)}?tamano=50", ct);
+        if (!res.IsSuccessStatusCode) return new();
+        return (await res.Content.ReadFromJsonAsync<PaginaAuditoriaModel>(JsonOptions, ct))?.Items ?? new();
+    }
+
     // ── Incidencias ────────────────────────────────────────────────────────────
     public async Task<(bool Exito, IncidenciaModel? Incidencia, string? Error)> CrearIncidenciaAsync(CrearIncidenciaModel model, CancellationToken ct = default)
     {
@@ -413,7 +812,6 @@ public sealed class GatewayClient
     // ── Órdenes y Checkout ─────────────────────────────────────────────────────
     public async Task<(bool Exito, OrdenCreadaModel? Orden, string? Error)> CrearOrdenAsync(CrearOrdenModel model, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.PostAsJsonAsync("/api/ordenes", model, JsonOptions, ct);
         if (res.IsSuccessStatusCode)
         {
@@ -426,7 +824,6 @@ public sealed class GatewayClient
 
     public async Task<(bool Exito, OrdenCreadaModel? Orden, string? Error)> ConfirmarOrdenAsync(string ordenId, string? motivo = null, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.PostAsJsonAsync($"/api/ordenes/{ordenId}/confirmar", new { Motivo = motivo }, JsonOptions, ct);
         if (res.IsSuccessStatusCode)
         {
@@ -437,6 +834,23 @@ public sealed class GatewayClient
         return (false, null, err);
     }
 
+    /// <summary>
+    /// Cancelacion de la orden por su cliente via POST /api/ordenes/{id}/cancelar.
+    /// Ordenes valida que <paramref name="clienteId" /> sea el dueno (403) y que el
+    /// estado lo admita (409); el detalle del ProblemDetails vuelve como error.
+    /// </summary>
+    public async Task<(bool Exito, string? Error)> CancelarOrdenAsync(string ordenId, string clienteId, string? motivo = null, CancellationToken ct = default)
+    {
+        var res = await _http.PostAsJsonAsync(
+            $"/api/ordenes/{Uri.EscapeDataString(ordenId)}/cancelar",
+            new { ClienteId = clienteId, Motivo = motivo },
+            JsonOptions,
+            ct);
+        if (res.IsSuccessStatusCode) return (true, null);
+        var err = await ParseProblemDetailsOrStringAsync(res, ct);
+        return (false, err);
+    }
+
     // ── Despacho ────────────────────────────────────────────────────────────────
     /// <summary>
     /// Consulta el estado real de despacho de una orden via GET /api/despacho/{ordenId}.
@@ -444,7 +858,6 @@ public sealed class GatewayClient
     /// </summary>
     public async Task<DespachoOrdenModel?> ObtenerDespachoOrdenAsync(string ordenId, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.GetAsync($"/api/despacho/{ordenId}", ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<DespachoOrdenModel>(JsonOptions, ct);
@@ -452,7 +865,6 @@ public sealed class GatewayClient
 
     public async Task<List<DespachoPreparacionDto>?> ObtenerColaPreparacionAsync(string ubicacionId, string? estado = null, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var url = $"/api/despacho/ubicaciones/{ubicacionId}/preparacion" + (!string.IsNullOrWhiteSpace(estado) ? $"?estado={estado}" : "");
         var res = await _http.GetAsync(url, ct);
         if (!res.IsSuccessStatusCode) return null;
@@ -461,7 +873,6 @@ public sealed class GatewayClient
 
     public async Task<(bool Exito, string? Error)> ActualizarEstadoDespachoAsync(string ordenId, string estado, string? detalle = null, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var payload = new { Estado = estado, Detalle = detalle, OcurridoEn = DateTime.UtcNow };
         var res = await _http.PostAsJsonAsync($"/api/despacho/{ordenId}/estados", payload, JsonOptions, ct);
         if (res.IsSuccessStatusCode) return (true, null);
@@ -471,7 +882,6 @@ public sealed class GatewayClient
 
     public async Task<(bool Exito, string? Error)> ReasignarMetodoEntregaDespachoAsync(string ordenId, string nuevoMetodo, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.PutAsJsonAsync($"/api/despacho/{ordenId}/metodo-entrega", new { MetodoEntrega = nuevoMetodo }, JsonOptions, ct);
         if (res.IsSuccessStatusCode) return (true, null);
         var err = await ParseProblemDetailsOrStringAsync(res, ct);
@@ -481,15 +891,220 @@ public sealed class GatewayClient
     // ── Inventario ─────────────────────────────────────────────────────────────
     public async Task<List<ExistenciaSkuDto>?> ObtenerExistenciasSkuAsync(string sku, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.GetAsync($"/api/inventario/existencias/{sku}", ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<List<ExistenciaSkuDto>>(JsonOptions, ct);
     }
 
+    // ── Tarjetas guardadas y tokenizacion ──────────────────────────────────────
+    // Pagos toma el cliente del JWT de la sesion (EncabezadosSesionHandler), nunca de
+    // un parametro. Estas llamadas no registran nada: el PAN y el CVV solo viajan en
+    // el cuerpo hacia Pagos, que los cifra en su boveda transitoria.
+
+    /// <summary>Tarjetas activas del cliente; lista vacia si no hay sesion o Pagos no responde.</summary>
+    public async Task<IReadOnlyList<TarjetaGuardadaModel>> ListarTarjetasAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var res = await _http.GetAsync("/api/pagos/tarjetas", ct);
+            if (!res.IsSuccessStatusCode) return Array.Empty<TarjetaGuardadaModel>();
+            return await res.Content.ReadFromJsonAsync<List<TarjetaGuardadaModel>>(JsonOptions, ct)
+                ?? new List<TarjetaGuardadaModel>();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            return Array.Empty<TarjetaGuardadaModel>();
+        }
+    }
+
+    public async Task<(bool Exito, string? Error)> EliminarTarjetaAsync(Guid id, CancellationToken ct = default)
+    {
+        try
+        {
+            var res = await _http.DeleteAsync($"/api/pagos/tarjetas/{id}", ct);
+            return res.IsSuccessStatusCode ? (true, null) : (false, await ParseProblemDetailsOrStringAsync(res, ct));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+        {
+            return (false, "No pudimos comunicarnos con el servicio de pagos.");
+        }
+    }
+
+    /// <summary>
+    /// Tokeniza una tarjeta nueva en la boveda de Pagos (POST /api/pagos/tokens). Pagos
+    /// la valida (autoridad) y, con sesion y guardar=true, la guarda al cobrar. 201 con
+    /// token; 422 con errores por campo; cualquier otra cosa, mensaje generico. El
+    /// cuerpo lleva el PAN y el CVV: no se registra.
+    /// </summary>
+    public Task<ResultadoTokenPagoModel> TokenizarTarjetaAsync(SolicitudTokenPagoModel solicitud, CancellationToken ct = default) =>
+        EnviarTokenizacionAsync(() => _http.PostAsJsonAsync("/api/pagos/tokens", solicitud, ct), ct);
+
+    /// <summary>
+    /// Token de la boveda de Pagos para pagar con una tarjeta guardada, con el CVV que
+    /// escribio el cliente. 201 con token; 404 si no es suya; 422 con errores por campo.
+    /// </summary>
+    public Task<ResultadoTokenPagoModel> ObtenerTokenTarjetaAsync(Guid id, string cvv, CancellationToken ct = default) =>
+        EnviarTokenizacionAsync(() => _http.PostAsJsonAsync($"/api/pagos/tarjetas/{id}/token", new { cvv }, ct), ct);
+
+    private static async Task<ResultadoTokenPagoModel> EnviarTokenizacionAsync(
+        Func<Task<HttpResponseMessage>> llamada,
+        CancellationToken ct)
+    {
+        try
+        {
+            using var res = await llamada();
+            if (res.IsSuccessStatusCode)
+            {
+                var token = await res.Content.ReadFromJsonAsync<TokenPagoModel>(JsonOptions, ct);
+                return token is null
+                    ? ResultadoTokenPagoModel.Falla(StatusCodes.Status502BadGateway, "Respuesta vacia del servicio de pagos.")
+                    : new ResultadoTokenPagoModel(token, (int)res.StatusCode, null, null);
+            }
+
+            var status = (int)res.StatusCode;
+            if (status == StatusCodes.Status422UnprocessableEntity)
+            {
+                var errores = await LeerErroresPorCampoAsync(res, ct);
+                return new ResultadoTokenPagoModel(null, status, errores, "Revisa los datos de la tarjeta.");
+            }
+
+            return ResultadoTokenPagoModel.Falla(status, await ParseProblemDetailsOrStringAsync(res, ct));
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            return ResultadoTokenPagoModel.Falla(
+                StatusCodes.Status503ServiceUnavailable, "No pudimos comunicarnos con el servicio de pagos.");
+        }
+    }
+
+    /// <summary>Lee {errores:{campo:mensaje}} de un 422; diccionario vacio si el cuerpo no lo trae.</summary>
+    private static async Task<Dictionary<string, string>> LeerErroresPorCampoAsync(HttpResponseMessage res, CancellationToken ct)
+    {
+        var errores = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var documento = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
+            if (documento.RootElement.TryGetProperty("errores", out var porCampo) && porCampo.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var campo in porCampo.EnumerateObject())
+                {
+                    if (campo.Value.ValueKind == JsonValueKind.String)
+                    {
+                        errores[campo.Name] = campo.Value.GetString() ?? string.Empty;
+                    }
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Cuerpo no JSON: sin errores por campo.
+        }
+
+        return errores;
+    }
+
+    /// <summary>
+    /// Catalogo de sucursales activas de Inventario (GET /api/inventario/sucursales).
+    /// Se guarda 5 minutos en memoria de la Web: cambia rara vez y lo piden el
+    /// catalogo, el checkout y el rastreo en cada carga. Si Inventario no responde
+    /// devuelve una lista vacia y no la cachea.
+    /// </summary>
+    public async Task<IReadOnlyList<SucursalModel>> ObtenerSucursalesAsync(CancellationToken ct = default)
+    {
+        if (_cache.TryGetValue(ClaveCacheSucursales, out IReadOnlyList<SucursalModel>? enCache) && enCache is not null)
+        {
+            return enCache;
+        }
+
+        try
+        {
+            var res = await _http.GetAsync("/api/inventario/sucursales", ct);
+            if (!res.IsSuccessStatusCode)
+            {
+                return Array.Empty<SucursalModel>();
+            }
+
+            var sucursales = await res.Content.ReadFromJsonAsync<List<SucursalModel>>(JsonOptions, ct)
+                ?? new List<SucursalModel>();
+
+            _cache.Set(ClaveCacheSucursales, (IReadOnlyList<SucursalModel>)sucursales, VigenciaCacheSucursales);
+            return sucursales;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            return Array.Empty<SucursalModel>();
+        }
+    }
+
+    /// <summary>
+    /// Catalogo de productos activos de Inventario (GET /api/inventario/productos), la
+    /// fuente del precio. Se guarda 5 minutos en memoria de la Web. Si Inventario no
+    /// responde devuelve una lista vacia y no la cachea.
+    /// </summary>
+    public async Task<IReadOnlyList<ProductoInventarioModel>> ObtenerProductosAsync(CancellationToken ct = default)
+    {
+        if (_cache.TryGetValue(ClaveCacheProductos, out IReadOnlyList<ProductoInventarioModel>? enCache) && enCache is not null)
+        {
+            return enCache;
+        }
+
+        try
+        {
+            var res = await _http.GetAsync("/api/inventario/productos", ct);
+            if (!res.IsSuccessStatusCode)
+            {
+                return Array.Empty<ProductoInventarioModel>();
+            }
+
+            var productos = await res.Content.ReadFromJsonAsync<List<ProductoInventarioModel>>(JsonOptions, ct)
+                ?? new List<ProductoInventarioModel>();
+
+            _cache.Set(ClaveCacheProductos, (IReadOnlyList<ProductoInventarioModel>)productos, VigenciaCacheProductos);
+            return productos;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            return Array.Empty<ProductoInventarioModel>();
+        }
+    }
+
+    /// <summary>Tienda mas cercana a <paramref name="desde" /> con stock del SKU, o null si ninguna tiene (404).</summary>
+    public async Task<SucursalCercanaModel?> ObtenerSucursalCercanaAsync(string sku, string? desde, int cantidad = 1, CancellationToken ct = default)
+    {
+        try
+        {
+            var url = $"/api/inventario/existencias/{Uri.EscapeDataString(sku)}/cercana?cantidad={cantidad}"
+                      + (string.IsNullOrWhiteSpace(desde) ? string.Empty : $"&desde={Uri.EscapeDataString(desde)}");
+            var res = await _http.GetAsync(url, ct);
+            if (!res.IsSuccessStatusCode) return null;
+            return await res.Content.ReadFromJsonAsync<SucursalCercanaModel>(JsonOptions, ct);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Simula sin reservar desde donde saldria el pedido (POST /api/inventario/reservas/simular).
+    /// Null si Inventario no respondio.
+    /// </summary>
+    public async Task<SimulacionReservaModel?> SimularReservaAsync(SimularReservaModel model, CancellationToken ct = default)
+    {
+        try
+        {
+            var res = await _http.PostAsJsonAsync("/api/inventario/reservas/simular", model, ct);
+            if (!res.IsSuccessStatusCode) return null;
+            return await res.Content.ReadFromJsonAsync<SimulacionReservaModel>(JsonOptions, ct);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            return null;
+        }
+    }
+
     public async Task<List<UbicacionResumenDto>?> ObtenerUbicacionesInventarioAsync(CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.GetAsync("/api/inventario/ubicaciones", ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<List<UbicacionResumenDto>>(JsonOptions, ct);
@@ -497,7 +1112,6 @@ public sealed class GatewayClient
 
     public async Task<List<ExistenciaUbicacionDto>?> ObtenerExistenciasPorUbicacionAsync(string ubicacionId, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.GetAsync($"/api/inventario/ubicaciones/{ubicacionId}/existencias", ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<List<ExistenciaUbicacionDto>>(JsonOptions, ct);
@@ -506,7 +1120,6 @@ public sealed class GatewayClient
     // ── Incidencias (Listar / Resolver) ────────────────────────────────────────
     public async Task<List<IncidenciaModel>?> ListarIncidenciasAsync(string? ordenId = null, string? estado = null, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var query = new List<string>();
         if (!string.IsNullOrWhiteSpace(ordenId)) query.Add($"ordenId={Uri.EscapeDataString(ordenId)}");
         if (!string.IsNullOrWhiteSpace(estado)) query.Add($"estado={Uri.EscapeDataString(estado)}");
@@ -519,11 +1132,142 @@ public sealed class GatewayClient
 
     public async Task<(bool Exito, string? Error)> ActualizarIncidenciaAsync(Guid id, string? descripcion, string? estado, string? resolucion, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var payload = new { Descripcion = descripcion, Estado = estado, Resolucion = resolucion };
         var res = await _http.PutAsJsonAsync($"/api/incidencias/{id}", payload, JsonOptions, ct);
         if (res.IsSuccessStatusCode) return (true, null);
         var err = await ParseProblemDetailsOrStringAsync(res, ct);
         return (false, err);
     }
+
+    public async Task<(bool Exito, string? MensajeId, string? Error)> EnviarSmsAsync(string telefono, string mensaje, CancellationToken ct = default)
+    {
+        try
+        {
+            var payload = new { Destinatario = telefono, Asunto = "MegaStore Comprobante", Cuerpo = mensaje };
+            var res = await _http.PostAsJsonAsync("/api/mensajes/sms", payload, JsonOptions, ct);
+            if (res.IsSuccessStatusCode)
+            {
+                var doc = await res.Content.ReadFromJsonAsync<System.Text.Json.JsonElement>(cancellationToken: ct);
+                var id = doc.TryGetProperty("mensajeId", out var idProp) ? idProp.GetString() : null;
+                return (true, id, null);
+            }
+            var err = await ParseProblemDetailsOrStringAsync(res, ct);
+            return (false, null, err);
+        }
+        catch (Exception ex)
+        {
+            return (false, null, ex.Message);
+        }
+    }
+
+    public async Task<(bool Exito, EnlaceReintentoInfoModel? Info, string? Error)> ObtenerReintentoPagoAsync(string token, CancellationToken ct = default)
+    {
+        try
+        {
+            var res = await _http.GetAsync($"/api/pagos/reintentos/{Uri.EscapeDataString(token)}", ct);
+            if (res.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return (false, null, "El enlace de pago no existe o no fue encontrado.");
+            }
+
+            if (!res.IsSuccessStatusCode)
+            {
+                var err = await ParseProblemDetailsOrStringAsync(res, ct);
+                return (false, null, err);
+            }
+
+            var info = await res.Content.ReadFromJsonAsync<EnlaceReintentoInfoModel>(JsonOptions, ct);
+            return (true, info, null);
+        }
+        catch (Exception ex)
+        {
+            return (false, null, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Ejecuta el reintento. Sin <paramref name="tokenMedioPago" /> ni <paramref name="cvv" />
+    /// Pagos reusa el token del ultimo intento; si vencio responde 422 con los datos
+    /// que hay que volver a pedir (<see cref="ResultadoReintentoModel.DatosRequeridos" />).
+    /// </summary>
+    public async Task<ResultadoReintentoModel> EjecutarReintentoPagoAsync(
+        string token,
+        string? tokenMedioPago = null,
+        string? cvv = null,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var url = $"/api/pagos/reintentos/{Uri.EscapeDataString(token)}";
+            using var res = string.IsNullOrWhiteSpace(tokenMedioPago) && string.IsNullOrWhiteSpace(cvv)
+                ? await _http.PostAsync(url, null, ct)
+                : await _http.PostAsJsonAsync(url, new { tokenMedioPago, cvv }, ct);
+
+            if (res.StatusCode == System.Net.HttpStatusCode.Gone)
+            {
+                return new ResultadoReintentoModel(false, null, "El enlace de reintento ya se utilizó o ha expirado.");
+            }
+
+            if (res.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return new ResultadoReintentoModel(false, null, "El enlace de reintento no fue encontrado.");
+            }
+
+            if (res.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity)
+            {
+                var cuerpo = await res.Content.ReadAsStringAsync(ct);
+                string? datosRequeridos = null;
+                string? detalle = null;
+                var errores = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+                try
+                {
+                    using var documento = JsonDocument.Parse(cuerpo);
+                    var raiz = documento.RootElement;
+                    if (raiz.TryGetProperty("datosRequeridos", out var requeridos) && requeridos.ValueKind == JsonValueKind.String)
+                    {
+                        datosRequeridos = requeridos.GetString();
+                    }
+
+                    if (raiz.TryGetProperty("detail", out var detalleProp) && detalleProp.ValueKind == JsonValueKind.String)
+                    {
+                        detalle = detalleProp.GetString();
+                    }
+
+                    if (raiz.TryGetProperty("errores", out var porCampo) && porCampo.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var campo in porCampo.EnumerateObject())
+                        {
+                            errores[campo.Name] = campo.Value.GetString() ?? string.Empty;
+                        }
+                    }
+                }
+                catch (JsonException)
+                {
+                    // Cuerpo no JSON: mensaje generico.
+                }
+
+                return new ResultadoReintentoModel(
+                    false,
+                    null,
+                    detalle ?? "Revisa los datos de tu tarjeta.",
+                    datosRequeridos,
+                    errores.Count > 0 ? errores : null);
+            }
+
+            if (!res.IsSuccessStatusCode)
+            {
+                var err = await ParseProblemDetailsOrStringAsync(res, ct);
+                return new ResultadoReintentoModel(false, null, err);
+            }
+
+            var pago = await res.Content.ReadFromJsonAsync<PagoReintentoResultadoModel>(JsonOptions, ct);
+            return new ResultadoReintentoModel(true, pago, null);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            return new ResultadoReintentoModel(false, null, "No pudimos comunicarnos con el servicio de pagos.");
+        }
+    }
 }
+

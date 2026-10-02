@@ -83,7 +83,9 @@ public sealed class ManejadorCertificacionSatFallidaTests
             outbox,
             unidad,
             new GeneradorCorrelativoOrdenFalso(),
-            new PoliticaMediosPago(MediosPago));
+            new PoliticaMediosPago(MediosPago),
+            new ClienteCarritoFalso(),
+            new CatalogoProductosFalso());
         return (servicio, ordenes, outbox, unidad);
     }
 

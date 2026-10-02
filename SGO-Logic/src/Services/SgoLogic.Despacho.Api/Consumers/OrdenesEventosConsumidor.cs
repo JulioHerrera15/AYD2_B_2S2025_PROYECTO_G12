@@ -153,7 +153,8 @@ public sealed class OrdenesEventosConsumidor : BackgroundService
                         datos.UbicacionOrigenSugerida?.Tipo,
                         datos.UbicacionRecogidaId,
                         FormatearDireccion(datos.DireccionEntrega),
-                        datos.Lineas.Select(l => new LineaDespachoDto(l.Sku, l.Descripcion, l.Cantidad)).ToList()),
+                        datos.Lineas.Select(l => new LineaDespachoDto(l.Sku, l.Descripcion, l.Cantidad)).ToList(),
+                        datos.ClienteId),
                     cancelacion);
 
                 return true;

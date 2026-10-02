@@ -15,6 +15,10 @@ public static class DespachoSolicitado
 }
 
 /// <summary>Contenido de data del evento DespachoSolicitado (seccion 7.7 del contrato).</summary>
+/// <param name="ClienteId">
+/// Cliente de la orden (su email). Nullable y al final: Despacho lo guarda para
+/// incluirlo en PedidoListoParaRecoger y que Notificaciones avise al cliente.
+/// </param>
 public sealed record DespachoSolicitadoData(
     string OrdenId,
     string ReservaId,
@@ -23,7 +27,8 @@ public sealed record DespachoSolicitadoData(
     string? UbicacionRecogidaId,
     DireccionEntregaData? DireccionEntrega,
     IReadOnlyList<DespachoLineaData> Lineas,
-    DateTime SolicitadoEn);
+    DateTime SolicitadoEn,
+    string? ClienteId = null);
 
 public sealed record UbicacionOrigenSugeridaData(string Id, TipoUbicacion Tipo);
 

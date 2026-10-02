@@ -73,7 +73,9 @@ public sealed class ManejadorEventosPagosTests
             outbox,
             unidad,
             new GeneradorCorrelativoOrdenFalso(),
-            new PoliticaMediosPago(MediosPago));
+            new PoliticaMediosPago(MediosPago),
+            new ClienteCarritoFalso(),
+            new CatalogoProductosFalso());
         var manejador = new ManejadorEventosPagos(
             registro,
             servicio,
@@ -170,7 +172,9 @@ public sealed class ManejadorEventosPagosTests
             outboxForzada,
             unidadForzada,
             new GeneradorCorrelativoOrdenFalso(),
-            new PoliticaMediosPago(MediosPago));
+            new PoliticaMediosPago(MediosPago),
+            new ClienteCarritoFalso(),
+            new CatalogoProductosFalso());
 
         await servicio.AplicarTransicionAsync(
             ordenForzada.Id,

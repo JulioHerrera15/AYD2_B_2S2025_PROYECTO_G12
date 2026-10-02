@@ -1,168 +1,199 @@
-using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.DependencyInjection;
-using SgoLogic.Contracts;
+using Microsoft.Extensions.Logging.Abstractions;
 using SgoLogic.Contracts.Eventos.Despacho;
 using SgoLogic.Notificaciones.Api.Application;
-using SgoLogic.Notificaciones.Api.Infrastructure;
+using SgoLogic.Notificaciones.Api.Domain;
 using Xunit;
 
 namespace SgoLogic.Notificaciones.Tests.Consumers;
 
 /// <summary>
-/// Pruebas del consumidor NotificacionesDespachoConsumidor.
-///
-/// Verifica el aislamiento de fallos del proveedor externo (SMS/Push) cuando
-/// se recibe PedidoListoParaRecoger, y que la cola de despacho es independiente
-/// de la cola de ordenes (topologia separada).
+/// B3: el aviso de pedido listo para recoger va al email del cliente (ClienteId del
+/// evento), nunca al OrdenId; un envio fallido se guarda como pendiente en lugar de
+/// perderse, y el reintento exitoso lo marca enviado.
 /// </summary>
 public sealed class NotificacionesDespachoConsumidorTests
 {
-    // ── Doble del cliente de mensajeria ───────────────────────────────────────
+    private static readonly DateTime Ahora = new(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
 
-    private sealed class ClienteMensajeriaSimulado : IMockMensajeriaClient
+    // ── Dobles hechos a mano ──────────────────────────────────────────────────
+
+    private sealed class MensajeriaSimulada : IMockMensajeriaClient
     {
-        private readonly bool _forzarFalla;
-        private readonly List<(string ClienteId, string Estado, string OrdenId)> _llamadas = new();
+        public bool Falla { get; set; }
 
-        public IReadOnlyList<(string ClienteId, string Estado, string OrdenId)> Llamadas => _llamadas;
+        public List<(string Destinatario, string Asunto, string Cuerpo)> Enviados { get; } = new();
 
-        public ClienteMensajeriaSimulado(bool forzarFalla = false)
-        {
-            _forzarFalla = forzarFalla;
-        }
+        public int Intentos { get; private set; }
 
-        public Task EnviarAsync(string clienteId, string estadoOrden, string ordenId, CancellationToken ct = default)
-        {
-            _llamadas.Add((clienteId, estadoOrden, ordenId));
-            if (_forzarFalla)
-                throw new HttpRequestException("Proveedor externo no disponible (simulado)");
-            return Task.CompletedTask;
-        }
+        public Task EnviarAsync(string clienteId, string estadoOrden, string ordenId, CancellationToken ct = default) =>
+            EnviarEmailAsync(clienteId, estadoOrden, ordenId, ct);
 
         public Task EnviarEmailAsync(string destinatario, string asunto, string cuerpo, CancellationToken ct = default)
         {
-            _llamadas.Add((destinatario, asunto, cuerpo));
-            if (_forzarFalla)
-                throw new HttpRequestException("Proveedor externo no disponible (simulado)");
+            Intentos++;
+            if (Falla)
+            {
+                throw new HttpRequestException("Proveedor de mensajeria no disponible (simulado).");
+            }
+
+            Enviados.Add((destinatario, asunto, cuerpo));
             return Task.CompletedTask;
         }
     }
 
-    private static ServiceProvider CrearServiceProvider(IMockMensajeriaClient cliente)
+    private sealed class PendientesEnMemoria : IRepositorioNotificacionesPendientes
     {
-        var services = new ServiceCollection();
-        services.AddSingleton(cliente);
-        return services.BuildServiceProvider();
-    }
+        public List<NotificacionPendiente> Todas { get; } = new();
 
-    // ── PedidoListoParaRecoger: camino feliz ──────────────────────────────────
+        public int Guardados { get; private set; }
 
-    [Fact]
-    public async Task PedidoListoParaRecoger_envia_notificacion_al_cliente()
-    {
-        var clienteMock = new ClienteMensajeriaSimulado();
-        var sp = CrearServiceProvider(clienteMock);
+        public void Agregar(NotificacionPendiente notificacion) => Todas.Add(notificacion);
 
-        var evento = new IntegrationEvent<PedidoListoParaRecogerData>
+        public Task<IReadOnlyList<NotificacionPendiente>> ListarParaReintentarAsync(DateTime ahora, int maximo, CancellationToken cancelacion) =>
+            Task.FromResult<IReadOnlyList<NotificacionPendiente>>(Todas
+                .Where(n => n.TocaReintentar(ahora))
+                .OrderBy(n => n.ProximoIntentoEn)
+                .Take(maximo)
+                .ToList());
+
+        public Task GuardarCambiosAsync(CancellationToken cancelacion)
         {
-            EventId = Guid.NewGuid().ToString(),
-            EventType = PedidoListoParaRecoger.EventType,
-            EventVersion = 1,
-            OccurredAt = DateTime.UtcNow,
-            Sequence = 1,
-            TransactionId = Guid.NewGuid().ToString(),
-            CausationId = null,
-            AggregateType = PedidoListoParaRecoger.AggregateType,
-            AggregateId = "DSP-001",
-            Source = "despacho",
-            Data = new PedidoListoParaRecogerData(
-                DespachoId: "DSP-001",
-                OrdenId: "ORD-001",
-                UbicacionRecogidaId: "TIENDA-CENTRAL-01",
-                ListoEn: DateTime.UtcNow)
-        };
-
-        // Simular ManejarPedidoListoParaRecoger
-        var cliente = sp.GetRequiredService<IMockMensajeriaClient>();
-        try
-        {
-            // En el consumidor real el ClienteId viene de otro contexto; aqui
-            // usamos el OrdenId como proxy para probar el flujo de aislamiento
-            await cliente.EnviarAsync(evento.Data.OrdenId, "LISTA_PARA_RECOGER", evento.Data.OrdenId);
+            Guardados++;
+            return Task.CompletedTask;
         }
-        catch { /* aislamiento */ }
-
-        Assert.Single(clienteMock.Llamadas);
-        Assert.Equal("ORD-001", clienteMock.Llamadas[0].OrdenId);
-        Assert.Equal("LISTA_PARA_RECOGER", clienteMock.Llamadas[0].Estado);
     }
 
-    // ── Aislamiento de fallos ─────────────────────────────────────────────────
+    private static (ServicioNotificaciones Servicio, MensajeriaSimulada Mensajeria, PendientesEnMemoria Pendientes) Construir(
+        Func<DateTime>? reloj = null)
+    {
+        var mensajeria = new MensajeriaSimulada();
+        var pendientes = new PendientesEnMemoria();
+        var servicio = new ServicioNotificaciones(
+            mensajeria, pendientes, NullLogger<ServicioNotificaciones>.Instance, reloj ?? (() => Ahora));
+        return (servicio, mensajeria, pendientes);
+    }
+
+    private static PedidoListoParaRecogerData Listo(string? clienteId = "cliente1@sgo.local") =>
+        new("DES-2026-000001", "ORD-2026-000123", "TIENDA-01-CENTRAL", Ahora, clienteId);
+
+    // ── Destinatario ──────────────────────────────────────────────────────────
 
     [Fact]
-    public async Task PedidoListoParaRecoger_cuando_proveedor_falla_no_relanza_excepcion()
+    public async Task El_aviso_de_listo_para_recoger_va_al_email_del_cliente_y_no_al_OrdenId()
     {
-        // CRITICO: un fallo del proveedor SMS/Push NO debe romper el ack del
-        // mensaje de RabbitMQ. La excepcion se captura, se loggea y se procede.
-        var clienteFalla = new ClienteMensajeriaSimulado(forzarFalla: true);
-        var sp = CrearServiceProvider(clienteFalla);
+        var (servicio, mensajeria, pendientes) = Construir();
 
-        Exception? excepcionSaliente = null;
-        try
+        await servicio.NotificarListoParaRecogerAsync(Listo(), "evt-1", CancellationToken.None);
+
+        var enviado = Assert.Single(mensajeria.Enviados);
+        Assert.Equal("cliente1@sgo.local", enviado.Destinatario);
+        Assert.NotEqual("ORD-2026-000123", enviado.Destinatario);
+        Assert.Contains("ORD-2026-000123", enviado.Asunto);
+        Assert.Contains("TIENDA-01-CENTRAL", enviado.Cuerpo);
+        Assert.Empty(pendientes.Todas);
+    }
+
+    [Fact]
+    public async Task Un_evento_sin_ClienteId_no_se_envia_a_nadie()
+    {
+        var (servicio, mensajeria, pendientes) = Construir();
+
+        await servicio.NotificarListoParaRecogerAsync(Listo(clienteId: null), "evt-2", CancellationToken.None);
+
+        Assert.Equal(0, mensajeria.Intentos);
+        Assert.Empty(pendientes.Todas);
+    }
+
+    // ── Envio fallido: pendiente, sin relanzar ────────────────────────────────
+
+    [Fact]
+    public async Task Un_envio_fallido_se_guarda_como_pendiente_y_no_relanza()
+    {
+        var (servicio, mensajeria, pendientes) = Construir();
+        mensajeria.Falla = true;
+
+        var ex = await Record.ExceptionAsync(
+            () => servicio.NotificarListoParaRecogerAsync(Listo(), "evt-3", CancellationToken.None));
+
+        Assert.Null(ex);
+        var pendiente = Assert.Single(pendientes.Todas);
+        Assert.Equal("evt-3", pendiente.EventId);
+        Assert.Equal("cliente1@sgo.local", pendiente.Destinatario);
+        Assert.Equal(EstadoNotificacionPendiente.PENDIENTE, pendiente.Estado);
+        Assert.Equal(0, pendiente.Intentos);
+        Assert.Equal(Ahora.AddSeconds(10), pendiente.ProximoIntentoEn);
+        Assert.Contains("no disponible", pendiente.UltimoError);
+
+        // El consumidor guarda la pendiente junto con la marca de procesado; el
+        // servicio no guarda por su cuenta.
+        Assert.Equal(0, pendientes.Guardados);
+    }
+
+    // ── Reintento ─────────────────────────────────────────────────────────────
+
+    [Fact]
+    public async Task El_reintento_exitoso_marca_la_pendiente_como_enviada()
+    {
+        var momento = Ahora;
+        var (servicio, mensajeria, pendientes) = Construir(() => momento);
+        mensajeria.Falla = true;
+        await servicio.NotificarListoParaRecogerAsync(Listo(), "evt-4", CancellationToken.None);
+
+        // Antes de los 10 s no toca reintentar.
+        momento = Ahora.AddSeconds(5);
+        Assert.Equal(0, await servicio.ReintentarPendientesAsync(CancellationToken.None));
+
+        mensajeria.Falla = false;
+        momento = Ahora.AddSeconds(10);
+        var tratadas = await servicio.ReintentarPendientesAsync(CancellationToken.None);
+
+        Assert.Equal(1, tratadas);
+        var pendiente = Assert.Single(pendientes.Todas);
+        Assert.Equal(EstadoNotificacionPendiente.ENVIADA, pendiente.Estado);
+        Assert.Equal(momento, pendiente.EnviadaEn);
+        Assert.Equal(1, pendiente.Intentos);
+        Assert.Equal("cliente1@sgo.local", Assert.Single(mensajeria.Enviados).Destinatario);
+        Assert.Equal(1, pendientes.Guardados);
+    }
+
+    [Fact]
+    public async Task Los_reintentos_usan_backoff_exponencial_y_tras_seis_fallos_la_pendiente_queda_FALLIDA()
+    {
+        var momento = Ahora;
+        var (servicio, mensajeria, pendientes) = Construir(() => momento);
+        mensajeria.Falla = true;
+        await servicio.NotificarListoParaRecogerAsync(Listo(), "evt-5", CancellationToken.None);
+        var pendiente = Assert.Single(pendientes.Todas);
+
+        var esperas = new List<TimeSpan>();
+        for (var reintento = 1; reintento <= NotificacionPendiente.MaximoIntentos; reintento++)
         {
-            var cliente = sp.GetRequiredService<IMockMensajeriaClient>();
-            try
-            {
-                await cliente.EnviarAsync("CLI-FALLA", "LISTA_PARA_RECOGER", "ORD-FALLA-001");
-            }
-            catch (Exception)
-            {
-                // Aislamiento intencional: el consumidor absorbe para no hacer nack
-            }
-        }
-        catch (Exception ex)
-        {
-            excepcionSaliente = ex;
+            esperas.Add(pendiente.ProximoIntentoEn - momento);
+            momento = pendiente.ProximoIntentoEn;
+            await servicio.ReintentarPendientesAsync(CancellationToken.None);
         }
 
-        Assert.Single(clienteFalla.Llamadas);
-        Assert.Null(excepcionSaliente); // Nada debe salir del bloque de manejo
+        Assert.Equal(
+            new[] { 10, 20, 40, 80, 160, 320 }.Select(s => TimeSpan.FromSeconds(s)),
+            esperas);
+        Assert.Equal(EstadoNotificacionPendiente.FALLIDA, pendiente.Estado);
+        Assert.Equal(NotificacionPendiente.MaximoIntentos, pendiente.Intentos);
+
+        // Una FALLIDA ya no se reintenta.
+        momento = momento.AddHours(1);
+        Assert.Equal(0, await servicio.ReintentarPendientesAsync(CancellationToken.None));
     }
 
-    [Fact]
-    public async Task Multiples_eventos_PedidoListoParaRecoger_se_envian_independientemente()
-    {
-        var clienteMock = new ClienteMensajeriaSimulado();
-        var sp = CrearServiceProvider(clienteMock);
-        var cliente = sp.GetRequiredService<IMockMensajeriaClient>();
-
-        // Dos ordenes distintas listas para recoger
-        await cliente.EnviarAsync("CLI-A", "LISTA_PARA_RECOGER", "ORD-A-001");
-        await cliente.EnviarAsync("CLI-B", "LISTA_PARA_RECOGER", "ORD-B-002");
-
-        Assert.Equal(2, clienteMock.Llamadas.Count);
-        Assert.Equal("ORD-A-001", clienteMock.Llamadas[0].OrdenId);
-        Assert.Equal("ORD-B-002", clienteMock.Llamadas[1].OrdenId);
-    }
-
-    // ── Contratos de eventos ──────────────────────────────────────────────────
+    // ── Contratos ─────────────────────────────────────────────────────────────
 
     [Fact]
-    public void Cola_despacho_es_independiente_de_la_cola_ordenes()
-    {
-        // La topologia usa colas separadas para evitar que fallos de despacho
-        // bloqueen el procesamiento de ordenes (y viceversa)
-        const string colaOrdenes = "notificaciones.ordenes";
-        const string colaDespacho = "notificaciones.despacho";
-
-        Assert.NotEqual(colaOrdenes, colaDespacho);
-    }
-
-    [Fact]
-    public void Evento_PedidoListoParaRecoger_tiene_routing_key_correcta()
+    public void Evento_PedidoListoParaRecoger_tiene_routing_key_correcta_y_ClienteId_opcional_al_final()
     {
         Assert.Equal("despacho.pedido.listo-para-recoger", PedidoListoParaRecoger.RoutingKey);
         Assert.Equal("PedidoListoParaRecoger", PedidoListoParaRecoger.EventType);
-        Assert.Equal("Despacho", PedidoListoParaRecoger.AggregateType);
+
+        // Un productor anterior que no manda ClienteId sigue siendo valido.
+        var sinCliente = new PedidoListoParaRecogerData("DES-1", "ORD-1", "TIENDA-01-CENTRAL", Ahora);
+        Assert.Null(sinCliente.ClienteId);
     }
 }

@@ -39,6 +39,8 @@ public sealed class ServicioMapeoPosTests
     [InlineData("TIENDA-02-MIRAFLORES", "T02")]
     [InlineData("TIENDA-03-PORTALES", "T03")]
     [InlineData("TIENDA-04-PRADERA", "T04")]
+    [InlineData("TIENDA-05-OAKLAND", "T05")]
+    [InlineData("TIENDA-32-SALAMA", "T32")]
     [InlineData("TIENDA-12", "T12")]
     [InlineData("TDA-08", "T08")]
     [InlineData("T1", "T01")]

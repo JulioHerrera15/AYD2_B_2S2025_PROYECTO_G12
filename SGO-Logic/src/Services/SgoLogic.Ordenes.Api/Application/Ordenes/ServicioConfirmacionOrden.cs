@@ -33,19 +33,59 @@ public sealed class ServicioConfirmacionOrden
     private readonly IUnidadDeTrabajo _unidadDeTrabajo;
     private readonly IGeneradorCorrelativoOrden _generadorCorrelativo;
     private readonly PoliticaMediosPago _politicaMediosPago;
+    private readonly IClienteCarrito _carrito;
+    private readonly ICatalogoProductos _catalogo;
 
     public ServicioConfirmacionOrden(
         IRepositorioOrdenes ordenes,
         IOutboxWriter outbox,
         IUnidadDeTrabajo unidadDeTrabajo,
         IGeneradorCorrelativoOrden generadorCorrelativo,
-        PoliticaMediosPago politicaMediosPago)
+        PoliticaMediosPago politicaMediosPago,
+        IClienteCarrito carrito,
+        ICatalogoProductos catalogo)
     {
         _ordenes = ordenes;
         _outbox = outbox;
         _unidadDeTrabajo = unidadDeTrabajo;
         _generadorCorrelativo = generadorCorrelativo;
         _politicaMediosPago = politicaMediosPago;
+        _carrito = carrito;
+        _catalogo = catalogo;
+    }
+
+    /// <summary>
+    /// Compara cada linea con el catalogo de Inventario. Lanza
+    /// <see cref="ExcepcionPrecioNoValido" /> con el primer SKU que no exista, este
+    /// inactivo o no tenga el precio vigente; deja subir
+    /// <see cref="ExcepcionCatalogoNoDisponible" /> si Inventario no responde.
+    /// </summary>
+    private async Task ValidarPreciosAsync(IReadOnlyList<CrearLineaOrdenRequest> lineas, CancellationToken cancelacion)
+    {
+        foreach (var linea in lineas)
+        {
+            if (string.IsNullOrWhiteSpace(linea.Sku))
+            {
+                // La entidad LineaOrden rechaza el SKU vacio con su propio mensaje (400).
+                continue;
+            }
+
+            var sku = linea.Sku.Trim();
+            var producto = await _catalogo.ObtenerAsync(sku, cancelacion);
+
+            if (producto is null || !producto.Activo)
+            {
+                throw new ExcepcionPrecioNoValido(sku, $"El producto '{sku}' no existe o no esta disponible para la venta.");
+            }
+
+            if (decimal.Round(linea.PrecioUnitario, 2) != producto.Precio)
+            {
+                throw new ExcepcionPrecioNoValido(
+                    sku,
+                    $"El precio unitario de '{sku}' no coincide con el precio vigente del catalogo.",
+                    producto.Precio);
+            }
+        }
     }
 
     /// <summary>
@@ -73,7 +113,7 @@ public sealed class ServicioConfirmacionOrden
             throw new ExcepcionMedioPagoNoHabilitado(solicitud.Canal, medioPago);
         }
 
-        // ADR-010: la tarjeta se cobra con el token que PayKlik emitio en el navegador.
+        // ADR-010: la tarjeta se cobra con el token que emitio la boveda de Pagos.
         // Aqui solo se exige y se conserva hasta CobroSolicitado; ningun dato de
         // tarjeta llega a este servicio. Para los medios sin token se ignora.
         var requiereToken = _politicaMediosPago.RequiereToken(medioPago);
@@ -82,7 +122,14 @@ public sealed class ServicioConfirmacionOrden
             throw new ExcepcionTokenMedioPagoRequerido(medioPago);
         }
 
-        var lineas = (solicitud.Lineas ?? Array.Empty<CrearLineaOrdenRequest>())
+        var lineasSolicitadas = solicitud.Lineas ?? Array.Empty<CrearLineaOrdenRequest>();
+
+        // B1: el precio no lo decide quien llama. Cada linea se compara con el catalogo
+        // de Inventario antes de crear nada; un SKU desconocido, inactivo o con otro
+        // precio rechaza la orden completa (422), e Inventario caido la rechaza (503).
+        await ValidarPreciosAsync(lineasSolicitadas, cancelacion);
+
+        var lineas = lineasSolicitadas
             .Select(linea => new LineaOrden(linea.Sku, linea.Descripcion, linea.Cantidad, linea.PrecioUnitario))
             .ToList();
 
@@ -105,7 +152,8 @@ public sealed class ServicioConfirmacionOrden
             solicitud.UbicacionSolicitadaId,
             receptorCui: receptorCui,
             direccionEntrega: solicitud.DireccionEntrega,
-            tokenMedioPago: requiereToken ? solicitud.TokenMedioPago : null);
+            tokenMedioPago: requiereToken ? solicitud.TokenMedioPago : null,
+            carritoId: solicitud.CarritoId);
 
         await _ordenes.AgregarAsync(orden, cancelacion);
 
@@ -146,6 +194,13 @@ public sealed class ServicioConfirmacionOrden
     /// subir <see cref="ExcepcionTransicionInvalida" /> sin escribir nada. Si la
     /// orden ya esta en el estado destino, no escribe nada y responde como exitosa
     /// (idempotencia).
+    ///
+    /// Este es el punto donde la orden pasa a consumir el carrito que la origino:
+    /// si el cliente solo crea la orden (CREADA) pero nunca llega a confirmarla,
+    /// su carrito debe seguir intacto (por eso el vaciado no vive en
+    /// CrearOrdenAsync). Se vacia sin condicionarlo al desenlace del cobro, que
+    /// llega despues de forma asincrona: la orden ya reservo inventario a partir
+    /// de ese carrito aunque el pago quede pendiente.
     /// </summary>
     public async Task<ConfirmacionOrdenDto> ConfirmarOrdenAsync(
         string ordenId,
@@ -159,6 +214,14 @@ public sealed class ServicioConfirmacionOrden
             motivo,
             esCompensacion: false,
             cancelacion);
+
+        if (!sinCambios)
+        {
+            // Solo en la confirmacion real, no en un reintento idempotente sobre
+            // una orden que ya estaba confirmada (evita vaciar el carrito de nuevo
+            // sin necesidad en cada reintento del cliente HTTP).
+            await _carrito.VaciarAsync(orden.ClienteId, cancelacion);
+        }
 
         return new ConfirmacionOrdenDto(OrdenDto.Desde(orden), YaConfirmada: sinCambios);
     }
@@ -208,6 +271,79 @@ public sealed class ServicioConfirmacionOrden
 
         return new ResultadoTransicionOrdenDto(OrdenDto.Desde(orden), sinCambios);
     }
+
+    /// <summary>
+    /// Cancelacion pedida por el cliente dueno de la orden. Solo procede antes de
+    /// que el pedido salga a ruta y fuera de la ventana del cobro:
+    /// <list type="bullet">
+    ///   <item>Otro cliente: <see cref="ExcepcionOrdenAjena" /> (403).</item>
+    ///   <item>COBRO_SOLICITADO o PAGO_APLICADO: el resultado del cobro esta por
+    ///   llegar; <see cref="ExcepcionCancelacionNoPermitida" /> transitoria (409).</item>
+    ///   <item>EN_TRANSITO o posterior, o ya cancelada/rechazada:
+    ///   <see cref="ExcepcionCancelacionNoPermitida" /> definitiva (409).</item>
+    /// </list>
+    /// En cualquier otro estado aplica CANCELADA como compensacion, de modo que
+    /// <see cref="MapaEventosSagaOrden" /> emite OrdenCancelada (con
+    /// RequiereReembolso si ya hubo PAGO_APLICADO) y LiberacionReservaSolicitada
+    /// si la orden ya tiene reserva. Si aun no la tiene (RESERVA_SOLICITADA), la
+    /// libera <see cref="ManejadorEventosInventario" /> al llegar InventarioReservado.
+    /// </summary>
+    public async Task<ResultadoTransicionOrdenDto> CancelarPorClienteAsync(
+        string ordenId,
+        CancelarOrdenRequest solicitud,
+        CancellationToken cancelacion)
+    {
+        ArgumentNullException.ThrowIfNull(solicitud);
+
+        var orden = await _ordenes.ObtenerPorIdAsync(ordenId, cancelacion)
+            ?? throw new ExcepcionOrdenNoEncontrada(ordenId);
+
+        if (!string.Equals(orden.ClienteId, solicitud.ClienteId?.Trim(), StringComparison.OrdinalIgnoreCase))
+        {
+            throw new ExcepcionOrdenAjena(ordenId);
+        }
+
+        if (orden.Estado is EstadoOrden.COBRO_SOLICITADO or EstadoOrden.PAGO_APLICADO)
+        {
+            throw new ExcepcionCancelacionNoPermitida(ordenId, orden.Estado, pagoEnCurso: true);
+        }
+
+        if (!EstadosCancelablesPorCliente.Contains(orden.Estado))
+        {
+            throw new ExcepcionCancelacionNoPermitida(ordenId, orden.Estado, pagoEnCurso: false);
+        }
+
+        var motivo = string.IsNullOrWhiteSpace(solicitud.Motivo)
+            ? "Cancelada por el cliente"
+            : solicitud.Motivo.Trim();
+
+        var (ordenCancelada, sinCambios) = await AplicarTransicionInternaAsync(
+            ordenId,
+            EstadoOrden.CANCELADA,
+            pasoSaga: null,
+            motivo,
+            esCompensacion: true,
+            cancelacion,
+            MotivoLiberacionReserva.CANCELACION_CLIENTE);
+
+        return new ResultadoTransicionOrdenDto(OrdenDto.Desde(ordenCancelada), sinCambios);
+    }
+
+    /// <summary>
+    /// Estados previos a la salida a ruta desde los que el cliente puede cancelar.
+    /// COBRO_SOLICITADO y PAGO_APLICADO quedan fuera porque el cobro esta en curso.
+    /// </summary>
+    private static readonly IReadOnlySet<EstadoOrden> EstadosCancelablesPorCliente = new HashSet<EstadoOrden>
+    {
+        EstadoOrden.CREADA,
+        EstadoOrden.RESERVA_SOLICITADA,
+        EstadoOrden.INVENTARIO_RESERVADO,
+        EstadoOrden.PAGO_PENDIENTE,
+        EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL,
+        EstadoOrden.CONFIRMADA,
+        EstadoOrden.DESPACHO_SOLICITADO,
+        EstadoOrden.EN_PREPARACION
+    };
 
     /// <summary>
     /// Cambia el metodo de entrega de una orden no terminal (EV-31) y emite

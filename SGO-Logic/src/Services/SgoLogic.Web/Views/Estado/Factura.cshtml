@@ -1,0 +1,183 @@
+@model SgoLogic.Web.Services.FacturaModel?
+@{
+    var ordenId = ViewBag.OrdenId as string ?? string.Empty;
+    var orden = ViewBag.Orden as SgoLogic.Web.Services.OrdenEstadoModel;
+    var vistaCompleta = (bool)(ViewBag.VistaCompleta ?? false);
+    var autenticado = (bool)(ViewBag.Autenticado ?? false);
+    var numeroOrden = orden?.NumeroOrden ?? ordenId;
+    var certificada = Model?.EstaCertificada ?? false;
+    var moneda = string.IsNullOrWhiteSpace(Model?.Moneda) ? "Q" : (Model!.Moneda == "GTQ" ? "Q" : Model.Moneda + " ");
+    var urlFactura = $"/Estado/Factura?ordenId={Uri.EscapeDataString(ordenId)}";
+    ViewData["Title"] = Model != null ? $"Factura {Model.Serie}-{Model.NumeroDocumento}" : "Factura";
+}
+
+<style>
+    @@media print {
+        header, footer, .no-print { display: none !important; }
+        body { background: #ffffff !important; }
+        .factura-hoja { box-shadow: none !important; border: none !important; }
+    }
+</style>
+
+<div class="max-w-3xl mx-auto py-6 px-4">
+    <div class="no-print mb-4 flex items-center justify-between gap-3 text-xs">
+        <a href="/Estado?ordenId=@Uri.EscapeDataString(ordenId)" class="inline-flex items-center gap-1 font-semibold text-secondary hover:underline">
+            <span class="material-symbols-outlined text-[16px]">arrow_back</span>
+            Volver al rastreo de la orden
+        </a>
+    </div>
+
+    @if (orden is null && Model is null)
+    {
+        <div class="bg-surface-white rounded-3xl p-8 border border-border-subtle/70 ambient-shadow text-center">
+            <div class="w-16 h-16 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-4">
+                <span class="material-symbols-outlined text-[32px]">receipt_long</span>
+            </div>
+            <h1 class="text-xl font-bold text-primary mb-2">Factura no encontrada</h1>
+            <p class="text-xs text-text-muted">No encontramos la orden '@ordenId' ni una factura asociada.</p>
+        </div>
+    }
+    else if (Model is null || (vistaCompleta && !certificada))
+    {
+        <!-- Factura aun no emitida o pendiente ante la SAT -->
+        <div class="bg-surface-white rounded-3xl p-8 border border-border-subtle/70 ambient-shadow text-center">
+            <div class="w-16 h-16 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center mx-auto mb-4">
+                <span class="material-symbols-outlined text-[32px]">hourglass_top</span>
+            </div>
+            <h1 class="text-xl font-bold text-primary mb-2">Factura pendiente de certificación</h1>
+            <p class="text-xs text-text-muted mb-4">
+                La factura de la orden @numeroOrden aún no ha sido certificada por la SAT. Vuelve a consultarla en unos minutos.
+            </p>
+            @if (Model is not null)
+            {
+                <div class="inline-flex flex-col gap-1 text-xs text-left bg-surface-container-low rounded-xl px-4 py-3 border border-border-subtle/60">
+                    <span><span class="text-text-muted">Serie:</span> <strong class="font-mono text-primary">@Model.Serie</strong></span>
+                    <span><span class="text-text-muted">Número:</span> <strong class="font-mono text-primary">@Model.NumeroDocumento</strong></span>
+                    <span><span class="text-text-muted">Estado:</span> <strong class="text-amber-700">@(Model.Estado ?? "PENDIENTE")</strong></span>
+                </div>
+            }
+        </div>
+    }
+    else if (!vistaCompleta)
+    {
+        <!-- Visitante anonimo o cliente ajeno: solo datos publicos del documento -->
+        <div class="bg-surface-white rounded-3xl p-8 border border-border-subtle/70 ambient-shadow text-center">
+            <div class="w-16 h-16 rounded-2xl bg-surface-container-low text-primary flex items-center justify-center mx-auto mb-4">
+                <span class="material-symbols-outlined text-[32px]">lock</span>
+            </div>
+            <h1 class="text-xl font-bold text-primary mb-2">Factura de la orden @numeroOrden</h1>
+            <div class="inline-flex flex-col gap-1 text-xs text-left bg-surface-container-low rounded-xl px-4 py-3 border border-border-subtle/60 mb-4">
+                <span><span class="text-text-muted">Serie:</span> <strong class="font-mono text-primary">@Model.Serie</strong></span>
+                <span><span class="text-text-muted">Número:</span> <strong class="font-mono text-primary">@Model.NumeroDocumento</strong></span>
+                <span><span class="text-text-muted">Estado:</span> <strong class="@(certificada ? "text-emerald-700" : "text-amber-700")">@(certificada ? "CERTIFICADO" : "Pendiente de certificación")</strong></span>
+            </div>
+            <p class="text-xs text-text-muted mb-5">
+                @(autenticado
+                    ? "Esta factura pertenece a otra cuenta. Solo su titular puede ver el detalle completo."
+                    : "Para ver el detalle completo de la factura y descargar el XML, inicia sesión con la cuenta que hizo la compra.")
+            </p>
+            @if (!autenticado)
+            {
+                <a href="/Auth/Login?returnUrl=@Uri.EscapeDataString(urlFactura)"
+                   class="inline-flex items-center gap-2 bg-primary text-on-primary px-5 py-2.5 rounded-xl text-xs font-bold hover:opacity-90 transition-all">
+                    <span class="material-symbols-outlined text-[18px]">login</span>
+                    Iniciar sesión
+                </a>
+            }
+        </div>
+    }
+    else
+    {
+        <!-- Factura completa: solo para el dueno de la orden o personal autorizado -->
+        <div class="factura-hoja bg-surface-white rounded-3xl border border-border-subtle/80 ambient-shadow overflow-hidden">
+            <div class="p-6 sm:p-8 border-b border-border-subtle/70 flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                <div>
+                    <div class="text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1">Factura Electrónica en Línea (FEL)</div>
+                    <h1 class="text-2xl font-extrabold text-primary tracking-tight">MegaStore S.A.</h1>
+                    <p class="text-xs text-text-muted">NIT: 10293847-5 &bull; Ciudad de Guatemala</p>
+                </div>
+                <div class="text-xs text-left sm:text-right space-y-0.5">
+                    <div><span class="text-text-muted">Serie:</span> <strong class="font-mono text-primary">@Model.Serie</strong></div>
+                    <div><span class="text-text-muted">Número:</span> <strong class="font-mono text-primary">@Model.NumeroDocumento</strong></div>
+                    <div><span class="text-text-muted">Orden:</span> <strong class="text-primary">@numeroOrden</strong></div>
+                </div>
+            </div>
+
+            <div class="p-6 sm:p-8 grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs border-b border-border-subtle/70">
+                <div class="space-y-1">
+                    <div class="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Datos fiscales</div>
+                    <div><span class="text-text-muted">Número de autorización:</span> <span class="font-mono font-semibold text-primary break-all">@(Model.NumeroAutorizacion ?? "-")</span></div>
+                    <div><span class="text-text-muted">Folio:</span> <span class="font-mono font-semibold text-primary">@(string.IsNullOrWhiteSpace(Model.Folio) ? "-" : Model.Folio)</span></div>
+                    <div><span class="text-text-muted">Certificada:</span> <span class="font-semibold text-primary">@FechaHelper.Formatear(Model.CertificadoEn)</span></div>
+                    <div><span class="text-text-muted">Estado:</span> <span class="font-bold text-emerald-700">@Model.Estado</span></div>
+                </div>
+                <div class="space-y-1">
+                    <div class="text-[10px] font-semibold text-text-muted uppercase tracking-wider">Receptor</div>
+                    <div><span class="text-text-muted">Nombre:</span> <span class="font-semibold text-primary">@(Model.NombreReceptor ?? "Consumidor Final")</span></div>
+                    <div><span class="text-text-muted">NIT/CUI:</span> <span class="font-mono font-semibold text-primary">@(Model.CuiReceptor ?? "CF")</span></div>
+                </div>
+            </div>
+
+            <div class="p-6 sm:p-8">
+                <div class="overflow-x-auto rounded-2xl border border-border-subtle/60">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="bg-surface-bright/60 border-b border-border-subtle text-text-muted uppercase font-semibold">
+                                <th class="py-2.5 px-3">#</th>
+                                <th class="py-2.5 px-3">Descripción</th>
+                                <th class="py-2.5 px-3 text-center">Cant.</th>
+                                <th class="py-2.5 px-3 text-right">Precio unitario</th>
+                                <th class="py-2.5 px-3 text-right">IVA</th>
+                                <th class="py-2.5 px-3 text-right">Subtotal</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-border-subtle/50">
+                            @foreach (var linea in Model.Lineas ?? new List<SgoLogic.Web.Services.FacturaLineaModel>())
+                            {
+                                <tr>
+                                    <td class="py-2.5 px-3 text-text-muted">@linea.NumeroLinea</td>
+                                    <td class="py-2.5 px-3">
+                                        <div class="font-medium text-primary">@linea.Descripcion</div>
+                                        <div class="font-mono text-[10px] text-text-muted">@linea.Sku</div>
+                                    </td>
+                                    <td class="py-2.5 px-3 text-center">@linea.Cantidad</td>
+                                    <td class="py-2.5 px-3 text-right">@moneda @linea.PrecioUnitario.ToString("N2")</td>
+                                    <td class="py-2.5 px-3 text-right text-text-muted">@moneda @linea.Impuesto.ToString("N2")</td>
+                                    <td class="py-2.5 px-3 text-right font-semibold text-primary">@moneda @linea.Subtotal.ToString("N2")</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="mt-5 ml-auto max-w-xs space-y-1.5 text-xs">
+                    <div class="flex justify-between text-text-muted">
+                        <span>Subtotal</span>
+                        <span>@moneda @Model.Subtotal.ToString("N2")</span>
+                    </div>
+                    <div class="flex justify-between text-text-muted">
+                        <span>IVA (12%)</span>
+                        <span>@moneda @Model.Impuestos.ToString("N2")</span>
+                    </div>
+                    <div class="flex justify-between pt-2 border-t border-border-subtle text-base font-extrabold text-primary">
+                        <span>Total</span>
+                        <span>@moneda @Model.Total.ToString("N2")</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="no-print p-6 sm:p-8 pt-0 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button type="button" onclick="window.print()"
+                        class="w-full bg-surface-container-low hover:bg-surface-variant text-primary py-2.5 px-3 rounded-xl text-xs font-bold transition-all border border-border-subtle flex items-center justify-center gap-1.5">
+                    <span class="material-symbols-outlined text-[18px]">print</span>
+                    Imprimir factura
+                </button>
+                <a href="/Cuenta/Factura?ordenId=@Uri.EscapeDataString(ordenId)"
+                   class="w-full bg-primary text-on-primary hover:opacity-90 py-2.5 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5">
+                    <span class="material-symbols-outlined text-[18px]">download</span>
+                    Descargar XML
+                </a>
+            </div>
+        </div>
+    }
+</div>

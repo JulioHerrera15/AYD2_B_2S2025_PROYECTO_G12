@@ -135,7 +135,7 @@ public sealed class ConsultaEstadoService : IConsultaEstadoService
             Tamano: tamano,
             TotalRegistros: total,
             Ordenes: ordenes.Select(o => new OrdenResumenDto(
-                o.OrdenId, o.NumeroOrden ?? string.Empty, o.Estado ?? "CREADA", o.Total, o.ActualizadaEn, o.ClienteId))
+                o.OrdenId, o.NumeroOrden ?? string.Empty, o.Estado ?? "CREADA", o.Total, o.ActualizadaEn, o.ClienteId, o.CreadaEn))
                 .ToList());
     }
 
@@ -158,5 +158,8 @@ public sealed class ConsultaEstadoService : IConsultaEstadoService
             ActualizadaEn: v.ActualizadaEn,
             Incidencias: incidencias.Select(i => new IncidenciaDto(
                 i.Id, i.Estado, i.Descripcion, i.Resolucion, i.CreadaEn, i.ActualizadaEn))
-                .ToList());
+                .ToList(),
+            UbicacionOrigenId: v.UbicacionOrigenId,
+            SerieDocumentoFiscal: v.SerieDocumentoFiscal,
+            NumeroDocumentoFiscal: v.NumeroDocumentoFiscal);
 }

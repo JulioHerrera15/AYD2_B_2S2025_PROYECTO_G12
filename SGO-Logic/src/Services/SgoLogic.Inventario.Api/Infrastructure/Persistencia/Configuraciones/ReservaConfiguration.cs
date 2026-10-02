@@ -77,5 +77,6 @@ public sealed class ReservaConfiguration : IEntityTypeConfiguration<Reserva>
             .SetPropertyAccessMode(PropertyAccessMode.Field);
 
         builder.Ignore(reserva => reserva.EstaActiva);
+        builder.Ignore(reserva => reserva.RetieneStock);
     }
 }

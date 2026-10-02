@@ -10,6 +10,9 @@ Accept: application/json
 # POST http://localhost:8084/v1/tokens (payklik-mock) al tokenizar la tarjeta desde el
 # navegador. Nunca se envia el numero de tarjeta, el CVV ni el vencimiento. Con
 # TRANSFERENCIA o BILLETERA_DIGITAL el campo no aplica. La orden no devuelve el token.
+# carritoId (opcional) es el carrito del que sale la orden (cart:{usuarioId} o
+# guest:{sesionId}): viaja en ReservaInventarioSolicitada e Inventario adopta sus
+# retenciones de stock al reservar.
 # @name crearOrden
 POST {{SgoLogic.Ordenes.Api_HostAddress}}/api/ordenes/
 Content-Type: application/json
@@ -21,6 +24,7 @@ Content-Type: application/json
   "moneda": "GTQ",
   "medioPago": "TARJETA",
   "tokenMedioPago": "tok_pk_390369109c1dbac6d48a121d",
+  "carritoId": "cart:6f1c2a7e-0000-4000-8000-000000000001",
   "impuestos": 150.00,
   "ubicacionSolicitadaId": null,
   "lineas": [

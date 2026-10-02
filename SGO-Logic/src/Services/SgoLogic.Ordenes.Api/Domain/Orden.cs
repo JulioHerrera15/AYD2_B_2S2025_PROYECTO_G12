@@ -44,7 +44,8 @@ public sealed partial class Orden
         DateTime? creadaEn = null,
         string receptorCui = "CF",
         DireccionEntregaData? direccionEntrega = null,
-        string? tokenMedioPago = null)
+        string? tokenMedioPago = null,
+        string? carritoId = null)
     {
         if (string.IsNullOrWhiteSpace(id))
         {
@@ -100,6 +101,13 @@ public sealed partial class Orden
                 nameof(tokenMedioPago));
         }
 
+        if (carritoId is not null && carritoId.Trim().Length > LongitudMaximaCarritoId)
+        {
+            throw new ArgumentException(
+                $"El identificador del carrito no puede exceder {LongitudMaximaCarritoId} caracteres.",
+                nameof(carritoId));
+        }
+
         Id = id;
         NumeroOrden = numeroOrden;
         ClienteId = clienteId;
@@ -115,12 +123,16 @@ public sealed partial class Orden
         CreadaEn = creadaEn ?? DateTime.UtcNow;
         ReceptorCui = receptorCui;
         TokenMedioPago = string.IsNullOrWhiteSpace(tokenMedioPago) ? null : tokenMedioPago.Trim();
+        CarritoId = string.IsNullOrWhiteSpace(carritoId) ? null : carritoId.Trim();
 
         _lineas.AddRange(lineasMaterializadas);
     }
 
     /// <summary>Largo maximo del token del medio de pago; coincide con la columna token_medio_pago.</summary>
     public const int LongitudMaximaTokenMedioPago = 200;
+
+    /// <summary>Largo maximo del identificador de carrito; coincide con la columna carrito_id.</summary>
+    public const int LongitudMaximaCarritoId = 120;
 
     public string Id { get; private set; }
 
@@ -170,7 +182,7 @@ public sealed partial class Orden
     public string ReceptorCui { get; private set; }
 
     /// <summary>
-    /// Token opaco de la tarjeta que emitio PayKlik (ADR-010). Existe solo para
+    /// Token opaco de la tarjeta que emitio la boveda de Pagos (ADR-010). Existe solo para
     /// cruzar el tramo entre crear la orden y emitir CobroSolicitado, que sale
     /// despues, cuando Inventario confirma la reserva. Se pone en null en cuanto
     /// se emite el evento (<see cref="TomarTokenMedioPago" />) o la orden llega a un
@@ -179,6 +191,14 @@ public sealed partial class Orden
     /// No es el numero de tarjeta ni el CVV: esos no entran a SGO-Logic.
     /// </summary>
     public string? TokenMedioPago { get; private set; }
+
+    /// <summary>
+    /// Carrito del que salio la orden (cart:{usuarioId} o guest:{sesionId}), tal como
+    /// lo identifica Auth. Viaja en ReservaInventarioSolicitada para que Inventario
+    /// adopte las retenciones de stock de ese carrito al reservar. Null en ordenes
+    /// que no vienen de un carrito (POS, scripts).
+    /// </summary>
+    public string? CarritoId { get; private set; }
 
     /// <summary>
     /// Entrega el token para armar CobroSolicitado y lo suelta: despues de esto la

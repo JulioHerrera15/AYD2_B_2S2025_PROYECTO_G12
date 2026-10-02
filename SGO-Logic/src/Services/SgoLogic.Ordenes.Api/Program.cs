@@ -6,6 +6,8 @@ using SgoLogic.Contracts.Enumeraciones;
 using SgoLogic.Ordenes.Api.Application.Ordenes;
 using SgoLogic.Ordenes.Api.Consumers;
 using SgoLogic.Ordenes.Api.Domain;
+using SgoLogic.Ordenes.Api.Infrastructure.Carrito;
+using SgoLogic.Ordenes.Api.Infrastructure.Inventario;
 using SgoLogic.Ordenes.Api.Infrastructure.Persistencia;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -31,6 +33,26 @@ builder.Services.AddScoped<IGeneradorCorrelativoOrden, GeneradorCorrelativoOrden
 builder.Services.AddScoped<IGeneradorCorrelativoDevolucion, GeneradorCorrelativoDevolucion>();
 builder.Services.AddScoped<ServicioConfirmacionOrden>();
 builder.Services.AddScoped<ServicioDevolucion>();
+
+// Llamada directa a Auth para vaciar el carrito al confirmar una orden (mismo
+// patron que ClienteInventarioHttp de Despacho). Sin circuit breaker: al
+// contrario que ese caso, aca un fallo se traga en el propio cliente (ver
+// ClienteCarritoHttp) porque vaciar el carrito es una cortesia, no algo de lo
+// que dependa confirmar la orden.
+builder.Services.AddHttpClient<IClienteCarrito, ClienteCarritoHttp>(http =>
+{
+    http.BaseAddress = new Uri(builder.Configuration["Auth:BaseUrl"] ?? "http://auth-api:8080");
+    http.Timeout = TimeSpan.FromSeconds(5);
+});
+
+// B1: precios de la orden contra el catalogo de Inventario (red interna). Cache corta
+// por SKU en CatalogoProductosHttp; sin respuesta de Inventario la orden no se crea.
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient<ICatalogoProductos, CatalogoProductosHttp>(http =>
+{
+    http.BaseAddress = new Uri(builder.Configuration["Inventario:BaseUrl"] ?? "http://inventario-api:8080");
+    http.Timeout = TimeSpan.FromSeconds(3);
+});
 
 // Consumo de los resultados de Pagos: avance de la saga y compensacion (HU-003).
 builder.Services.AddScoped<IRegistroMensajesProcesados, RegistroMensajesProcesados>();
@@ -89,6 +111,27 @@ ordenes.MapPost("/", async (
             statusCode: StatusCodes.Status400BadRequest,
             extensions: new Dictionary<string, object?> { ["codigo"] = "token_medio_pago_requerido" });
     }
+    catch (ExcepcionPrecioNoValido ex)
+    {
+        return Results.Problem(
+            title: "Precio no valido",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status422UnprocessableEntity,
+            extensions: new Dictionary<string, object?>
+            {
+                ["codigo"] = "precio_no_valido",
+                ["sku"] = ex.Sku,
+                ["precioVigente"] = ex.PrecioVigente
+            });
+    }
+    catch (ExcepcionCatalogoNoDisponible ex)
+    {
+        return Results.Problem(
+            title: "Catalogo no disponible",
+            detail: "No se pudieron validar los precios con Inventario. Intenta de nuevo en unos momentos.",
+            statusCode: StatusCodes.Status503ServiceUnavailable,
+            extensions: new Dictionary<string, object?> { ["codigo"] = "catalogo_no_disponible", ["motivo"] = ex.Message });
+    }
     catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
     {
         return Results.Problem(
@@ -135,6 +178,45 @@ ordenes.MapPost("/{id}/metodo-entrega", async (
     catch (Exception ex) when (
         ex is ExcepcionOrdenNoEncontrada or ExcepcionConflictoConcurrencia
         or ArgumentException or InvalidOperationException)
+    {
+        return MapearError(ex);
+    }
+});
+
+// Cancelacion por el cliente: libera la reserva por compensacion de la saga.
+ordenes.MapPost("/{id}/cancelar", async (
+    string id,
+    CancelarOrdenRequest solicitud,
+    ServicioConfirmacionOrden servicio,
+    CancellationToken cancelacion) =>
+{
+    try
+    {
+        var resultado = await servicio.CancelarPorClienteAsync(id, solicitud, cancelacion);
+        return Results.Ok(new { id = resultado.Orden.Id, estado = resultado.Orden.Estado });
+    }
+    catch (ExcepcionOrdenAjena ex)
+    {
+        return Results.Problem(
+            title: "La orden no pertenece al cliente",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status403Forbidden,
+            extensions: new Dictionary<string, object?> { ["codigo"] = "orden_ajena" });
+    }
+    catch (ExcepcionCancelacionNoPermitida ex)
+    {
+        return Results.Problem(
+            title: ex.Message,
+            detail: ex.Message,
+            statusCode: StatusCodes.Status409Conflict,
+            extensions: new Dictionary<string, object?>
+            {
+                ["codigo"] = ex.PagoEnCurso ? "pago_en_curso" : "orden_no_cancelable",
+                ["estado"] = ex.Estado.ToString()
+            });
+    }
+    catch (Exception ex) when (
+        ex is ExcepcionOrdenNoEncontrada or ExcepcionTransicionInvalida or ExcepcionConflictoConcurrencia)
     {
         return MapearError(ex);
     }

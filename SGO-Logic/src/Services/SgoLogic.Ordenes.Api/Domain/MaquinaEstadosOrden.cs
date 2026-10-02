@@ -1,4 +1,4 @@
-﻿using SgoLogic.Contracts.Enumeraciones;
+using SgoLogic.Contracts.Enumeraciones;
 
 namespace SgoLogic.Ordenes.Api.Domain;
 
@@ -34,6 +34,7 @@ public static class MaquinaEstadosOrden
                 EstadoOrden.CANCELADA),
 
             [EstadoOrden.PAGO_PENDIENTE] = Conjunto(
+                EstadoOrden.PAGO_APLICADO,
                 EstadoOrden.COBRO_SOLICITADO,
                 EstadoOrden.CANCELADA_RESERVA_VENCIDA,
                 EstadoOrden.CANCELADA),

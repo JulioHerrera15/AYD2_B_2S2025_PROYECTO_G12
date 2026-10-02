@@ -38,7 +38,7 @@ param(
     [string]$InventarioUrl = 'http://localhost:8094',
     [string]$DespachoUrl = 'http://localhost:8097',
     [string]$LogiExpressUrl = 'http://localhost:8098',
-    [string]$PayKlikUrl = 'http://localhost:8084',
+    [string]$PagosUrl = 'http://localhost:8085',
     [string]$Sku = 'SKU-CAMINO-FELIZ',
     [string]$UbicacionId = 'CD-01'
 )
@@ -207,6 +207,23 @@ if ($null -eq $seedRes) {
 }
 Write-Step "Siembra" "SKU=$Sku cant=100 en $UbicacionId" 'AUTO'
 
+# Ordenes valida el precio de cada linea contra el catalogo de Inventario: el SKU
+# de la prueba se registra con el mismo precio que lleva la orden.
+$PrecioUnitario = 100.0
+$productoBody = @{
+    nombre    = 'Producto de prueba camino feliz'
+    categoria = 'Pruebas'
+    precio    = $PrecioUnitario
+    icono     = 'inventory_2'
+    activo    = $true
+}
+$productoRes = Invoke-HttpJson -Method 'PUT' -Url "$InventarioUrl/api/inventario/productos/$Sku" -Body $productoBody
+if ($null -eq $productoRes) {
+    Write-Host "  FALLO: no se pudo registrar el producto $Sku en $InventarioUrl"
+    exit 1
+}
+Write-Step "Catalogo" "SKU=$Sku precio=$PrecioUnitario" 'AUTO'
+
 # ---------------------------------------------------------------------------
 # Paso 1: Crear y confirmar la orden (CREADA -> RESERVA_SOLICITADA)
 # ---------------------------------------------------------------------------
@@ -214,21 +231,23 @@ Write-Step "Siembra" "SKU=$Sku cant=100 en $UbicacionId" 'AUTO'
 Write-Host ""
 Write-Host "Paso 1: Crear y confirmar la orden"
 
-# TARJETA exige tokenMedioPago (ADR-010, DDA 14.3.1). El script hace de navegador:
-# tokeniza una tarjeta de prueba directo contra PayKlik y solo el token llega a
-# Ordenes. El PAN y el CVV no se imprimen.
+# TARJETA exige tokenMedioPago (ADR-010, DDA 14.3.1). El script hace de checkout:
+# tokeniza una tarjeta de prueba en la boveda de Pagos (POST /api/pagos/tokens, no
+# llama a PayKlik) y solo el token llega a Ordenes. El PAN y el CVV no se imprimen.
 $tokenBody = @{
-    numeroTarjeta  = '4111111111111111'
-    cvv            = '123'
-    mesExpiracion  = 12
-    anioExpiracion = (Get-Date).Year + 3
+    numero  = '4111111111111111'
+    mesExp  = 12
+    anioExp = (Get-Date).Year + 3
+    cvv     = '123'
+    titular = 'Cliente Camino Feliz'
+    guardar = $false
 }
-$tokenRes = Invoke-HttpJson -Method 'POST' -Url "$PayKlikUrl/v1/tokens" -Body $tokenBody
+$tokenRes = Invoke-HttpJson -Method 'POST' -Url "$PagosUrl/api/pagos/tokens" -Body $tokenBody
 if ($null -eq $tokenRes -or [string]::IsNullOrWhiteSpace($tokenRes.token)) {
-    Write-Host "  FALLO: no se pudo tokenizar la tarjeta en $PayKlikUrl"
+    Write-Host "  FALLO: no se pudo tokenizar la tarjeta en $PagosUrl"
     exit 1
 }
-Write-Step "Tokenizar tarjeta" "ultimosCuatro=$($tokenRes.ultimosCuatro) marca=$($tokenRes.marca)" 'AUTO'
+Write-Step "Tokenizar tarjeta" "ultimos4=$($tokenRes.ultimos4) marca=$($tokenRes.marca)" 'AUTO'
 
 $crearBody = @{
     clienteId        = "CAMINO-FELIZ-$(Get-Date -Format 'yyyyMMddHHmmss')"
@@ -250,7 +269,7 @@ $crearBody = @{
             sku            = $Sku
             descripcion    = 'Producto de prueba camino feliz'
             cantidad       = 1
-            precioUnitario = 100.0
+            precioUnitario = $PrecioUnitario
         }
     )
 }

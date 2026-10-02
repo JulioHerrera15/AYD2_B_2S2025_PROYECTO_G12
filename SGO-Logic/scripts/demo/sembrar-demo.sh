@@ -53,20 +53,28 @@ require_success() {
   fi
 }
 
-# El registro siempre deja rol CLIENTE y no hay endpoint que lo cambie, asi que
-# los roles se asignan directo en la base por prefijo de correo. Solo corre desde
-# el host: dentro del contenedor de seed no hay cliente de Postgres.
+# Asignacion de roles mediante el endpoint oficial /api/auth/asignar-rol
+# y actualizacion de seguridad directa en Postgres como respaldo.
 asignar_roles() {
-  if ! command -v docker >/dev/null 2>&1; then
-    printf 'Sin docker en el PATH: los roles quedan en CLIENTE (asignalos a mano en auth.usuarios).\n'
-    return 0
-  fi
+  for u in "${USUARIOS_DEMO[@]}"; do
+    local correo="${u%%|*}"
+    local rol="CLIENTE"
+    if [[ "$correo" == admin* ]]; then
+      rol="ADMIN"
+    elif [[ "$correo" == operador* ]]; then
+      rol="OPERADOR"
+    fi
+    request POST "$BASE_URL/api/auth/asignar-rol" "{\"email\":\"$correo\",\"rol\":\"$rol\"}" || true
+  done
 
-  docker compose exec -T "$DB_SERVICIO" psql -U "$DB_USUARIO" -d sgo_auth -v ON_ERROR_STOP=1 <<'SQL'
+  if command -v docker >/dev/null 2>&1; then
+    docker compose exec -T "$DB_SERVICIO" psql -U "$DB_USUARIO" -d sgo_auth -v ON_ERROR_STOP=1 <<'SQL' >/dev/null 2>&1 || true
 UPDATE auth.usuarios SET rol = 'ADMIN'    WHERE email LIKE 'admin%@sgo.local';
 UPDATE auth.usuarios SET rol = 'OPERADOR' WHERE email LIKE 'operador%@sgo.local';
 SQL
+  fi
 }
+
 
 # Lee de la cola del mock de mensajeria el ultimo codigo enviado a un correo.
 leer_codigo() {
@@ -135,9 +143,9 @@ asignar_roles
 printf 'Cargando existencias de demo y catalogo web\n'
 for existencia in \
   '{"sku":"SKU-DEMO-001","ubicacionId":"CD-CENTRAL","tipoUbicacion":"CENTRO_DISTRIBUCION","cantidadFisica":100}' \
-  '{"sku":"SKU-DEMO-001","ubicacionId":"TIENDA-001","tipoUbicacion":"TIENDA","cantidadFisica":20}' \
+  '{"sku":"SKU-DEMO-001","ubicacionId":"TIENDA-01-CENTRAL","tipoUbicacion":"TIENDA","cantidadFisica":20}' \
   '{"sku":"SKU-DEMO-002","ubicacionId":"CD-CENTRAL","tipoUbicacion":"CENTRO_DISTRIBUCION","cantidadFisica":75}' \
-  '{"sku":"SKU-DEMO-003","ubicacionId":"TIENDA-001","tipoUbicacion":"TIENDA","cantidadFisica":40}'; do
+  '{"sku":"SKU-DEMO-003","ubicacionId":"TIENDA-01-CENTRAL","tipoUbicacion":"TIENDA","cantidadFisica":40}'; do
   request PUT "$BASE_URL/api/inventario/existencias" "$existencia"
   if [[ "$HTTP_CODE" != "200" ]]; then
     printf 'ERROR existencias %s: %s\n' "$HTTP_CODE" "$HTTP_BODY" >&2
@@ -146,18 +154,93 @@ for existencia in \
   printf '  OK %s\n' "$existencia"
 done
 
+# PROD-001..008 en las tiendas 01..04 solo se crean si todavia no existen: si el
+# seed de datos (scripts/seed/sql/02-inventario.sql) ya las cargo, se respetan sus
+# excepciones de stock bajo (PROD-001 en Portales = 3, PROD-005 en Pradera = 0) en
+# lugar de pisarlas en cada 'docker compose up'.
 for sku in PROD-001 PROD-002 PROD-003 PROD-004 PROD-005 PROD-006 PROD-007 PROD-008; do
   for cd in CD-01 CD-CENTRAL; do
     request PUT "$BASE_URL/api/inventario/existencias" \
       "{\"sku\":\"$sku\",\"ubicacionId\":\"$cd\",\"tipoUbicacion\":\"CENTRO_DISTRIBUCION\",\"cantidadFisica\":100}"
     printf '  OK %s en %s\n' "$sku" "$cd"
   done
+
+  request GET "$BASE_URL/api/inventario/existencias/$sku"
+  existentes="$HTTP_BODY"
   for tienda in TIENDA-01-CENTRAL TIENDA-02-MIRAFLORES TIENDA-03-PORTALES TIENDA-04-PRADERA; do
+    if [[ "$existentes" == *"\"ubicacionId\":\"$tienda\""* ]]; then
+      printf '  SE CONSERVA %s en %s\n' "$sku" "$tienda"
+      continue
+    fi
     request PUT "$BASE_URL/api/inventario/existencias" \
       "{\"sku\":\"$sku\",\"ubicacionId\":\"$tienda\",\"tipoUbicacion\":\"TIENDA\",\"cantidadFisica\":50}"
     printf '  OK %s en %s\n' "$sku" "$tienda"
   done
 done
 
-printf 'Seed de demo completado. Usuarios: %s y %d mas (contrasena %s) | SKUs: SKU-DEMO-001..003 y PROD-001..008\n' \
+# Productos con stock bajo (PROD-101..105) para probar las retenciones de carrito y
+# la sugerencia de la tienda mas cercana con existencias. Roles de sucursal
+# (distancia Haversine desde T1, coordenadas de inventario.sucursal):
+#   T1     = TIENDA-01-CENTRAL     sucursal "casa" de las pruebas
+#   TVACIA = TIENDA-09-FONTABELLA  la mas cercana a T1 (0.4 km); sin PROD-102
+#   TCERCA = TIENDA-05-OAKLAND     la segunda mas cercana a T1 (0.65 km)
+#   T2     = TIENDA-12-AMERICAS    otra tienda cercana a T1 (1.9 km)
+#   TLEJOS = TIENDA-17-XELA        Quetzaltenango, otro departamento (112.7 km)
+# PUT fija la cantidad fisica, asi que cada 'up' vuelve a este estado. Inventario
+# responde 409 si la nueva cantidad queda por debajo de lo ya reservado (por
+# ejemplo, un carrito con unidades apartadas): se avisa y se sigue con el resto.
+T1="TIENDA-01-CENTRAL"
+T2="TIENDA-12-AMERICAS"
+TVACIA="TIENDA-09-FONTABELLA"
+TCERCA="TIENDA-05-OAKLAND"
+TLEJOS="TIENDA-17-XELA"
+
+cargar_existencia() {
+  local sku="$1" ubicacion="$2" tipo="$3" cantidad="$4"
+  request PUT "$BASE_URL/api/inventario/existencias" \
+    "{\"sku\":\"$sku\",\"ubicacionId\":\"$ubicacion\",\"tipoUbicacion\":\"$tipo\",\"cantidadFisica\":$cantidad}"
+  case "$HTTP_CODE" in
+    2*) printf '  OK %s en %s = %s\n' "$sku" "$ubicacion" "$cantidad" ;;
+    409) printf '  AVISO 409 %s en %s: %s\n' "$sku" "$ubicacion" "$HTTP_BODY" ;;
+    *)
+      printf 'ERROR existencias %s %s en %s: %s\n' "$HTTP_CODE" "$sku" "$ubicacion" "$HTTP_BODY" >&2
+      exit 1
+      ;;
+  esac
+}
+
+printf 'Cargando productos con stock bajo (PROD-101..105)\n'
+# PROD-101: solo T1 y T2 tienen 2 unidades.
+for fila in "CD-01|CENTRO_DISTRIBUCION|0" "CD-CENTRAL|CENTRO_DISTRIBUCION|0" "$T1|TIENDA|2" "$T2|TIENDA|2"; do
+  IFS='|' read -r ubicacion tipo cantidad <<< "$fila"
+  cargar_existencia PROD-101 "$ubicacion" "$tipo" "$cantidad"
+done
+
+# PROD-102: agotado en T1 y en la tienda mas cercana (TVACIA); hay en TCERCA y TLEJOS.
+for fila in "CD-01|CENTRO_DISTRIBUCION|0" "CD-CENTRAL|CENTRO_DISTRIBUCION|0" "$T1|TIENDA|0" "$T2|TIENDA|0" \
+            "$TVACIA|TIENDA|0" "$TCERCA|TIENDA|2" "$TLEJOS|TIENDA|2"; do
+  IFS='|' read -r ubicacion tipo cantidad <<< "$fila"
+  cargar_existencia PROD-102 "$ubicacion" "$tipo" "$cantidad"
+done
+
+# PROD-103: la unica unidad esta en TLEJOS.
+for fila in "CD-01|CENTRO_DISTRIBUCION|0" "CD-CENTRAL|CENTRO_DISTRIBUCION|0" "$T1|TIENDA|0" "$T2|TIENDA|0" \
+            "$TLEJOS|TIENDA|1"; do
+  IFS='|' read -r ubicacion tipo cantidad <<< "$fila"
+  cargar_existencia PROD-103 "$ubicacion" "$tipo" "$cantidad"
+done
+
+# PROD-104: sin existencias en ninguna parte.
+for fila in "CD-01|CENTRO_DISTRIBUCION|0" "CD-CENTRAL|CENTRO_DISTRIBUCION|0" "$T1|TIENDA|0" "$T2|TIENDA|0"; do
+  IFS='|' read -r ubicacion tipo cantidad <<< "$fila"
+  cargar_existencia PROD-104 "$ubicacion" "$tipo" "$cantidad"
+done
+
+# PROD-105 (control): disponible en CD-CENTRAL, T1 y T2.
+for fila in "CD-CENTRAL|CENTRO_DISTRIBUCION|2" "$T1|TIENDA|2" "$T2|TIENDA|2"; do
+  IFS='|' read -r ubicacion tipo cantidad <<< "$fila"
+  cargar_existencia PROD-105 "$ubicacion" "$tipo" "$cantidad"
+done
+
+printf 'Seed de demo completado. Usuarios: %s y %d mas (contrasena %s) | SKUs: SKU-DEMO-001..003, PROD-001..008 y PROD-101..105\n' \
   "$EMAIL" "${#USUARIOS_DEMO[@]}" "$PASSWORD"

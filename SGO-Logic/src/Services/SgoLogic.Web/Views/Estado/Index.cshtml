@@ -3,6 +3,7 @@
     var isStaff = (bool)(ViewBag.IsStaff ?? false);
     ViewData["Title"] = isStaff ? "Supervisión Global de Órdenes" : "Mis Pedidos & Rastreo de Guías";
     var despacho = ViewBag.Despacho as SgoLogic.Web.Services.DespachoOrdenModel;
+    var tiendaOrigen = ViewBag.TiendaOrigen as string;
     var isAuthenticated = (bool)(ViewBag.IsAuthenticated ?? false);
     var userEmail = ViewBag.UserEmail as string;
     var historial = ViewBag.HistorialDespachos as List<SgoLogic.Web.Controllers.OrdenConDespachoItem>;
@@ -223,7 +224,7 @@ else if (Model == null)
                                     @(ord.NumeroOrden ?? ord.OrdenId)
                                 </td>
                                 <td class="py-4 px-4 text-text-muted whitespace-nowrap">
-                                    @ord.ActualizadaEn.ToLocalTime().ToString("dd/MM/yyyy HH:mm")
+                                    @FechaHelper.Formatear(ord.CreadaEn ?? ord.ActualizadaEn)
                                 </td>
                                 @if (isStaff)
                                 {
@@ -352,6 +353,9 @@ else
                         <span class="text-[10px] text-text-muted font-mono" id="sync-status">Sincronizado</span>
                     </div>
                     <h2 class="text-xl sm:text-2xl font-bold text-primary tracking-tight font-mono">@(Model.NumeroOrden ?? Model.OrdenId)</h2>
+                    <div class="text-xs text-text-muted mt-1">
+                        Fecha: <span class="font-medium text-primary">@FechaHelper.Formatear(Model.CreadaEn ?? Model.ActualizadaEn)</span>
+                    </div>
                 </div>
             </div>
 
@@ -421,7 +425,7 @@ else
                         </span>
                         <div>
                             <div class="font-bold text-primary">1. Creada & Cobro</div>
-                            <div class="text-[11px] text-text-muted">PayKlik Tokenizado</div>
+                            <div class="text-[11px] text-text-muted">Tarjeta tokenizada</div>
                         </div>
                     }
                 </div>
@@ -519,6 +523,10 @@ else
                         <span class="font-bold text-primary">@(Model.Moneda ?? "GTQ") @(Model.Total?.ToString("F2") ?? "0.00")</span>
                     </div>
                     <div class="flex justify-between">
+                        <span class="text-text-muted">Fecha Creación:</span>
+                        <span class="font-medium text-primary">@FechaHelper.Formatear(Model.CreadaEn ?? Model.ActualizadaEn)</span>
+                    </div>
+                    <div class="flex justify-between">
                         <span class="text-text-muted">Canal:</span>
                         <span class="font-semibold text-primary">@(Model.Canal ?? "WEB")</span>
                     </div>
@@ -588,6 +596,16 @@ else
                             <span class="font-semibold text-amber-700">En Trámite</span>
                         }
                     </div>
+                    @if (!isCancelledOrRejected)
+                    {
+                        <div class="pt-2">
+                            <a href="/Estado/Factura?ordenId=@Uri.EscapeDataString(Model.OrdenId)"
+                               class="w-full inline-flex items-center justify-center gap-1.5 bg-surface-white hover:bg-surface-container text-primary px-3 py-2 rounded-xl text-xs font-semibold border border-border-subtle/70 transition-colors">
+                                <span class="material-symbols-outlined text-[16px]">description</span>
+                                Ver factura
+                            </a>
+                        </div>
+                    }
                 </div>
             </div>
 
@@ -602,6 +620,13 @@ else
                         <span class="text-text-muted">Método:</span>
                         <span class="font-bold text-primary">@(Model.MetodoEntrega ?? "DOMICILIO")</span>
                     </div>
+                    @if (!isCancelledOrRejected && !string.IsNullOrWhiteSpace(tiendaOrigen))
+                    {
+                        <div class="flex items-start gap-1.5 p-2 rounded-lg bg-amber-50 border border-amber-200/70 text-amber-900 font-medium">
+                            <span class="material-symbols-outlined text-[15px]">storefront</span>
+                            <span>Este envío sale desde la tienda @tiendaOrigen</span>
+                        </div>
+                    }
                     <div class="flex justify-between">
                         <span class="text-text-muted">Transportista:</span>
                         @if (isCancelledOrRejected)
@@ -686,7 +711,7 @@ else
                             @foreach (var inc in Model.Incidencias)
                             {
                                 <tr>
-                                    <td class="py-3 px-4 text-text-muted whitespace-nowrap">@inc.CreadaEn.ToLocalTime().ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td class="py-3 px-4 text-text-muted whitespace-nowrap">@FechaHelper.Formatear(inc.CreadaEn)</td>
                                     <td class="py-3 px-4 text-primary font-medium">@inc.Descripcion</td>
                                     <td class="py-3 px-4">
                                         <span class="px-2.5 py-1 rounded-full text-[11px] font-bold @(inc.Estado == "RESUELTA" ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800")">

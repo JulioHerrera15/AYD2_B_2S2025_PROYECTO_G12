@@ -89,7 +89,9 @@ public sealed class ManejadorReembolsoTests
             outbox,
             unidad,
             new GeneradorCorrelativoOrdenFalso(),
-            new PoliticaMediosPago(MediosPago));
+            new PoliticaMediosPago(MediosPago),
+            new ClienteCarritoFalso(),
+            new CatalogoProductosFalso());
         var manejador = new ManejadorEventosPagos(
             registro,
             servicio,

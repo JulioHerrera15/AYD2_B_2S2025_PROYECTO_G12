@@ -55,7 +55,8 @@ public sealed record SolicitudDespacho(
     TipoUbicacion? TipoUbicacionOrigenSugerida,
     string? UbicacionRecogidaId,
     string? DireccionEntrega,
-    IReadOnlyList<LineaDespachoDto> Lineas);
+    IReadOnlyList<LineaDespachoDto> Lineas,
+    string? ClienteId = null);
 
 /// <summary>Cambio de metodo de entrega despues de confirmada la compra.</summary>
 public sealed record SolicitudCambioMetodo(

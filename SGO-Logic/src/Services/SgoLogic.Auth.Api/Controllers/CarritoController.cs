@@ -11,6 +11,13 @@ namespace SgoLogic.Auth.Api.Controllers;
 ///   - sesionId (header X-Session-Id) cuando es invitado
 /// Ambos carritos comparten la misma clave de Redis una vez asociados con
 /// POST /api/carrito/asociar, que migra guest:{sesionId} → cart:{clienteId}.
+///
+/// Agregar y actualizar toman precio y descripcion del catalogo de Inventario (404 si
+/// el SKU no existe o esta inactivo): lo que mande el cliente se ignora.
+///
+/// Agregar, actualizar, quitar, asociar y renovar pasan primero por Inventario,
+/// que retiene el stock. Si Inventario responde 409 se devuelve 409 con el mismo
+/// cuerpo; si no responde, 503. En ambos casos el carrito no cambia.
 /// </summary>
 [ApiController]
 [Route("api/carrito")]
@@ -37,43 +44,61 @@ public sealed class CarritoController : ControllerBase
     [HttpPost("items")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> AgregarItem([FromBody] AgregarItemRequest request, CancellationToken ct)
-    {
-        try
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public Task<IActionResult> AgregarItem([FromBody] AgregarItemRequest request, CancellationToken ct) =>
+        OperarAsync(async () =>
         {
             var id = ResolverIdentificador();
             await _carrito.AgregarItemAsync(id, request, ct);
             return NoContent();
-        }
-        catch (ArgumentException ex)
-        {
-            return BadRequest(new ProblemDetails { Title = "Solicitud invalida", Detail = ex.Message });
-        }
-    }
+        });
 
     /// <summary>Actualiza la cantidad de un item del carrito por SKU.</summary>
     [HttpPut("items/{sku}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
     public async Task<IActionResult> ActualizarCantidad(string sku, [FromBody] ActualizarCantidadRequest request, CancellationToken ct)
     {
         if (request.Cantidad < 0)
             return BadRequest(new ProblemDetails { Title = "Solicitud inválida", Detail = "La cantidad no puede ser negativa." });
 
-        var id = ResolverIdentificador();
-        await _carrito.ActualizarCantidadItemAsync(id, sku, request.Cantidad, ct);
-        return NoContent();
+        return await OperarAsync(async () =>
+        {
+            var id = ResolverIdentificador();
+            await _carrito.ActualizarCantidadItemAsync(id, sku, request.Cantidad, request.UbicacionPreferidaId, ct);
+            return NoContent();
+        });
     }
 
     /// <summary>Elimina un item del carrito por SKU.</summary>
     [HttpDelete("items/{sku}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
-    public async Task<IActionResult> EliminarItem(string sku, CancellationToken ct)
-    {
-        var id = ResolverIdentificador();
-        await _carrito.EliminarItemAsync(id, sku, ct);
-        return NoContent();
-    }
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public Task<IActionResult> EliminarItem(string sku, CancellationToken ct) =>
+        OperarAsync(async () =>
+        {
+            var id = ResolverIdentificador();
+            await _carrito.EliminarItemAsync(id, sku, ct);
+            return NoContent();
+        });
+
+    /// <summary>
+    /// Extiende la retencion de stock de todo el carrito y reactiva las lineas
+    /// vencidas donde todavia haya stock. Devuelve el carrito actualizado; un item que
+    /// no se pudo reactivar queda con estadoReserva EXPIRADA.
+    /// </summary>
+    [HttpPost("reserva/renovar")]
+    [ProducesResponseType<CarritoDto>(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status503ServiceUnavailable)]
+    public Task<IActionResult> RenovarReserva(CancellationToken ct) =>
+        OperarAsync(async () =>
+        {
+            var id = ResolverIdentificador();
+            return Ok(await _carrito.RenovarReservaAsync(id, ct));
+        });
 
     /// <summary>
     /// Asocia el carrito de invitado (guest:{sesionId}) al carrito de la cuenta
@@ -90,11 +115,57 @@ public sealed class CarritoController : ControllerBase
             ?? User.FindFirstValue("sub")
             ?? throw new UnauthorizedAccessException("No se pudo obtener el clienteId del token.");
 
-        await _carrito.AsociarAsync(request.SesionId, clienteId, ct);
-        return NoContent();
+        return await OperarAsync(async () =>
+        {
+            await _carrito.AsociarAsync(request.SesionId, clienteId, ct);
+            return NoContent();
+        });
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Traduce los rechazos de Inventario: 409 pasa con el mismo cuerpo (sku,
+    /// disponible, mensaje y sucursal cercana) y la falta de respuesta es 503.
+    /// </summary>
+    private async Task<IActionResult> OperarAsync(Func<Task<IActionResult>> operacion)
+    {
+        try
+        {
+            return await operacion();
+        }
+        catch (ExcepcionInventarioRechazo ex)
+        {
+            return new ContentResult
+            {
+                StatusCode = ex.Status,
+                Content = ex.Cuerpo,
+                ContentType = string.IsNullOrWhiteSpace(ex.ContentType) ? "application/json" : ex.ContentType
+            };
+        }
+        catch (ExcepcionProductoNoEncontrado ex)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "Producto no encontrado",
+                Detail = ex.Message,
+                Status = StatusCodes.Status404NotFound
+            });
+        }
+        catch (ExcepcionInventarioNoDisponible)
+        {
+            return StatusCode(StatusCodes.Status503ServiceUnavailable, new ProblemDetails
+            {
+                Title = "Inventario no disponible",
+                Detail = "No pudimos confirmar la disponibilidad del producto en este momento. Tu carrito no se modifico; intenta de nuevo en unos minutos.",
+                Status = StatusCodes.Status503ServiceUnavailable
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new ProblemDetails { Title = "Solicitud invalida", Detail = ex.Message });
+        }
+    }
 
     private string ResolverIdentificador()
     {

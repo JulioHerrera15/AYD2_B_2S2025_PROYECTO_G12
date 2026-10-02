@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using SgoLogic.Inventario.Api.Application.Inventario;
+using SgoLogic.Inventario.Api.Infrastructure.Persistencia.Configuraciones;
 
 namespace SgoLogic.Inventario.Api.Infrastructure.Persistencia;
 
@@ -29,6 +31,18 @@ public sealed class UnidadDeTrabajo : IUnidadDeTrabajo
         {
             throw new ExcepcionConflictoConcurrencia(
                 "Una existencia fue modificada por otra operacion concurrente. Reintente con el estado actual.",
+                ex);
+        }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException
+        {
+            SqlState: PostgresErrorCodes.UniqueViolation,
+            ConstraintName: ReservaCarritoConfiguration.IndiceRetencionActiva
+        })
+        {
+            // Dos peticiones del mismo carrito crearon a la vez la retencion de un SKU:
+            // es el mismo choque que el de version, solo que lo detecta el indice unico.
+            throw new ExcepcionConflictoConcurrencia(
+                "El carrito fue modificado por otra operacion concurrente. Reintente con el estado actual.",
                 ex);
         }
     }

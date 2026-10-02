@@ -39,9 +39,10 @@ public sealed class ServicioLiberacionReservas
     }
 
     /// <summary>
-    /// Devuelve al disponible las unidades de la reserva de una orden. Idempotente:
-    /// una reserva que ya no esta ACTIVA (porque expiro por TTL o porque el mensaje
-    /// llego repetido) no se toca ni re-emite.
+    /// Devuelve al disponible las unidades de la reserva de una orden, localizada
+    /// por su OrdenId (indice unico). Libera reservas ACTIVA o CONFIRMADA (la orden
+    /// pudo cancelarse despues de pagada). Idempotente: una reserva que ya no retiene
+    /// stock (LIBERADA, EXPIRADA o ENTREGADA) no se toca ni re-emite.
     /// </summary>
     public async Task<bool> LiberarAsync(
         string ordenId,
@@ -62,10 +63,11 @@ public sealed class ServicioLiberacionReservas
             return false;
         }
 
-        if (!reserva.EstaActiva)
+        if (!reserva.RetieneStock)
         {
-            // Ya la libero el barrido de TTL (HU-002) o un mensaje anterior. El
-            // stock ya esta de vuelta; re-emitir solo confundiria a los consumidores.
+            // Ya la libero el barrido de TTL (HU-002) o un mensaje anterior, o sus
+            // unidades ya salieron a ruta. No hay nada que devolver; re-emitir solo
+            // confundiria a los consumidores.
             _logger.LogInformation(
                 "La reserva {ReservaId} de la orden {OrdenId} ya estaba en {Estado}; no se libera de nuevo.",
                 reserva.Id,

@@ -106,12 +106,45 @@ public sealed class Existencia
         Version += 1;
     }
 
-    /// <summary>Ajusta la cantidad fisica (carga inicial, recuento, reingreso).</summary>
+    /// <summary>
+    /// Saca del almacen <paramref name="cantidad" /> unidades que estaban reservadas
+    /// para una orden: resta exactamente esa cantidad de la fisica y de la
+    /// reservada, sin tocar lo comprometido por otras reservas. Lanza
+    /// <see cref="ExcepcionConsumoReservaInconsistente" /> si la existencia no tiene
+    /// esas unidades reservadas o fisicas, sin modificar nada.
+    /// </summary>
+    public void ConsumirReservada(int cantidad)
+    {
+        if (cantidad <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(cantidad), "La cantidad a consumir debe ser mayor que cero.");
+        }
+
+        if (cantidad > CantidadReservada || cantidad > CantidadFisica)
+        {
+            throw new ExcepcionConsumoReservaInconsistente(Sku, UbicacionId, cantidad, CantidadReservada, CantidadFisica);
+        }
+
+        CantidadFisica -= cantidad;
+        CantidadReservada -= cantidad;
+        Version += 1;
+    }
+
+    /// <summary>
+    /// Ajusta la cantidad fisica (carga inicial, recuento, reingreso). Lanza
+    /// <see cref="ExcepcionCantidadFisicaMenorQueReservada" /> si la nueva cantidad no
+    /// alcanza para lo ya reservado, sin modificar nada.
+    /// </summary>
     public void AjustarCantidadFisica(int cantidadFisica)
     {
         if (cantidadFisica < 0)
         {
             throw new ArgumentOutOfRangeException(nameof(cantidadFisica), "La cantidad fisica no puede ser negativa.");
+        }
+
+        if (cantidadFisica < CantidadReservada)
+        {
+            throw new ExcepcionCantidadFisicaMenorQueReservada(Sku, UbicacionId, cantidadFisica, CantidadReservada);
         }
 
         CantidadFisica = cantidadFisica;

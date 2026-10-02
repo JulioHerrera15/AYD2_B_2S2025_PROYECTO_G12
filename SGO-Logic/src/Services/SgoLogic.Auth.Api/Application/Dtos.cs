@@ -38,26 +38,64 @@ public sealed record LoginResponse(
 
 // ── Carrito ───────────────────────────────────────────────────────────────────
 
+/// <summary>
+/// Item del carrito. Los cinco campos finales describen la retencion de stock en
+/// Inventario (null si el item no tiene retencion conocida): donde quedo apartado,
+/// hasta cuando, su estado (ACTIVA o EXPIRADA) y si es otra sucursal distinta de la
+/// que eligio el cliente.
+/// </summary>
 public sealed record ItemCarritoDto(
     string Sku,
     string Descripcion,
     int Cantidad,
-    decimal PrecioUnitario);
+    decimal PrecioUnitario,
+    string? UbicacionId = null,
+    string? NombreUbicacion = null,
+    DateTime? ExpiraEn = null,
+    string? EstadoReserva = null,
+    bool? EnOtraSucursal = null);
 
+/// <param name="ReservaExpiraEn">La menor expiracion entre las retenciones activas del carrito.</param>
+/// <param name="CarritoId">Clave del carrito (cart:{usuarioId} o guest:{sesionId}); es el carritoId de la orden.</param>
 public sealed record CarritoDto(
     string ClienteOSesionId,
     IReadOnlyList<ItemCarritoDto> Items,
-    decimal Total);
+    decimal Total,
+    DateTime? ReservaExpiraEn = null,
+    string? CarritoId = null);
 
+/// <param name="Descripcion">Se ignora: la descripcion sale del catalogo de Inventario. Se conserva por compatibilidad.</param>
+/// <param name="PrecioUnitario">Se ignora: el precio sale del catalogo de Inventario. Se conserva por compatibilidad.</param>
+/// <param name="UbicacionPreferidaId">Sucursal elegida por el cliente: Inventario intenta apartar ahi primero.</param>
 public sealed record AgregarItemRequest(
     string Sku,
-    string Descripcion,
+    string? Descripcion,
     int Cantidad,
-    decimal PrecioUnitario);
+    decimal? PrecioUnitario,
+    string? UbicacionPreferidaId = null);
 
 public sealed record AsociarCarritoRequest(
     string SesionId);
 
 public sealed record ActualizarCantidadRequest(
-    int Cantidad);
+    int Cantidad,
+    string? UbicacionPreferidaId = null);
 
+// ── Gestion de Roles y Usuarios ──────────────────────────────────────────────
+
+public sealed record AsignarRolRequest(
+    string Email,
+    string Rol);
+
+public sealed record AsignarRolResponse(
+    string Email,
+    string Rol,
+    string Mensaje);
+
+public sealed record UsuarioDto(
+    Guid Id,
+    string Email,
+    string NombreCompleto,
+    string Rol,
+    bool EmailVerificado,
+    DateTime CreadoEn);

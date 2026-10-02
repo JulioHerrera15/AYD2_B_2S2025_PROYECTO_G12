@@ -48,6 +48,7 @@ public sealed class ServicioReservasTests
             repoReservas,
             outbox,
             new GeneradorCorrelativoReservaFalso(correlativoInicial),
+            new RepositorioReservasCarritoFalso(),
             Options.Create(opciones ?? new InventarioOptions()));
         return (servicio, repoExistencias, repoReservas, outbox);
     }
@@ -227,6 +228,46 @@ public sealed class ServicioReservasTests
             CancellationToken.None);
 
         Assert.Equal("RSV-2026-000001", Assert.Single(activas).Id);
+    }
+
+    [Fact]
+    public async Task OrdenConfirmada_deja_la_reserva_confirmada_sin_descontar_fisico()
+    {
+        var (servicio, existencias, reservas, outbox) = Construir(
+            existencias: Existencia("CD-01", 10));
+        await servicio.ReservarAsync(Solicitud(cantidad: 3), CancellationToken.None);
+        outbox.Eventos.Clear();
+
+        var estado = await servicio.ConfirmarAsync(OrdenId, CancellationToken.None);
+
+        Assert.Equal(EstadoReserva.CONFIRMADA, estado);
+        Assert.Equal(EstadoReserva.CONFIRMADA, reservas.Todas.Single().Estado);
+
+        var existencia = (await existencias.ListarPorSkuAsync(Sku, CancellationToken.None)).Single();
+        Assert.Equal(10, existencia.CantidadFisica);
+        Assert.Equal(3, existencia.CantidadReservada);
+        Assert.Empty(outbox.Eventos);
+    }
+
+    [Fact]
+    public async Task Confirmar_es_idempotente_sobre_confirmada_y_entregada()
+    {
+        var (servicio, _, reservas, _) = Construir(existencias: Existencia("CD-01", 10));
+        await servicio.ReservarAsync(Solicitud(cantidad: 3), CancellationToken.None);
+
+        Assert.Equal(EstadoReserva.CONFIRMADA, await servicio.ConfirmarAsync(OrdenId, CancellationToken.None));
+        Assert.Equal(EstadoReserva.CONFIRMADA, await servicio.ConfirmarAsync(OrdenId, CancellationToken.None));
+
+        reservas.Todas.Single().MarcarEntregada();
+        Assert.Equal(EstadoReserva.ENTREGADA, await servicio.ConfirmarAsync(OrdenId, CancellationToken.None));
+    }
+
+    [Fact]
+    public async Task Confirmar_sin_reserva_devuelve_null()
+    {
+        var (servicio, _, _, _) = Construir();
+
+        Assert.Null(await servicio.ConfirmarAsync("ORD-SIN-RESERVA", CancellationToken.None));
     }
 
     private static Reserva ReservaEn(string id, string ordenId, string ubicacionId) =>

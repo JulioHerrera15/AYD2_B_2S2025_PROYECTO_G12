@@ -7,7 +7,9 @@ using SgoLogic.BuildingBlocks.Serialization;
 using SgoLogic.Contracts;
 using SgoLogic.Contracts.Enumeraciones;
 using SgoLogic.Contracts.Eventos.Ordenes;
+using SgoLogic.Contracts.Eventos.Despacho;
 using SgoLogic.Inventario.Api.Application.Inventario;
+using SgoLogic.Inventario.Api.Domain;
 using SgoLogic.Inventario.Api.Infrastructure.Persistencia;
 
 namespace SgoLogic.Inventario.Api.Consumers;
@@ -43,8 +45,14 @@ public sealed class OrdenesEventosConsumidor : BackgroundService
     {
         new BindingCola(TopologiaMensajeria.ExchangeEventos, ReservaInventarioSolicitada.RoutingKey),
         new BindingCola(TopologiaMensajeria.ExchangeEventos, LiberacionReservaSolicitada.RoutingKey),
-        new BindingCola(TopologiaMensajeria.ExchangeEventos, DevolucionRegistrada.RoutingKey)
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, DevolucionRegistrada.RoutingKey),
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, DespachoEstadoActualizado.RoutingKey),
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, OrdenConfirmada.RoutingKey)
     };
+
+    /// <summary>Estados de despacho que sacan fisicamente las unidades reservadas.</summary>
+    private static readonly IReadOnlySet<string> EstadosQueConsumen =
+        new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "EN_TRANSITO", "LISTA_PARA_RECOGER", "ENTREGADA" };
 
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly IConexionRabbitMq _conexion;
@@ -161,7 +169,8 @@ public sealed class OrdenesEventosConsumidor : BackgroundService
                         datos.MetodoEntrega,
                         datos.UbicacionPreferidaId,
                         datos.TtlReservaSegundos,
-                        datos.Lineas.Select(l => new LineaSolicitudReserva(l.Sku, l.Cantidad)).ToList()),
+                        datos.Lineas.Select(l => new LineaSolicitudReserva(l.Sku, l.Cantidad)).ToList(),
+                        datos.CarritoId),
                     cancelacion);
 
                 return true;
@@ -175,6 +184,49 @@ public sealed class OrdenesEventosConsumidor : BackgroundService
 
                 await servicios.GetRequiredService<ServicioLiberacionReservas>()
                     .LiberarAsync(datos.OrdenId, datos.Motivo, cancelacion);
+
+                return true;
+            }
+
+            case OrdenConfirmada.EventType:
+            {
+                // La orden quedo pagada: la reserva pasa a CONFIRMADA para que no
+                // expire por TTL. El stock fisico NO se descuenta aqui, sino cuando
+                // el operador envia el pedido a ruta.
+                var datos = Leer<OrdenConfirmadaData>(sobre.Data);
+                var estado = await servicios.GetRequiredService<ServicioReservas>()
+                    .ConfirmarAsync(datos.OrdenId, cancelacion);
+
+                if (estado is null or EstadoReserva.EXPIRADA or EstadoReserva.LIBERADA)
+                {
+                    servicios.GetRequiredService<ILogger<OrdenesEventosConsumidor>>().LogWarning(
+                        "OrdenConfirmada para la orden {OrdenId} sin reserva vigente ({Estado}); no hay nada que confirmar.",
+                        datos.OrdenId,
+                        estado?.ToString() ?? "sin reserva");
+                }
+
+                return true;
+            }
+
+            case DespachoEstadoActualizado.EventType:
+            {
+                // El paso a ruta (EN_TRANSITO o LISTA_PARA_RECOGER) es la salida
+                // fisica. ENTREGADA queda de respaldo por si el paso a ruta no llego;
+                // si la reserva ya se consumio, el servicio no descuenta dos veces.
+                var datos = Leer<DespachoEstadoActualizadoData>(sobre.Data);
+                if (EstadosQueConsumen.Contains(datos.EstadoNuevo))
+                {
+                    var consumido = await servicios.GetRequiredService<ServicioConsumoEntrega>()
+                        .ConsumirAsync(datos.OrdenId, cancelacion);
+
+                    if (!consumido)
+                    {
+                        servicios.GetRequiredService<ILogger<OrdenesEventosConsumidor>>().LogWarning(
+                            "Despacho {EstadoNuevo} para la orden {OrdenId} sin reserva registrada; no se descuenta stock.",
+                            datos.EstadoNuevo,
+                            datos.OrdenId);
+                    }
+                }
 
                 return true;
             }

@@ -62,6 +62,76 @@ public sealed class ReservaTests
     }
 
     [Fact]
+    public void MarcarEntregada_desde_activa_cambia_a_entregada_e_idempotente()
+    {
+        var reserva = Nueva();
+        reserva.MarcarEntregada();
+        Assert.Equal(EstadoReserva.ENTREGADA, reserva.Estado);
+        Assert.Equal(2, reserva.Secuencia);
+
+        // Idempotente
+        reserva.MarcarEntregada();
+        Assert.Equal(EstadoReserva.ENTREGADA, reserva.Estado);
+        Assert.Equal(2, reserva.Secuencia);
+    }
+
+    [Fact]
+    public void MarcarEntregada_desde_confirmada_cambia_a_entregada()
+    {
+        var reserva = Nueva();
+        reserva.Confirmar();
+
+        reserva.MarcarEntregada();
+
+        Assert.Equal(EstadoReserva.ENTREGADA, reserva.Estado);
+    }
+
+    [Fact]
+    public void MarcarEntregada_sobre_una_reserva_liberada_lanza()
+    {
+        var reserva = Nueva();
+        reserva.Liberar();
+
+        Assert.Throws<InvalidOperationException>(() => reserva.MarcarEntregada());
+        Assert.Equal(EstadoReserva.LIBERADA, reserva.Estado);
+    }
+
+    [Fact]
+    public void Confirmar_desde_activa_la_deja_confirmada_e_idempotente()
+    {
+        var reserva = Nueva();
+
+        reserva.Confirmar();
+        reserva.Confirmar();
+
+        Assert.Equal(EstadoReserva.CONFIRMADA, reserva.Estado);
+        Assert.True(reserva.RetieneStock);
+        Assert.False(reserva.EstaActiva);
+    }
+
+    [Fact]
+    public void Confirmar_fuera_de_activa_lanza()
+    {
+        var expirada = Nueva();
+        expirada.MarcarExpirada();
+
+        Assert.Throws<InvalidOperationException>(() => expirada.Confirmar());
+        Assert.Equal(EstadoReserva.EXPIRADA, expirada.Estado);
+    }
+
+    [Fact]
+    public void Liberar_una_reserva_confirmada_la_deja_liberada()
+    {
+        var reserva = Nueva();
+        reserva.Confirmar();
+
+        reserva.Liberar();
+
+        Assert.Equal(EstadoReserva.LIBERADA, reserva.Estado);
+        Assert.False(reserva.RetieneStock);
+    }
+
+    [Fact]
     public void Crear_con_id_fuera_de_patron_lanza()
     {
         Assert.Throws<ArgumentException>(() => Reserva.Crear(

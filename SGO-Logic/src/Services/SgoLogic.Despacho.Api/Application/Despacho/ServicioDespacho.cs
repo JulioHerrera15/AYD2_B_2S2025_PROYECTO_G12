@@ -63,6 +63,7 @@ public sealed class ServicioDespacho
             solicitud.UbicacionRecogidaId,
             solicitud.DireccionEntrega,
             solicitud.Lineas.Select(l => (l.Sku, l.Descripcion, l.Cantidad)));
+        despacho.RegistrarCliente(solicitud.ClienteId);
 
         await _despachos.AgregarAsync(despacho, cancelacion);
 
@@ -272,7 +273,8 @@ public sealed class ServicioDespacho
                     despacho.Id,
                     despacho.OrdenId,
                     despacho.UbicacionRecogidaId ?? despacho.UbicacionOrigenId ?? string.Empty,
-                    ocurridoEn));
+                    ocurridoEn,
+                    despacho.ClienteId));
         }
 
         return DespachoDto.Desde(despacho);

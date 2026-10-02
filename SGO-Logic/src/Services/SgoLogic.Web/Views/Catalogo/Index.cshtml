@@ -3,6 +3,16 @@
     ViewData["Title"] = "Catálogo Comercial Omnicanal";
     var categoriaActual = ViewBag.Categoria as string ?? "TODOS";
     var busquedaActual = ViewBag.Busqueda as string ?? "";
+    var sucursales = ViewBag.Sucursales as IReadOnlyList<SgoLogic.Web.Services.SucursalModel>
+        ?? Array.Empty<SgoLogic.Web.Services.SucursalModel>();
+    var sucursalSeleccionada = ViewBag.SucursalSeleccionada as string ?? SgoLogic.Web.Controllers.CatalogoController.SucursalPorDefecto;
+    var centrosDistribucion = sucursales.Where(s => !s.EsTienda).ToList();
+    var tiendasPorDepartamento = sucursales
+        .Where(s => s.EsTienda)
+        .GroupBy(s => s.Departamento)
+        .OrderBy(g => g.Key == "Guatemala" ? 0 : 1)
+        .ThenBy(g => g.Key)
+        .ToList();
 }
 
 <div class="mb-8">
@@ -22,13 +32,32 @@
             <span class="material-symbols-outlined text-secondary text-[20px]">location_on</span>
             <div class="flex flex-col">
                 <span class="text-[10px] text-text-muted font-semibold uppercase tracking-wider">Sucursal Seleccionada</span>
-                <select id="sucursal-selector" class="text-xs font-bold text-primary bg-transparent border-none p-0 focus:ring-0 cursor-pointer" onchange="actualizarDisponibilidadTienda(this.value)">
-                    <option value="TIENDA-01-CENTRAL">MegaStore Central — Zona 10</option>
-                    <option value="TIENDA-02-MIRAFLORES">MegaStore Miraflores — Zona 11</option>
-                    <option value="TIENDA-03-PORTALES">MegaStore Portales — Zona 17</option>
-                    <option value="TIENDA-04-PRADERA">MegaStore Pradera Concepción</option>
-                    <option value="CD-01">Centro de Distribución Central (CD-01)</option>
-                    <option value="CD-CENTRAL">Centro de Distribución Norte (CD-CENTRAL)</option>
+                <select id="sucursal-selector" class="text-xs font-bold text-primary bg-transparent border-none p-0 focus:ring-0 cursor-pointer">
+                    @if (sucursales.Count == 0)
+                    {
+                        <option value="@sucursalSeleccionada" selected>@sucursalSeleccionada</option>
+                    }
+                    else
+                    {
+                        if (centrosDistribucion.Count > 0)
+                        {
+                            <optgroup label="Centros de Distribución">
+                                @foreach (var cd in centrosDistribucion)
+                                {
+                                    <option value="@cd.Id" selected="@(cd.Id == sucursalSeleccionada)">@cd.Nombre</option>
+                                }
+                            </optgroup>
+                        }
+                        foreach (var grupo in tiendasPorDepartamento)
+                        {
+                            <optgroup label="@grupo.Key">
+                                @foreach (var tienda in grupo)
+                                {
+                                    <option value="@tienda.Id" selected="@(tienda.Id == sucursalSeleccionada)">@tienda.Nombre</option>
+                                }
+                            </optgroup>
+                        }
+                    }
                 </select>
             </div>
         </div>
@@ -100,9 +129,15 @@
                             <span class="material-symbols-outlined text-[15px] text-secondary">inventory</span>
                             Stock en Sucursal:
                         </span>
-                        <span id="stock-badge-@prod.Sku" class="font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md" data-stock="loading">
+                        <span id="stock-badge-@prod.Sku" class="font-bold text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md text-right" data-stock="loading">
                             Consultando...
                         </span>
+                    </div>
+                    <div id="stock-cercana-@prod.Sku" class="hidden -mt-2 mb-4 text-right">
+                        <button type="button" class="btn-cambiar-sucursal inline-flex items-center gap-1 text-[11px] font-semibold text-secondary hover:underline" data-ubicacion="">
+                            <span class="material-symbols-outlined text-[14px]">swap_horiz</span>
+                            Cambiar a esa sucursal
+                        </button>
                     </div>
                 </div>
 
@@ -115,10 +150,11 @@
                         </div>
                     </div>
 
-                    <form method="post" action="/Carrito/Agregar" class="flex items-center gap-2" data-stock-form="@prod.Sku">
+                    <form method="post" action="/Carrito/Agregar" class="flex items-center gap-2 form-agregar-carrito" data-stock-form="@prod.Sku">
                         <input type="hidden" name="sku" value="@prod.Sku" />
                         <input type="hidden" name="descripcion" value="@prod.Nombre" />
                         <input type="hidden" name="precioUnitario" value="@prod.PrecioUnitario" />
+                        <input type="hidden" name="returnUrl" value="/Catalogo" />
                         <input type="number" name="cantidad" value="1" min="1" max="10"
                                class="w-14 px-2 py-2 text-center text-xs font-semibold rounded-xl border border-border-subtle bg-surface-container-low focus:outline-none" />
                         <button type="submit" class="flex-1 bg-primary text-on-primary hover:opacity-90 active:scale-95 py-2 px-3 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm" disabled>
@@ -135,7 +171,7 @@
     <div class="mt-8 flex flex-col sm:flex-row items-center justify-between gap-4 p-4 bg-surface-white rounded-2xl border border-border-subtle/60 ambient-shadow">
         <div class="flex items-center gap-3 text-xs text-text-muted">
             <span class="material-symbols-outlined text-secondary text-[18px]">sync</span>
-            <span>Los stocks se consultan en tiempo real desde <strong>inventario-api</strong> vía API Gateway.</span>
+            <span>Los stocks se consultan en tiempo real.</span>
             <span id="stock-global-status" class="text-xs text-emerald-700 ml-2 hidden">Actualizado</span>
         </div>
         <div class="flex items-center gap-2">
@@ -175,6 +211,28 @@
         return existencia.ubicacionId ?? existencia.UbicacionId ?? '';
     }
 
+    function guardarSucursal(ubicacionId) {
+        document.cookie = `sgo_sucursal=${encodeURIComponent(ubicacionId)}; path=/; max-age=2592000`;
+    }
+
+    function formatearKm(km) {
+        if (km === null || km === undefined) return null;
+        return Number(km).toLocaleString('es-GT', { maximumFractionDigits: 1 });
+    }
+
+    function habilitarAgregar(btn, qtyInput, maximo) {
+        if (!btn) return;
+        btn.disabled = false;
+        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        if (qtyInput && maximo) qtyInput.max = Math.min(10, maximo);
+    }
+
+    function deshabilitarAgregar(btn) {
+        if (!btn) return;
+        btn.disabled = true;
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+    }
+
     // Consultar stock en tiempo real desde inventario-api al cambiar de sucursal
     async function actualizarDisponibilidadTienda(ubicacionId) {
         const skus = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(Model.Select(m => m.Sku)));
@@ -182,60 +240,59 @@
 
         for (const sku of skus) {
             const el = document.getElementById(`stock-badge-${sku}`);
+            const contenedorCercana = document.getElementById(`stock-cercana-${sku}`);
+            const btnCambiar = contenedorCercana?.querySelector('.btn-cambiar-sucursal');
             const form = document.querySelector(`form[data-stock-form="${sku}"]`);
             const btn = form?.querySelector('button[type="submit"]');
             const qtyInput = form?.querySelector('input[name="cantidad"]');
             if (!el) continue;
+            contenedorCercana?.classList.add('hidden');
 
             try {
                 // Cache-busting: timestamp único por petición para evitar cache de navegador/gateway
                 const cacheBust = Date.now();
-                const res = await fetch(`/Catalogo/Stock?sku=${encodeURIComponent(sku)}&_=${cacheBust}`, {
+                const res = await fetch(`/Catalogo/Stock?sku=${encodeURIComponent(sku)}&ubicacionId=${encodeURIComponent(ubicacionId)}&_=${cacheBust}`, {
                     headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate', 'Pragma': 'no-cache' }
                 });
                 if (res.ok) {
-                    let data = await res.json();
-                    data = normalizeKeys(data);
+                    const data = normalizeKeys(await res.json());
+                    const existencias = data.existencias ?? [];
+                    const cercana = data.cercana;
 
-                    const existencia = data.find(e => getUbicacionId(e) === ubicacionId);
+                    const existencia = existencias.find(e => getUbicacionId(e) === ubicacionId);
                     const disponible = getDisponible(existencia);
+                    const totalGlobal = existencias.reduce((acc, curr) => acc + Math.max(0, getDisponible(curr)), 0);
 
                     if (existencia && disponible > 0) {
                         el.textContent = `${disponible} en stock`;
-                        el.className = "font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md";
+                        el.className = "font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md text-right";
                         el.dataset.stock = 'available';
-                        if (btn) {
-                            btn.disabled = false;
-                            btn.classList.remove('opacity-50', 'cursor-not-allowed');
-                            if (qtyInput) qtyInput.max = Math.min(10, disponible);
+                        habilitarAgregar(btn, qtyInput, disponible);
+                    } else if (cercana) {
+                        // Agotado en la sucursal elegida: se sugiere la tienda mas cercana
+                        // con stock. Agregar sigue habilitado: el carrito aparta en esa tienda.
+                        const km = formatearKm(cercana.distanciaKm);
+                        el.textContent = km
+                            ? `Agotado aquí - disponible en ${cercana.nombre} a ${km} km`
+                            : `Agotado aquí - disponible en ${cercana.nombre}`;
+                        el.className = "font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md text-right";
+                        el.dataset.stock = 'other';
+                        if (btnCambiar) {
+                            btnCambiar.dataset.ubicacion = cercana.ubicacionId;
+                            contenedorCercana.classList.remove('hidden');
                         }
-                    } else if (existencia && disponible <= 0) {
-                        el.textContent = "Agotado aquí";
-                        el.className = "font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md";
-                        el.dataset.stock = 'out';
-                        if (btn) {
-                            btn.disabled = true;
-                            btn.classList.add('opacity-50', 'cursor-not-allowed');
-                        }
+                        habilitarAgregar(btn, qtyInput, cercana.disponible);
+                    } else if (totalGlobal > 0) {
+                        // Ninguna tienda tiene, pero un centro de distribucion si.
+                        el.textContent = "Agotado aquí - disponible en centro de distribución";
+                        el.className = "font-bold text-amber-800 bg-amber-100 px-2 py-0.5 rounded-md text-right";
+                        el.dataset.stock = 'cd';
+                        habilitarAgregar(btn, qtyInput, totalGlobal);
                     } else {
-                        const totalGlobal = data.reduce((acc, curr) => acc + getDisponible(curr), 0);
-                        if (totalGlobal > 0) {
-                            el.textContent = "En otra sucursal";
-                            el.className = "font-bold text-amber-700 bg-amber-100 px-2 py-0.5 rounded-md";
-                            el.dataset.stock = 'other';
-                            if (btn) {
-                                btn.disabled = true;
-                                btn.classList.add('opacity-50', 'cursor-not-allowed');
-                            }
-                        } else {
-                            el.textContent = "Sin existencias";
-                            el.className = "font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md";
-                            el.dataset.stock = 'none';
-                            if (btn) {
-                                btn.disabled = true;
-                                btn.classList.add('opacity-50', 'cursor-not-allowed');
-                            }
-                        }
+                        el.textContent = "Sin existencias en ninguna sucursal";
+                        el.className = "font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded-md text-right";
+                        el.dataset.stock = 'none';
+                        deshabilitarAgregar(btn);
                     }
                 } else {
                     anyError = true;
@@ -277,9 +334,15 @@
         const chkAuto = document.getElementById("chk-auto-refresh");
 
         if (selector) {
+            // La sucursal elegida viaja en la cookie: el carrito la usa para apartar ahi.
+            if (!document.cookie.split('; ').some(c => c.startsWith('sgo_sucursal='))) {
+                guardarSucursal(selector.value);
+            }
+
             actualizarDisponibilidadTienda(selector.value);
 
             selector.addEventListener("change", function () {
+                guardarSucursal(this.value);
                 actualizarDisponibilidadTienda(this.value);
                 if (chkAuto?.checked) {
                     iniciarAutoRefresh(this.value);
@@ -287,9 +350,22 @@
             });
         }
 
+        document.querySelectorAll('.btn-cambiar-sucursal').forEach(boton => {
+            boton.addEventListener('click', function () {
+                const destino = this.dataset.ubicacion;
+                if (!destino || !selector) return;
+                selector.value = destino;
+                guardarSucursal(destino);
+                actualizarDisponibilidadTienda(destino);
+                if (chkAuto?.checked) {
+                    iniciarAutoRefresh(destino);
+                }
+            });
+        });
+
         if (btnRefrescar) {
             btnRefrescar.addEventListener("click", function () {
-                const ubicacionId = selector?.value || "TIENDA-01-CENTRAL";
+                const ubicacionId = selector?.value || "@sucursalSeleccionada";
                 this.disabled = true;
                 this.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">refresh</span><span>Actualizando...</span>';
                 actualizarDisponibilidadTienda(ubicacionId).finally(() => {
@@ -301,7 +377,7 @@
 
         if (chkAuto) {
             chkAuto.addEventListener("change", function () {
-                const ubicacionId = selector?.value || "TIENDA-01-CENTRAL";
+                const ubicacionId = selector?.value || "@sucursalSeleccionada";
                 if (this.checked) {
                     iniciarAutoRefresh(ubicacionId);
                 } else {
@@ -319,6 +395,130 @@
                 console.log('[Stock] Pestaña visible, refrescando stock...');
                 actualizarDisponibilidadTienda(selector.value);
             }
+        });
+
+        // ── Manejador de Carrito sin salir del Catalogo ──────────────────────
+        function actualizarBadgeCarrito(total) {
+            const badgeDesktop = document.getElementById('nav-cart-badge');
+            const badgeMobile = document.getElementById('nav-cart-badge-mobile');
+            if (total > 0) {
+                if (badgeDesktop) {
+                    badgeDesktop.textContent = total;
+                    badgeDesktop.classList.remove('hidden');
+                }
+                if (badgeMobile) {
+                    badgeMobile.textContent = total;
+                    badgeMobile.classList.remove('hidden');
+                }
+            }
+        }
+
+        function mostrarErrorCarrito(mensaje) {
+            let toast = document.getElementById('cart-toast-error');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'cart-toast-error';
+                toast.className = 'fixed bottom-5 right-5 z-50 transition-all duration-300 max-w-sm';
+                document.body.appendChild(toast);
+            }
+
+            toast.innerHTML = `
+                <div class="bg-surface-white border border-rose-200 shadow-2xl rounded-2xl p-4 flex items-center gap-3 text-xs font-medium text-primary ambient-shadow">
+                    <div class="w-9 h-9 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center flex-shrink-0">
+                        <span class="material-symbols-outlined text-[20px]">inventory</span>
+                    </div>
+                    <div class="flex-1 text-rose-900"></div>
+                </div>
+            `;
+            toast.querySelector('.flex-1').textContent = mensaje;
+            toast.classList.remove('hidden');
+
+            if (window._toastErrorTimeout) clearTimeout(window._toastErrorTimeout);
+            window._toastErrorTimeout = setTimeout(() => toast.classList.add('hidden'), 6000);
+        }
+
+        function mostrarNotificacionCarrito(descripcion, total) {
+            let toast = document.getElementById('cart-toast');
+            if (!toast) {
+                toast = document.createElement('div');
+                toast.id = 'cart-toast';
+                toast.className = 'fixed bottom-5 right-5 z-50 transition-all duration-300 transform translate-y-12 opacity-0 pointer-events-none';
+                document.body.appendChild(toast);
+            }
+
+            toast.innerHTML = `
+                <div class="bg-surface-white border border-border-subtle shadow-2xl rounded-2xl p-4 flex items-center gap-4 text-xs font-medium text-primary max-w-sm ambient-shadow">
+                    <div class="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center flex-shrink-0">
+                        <span class="material-symbols-outlined text-[20px]">shopping_bag</span>
+                    </div>
+                    <div class="flex-1">
+                        <div class="font-bold text-primary truncate max-w-[190px]">${descripcion}</div>
+                        <div class="text-[11px] text-text-muted">Agregado al carrito (${total} items en total)</div>
+                    </div>
+                    <a href="/Carrito" class="bg-primary text-on-primary font-bold px-3 py-1.5 rounded-xl hover:opacity-90 transition-all whitespace-nowrap">
+                        Ver Carrito
+                    </a>
+                </div>
+            `;
+
+            toast.classList.remove('translate-y-12', 'opacity-0', 'pointer-events-none');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            if (window._toastTimeout) clearTimeout(window._toastTimeout);
+            window._toastTimeout = setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-12', 'opacity-0', 'pointer-events-none');
+            }, 3500);
+        }
+
+        document.querySelectorAll('.form-agregar-carrito').forEach(form => {
+            form.addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const btn = form.querySelector('button[type="submit"]');
+                const originalHtml = btn.innerHTML;
+                btn.disabled = true;
+                btn.innerHTML = '<span class="material-symbols-outlined text-[16px] animate-spin">sync</span><span>Agregando...</span>';
+
+                try {
+                    const formData = new FormData(form);
+                    const res = await fetch('/Carrito/Agregar', {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json'
+                        },
+                        body: formData
+                    });
+
+                    const data = await res.json().catch(() => null);
+
+                    if (data && (!res.ok || data.exito === false)) {
+                        // Inventario no aparto el stock (409) o no respondio (503): el
+                        // carrito no cambio y se avisa sin salir del catalogo.
+                        mostrarErrorCarrito(data.mensaje || 'No se pudo agregar el producto.');
+                        btn.disabled = false;
+                        btn.innerHTML = originalHtml;
+                        actualizarDisponibilidadTienda(selector?.value || "@sucursalSeleccionada");
+                    } else if (res.ok && data) {
+                        actualizarBadgeCarrito(data.totalItems);
+                        mostrarNotificacionCarrito(data.descripcion || 'Producto', data.totalItems);
+
+                        btn.classList.remove('bg-primary');
+                        btn.classList.add('bg-emerald-600');
+                        btn.innerHTML = '<span class="material-symbols-outlined text-[16px]">check</span><span>Agregado</span>';
+                        setTimeout(() => {
+                            btn.classList.remove('bg-emerald-600');
+                            btn.classList.add('bg-primary');
+                            btn.disabled = false;
+                            btn.innerHTML = originalHtml;
+                        }, 1200);
+                    } else {
+                        form.submit();
+                    }
+                } catch {
+                    form.submit();
+                }
+            });
         });
     });
 </script>

@@ -338,6 +338,159 @@ namespace SgoLogic.Pagos.Api.Infrastructure.Persistencia.Migraciones
                     b.ToTable("pago", "pagos");
                 });
 
+            modelBuilder.Entity("SgoLogic.Pagos.Api.Domain.TarjetaGuardada", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<bool>("Activa")
+                        .HasColumnType("boolean")
+                        .HasColumnName("activa");
+
+                    b.Property<int>("AnioExp")
+                        .HasColumnType("integer")
+                        .HasColumnName("anio_exp");
+
+                    b.Property<string>("ClienteId")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("cliente_id");
+
+                    b.Property<DateTime>("CreadaEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("creada_en");
+
+                    b.Property<string>("Marca")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("marca");
+
+                    b.Property<int>("MesExp")
+                        .HasColumnType("integer")
+                        .HasColumnName("mes_exp");
+
+                    b.Property<string>("ReferenciaPayKlik")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)")
+                        .HasColumnName("referencia_payklik");
+
+                    b.Property<string>("Titular")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("titular");
+
+                    b.Property<DateTime?>("UltimoUsoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("ultimo_uso_en");
+
+                    b.Property<string>("Ultimos4")
+                        .IsRequired()
+                        .HasMaxLength(4)
+                        .HasColumnType("character(4)")
+                        .HasColumnName("ultimos4")
+                        .IsFixedLength();
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClienteId", "Marca", "Ultimos4", "MesExp", "AnioExp")
+                        .IsUnique()
+                        .HasDatabaseName("ix_tarjeta_guardada_cliente_tarjeta_activa")
+                        .HasFilter("activa");
+
+                    b.ToTable("tarjeta_guardada", "pagos");
+                });
+
+            modelBuilder.Entity("SgoLogic.Pagos.Api.Domain.TokenPago", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("id");
+
+                    b.Property<int>("AnioExp")
+                        .HasColumnType("integer")
+                        .HasColumnName("anio_exp");
+
+                    b.Property<string>("ClienteId")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("cliente_id");
+
+                    b.Property<DateTime>("CreadoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("creado_en");
+
+                    b.Property<byte[]>("DatosCifrados")
+                        .HasColumnType("bytea")
+                        .HasColumnName("datos_cifrados");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("estado");
+
+                    b.Property<DateTime>("ExpiraEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expira_en");
+
+                    b.Property<bool>("GuardarAlCobrar")
+                        .HasColumnType("boolean")
+                        .HasColumnName("guardar_al_cobrar");
+
+                    b.Property<string>("Marca")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("marca");
+
+                    b.Property<int>("MesExp")
+                        .HasColumnType("integer")
+                        .HasColumnName("mes_exp");
+
+                    b.Property<byte[]>("Nonce")
+                        .HasColumnType("bytea")
+                        .HasColumnName("nonce");
+
+                    b.Property<Guid?>("ReferenciaTarjetaGuardadaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("referencia_tarjeta_guardada_id");
+
+                    b.Property<byte[]>("Tag")
+                        .HasColumnType("bytea")
+                        .HasColumnName("tag");
+
+                    b.Property<string>("Titular")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("titular");
+
+                    b.Property<string>("Ultimos4")
+                        .IsRequired()
+                        .HasMaxLength(4)
+                        .HasColumnType("character(4)")
+                        .HasColumnName("ultimos4")
+                        .IsFixedLength();
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Estado", "ExpiraEn")
+                        .HasDatabaseName("ix_token_pago_estado_expira_en");
+
+                    b.ToTable("token_pago", "pagos");
+                });
+
             modelBuilder.Entity("SgoLogic.Pagos.Api.Domain.IntentoPago", b =>
                 {
                     b.HasOne("SgoLogic.Pagos.Api.Domain.Pago", null)

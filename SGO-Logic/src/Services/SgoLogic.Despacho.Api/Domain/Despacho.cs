@@ -51,6 +51,13 @@ public sealed class Despacho
 
     public string ReservaId { get; private set; }
 
+    /// <summary>
+    /// Email del cliente de la orden, tal como llega en DespachoSolicitado. Solo se usa
+    /// para que PedidoListoParaRecoger diga a quien avisar. Nulo en despachos creados
+    /// antes de que el evento lo trajera.
+    /// </summary>
+    public string? ClienteId { get; private set; }
+
     public MetodoEntrega MetodoEntrega { get; private set; }
 
     /// <summary>Nulo hasta que se determina el origen.</summary>
@@ -126,6 +133,13 @@ public sealed class Despacho
             creadoEn ?? DateTime.UtcNow);
     }
 
+    /// <summary>Guarda el cliente de la orden (null o vacio lo deja sin cliente).</summary>
+    public void RegistrarCliente(string? clienteId)
+    {
+        var limpio = clienteId?.Trim();
+        ClienteId = string.IsNullOrEmpty(limpio) ? null : limpio;
+    }
+
     /// <summary>
     /// Fija desde donde sale el pedido. En recogida en tienda el despacho queda
     /// listo (no hay guia que pedir); en domicilio queda a la espera de LogiExpress.
@@ -178,6 +192,13 @@ public sealed class Despacho
     /// </summary>
     public bool ActualizarEstadoEntrega(EstadoDespacho nuevoEstado, string? detalle, DateTime ocurridoEn)
     {
+        // Un despacho anulado por cancelacion de la orden no admite ninguna
+        // transicion: ni siquiera repetir ANULADA por esta via.
+        if (Estado == EstadoDespacho.ANULADA)
+        {
+            throw new ExcepcionDespachoCancelado(OrdenId);
+        }
+
         if (Estado == nuevoEstado)
         {
             return false;
@@ -236,10 +257,17 @@ public sealed class Despacho
         Avanzar();
     }
 
-    /// <summary>La orden se cancelo: el despacho se anula para no dejar guias huerfanas.</summary>
+    /// <summary>
+    /// La orden se cancelo: el despacho se anula (estado cancelado) para no dejar
+    /// guias huerfanas. Solo antes de salir a ruta; un despacho EN_TRANSITO,
+    /// LISTA_PARA_RECOGER o ENTREGADA ya saco las unidades y no se toca.
+    /// </summary>
     public bool Anular()
     {
-        if (Estado is EstadoDespacho.ENTREGADA or EstadoDespacho.ANULADA)
+        if (Estado is EstadoDespacho.EN_TRANSITO
+            or EstadoDespacho.LISTA_PARA_RECOGER
+            or EstadoDespacho.ENTREGADA
+            or EstadoDespacho.ANULADA)
         {
             return false;
         }

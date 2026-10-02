@@ -11,94 +11,47 @@ builder.Services.ConfigureHttpJsonOptions(opciones =>
     opciones.SerializerOptions.Converters.Add(new JsonStringEnumConverter());
 });
 
-builder.Services.Configure<TokenizacionOptions>(builder.Configuration.GetSection(TokenizacionOptions.Seccion));
 builder.Services.AddSingleton<EstadoMock>();
-
-// Decision del mock para la demo: POST /v1/tokens acepta cualquier origen porque el
-// navegador lo llama directo desde la UI (asi el numero de tarjeta y el CVV viajan
-// del navegador a PayKlik sin tocar ningun servicio de SGO-Logic). Un proveedor real
-// restringiria los origenes permitidos. El resto de endpoints del mock no llevan CORS.
-const string PoliticaCorsTokens = "TokenizacionAbierta";
-builder.Services.AddCors(opciones => opciones.AddPolicy(PoliticaCorsTokens, politica => politica
-    .AllowAnyOrigin()
-    .AllowAnyHeader()
-    .WithMethods("POST")
-    .SetPreflightMaxAge(TimeSpan.FromMinutes(10))));
+builder.Services.Configure<BovedaOptions>(builder.Configuration.GetSection(BovedaOptions.Seccion));
+builder.Services.AddSingleton(proveedor => new BovedaTarjetas(
+    () => DateTime.UtcNow,
+    proveedor.GetRequiredService<IOptions<BovedaOptions>>().Value.RutaArchivo));
 
 var app = builder.Build();
 
 // Este mock no registra cuerpos de peticion: no hay UseHttpLogging ni middleware de
-// logging de request, y ningun handler escribe la peticion de tokenizacion en un log.
-// El numero de tarjeta y el CVV solo existen en la variable local de POST /v1/tokens,
-// mientras se validan; el almacen conserva unicamente ultimos cuatro y marca.
-app.UseCors();
+// logging de request, y ningun handler escribe la peticion de cargo en un log. El
+// numero de tarjeta y el CVV solo existen en la variable local de POST /v1/cargos,
+// mientras se validan; la boveda conserva unicamente ultimos cuatro, marca y
+// vencimiento.
+//
+// Ya no hay tokenizacion desde el navegador (POST /v1/tokens) ni tokens desde la
+// boveda (POST /v1/tarjetas/tokens): la tokenizacion la hace Pagos con su boveda
+// transitoria, y PayKlik recibe los datos solo al cobrar, servidor a servidor.
 
 app.MapGet("/health/live", () => Results.Ok(new { estado = "vivo" }));
 
-// Tokenizacion. Recibe los datos de la tarjeta, los valida y devuelve un token
-// opaco de un solo uso. Es el unico endpoint que ve un PAN o un CVV.
-app.MapPost("/v1/tokens", async (
-    PeticionTokenizacion peticion,
-    EstadoMock estado,
-    IOptions<TokenizacionOptions> opciones) =>
-{
-    var configuracion = estado.Configuracion;
-    var modoEfectivo = ResolverModoEfectivo(configuracion);
+// Inspeccion de la demo: tarjetas de la boveda. Solo referencia, marca, ultimos
+// cuatro y vencimiento; la boveda no tiene PAN ni CVV.
+app.MapGet("/admin/tarjetas", (BovedaTarjetas boveda) => Results.Ok(boveda.Listar()));
 
-    // latenciaMs igual a 0 se aplica como cero: no hay espera.
-    if (modoEfectivo == ModoMock.LENTO && configuracion.LatenciaMs > 0)
-    {
-        await Task.Delay(configuracion.LatenciaMs);
-    }
-
-    if (modoEfectivo == ModoMock.CAIDO)
-    {
-        return Results.Problem(
-            title: "PayKlik no disponible",
-            detail: "El proveedor no tokenizo la tarjeta (modo CAIDO).",
-            statusCode: StatusCodes.Status503ServiceUnavailable);
-    }
-
-    var validacion = ValidadorTarjeta.Validar(peticion, DateTime.UtcNow);
-    if (!validacion.EsValida)
-    {
-        return Results.Problem(
-            title: "Tarjeta invalida",
-            detail: "Los datos de la tarjeta no superaron la validacion.",
-            statusCode: StatusCodes.Status422UnprocessableEntity,
-            extensions: new Dictionary<string, object?>
-            {
-                ["codigo"] = "TARJETA_INVALIDA",
-                ["errores"] = validacion.Errores
-            });
-    }
-
-    var vigencia = TimeSpan.FromSeconds(Math.Max(1, opciones.Value.VigenciaSegundos));
-    return Results.Json(
-        estado.Tokens.Emitir(validacion.Tarjeta!, vigencia),
-        statusCode: StatusCodes.Status201Created);
-}).RequireCors(PoliticaCorsTokens);
-
-// Inspeccion de la demo: solo token, ultimos cuatro, marca y vigencia. Nunca el PAN.
-app.MapGet("/admin/tokens", (EstadoMock estado) => Results.Ok(estado.Tokens.Listar()));
-
-// Cobro. Nunca recibe ni devuelve numero de tarjeta ni CVV: para TARJETA recibe el
-// token de POST /v1/tokens, lo resuelve contra el almacen en memoria y devuelve los
-// ultimos cuatro y la marca reales. Un token inexistente, vencido o ya usado responde
-// 422 con un campo "codigo" (TOKEN_INVALIDO, TOKEN_VENCIDO, TOKEN_YA_USADO o
-// TOKEN_REQUERIDO), distinguible del rechazo por fondos, que es 200 con estado
-// RECHAZADO.
+// Cobro. Para TARJETA recibe los datos de una tarjeta nueva ({ tarjeta, guardar }) o
+// la referencia de una guardada con su CVV ({ referenciaTarjeta, cvv }). Datos que no
+// pasan la validacion responden 422 con un campo "codigo" (TARJETA_INVALIDA,
+// CVV_INVALIDO o TARJETA_VENCIDA) y una referencia inexistente 404
+// (TARJETA_NO_ENCONTRADA), distinguibles del rechazo por fondos, que es 200 con
+// estado RECHAZADO. Nunca devuelve el numero ni el CVV.
 app.MapPost("/v1/cargos", async (
     PeticionCargo peticion,
     EstadoMock estado,
+    BovedaTarjetas boveda,
     [FromHeader(Name = "Idempotency-Key")] string? claveIdempotencia) =>
 {
     var configuracion = estado.Configuracion;
     var recibidoEn = DateTime.UtcNow;
 
     // Idempotencia: ante una clave ya vista se devuelve la misma respuesta sin
-    // volver a procesar el cargo. Va antes de resolver el token: un reintento del
-    // mismo cargo llega con un token que la primera llamada ya consumio.
+    // volver a procesar el cargo.
     if (!string.IsNullOrWhiteSpace(claveIdempotencia) &&
         estado.Idempotencia.TryObtener(claveIdempotencia, out var previa))
     {
@@ -117,6 +70,7 @@ app.MapPost("/v1/cargos", async (
         await Task.Delay(configuracion.LatenciaMs);
     }
 
+    // CAIDO sale antes de mirar la tarjeta: no procesa nada ni guarda nada.
     if (modoEfectivo == ModoMock.CAIDO)
     {
         estado.Registrar(new CargoRegistrado(
@@ -129,47 +83,29 @@ app.MapPost("/v1/cargos", async (
             statusCode: StatusCodes.Status503ServiceUnavailable);
     }
 
-    // Solo un cargo procesado consume el token: un 503 (CAIDO) sale antes y lo deja
-    // intacto para el reintento.
-    TarjetaTokenizada? tarjeta = null;
+    ResumenTarjeta? tarjeta = null;
     if (string.Equals(peticion.MedioPago, "TARJETA", StringComparison.OrdinalIgnoreCase))
     {
-        var consumo = estado.Tokens.Consumir(peticion.TokenMedioPago);
-
-        if (consumo.Resultado != ResultadoConsumoToken.Consumido)
+        var (resumen, rechazo, codigo) = ResolverTarjeta(peticion, boveda);
+        if (rechazo is not null)
         {
-            // Dos peticiones concurrentes con la misma clave: la perdedora ve el token
-            // ya consumido, pero corresponde devolverle la respuesta de la ganadora.
-            if (!string.IsNullOrWhiteSpace(claveIdempotencia) &&
-                estado.Idempotencia.TryObtener(claveIdempotencia, out var ganadora))
-            {
-                return Results.Ok(ganadora);
-            }
-
-            var codigo = string.IsNullOrWhiteSpace(peticion.TokenMedioPago)
-                ? "TOKEN_REQUERIDO"
-                : consumo.Resultado switch
-                {
-                    ResultadoConsumoToken.Vencido => "TOKEN_VENCIDO",
-                    ResultadoConsumoToken.YaUsado => "TOKEN_YA_USADO",
-                    _ => "TOKEN_INVALIDO"
-                };
-
             estado.Registrar(new CargoRegistrado(
                 peticion.Referencia, peticion.Monto, peticion.Moneda, peticion.MedioPago,
-                Resultado: codigo, AutorizacionId: null, RecibidoEn: recibidoEn));
-
-            return Results.Problem(
-                title: "Token de medio de pago no valido",
-                detail: DetalleTokenNoValido(codigo),
-                statusCode: StatusCodes.Status422UnprocessableEntity,
-                extensions: new Dictionary<string, object?> { ["codigo"] = codigo });
+                Resultado: codigo!, AutorizacionId: null, RecibidoEn: recibidoEn));
+            return rechazo;
         }
 
-        tarjeta = consumo.Tarjeta;
+        tarjeta = resumen;
     }
 
     var aprobado = modoEfectivo != ModoMock.RECHAZO;
+
+    // La tarjeta nueva se guarda en la boveda solo si el cargo se aprobo.
+    string? referenciaGuardada = null;
+    if (aprobado && tarjeta is not null && peticion.Tarjeta is not null && peticion.Guardar == true)
+    {
+        referenciaGuardada = boveda.Guardar(tarjeta);
+    }
 
     var respuesta = new RespuestaCargo(
         AutorizacionId: aprobado ? GenerarAutorizacionId() : null,
@@ -178,17 +114,20 @@ app.MapPost("/v1/cargos", async (
         Mensaje: aprobado ? "Cargo aprobado" : "Fondos insuficientes",
         UltimosCuatro: tarjeta?.UltimosCuatro,
         Marca: tarjeta?.Marca,
-        ProcesadoEn: recibidoEn);
+        ProcesadoEn: recibidoEn,
+        ReferenciaTarjeta: referenciaGuardada);
+
+    // Solo se guarda para idempotencia una respuesta efectivamente procesada (200).
+    // Si dos peticiones con la misma clave llegaron a la vez, ambas devuelven la
+    // primera que quedo guardada.
+    if (!string.IsNullOrWhiteSpace(claveIdempotencia))
+    {
+        respuesta = estado.Idempotencia.ObtenerOAgregar(claveIdempotencia, () => respuesta);
+    }
 
     estado.Registrar(new CargoRegistrado(
         peticion.Referencia, peticion.Monto, peticion.Moneda, peticion.MedioPago,
         Resultado: respuesta.Estado, AutorizacionId: respuesta.AutorizacionId, RecibidoEn: recibidoEn));
-
-    // Solo se guarda para idempotencia una respuesta efectivamente procesada (200).
-    if (!string.IsNullOrWhiteSpace(claveIdempotencia))
-    {
-        estado.Idempotencia.ObtenerOAgregar(claveIdempotencia, () => respuesta);
-    }
 
     return Results.Ok(respuesta);
 });
@@ -314,10 +253,68 @@ static ModoMock ResolverModoEfectivo(ConfiguracionMock configuracion)
         : ModoMock.NORMAL;
 }
 
-static string DetalleTokenNoValido(string codigo) => codigo switch
+// Tarjeta de un cargo con TARJETA: valida los datos de una tarjeta nueva o la
+// referencia + CVV de una guardada. Devuelve el resumen (ultimos cuatro, marca) o
+// la respuesta de rechazo con su codigo.
+static (ResumenTarjeta? Tarjeta, IResult? Rechazo, string? Codigo) ResolverTarjeta(PeticionCargo peticion, BovedaTarjetas boveda)
 {
-    "TOKEN_REQUERIDO" => "El cargo con TARJETA requiere un token de medio de pago.",
-    "TOKEN_VENCIDO" => "El token de medio de pago vencio; hay que tokenizar la tarjeta de nuevo.",
-    "TOKEN_YA_USADO" => "El token de medio de pago ya se uso en otro cargo; son de un solo uso.",
-    _ => "El token de medio de pago no existe."
-};
+    if (peticion.Tarjeta is not null)
+    {
+        var validacion = ValidadorTarjeta.Validar(peticion.Tarjeta, DateTime.UtcNow);
+        if (validacion.EsValida)
+        {
+            return (validacion.Tarjeta, null, null);
+        }
+
+        return (null, Rechazo(
+            StatusCodes.Status422UnprocessableEntity,
+            "Tarjeta invalida",
+            "Los datos de la tarjeta no superaron la validacion.",
+            "TARJETA_INVALIDA",
+            validacion.Errores), "TARJETA_INVALIDA");
+    }
+
+    if (!string.IsNullOrWhiteSpace(peticion.ReferenciaTarjeta))
+    {
+        var (resultado, guardada) = boveda.Validar(peticion.ReferenciaTarjeta, peticion.Cvv);
+
+        return resultado switch
+        {
+            ResultadoValidacionReferencia.Valida => (guardada!.AResumen(), null, null),
+            ResultadoValidacionReferencia.NoExiste => (null, Rechazo(
+                StatusCodes.Status404NotFound,
+                "Tarjeta no encontrada",
+                "La referencia de tarjeta no existe en la boveda.",
+                "TARJETA_NO_ENCONTRADA"), "TARJETA_NO_ENCONTRADA"),
+            ResultadoValidacionReferencia.CvvInvalido => (null, Rechazo(
+                StatusCodes.Status422UnprocessableEntity,
+                "Codigo de seguridad invalido",
+                "El codigo de seguridad no es valido para esta tarjeta.",
+                "CVV_INVALIDO",
+                new[] { new ErrorValidacionTarjeta("cvv", guardada!.Marca == "AMEX" ? "El CVV debe tener 4 digitos." : "El CVV debe tener 3 digitos.") }), "CVV_INVALIDO"),
+            _ => (null, Rechazo(
+                StatusCodes.Status422UnprocessableEntity,
+                "Tarjeta vencida",
+                "La tarjeta guardada esta vencida.",
+                "TARJETA_VENCIDA",
+                new[] { new ErrorValidacionTarjeta("expiracion", "La tarjeta esta vencida.") }), "TARJETA_VENCIDA")
+        };
+    }
+
+    return (null, Rechazo(
+        StatusCodes.Status422UnprocessableEntity,
+        "Datos de tarjeta requeridos",
+        "El cargo con TARJETA requiere los datos de la tarjeta o la referencia de una tarjeta guardada.",
+        "TARJETA_INVALIDA"), "TARJETA_INVALIDA");
+}
+
+static IResult Rechazo(int status, string titulo, string detalle, string codigo, IReadOnlyList<ErrorValidacionTarjeta>? errores = null)
+{
+    var extensiones = new Dictionary<string, object?> { ["codigo"] = codigo };
+    if (errores is not null)
+    {
+        extensiones["errores"] = errores;
+    }
+
+    return Results.Problem(title: titulo, detail: detalle, statusCode: status, extensions: extensiones);
+}

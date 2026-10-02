@@ -13,7 +13,7 @@ public class CuentaController : Controller
     }
 
     [HttpGet]
-    public IActionResult Perfil()
+    public async Task<IActionResult> Perfil()
     {
         var userEmail = Request.Cookies["sgo_user_email"];
         if (string.IsNullOrWhiteSpace(userEmail))
@@ -21,9 +21,25 @@ public class CuentaController : Controller
             return RedirectToAction("Login", "Auth", new { returnUrl = "/Cuenta/Perfil" });
         }
 
-        ViewBag.UserName = Request.Cookies["sgo_user_name"] ?? "Usuario MegaStore";
+        var jwt = Request.Cookies["sgo_jwt"];
+        var infoUsuario = await _gateway.ObtenerUsuarioPorEmailAsync(userEmail);
+        var userRole = infoUsuario?.Rol
+            ?? Request.Cookies["sgo_user_role"]
+            ?? (!string.IsNullOrWhiteSpace(jwt) ? PermisosHelper.ObtenerRolDesdeJwt(jwt) : "CLIENTE");
+
+        var userName = infoUsuario?.NombreCompleto
+            ?? Request.Cookies["sgo_user_name"]
+            ?? "Usuario MegaStore";
+
+        ViewBag.UserName = userName;
         ViewBag.UserEmail = userEmail;
-        ViewBag.HasJwt = !string.IsNullOrWhiteSpace(Request.Cookies["sgo_jwt"]);
+        ViewBag.UserRole = userRole;
+        ViewBag.HasJwt = !string.IsNullOrWhiteSpace(jwt);
+        ViewBag.InfoUsuario = infoUsuario;
+
+        // Historial real de ordenes para mostrar estadisticas reales y transparentes
+        var historial = await _gateway.ObtenerHistorialClienteAsync(userEmail, pagina: 1, tamano: 50);
+        ViewBag.Historial = historial;
 
         return View();
     }
@@ -49,6 +65,116 @@ public class CuentaController : Controller
         return View(historial);
     }
 
+    /// <summary>Mis tarjetas: las tarjetas guardadas del cliente, con la opcion de eliminarlas.</summary>
+    [HttpGet]
+    public async Task<IActionResult> Tarjetas()
+    {
+        var userEmail = Request.Cookies["sgo_user_email"];
+        var jwt = Request.Cookies["sgo_jwt"];
+        if (string.IsNullOrWhiteSpace(userEmail) || string.IsNullOrWhiteSpace(jwt))
+        {
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Cuenta/Tarjetas" });
+        }
+
+        var userRole = Request.Cookies["sgo_user_role"] ?? "CLIENTE";
+        if (PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt))
+        {
+            return RedirectToAction("Index", "Estado");
+        }
+
+        ViewBag.UserEmail = userEmail;
+        return View(await _gateway.ListarTarjetasAsync());
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EliminarTarjeta(Guid id)
+    {
+        if (string.IsNullOrWhiteSpace(Request.Cookies["sgo_jwt"]))
+        {
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Cuenta/Tarjetas" });
+        }
+
+        var (exito, error) = await _gateway.EliminarTarjetaAsync(id);
+        if (exito)
+        {
+            TempData["Exito"] = "Tarjeta eliminada.";
+        }
+        else
+        {
+            TempData["Error"] = $"No se pudo eliminar la tarjeta: {error}";
+        }
+
+        return RedirectToAction(nameof(Tarjetas));
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> Cancelar(string ordenId, int pagina = 1)
+    {
+        // La identidad sale del JWT de la sesion, nunca del formulario: Ordenes
+        // compara este email con el dueno de la orden y responde 403 si no coincide.
+        var jwt = Request.Cookies["sgo_jwt"];
+        var clienteId = PermisosHelper.ObtenerEmailDesdeJwt(jwt);
+        if (string.IsNullOrWhiteSpace(clienteId))
+        {
+            TempData["Error"] = "Tu sesion expiro. Inicia sesion nuevamente para cancelar la orden.";
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Cuenta/Ordenes" });
+        }
+
+        if (string.IsNullOrWhiteSpace(ordenId))
+        {
+            TempData["Error"] = "No se indico la orden a cancelar.";
+            return RedirectToAction(nameof(Ordenes), new { pagina });
+        }
+
+        var (exito, error) = await _gateway.CancelarOrdenAsync(
+            ordenId.Trim(), clienteId, "Cancelada por el cliente desde su historial de pedidos");
+
+        if (exito)
+        {
+            TempData["Exito"] = "Orden cancelada. Los productos regresaron a stock; el estado puede tardar unos segundos en actualizarse.";
+        }
+        else
+        {
+            TempData["Error"] = $"No se pudo cancelar la orden: {error}";
+        }
+
+        return RedirectToAction(nameof(Ordenes), new { pagina });
+    }
+
+    [HttpGet]
+    public async Task<IActionResult> Factura(string ordenId)
+    {
+        var userEmail = Request.Cookies["sgo_user_email"];
+        if (string.IsNullOrWhiteSpace(userEmail))
+        {
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Cuenta/Ordenes" });
+        }
+
+        // El cliente solo puede descargar facturas de sus propias ordenes.
+        var userRole = Request.Cookies["sgo_user_role"] ?? "CLIENTE";
+        var jwt = Request.Cookies["sgo_jwt"];
+        var orden = PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt)
+            ? null
+            : await _gateway.ObtenerEstadoOrdenAsync(ordenId);
+
+        if (!PermisosHelper.PuedeVerOrden(orden, userEmail, userRole, jwt))
+        {
+            return NotFound();
+        }
+
+        var factura = await _gateway.ObtenerFacturaAsync(ordenId);
+        if (factura is null)
+        {
+            TempData["Error"] = "La factura de esta orden aun no ha sido generada. Intenta de nuevo en unos minutos.";
+            return RedirectToAction(nameof(Ordenes));
+        }
+
+        return File(System.Text.Encoding.UTF8.GetBytes(factura.Xml), "application/xml",
+            $"factura-{factura.Serie}-{factura.NumeroDocumento}.xml");
+    }
+
     [HttpGet]
     public IActionResult Privacidad()
     {
@@ -71,8 +197,9 @@ public class CuentaController : Controller
             return RedirectToAction("Login", "Auth", new { returnUrl = "/Cuenta/Privacidad" });
         }
 
-        var userName = Request.Cookies["sgo_user_name"] ?? "Usuario MegaStore";
-        var rol = PermisosHelper.DeterminarRol(userEmail);
+        var infoUsuario = await _gateway.ObtenerUsuarioPorEmailAsync(userEmail);
+        var userName = infoUsuario?.NombreCompleto ?? Request.Cookies["sgo_user_name"] ?? "Usuario MegaStore";
+        var rol = infoUsuario?.Rol ?? Request.Cookies["sgo_user_role"] ?? PermisosHelper.DeterminarRol(userEmail, Request.Cookies["sgo_jwt"]);
 
         // Consultar datos reales asociados a la cuenta del usuario
         var historial = await _gateway.ObtenerHistorialClienteAsync(userEmail, 1, 100);
@@ -123,7 +250,7 @@ public class CuentaController : Controller
             politicaResguardoYRetencion = new
             {
                 facturacionSat = "Las facturas tributarias electronicas (DTE) se conservan inmutables por 5 anos conforme al Codigo Tributario.",
-                tarjetasBancarias = "Cero datos de tarjetas o CVV almacenados en MegaStore (Aislamiento PCI-DSS RES-08 via tokenizacion PayKlik).",
+                tarjetasBancarias = "Numero y CVV solo cifrados (AES-GCM) en la boveda transitoria de Pagos hasta el cobro o el vencimiento del token; nunca en logs ni eventos (RES-08).",
                 bitacoraAuditoria = "Trazabilidad forense inmutable append-only sin permisos de modificacion (ADR-006 / EAC-03)."
             }
         };

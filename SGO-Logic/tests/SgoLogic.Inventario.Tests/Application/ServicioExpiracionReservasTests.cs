@@ -86,6 +86,27 @@ public sealed class ServicioExpiracionReservasTests
     }
 
     [Fact]
+    public async Task Reserva_confirmada_nunca_expira_aunque_su_TTL_haya_vencido()
+    {
+        // La orden ya se pago: el stock se retiene hasta que el pedido sale a ruta.
+        var existencia = ExistenciaReservada(fisica: 10, aReservar: 3);
+        var confirmada = ReservaVencida("RSV-2026-000003", "ORD-2026-000003");
+        confirmada.Confirmar();
+
+        var (servicio, reservas, outbox, unidadDeTrabajo) = Construir(
+            new RepositorioExistenciasFalso().Precargar(existencia),
+            confirmada);
+
+        var expiradas = await servicio.ProcesarLoteAsync(CancellationToken.None);
+
+        Assert.Equal(0, expiradas);
+        Assert.Equal(EstadoReserva.CONFIRMADA, reservas.Todas.Single().Estado);
+        Assert.Equal(3, existencia.CantidadReservada);
+        Assert.Empty(outbox.Eventos);
+        Assert.Equal(0, unidadDeTrabajo.Confirmaciones);
+    }
+
+    [Fact]
     public async Task Reserva_con_TTL_vigente_no_se_toca()
     {
         var existencia = ExistenciaReservada(fisica: 10, aReservar: 3);

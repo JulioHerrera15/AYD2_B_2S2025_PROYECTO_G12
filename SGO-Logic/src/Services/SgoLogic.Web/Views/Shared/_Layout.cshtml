@@ -169,9 +169,17 @@
                         <span class="material-symbols-outlined text-[17px] text-secondary">support_agent</span>
                         <span>Visión 360</span>
                     </a>
+                    <a href="/Usuarios" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                        <span class="material-symbols-outlined text-[17px] text-secondary">manage_accounts</span>
+                        <span>Usuarios & Roles</span>
+                    </a>
                     <a href="/Incidencias" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
                         <span class="material-symbols-outlined text-[17px] text-secondary">gavel</span>
                         <span>Incidencias</span>
+                    </a>
+                    <a href="/InformeVentas" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                        <span class="material-symbols-outlined text-[17px] text-secondary">summarize</span>
+                        <span>Informe de Ventas</span>
                     </a>
                     <a href="/Monitoreo" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
                         <span class="material-symbols-outlined text-[17px] text-secondary">hub</span>
@@ -184,9 +192,10 @@
                         <span class="material-symbols-outlined text-[17px]">store</span>
                         <span>Catálogo</span>
                     </a>
-                    <a href="/Carrito" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
+                    <a href="/Carrito" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary relative" id="nav-cart-link">
                         <span class="material-symbols-outlined text-[17px]">shopping_cart</span>
                         <span>Carrito</span>
+                        <span id="nav-cart-badge" class="hidden ml-1 px-1.5 py-0.2 rounded-full bg-secondary text-white text-[10px] font-bold"></span>
                     </a>
                     <a href="/Estado" class="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors hover:bg-surface-container-low text-on-surface-variant hover:text-primary">
                         <span class="material-symbols-outlined text-[17px]">track_changes</span>
@@ -214,13 +223,14 @@
                                 <div class="px-4 py-2 border-b border-border-subtle/40 mb-1">
                                     <span class="text-[11px] font-bold text-primary block truncate">@(userName ?? "Usuario")</span>
                                     <span class="text-[10px] text-text-muted block truncate font-mono">@userEmail</span>
-                                    @if (isStaff)
-                                    {
-                                        <span class="inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-secondary-fixed text-on-secondary-fixed">Rol: @userRole</span>
-                                    }
+                                    <span class="inline-block mt-1 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full @(isStaff ? "bg-secondary-fixed text-on-secondary-fixed" : "bg-surface-container-low text-text-muted border border-border-subtle")">Rol: @userRole</span>
                                 </div>
                                 @if (isStaff)
                                 {
+                                    <a href="/Usuarios" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                        <span class="material-symbols-outlined text-[17px] text-secondary">manage_accounts</span>
+                                        Usuarios y Roles
+                                    </a>
                                     <a href="/Despacho" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
                                         <span class="material-symbols-outlined text-[17px] text-secondary">local_shipping</span>
                                         Control de Despacho
@@ -243,6 +253,10 @@
                                     <a href="/Cuenta/Ordenes" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
                                         <span class="material-symbols-outlined text-[17px]">receipt_long</span>
                                         Mis Órdenes
+                                    </a>
+                                    <a href="/Cuenta/Tarjetas" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
+                                        <span class="material-symbols-outlined text-[17px]">credit_card</span>
+                                        Mis Tarjetas
                                     </a>
                                     <a href="/Cuenta/Privacidad" class="flex items-center gap-2 px-4 py-2 text-xs font-medium text-primary hover:bg-surface-container-low">
                                         <span class="material-symbols-outlined text-[17px]">shield</span>
@@ -290,6 +304,14 @@
                     <span class="material-symbols-outlined text-[18px]">support_agent</span>
                     <span>Visión 360</span>
                 </a>
+                <a href="/Usuarios" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[18px]">manage_accounts</span>
+                    <span>Usuarios</span>
+                </a>
+                <a href="/InformeVentas" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                    <span class="material-symbols-outlined text-[18px]">summarize</span>
+                    <span>Ventas</span>
+                </a>
                 <a href="/Monitoreo" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
                     <span class="material-symbols-outlined text-[18px]">hub</span>
                     <span>Monitoreo</span>
@@ -301,9 +323,10 @@
                     <span class="material-symbols-outlined text-[18px]">store</span>
                     <span>Catálogo</span>
                 </a>
-                <a href="/Carrito" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
+                <a href="/Carrito" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary relative">
                     <span class="material-symbols-outlined text-[18px]">shopping_cart</span>
                     <span>Carrito</span>
+                    <span id="nav-cart-badge-mobile" class="hidden absolute top-1 right-2 px-1.5 py-0.2 rounded-full bg-secondary text-white text-[9px] font-bold"></span>
                 </a>
                 <a href="/Estado" class="flex flex-col items-center px-2 py-1 font-medium text-on-surface-variant hover:text-primary">
                     <span class="material-symbols-outlined text-[18px]">track_changes</span>

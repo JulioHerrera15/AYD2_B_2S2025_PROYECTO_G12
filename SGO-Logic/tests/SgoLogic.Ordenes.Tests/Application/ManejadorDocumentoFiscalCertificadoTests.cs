@@ -71,7 +71,9 @@ public sealed class ManejadorDocumentoFiscalCertificadoTests
             outbox,
             unidad,
             new GeneradorCorrelativoOrdenFalso(),
-            new PoliticaMediosPago(MediosPago));
+            new PoliticaMediosPago(MediosPago),
+            new ClienteCarritoFalso(),
+            new CatalogoProductosFalso());
         var manejador = new ManejadorDocumentoFiscalCertificado(
             servicio,
             ordenes,
@@ -275,7 +277,9 @@ public sealed class ManejadorDocumentoFiscalCertificadoTests
         var servicio = new ServicioConfirmacionOrden(
             ordenes, outbox, unidad,
             new GeneradorCorrelativoOrdenFalso(),
-            new PoliticaMediosPago(MediosPago));
+            new PoliticaMediosPago(MediosPago),
+            new ClienteCarritoFalso(),
+            new CatalogoProductosFalso());
 
         // CUI valido: solo digitos
         var dto = await servicio.CrearOrdenAsync(

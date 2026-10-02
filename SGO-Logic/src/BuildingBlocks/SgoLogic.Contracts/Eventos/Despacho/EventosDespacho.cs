@@ -114,11 +114,17 @@ public static class PedidoListoParaRecoger
     public const string AggregateType = "Despacho";
 }
 
+/// <param name="ClienteId">
+/// Email del cliente de la orden, para que Notificaciones sepa a quien avisar.
+/// Nullable y al final: los productores anteriores no lo envian y los despachos
+/// creados antes de este campo no lo conocen.
+/// </param>
 public sealed record PedidoListoParaRecogerData(
     string DespachoId,
     string OrdenId,
     string UbicacionRecogidaId,
-    DateTime ListoEn);
+    DateTime ListoEn,
+    string? ClienteId = null);
 
 /// <summary>Linea de un despacho tal como viaja en los eventos.</summary>
 public sealed record LineaDespachoData(string Sku, string Descripcion, int Cantidad);

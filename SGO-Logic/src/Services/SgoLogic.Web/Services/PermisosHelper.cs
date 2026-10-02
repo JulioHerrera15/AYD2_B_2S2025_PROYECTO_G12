@@ -56,6 +56,39 @@ public static class PermisosHelper
     }
 
     /// <summary>
+    /// Email del usuario segun el claim <c>email</c> del JWT emitido por Auth.Api, o
+    /// null si no hay token o no trae el claim. Es la identidad con la que se opera
+    /// sobre recursos del propio cliente (por ejemplo, cancelar una orden).
+    /// </summary>
+    public static string? ObtenerEmailDesdeJwt(string? jwtToken)
+    {
+        var partes = jwtToken?.Split('.');
+        if (partes is null || partes.Length < 2)
+        {
+            return null;
+        }
+
+        try
+        {
+            var payload = partes[1].Replace('-', '+').Replace('_', '/');
+            payload = payload.PadRight(payload.Length + (4 - payload.Length % 4) % 4, '=');
+
+            using var doc = JsonDocument.Parse(Convert.FromBase64String(payload));
+            if (doc.RootElement.TryGetProperty("email", out var email) && email.ValueKind == JsonValueKind.String)
+            {
+                var valor = email.GetString();
+                return string.IsNullOrWhiteSpace(valor) ? null : valor.Trim();
+            }
+        }
+        catch (Exception ex) when (ex is FormatException or JsonException)
+        {
+            // Token corrupto o invalido
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Determina el rol del usuario utilizando prioritariamente el token JWT firmado de la API.
     /// </summary>
     public static string DeterminarRol(string? userEmail, string? jwtToken = null)
@@ -110,6 +143,27 @@ public static class PermisosHelper
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Pertenencia de una orden: el personal autorizado puede ver cualquiera y un
+    /// cliente solo las suyas (el email de la sesion debe coincidir con el ClienteId
+    /// de la orden). Sin sesion, nadie. Es la verificacion de la descarga de factura
+    /// de CuentaController, compartida con la vista de factura del rastreo.
+    /// </summary>
+    public static bool PuedeVerOrden(OrdenEstadoModel? orden, string? userEmail, string? userRole, string? jwtToken)
+    {
+        if (string.IsNullOrWhiteSpace(userEmail))
+        {
+            return false;
+        }
+
+        if (EsPersonalAutorizado(userRole ?? "CLIENTE", userEmail, jwtToken))
+        {
+            return true;
+        }
+
+        return orden is not null && string.Equals(orden.ClienteId, userEmail, StringComparison.OrdinalIgnoreCase);
     }
 
     public static bool EsAdministrador(string? jwtToken, string? userRole = null, string? userEmail = null)

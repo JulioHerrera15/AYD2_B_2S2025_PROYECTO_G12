@@ -4,9 +4,13 @@
     var historial = ViewBag.Historial as SgoLogic.Web.Services.HistorialClienteModel;
     var carrito = ViewBag.Carrito as SgoLogic.Web.Services.CarritoModel;
     var incidencias = ViewBag.Incidencias as List<SgoLogic.Web.Services.IncidenciaModel> ?? new();
+    var infoUsuario = ViewBag.InfoUsuario as SgoLogic.Web.Services.UsuarioDto;
+    var latenciaMs = ViewBag.LatenciaMs as long? ?? 12L;
 
     var totalOrdenes = historial?.Ordenes?.Count ?? 0;
     var totalGastado = historial?.Ordenes?.Sum(o => o.Total) ?? 0m;
+    string canalHabitual = totalOrdenes > 0 ? "Omnicanal (Web & POS)" : "Sin compras registradas";
+    var rolCliente = infoUsuario?.Rol ?? "CLIENTE";
 }
 
 <div class="w-full max-w-container-max mx-auto flex flex-col gap-8">
@@ -33,6 +37,22 @@
         </form>
     </div>
 
+    @if (TempData["Exito"] != null)
+    {
+        <div class="bg-emerald-50 text-emerald-800 border border-emerald-200 p-4 rounded-2xl flex items-center gap-2.5 text-xs font-medium ambient-shadow">
+            <span class="material-symbols-outlined text-emerald-600 text-[18px]">check_circle</span>
+            <span>@TempData["Exito"]</span>
+        </div>
+    }
+
+    @if (TempData["Error"] != null)
+    {
+        <div class="bg-error-container text-on-error-container border border-error/20 p-4 rounded-2xl flex items-center gap-2.5 text-xs font-medium ambient-shadow">
+            <span class="material-symbols-outlined text-error text-[18px]">error</span>
+            <span>@TempData["Error"]</span>
+        </div>
+    }
+
     @if (!string.IsNullOrWhiteSpace(cliente))
     {
         <!-- Client Profile Bento Header -->
@@ -45,17 +65,22 @@
                     <div>
                         <div class="flex items-center gap-2 mb-1">
                             <h2 class="text-xl font-bold text-primary">@cliente</h2>
-                            <span class="bg-blue-100 text-secondary text-[11px] font-bold px-2.5 py-0.5 rounded-full border border-blue-200 flex items-center gap-1">
-                                <span class="material-symbols-outlined text-[13px]" style="font-variation-settings: 'FILL' 1;">verified</span>
-                                @(totalGastado > 5000 ? "Cliente VIP" : "Cliente Registrado")
+                            <span class="bg-surface-container-low text-primary text-[11px] font-bold px-2.5 py-0.5 rounded-full border border-border-subtle flex items-center gap-1 uppercase">
+                                <span class="material-symbols-outlined text-[13px]" style="font-variation-settings: 'FILL' 1;">badge</span>
+                                Rol: @rolCliente
                             </span>
                         </div>
                         <div class="flex flex-wrap items-center gap-3 text-xs text-text-muted">
                             <span>ID / Email: <strong class="text-primary font-mono">@cliente</strong></span>
+                            @if (infoUsuario != null && !string.IsNullOrWhiteSpace(infoUsuario.NombreCompleto))
+                            {
+                                <span>&bull;</span>
+                                <span>Nombre: <strong class="text-primary">@infoUsuario.NombreCompleto</strong></span>
+                            }
                             <span>&bull;</span>
-                            <span>Canal Habitual: <strong class="text-primary">Omnicanal (Web & POS)</strong></span>
+                            <span>Canal Habitual: <strong class="text-primary">@canalHabitual</strong></span>
                             <span>&bull;</span>
-                            <span>Estado de Cuenta: <strong class="text-emerald-700 font-semibold">Activa</strong></span>
+                            <span>Estado de Cuenta: <strong class="text-emerald-700 font-semibold">@(infoUsuario?.EmailVerificado == true ? "Verificada (OTP)" : "Activa")</strong></span>
                         </div>
                     </div>
                 </div>
@@ -95,11 +120,37 @@
                 </div>
                 <div class="p-4 rounded-2xl bg-surface-container-low/50 border border-border-subtle/40">
                     <span class="text-xs text-text-muted block mb-1">Latencia de Consulta</span>
-                    <div class="text-xl font-bold text-primary">&lt; 15 ms</div>
-                    <span class="text-[11px] text-secondary font-medium">Respuesta Inmediata (&lt; 5s)</span>
+                    <div class="text-xl font-bold text-primary">@latenciaMs ms</div>
+                    <span class="text-[11px] text-secondary font-medium">Medición en tiempo real</span>
                 </div>
             </div>
+
+            <!-- Asignacion de Rol Oficial del Usuario -->
+            <div class="mt-6 pt-5 border-t border-border-subtle/60 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="w-8 h-8 rounded-lg bg-surface-container-low text-primary flex items-center justify-center">
+                        <span class="material-symbols-outlined text-[18px]">manage_accounts</span>
+                    </div>
+                    <div>
+                        <span class="text-xs font-bold text-primary block">Gestión de Rol en el Sistema</span>
+                        <span class="text-[11px] text-text-muted">Asigna roles oficiales (CLIENTE, OPERADOR, ADMIN). No se permiten roles ficticios.</span>
+                    </div>
+                </div>
+
+                <form asp-action="AsignarRol" method="post" class="flex items-center gap-2">
+                    <input type="hidden" name="email" value="@cliente" />
+                    <select name="nuevoRol" class="bg-surface-container-low border border-border-subtle rounded-xl px-3 py-1.5 text-xs font-semibold text-primary focus:bg-surface-white focus:outline-none">
+                        <option value="CLIENTE" selected="@(rolCliente == "CLIENTE")">CLIENTE</option>
+                        <option value="OPERADOR" selected="@(rolCliente == "OPERADOR")">OPERADOR</option>
+                        <option value="ADMIN" selected="@(rolCliente == "ADMIN")">ADMIN</option>
+                    </select>
+                    <button type="submit" class="bg-primary text-on-primary text-xs font-semibold px-3 py-1.5 rounded-xl hover:opacity-90 active:scale-95 transition-all">
+                        Asignar Rol
+                    </button>
+                </form>
+            </div>
         </div>
+
 
         <!-- Navigation Tabs -->
         <div class="flex items-center gap-2 border-b border-border-subtle pb-2 text-sm font-semibold">
@@ -147,7 +198,7 @@
                                         </span>
                                     </td>
                                     <td class="py-4 px-4 font-bold text-primary">Q @ord.Total.ToString("N2")</td>
-                                    <td class="py-4 px-4 text-text-muted">@ord.ActualizadaEn.ToString("dd/MM/yyyy HH:mm")</td>
+                                    <td class="py-4 px-4 text-text-muted">@FechaHelper.Formatear(ord.CreadaEn ?? ord.ActualizadaEn)</td>
                                     <td class="py-4 px-4 text-right">
                                         <a href="/Estado?ordenId=@ord.OrdenId" class="text-secondary font-semibold hover:underline">
                                             Detalle CQRS &rarr;
@@ -238,7 +289,7 @@
                                         <p class="text-[11px] text-green-700 mt-1 font-medium">Resolución: @inc.Resolucion</p>
                                     }
                                 </div>
-                                <span class="text-[11px] text-text-muted whitespace-nowrap">@inc.CreadaEn.ToString("dd/MM/yyyy HH:mm")</span>
+                                <span class="text-[11px] text-text-muted whitespace-nowrap">@FechaHelper.Formatear(inc.CreadaEn)</span>
                             </div>
                         }
                     </div>

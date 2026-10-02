@@ -66,7 +66,9 @@ public sealed class DevolucionParcialFlujoTests
             outbox,
             unidad,
             new GeneradorCorrelativoOrdenFalso(),
-            politicaMediosPago);
+            politicaMediosPago,
+            new ClienteCarritoFalso(),
+            new CatalogoProductosFalso());
 
         var servicioDevolucion = new ServicioDevolucion(
             ordenes,

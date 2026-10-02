@@ -104,7 +104,9 @@ public sealed class ServicioConfirmacionOrdenTests
             outbox,
             unidad,
             new GeneradorCorrelativoOrdenFalso(correlativoInicial),
-            new PoliticaMediosPago(MediosPago));
+            new PoliticaMediosPago(MediosPago),
+            new ClienteCarritoFalso(),
+            new CatalogoProductosFalso());
         return (servicio, ordenes, outbox, unidad);
     }
 
@@ -633,4 +635,162 @@ public sealed class ServicioConfirmacionOrdenTests
             EstadoOrden.RESERVA_SOLICITADA, EstadoOrden.INVENTARIO_RESERVADO),
         _ => throw new ArgumentOutOfRangeException(nameof(estadoDestino), estadoDestino, null)
     };
+
+    // ── Cancelacion por el cliente ─────────────────────────────────────────────
+
+    private static CancelarOrdenRequest SolicitudCancelacion(string clienteId = "CLI-000045") =>
+        new(clienteId, "Ya no lo necesito");
+
+    [Fact]
+    public async Task Cancelar_una_orden_ajena_lanza_orden_ajena_sin_escribir()
+    {
+        var (servicio, ordenes, outbox, unidad) = Construir();
+        ordenes.Precargar(CrearOrdenEn(EstadoOrden.RESERVA_SOLICITADA));
+
+        var ex = await Assert.ThrowsAsync<ExcepcionOrdenAjena>(() => servicio.CancelarPorClienteAsync(
+            OrdenId, SolicitudCancelacion("otro@sgo.local"), CancellationToken.None));
+
+        Assert.Equal("La orden no pertenece al cliente", ex.Message);
+        Assert.Empty(outbox.Eventos);
+        Assert.Equal(0, unidad.Confirmaciones);
+    }
+
+    [Fact]
+    public async Task Cancelar_compara_el_cliente_sin_distinguir_mayusculas()
+    {
+        var (servicio, ordenes, _, _) = Construir();
+        ordenes.Precargar(CrearOrdenEn(EstadoOrden.RESERVA_SOLICITADA));
+
+        var resultado = await servicio.CancelarPorClienteAsync(
+            OrdenId, SolicitudCancelacion("cli-000045"), CancellationToken.None);
+
+        Assert.Equal(EstadoOrden.CANCELADA, resultado.Orden.Estado);
+    }
+
+    [Fact]
+    public async Task Cancelar_una_orden_inexistente_lanza_no_encontrada()
+    {
+        var (servicio, _, _, _) = Construir();
+
+        await Assert.ThrowsAsync<ExcepcionOrdenNoEncontrada>(() => servicio.CancelarPorClienteAsync(
+            "ORD-2026-999999", SolicitudCancelacion(), CancellationToken.None));
+    }
+
+    [Theory]
+    [InlineData(EstadoOrden.COBRO_SOLICITADO)]
+    [InlineData(EstadoOrden.PAGO_APLICADO)]
+    public async Task Cancelar_con_el_cobro_en_curso_lanza_pago_en_curso(EstadoOrden estado)
+    {
+        var (servicio, ordenes, outbox, _) = Construir();
+        var camino = new List<EstadoOrden>
+        {
+            EstadoOrden.RESERVA_SOLICITADA, EstadoOrden.INVENTARIO_RESERVADO, EstadoOrden.COBRO_SOLICITADO
+        };
+        if (estado == EstadoOrden.PAGO_APLICADO)
+        {
+            camino.Add(EstadoOrden.PAGO_APLICADO);
+        }
+        ordenes.Precargar(CrearOrdenEn(camino.ToArray()));
+
+        var ex = await Assert.ThrowsAsync<ExcepcionCancelacionNoPermitida>(() => servicio.CancelarPorClienteAsync(
+            OrdenId, SolicitudCancelacion(), CancellationToken.None));
+
+        Assert.True(ex.PagoEnCurso);
+        Assert.Equal("La orden esta procesando el pago, intenta de nuevo en unos segundos", ex.Message);
+        Assert.Empty(outbox.Eventos);
+    }
+
+    [Fact]
+    public async Task Cancelar_una_orden_en_transito_lanza_no_cancelable()
+    {
+        var (servicio, ordenes, outbox, _) = Construir();
+        ordenes.Precargar(CrearOrdenEn(
+            EstadoOrden.RESERVA_SOLICITADA,
+            EstadoOrden.INVENTARIO_RESERVADO,
+            EstadoOrden.COBRO_SOLICITADO,
+            EstadoOrden.PAGO_APLICADO,
+            EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL,
+            EstadoOrden.CONFIRMADA,
+            EstadoOrden.DESPACHO_SOLICITADO,
+            EstadoOrden.EN_PREPARACION,
+            EstadoOrden.EN_TRANSITO));
+
+        var ex = await Assert.ThrowsAsync<ExcepcionCancelacionNoPermitida>(() => servicio.CancelarPorClienteAsync(
+            OrdenId, SolicitudCancelacion(), CancellationToken.None));
+
+        Assert.False(ex.PagoEnCurso);
+        Assert.Equal("La orden ya no puede cancelarse", ex.Message);
+        Assert.Empty(outbox.Eventos);
+    }
+
+    [Fact]
+    public async Task Cancelar_una_orden_ya_cancelada_lanza_no_cancelable()
+    {
+        var (servicio, ordenes, _, _) = Construir();
+        ordenes.Precargar(CrearOrdenEn(EstadoOrden.CANCELADA));
+
+        var ex = await Assert.ThrowsAsync<ExcepcionCancelacionNoPermitida>(() => servicio.CancelarPorClienteAsync(
+            OrdenId, SolicitudCancelacion(), CancellationToken.None));
+
+        Assert.False(ex.PagoEnCurso);
+    }
+
+    [Fact]
+    public async Task Cancelar_con_reserva_pasa_a_CANCELADA_y_pide_liberar_la_reserva()
+    {
+        var (servicio, ordenes, outbox, unidad) = Construir();
+        var orden = CrearOrdenEn(EstadoOrden.RESERVA_SOLICITADA);
+        orden.RegistrarReserva("RSV-2026-000042", "CD-01");
+        orden.TransicionarA(EstadoOrden.INVENTARIO_RESERVADO);
+        ordenes.Precargar(orden);
+
+        var resultado = await servicio.CancelarPorClienteAsync(
+            OrdenId, SolicitudCancelacion(), CancellationToken.None);
+
+        Assert.Equal(EstadoOrden.CANCELADA, resultado.Orden.Estado);
+        Assert.True(orden.Transiciones.Last().EsCompensacion);
+        Assert.Equal(1, unidad.Confirmaciones);
+
+        var liberacion = Assert.Single(outbox.PorTipo(LiberacionReservaSolicitada.EventType));
+        var datosLiberacion = Assert.IsType<LiberacionReservaSolicitadaData>(liberacion.Data);
+        Assert.Equal(OrdenId, datosLiberacion.OrdenId);
+        Assert.Equal("RSV-2026-000042", datosLiberacion.ReservaId);
+        Assert.Equal(MotivoLiberacionReserva.CANCELACION_CLIENTE, datosLiberacion.Motivo);
+
+        var cancelada = Assert.Single(outbox.PorTipo(OrdenCancelada.EventType));
+        var datosCancelada = Assert.IsType<OrdenCanceladaData>(cancelada.Data);
+        Assert.Equal(MotivoCancelacion.CLIENTE, datosCancelada.Motivo);
+        Assert.False(datosCancelada.RequiereReembolso);
+    }
+
+    [Fact]
+    public async Task Cancelar_despues_del_pago_marca_que_requiere_reembolso()
+    {
+        var (servicio, ordenes, outbox, _) = Construir();
+        var orden = CrearOrden();
+        AvanzarHastaConfirmada(orden);
+        ordenes.Precargar(orden);
+
+        await servicio.CancelarPorClienteAsync(OrdenId, SolicitudCancelacion(), CancellationToken.None);
+
+        var datos = Assert.IsType<OrdenCanceladaData>(Assert.Single(outbox.PorTipo(OrdenCancelada.EventType)).Data);
+        Assert.True(datos.RequiereReembolso);
+        Assert.Single(outbox.PorTipo(LiberacionReservaSolicitada.EventType));
+    }
+
+    [Fact]
+    public async Task Cancelar_sin_reserva_aun_no_pide_liberar()
+    {
+        // RESERVA_SOLICITADA: la reserva va en camino y todavia no hay ReservaId. La
+        // libera ManejadorEventosInventario cuando llegue InventarioReservado.
+        var (servicio, ordenes, outbox, _) = Construir();
+        ordenes.Precargar(CrearOrdenEn(EstadoOrden.RESERVA_SOLICITADA));
+
+        var resultado = await servicio.CancelarPorClienteAsync(
+            OrdenId, SolicitudCancelacion(), CancellationToken.None);
+
+        Assert.Equal(EstadoOrden.CANCELADA, resultado.Orden.Estado);
+        Assert.Empty(outbox.PorTipo(LiberacionReservaSolicitada.EventType));
+        Assert.Single(outbox.PorTipo(OrdenCancelada.EventType));
+    }
 }

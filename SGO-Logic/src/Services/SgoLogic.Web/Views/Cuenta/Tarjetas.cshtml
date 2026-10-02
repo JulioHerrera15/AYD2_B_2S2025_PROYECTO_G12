@@ -1,0 +1,83 @@
+@model IReadOnlyList<SgoLogic.Web.Services.TarjetaGuardadaModel>
+@{
+    ViewData["Title"] = "Mis Tarjetas - MegaStore";
+    var tarjetas = Model ?? Array.Empty<SgoLogic.Web.Services.TarjetaGuardadaModel>();
+}
+
+<!-- Logos de marca de tarjeta (Font Awesome, iconos fa-cc-*) -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.2/css/all.min.css" referrerpolicy="no-referrer" />
+
+<div class="w-full max-w-container-max mx-auto flex flex-col gap-8">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-border-subtle">
+        <div>
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold mb-2">
+                <span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">credit_card</span>
+                Medios de pago &bull; Pago rápido y seguro
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight">Mis Tarjetas</h1>
+            <p class="text-xs sm:text-sm text-text-muted">Tarjetas guardadas para tus próximas compras. Solo conservamos la marca, los últimos cuatro dígitos y el vencimiento; nunca el número completo ni el código de seguridad.</p>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <a href="/Cuenta/Ordenes" class="bg-surface-white text-primary border border-border-subtle px-4 py-2 rounded-xl text-xs font-semibold hover:bg-surface-container-low transition-colors flex items-center gap-1.5 shadow-sm">
+                <span class="material-symbols-outlined text-[16px]">receipt_long</span>
+                Mis Pedidos
+            </a>
+            <a href="/Catalogo" class="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-semibold hover:opacity-90 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm">
+                <span class="material-symbols-outlined text-[16px]">storefront</span>
+                Seguir Comprando
+            </a>
+        </div>
+    </div>
+
+    <!-- Cards List -->
+    <div class="bg-surface-white rounded-3xl border border-border-subtle/60 overflow-hidden ambient-shadow">
+        @if (tarjetas.Count > 0)
+        {
+            <ul class="divide-y divide-border-subtle/50">
+                @foreach (var tarjeta in tarjetas)
+                {
+                    <li class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-6 py-4 @(tarjeta.Vencida ? "opacity-60" : "")">
+                        <div class="flex items-center gap-4">
+                            <i class="@tarjeta.IconoMarca text-[32px] text-primary" aria-hidden="true"></i>
+                            <span class="sr-only">@tarjeta.Marca</span>
+                            <div>
+                                <div class="font-mono text-sm font-semibold text-primary tracking-wider">@tarjeta.Enmascarado</div>
+                                <div class="text-[11px] text-text-muted">
+                                    @("Vence " + tarjeta.VenceTexto + (string.IsNullOrWhiteSpace(tarjeta.Titular) ? "" : " - " + tarjeta.Titular))
+                                </div>
+                            </div>
+                            @if (tarjeta.Vencida)
+                            {
+                                <span class="text-[10px] font-bold text-rose-700 bg-rose-100 px-2 py-0.5 rounded">Vencida</span>
+                            }
+                        </div>
+
+                        <form method="post" action="/Cuenta/EliminarTarjeta" class="inline"
+                              onsubmit="return confirm('¿Eliminar la tarjeta terminada en @tarjeta.Ultimos4?');">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" name="id" value="@tarjeta.Id" />
+                            <button type="submit" class="inline-flex items-center gap-1 text-error hover:bg-error-container/60 px-3 py-1 rounded-full text-xs font-medium transition-colors">
+                                <span class="material-symbols-outlined text-[14px]">delete</span>
+                                Eliminar
+                            </button>
+                        </form>
+                    </li>
+                }
+            </ul>
+        }
+        else
+        {
+            <div class="py-16 px-6 text-center">
+                <div class="w-16 h-16 rounded-full bg-surface-container-low text-text-muted flex items-center justify-center mx-auto mb-4">
+                    <span class="material-symbols-outlined text-[32px]">credit_card_off</span>
+                </div>
+                <h3 class="text-base font-semibold text-primary mb-1">No tienes tarjetas guardadas</h3>
+                <p class="text-sm text-text-muted max-w-sm mx-auto">
+                    En tu próxima compra marca "Guardar esta tarjeta para futuras compras" y aparecerá aquí.
+                </p>
+            </div>
+        }
+    </div>
+</div>
