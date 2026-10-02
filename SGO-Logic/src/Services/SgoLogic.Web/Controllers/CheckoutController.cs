@@ -49,7 +49,7 @@ public class CheckoutController : Controller
 
         ViewBag.UserEmail = Request.Cookies["sgo_user_email"];
         ViewBag.UserName = Request.Cookies["sgo_user_name"];
-        await CargarSucursalesAsync();
+        await CargarSucursalesAsync(carrito);
         return View(carrito);
     }
 
@@ -58,8 +58,10 @@ public class CheckoutController : Controller
     /// (cacheado 5 minutos por GatewayClient) y, con sesion, las tarjetas guardadas
     /// del cliente. Un invitado no ve tarjetas ni la opcion de guardarlas.
     /// </summary>
-    private async Task CargarSucursalesAsync()
+    private async Task CargarSucursalesAsync(CarritoModel carrito)
     {
+        ViewBag.OpcionCredito = await CargarOpcionCreditoAsync(carrito);
+
         ViewBag.Sucursales = await _gateway.ObtenerSucursalesAsync();
         ViewBag.SucursalSeleccionada = Request.Cookies["sgo_sucursal"];
 
@@ -68,6 +70,55 @@ public class CheckoutController : Controller
         ViewBag.Tarjetas = autenticado
             ? await _gateway.ListarTarjetasAsync()
             : Array.Empty<TarjetaGuardadaModel>();
+    }
+
+    /// <summary>
+    /// Opcion "Credito MegaStore" del checkout. Se consulta con el mismo total que
+    /// Ordenes le pedira evaluar a Credito (ver <see cref="TotalOrden" />), con limite
+    /// de 1 segundo: si Credito no responde, la opcion queda deshabilitada y el resto
+    /// del checkout sigue igual.
+    /// </summary>
+    private async Task<OpcionCreditoCheckout> CargarOpcionCreditoAsync(CarritoModel carrito)
+    {
+        if (string.IsNullOrWhiteSpace(Request.Cookies["sgo_jwt"]))
+        {
+            return new OpcionCreditoCheckout(EstadoOpcionCredito.SinSesion, null, OpcionCreditoCheckout.MensajeSinSesion);
+        }
+
+        var total = TotalOrden(carrito);
+        if (total <= 0m)
+        {
+            return new OpcionCreditoCheckout(
+                EstadoOpcionCredito.ServicioNoDisponible, null, OpcionCreditoCheckout.MensajeServicioNoDisponible);
+        }
+
+        return OpcionCreditoCheckout.Desde(await _gateway.ConsultarOfertaCreditoAsync(total, HttpContext.RequestAborted));
+    }
+
+    private static decimal ImpuestosDe(decimal subtotal) => Math.Round(subtotal * 0.12m / 1.12m, 2);
+
+    /// <summary>
+    /// Total con el que Ordenes crea la orden: suma de lineas mas los impuestos que
+    /// manda Procesar. Es el monto que Credito evalua y el cargo que queda en la cuenta.
+    /// </summary>
+    private static decimal TotalOrden(CarritoModel carrito)
+    {
+        var subtotal = carrito.Items?.Sum(i => i.Subtotal) ?? 0m;
+        return subtotal + ImpuestosDe(subtotal);
+    }
+
+    private const string MensajeSesionCredito = "Tu sesión expiró. Inicia sesión de nuevo para pagar con crédito.";
+
+    /// <summary>Solo estos medios se aceptan desde la web; vacio es TARJETA, como antes.</summary>
+    private static string? NormalizarMedioPago(string? medioPago)
+    {
+        if (string.IsNullOrWhiteSpace(medioPago))
+        {
+            return "TARJETA";
+        }
+
+        var valor = medioPago.Trim().ToUpperInvariant();
+        return valor is "TARJETA" or "TRANSFERENCIA" or "CREDITO" ? valor : null;
     }
 
     // ── Tokenizacion (AJAX desde el checkout) ─────────────────────────────────
@@ -289,12 +340,17 @@ public class CheckoutController : Controller
         var cuiFinal = string.IsNullOrWhiteSpace(receptorCui) ? "CF" : receptorCui.Trim();
         var metodoEntregaFinal = NormalizarMetodoEntrega(metodoEntrega);
 
-        var medioPagoFinal = string.IsNullOrWhiteSpace(medioPago)
-            ? "TARJETA"
-            : (medioPago.Contains("TRANSFERENCIA", StringComparison.OrdinalIgnoreCase) ? "TRANSFERENCIA" : "TARJETA");
+        var medioPagoFinal = NormalizarMedioPago(medioPago);
+        if (medioPagoFinal is null)
+        {
+            ViewBag.Error = "Elige un medio de pago válido.";
+            ViewBag.UserEmail = userEmail;
+            await CargarSucursalesAsync(carrito);
+            return View("Index", carrito);
+        }
 
         var subtotal = carrito.Items!.Sum(i => i.Subtotal);
-        var impuestos = Math.Round(subtotal * 0.12m / 1.12m, 2);
+        var impuestos = ImpuestosDe(subtotal);
 
         var lineas = carrito.Items!.Select(i => new LineaCrearOrdenModel(
             i.Sku,
@@ -321,7 +377,7 @@ public class CheckoutController : Controller
         {
             ViewBag.Error = "Valida tu tarjeta antes de confirmar el pedido.";
             ViewBag.UserEmail = userEmail;
-            await CargarSucursalesAsync();
+            await CargarSucursalesAsync(carrito);
             return View("Index", carrito);
         }
 
@@ -338,7 +394,7 @@ public class CheckoutController : Controller
         {
             ViewBag.Error = "No hay unidades suficientes para todo tu pedido en una misma ubicación. Revisa las cantidades de tu carrito.";
             ViewBag.UserEmail = userEmail;
-            await CargarSucursalesAsync();
+            await CargarSucursalesAsync(carrito);
             return View("Index", carrito);
         }
 
@@ -357,12 +413,16 @@ public class CheckoutController : Controller
             CarritoId: carrito.CarritoIdReserva
         );
 
-        var (exitoCrear, ordenCreada, errorCrear) = await _gateway.CrearOrdenAsync(crearModel);
-        if (!exitoCrear || ordenCreada is null)
+        var creacion = await _gateway.CrearOrdenConEstadoAsync(crearModel);
+        var ordenCreada = creacion.Orden;
+        if (!creacion.Exito || ordenCreada is null)
         {
-            ViewBag.Error = $"No pudimos registrar tu pedido: {errorCrear}";
+            // Ordenes exige sesion y cliente coincidente solo para credito.
+            ViewBag.Error = medioPagoFinal == "CREDITO" && creacion.Status is 401 or 403
+                ? MensajeSesionCredito
+                : $"No pudimos registrar tu pedido: {creacion.Error}";
             ViewBag.UserEmail = userEmail;
-            await CargarSucursalesAsync();
+            await CargarSucursalesAsync(carrito);
             return View("Index", carrito);
         }
 
@@ -388,13 +448,68 @@ public class CheckoutController : Controller
             numeroOrden = ordenFinal.NumeroOrden,
             total = ordenFinal.Total,
             confirmada = exitoConfirmar,
-            creadaEn = ordenFinal.CreadaEn.ToString("O")
+            creadaEn = ordenFinal.CreadaEn.ToString("O"),
+            credito = medioPagoFinal == "CREDITO"
         });
     }
 
-    [HttpGet]
-    public IActionResult Exito(string ordenId, string? numeroOrden, decimal? total, bool confirmada = true, string? creadaEn = null)
+    /// <summary>
+    /// "Pagar con tarjeta" despues de un rechazo de credito. Confirmar la orden vacio
+    /// el carrito, asi que se rearma desde las lineas de la orden (solo lo que falte)
+    /// y se vuelve al checkout. La orden debe ser del cliente de la sesion.
+    /// </summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> PagarConTarjeta(string ordenId)
     {
+        var userEmail = Request.Cookies["sgo_user_email"];
+        if (string.IsNullOrWhiteSpace(Request.Cookies["sgo_jwt"]) || string.IsNullOrWhiteSpace(userEmail))
+        {
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Checkout" });
+        }
+
+        var orden = string.IsNullOrWhiteSpace(ordenId) ? null : await _gateway.ObtenerOrdenAsync(ordenId.Trim());
+        if (orden is null || !string.Equals(orden.ClienteId, userEmail, StringComparison.OrdinalIgnoreCase))
+        {
+            TempData["Error"] = "No encontramos ese pedido. Revisa tu carrito para continuar.";
+            return RedirectToAction("Index", "Carrito");
+        }
+
+        var carrito = await _gateway.ObtenerCarritoAsync();
+        var enCarrito = (carrito?.Items ?? new List<ItemCarritoModel>())
+            .GroupBy(item => item.Sku, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(grupo => grupo.Key, grupo => grupo.Sum(item => item.Cantidad), StringComparer.OrdinalIgnoreCase);
+
+        var sinStock = new List<string>();
+        foreach (var linea in orden.Lineas ?? new List<LineaOrdenModel>())
+        {
+            var faltan = linea.Cantidad - enCarrito.GetValueOrDefault(linea.Sku);
+            if (faltan <= 0)
+            {
+                continue;
+            }
+
+            var agregado = await _gateway.AgregarItemCarritoAsync(
+                new AgregarItemModel(linea.Sku, linea.Descripcion, faltan, linea.PrecioUnitario));
+            if (!agregado.Exito)
+            {
+                sinStock.Add(linea.Descripcion);
+            }
+        }
+
+        if (sinStock.Count > 0)
+        {
+            TempData["Error"] = $"Algunos productos ya no tienen existencias: {string.Join(", ", sinStock)}. Revisa tu carrito.";
+            return RedirectToAction("Index", "Carrito");
+        }
+
+        return RedirectToAction(nameof(Index));
+    }
+
+    [HttpGet]
+    public IActionResult Exito(string ordenId, string? numeroOrden, decimal? total, bool confirmada = true, string? creadaEn = null, bool credito = false)
+    {
+        ViewBag.Credito = credito;
         ViewBag.OrdenId = ordenId;
         ViewBag.NumeroOrden = numeroOrden ?? ordenId;
         ViewBag.Total = total ?? 0m;

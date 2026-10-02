@@ -210,8 +210,8 @@ else if (Model == null)
                             var badgeClass = ord.Estado switch
                             {
                                 "CREADA" => "bg-blue-100 text-blue-800",
-                                "COBRO_SOLICITADO" or "PAGO_PENDIENTE" => "bg-amber-100 text-amber-800",
-                                "PAGO_APLICADO" or "CONFIRMADA" => "bg-secondary-fixed text-on-secondary-fixed",
+                                "COBRO_SOLICITADO" or "PAGO_PENDIENTE" or "EVALUACION_CREDITO_SOLICITADA" => "bg-amber-100 text-amber-800",
+                                "PAGO_APLICADO" or "CREDITO_APROBADO" or "CONFIRMADA" => "bg-secondary-fixed text-on-secondary-fixed",
                                 "DESPACHO_SOLICITADO" or "EN_PREPARACION" => "bg-purple-100 text-purple-800",
                                 "EN_TRANSITO" => "bg-indigo-100 text-indigo-800",
                                 "LISTA_PARA_RECOGER" or "ENTREGADA" => "bg-emerald-100 text-emerald-800",
@@ -234,7 +234,7 @@ else if (Model == null)
                                 }
                                 <td class="py-4 px-4">
                                     <span class="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold @badgeClass">
-                                        @ord.Estado
+                                        @SgoLogic.Web.Services.EtiquetasEstadoOrden.Etiqueta(ord.Estado)
                                     </span>
                                 </td>
                                 <td class="py-4 px-4">
@@ -364,6 +364,8 @@ else
                 {
                     "CREADA" => ("bg-blue-100 text-blue-800 border-blue-200", "CREADA", "hourglass_top"),
                     "COBRO_SOLICITADO" or "PAGO_PENDIENTE" => ("bg-amber-100 text-amber-800 border-amber-200", Model.Estado, "pending"),
+                    "EVALUACION_CREDITO_SOLICITADA" => ("bg-amber-100 text-amber-800 border-amber-200", "Confirmando crédito", "pending"),
+                    "CREDITO_APROBADO" => ("bg-secondary-fixed text-on-secondary-fixed border-secondary-container/50", "Crédito aprobado", "verified"),
                     "PAGO_APLICADO" or "CONFIRMADA" or "CONFIRMADA_PENDIENTE_FISCAL" => ("bg-secondary-fixed text-on-secondary-fixed border-secondary-container/50", Model.Estado, "verified"),
                     "DESPACHO_SOLICITADO" or "EN_PREPARACION" => ("bg-purple-100 text-purple-800 border-purple-200", Model.Estado, "inventory"),
                     "EN_TRANSITO" => ("bg-indigo-100 text-indigo-800 border-indigo-200", "EN TRANSITO", "local_shipping"),
@@ -425,7 +427,7 @@ else
                         </span>
                         <div>
                             <div class="font-bold text-primary">1. Creada & Cobro</div>
-                            <div class="text-[11px] text-text-muted">Tarjeta tokenizada</div>
+                            <div class="text-[11px] text-text-muted">@(SgoLogic.Web.Services.EtiquetasEstadoOrden.EsRutaCredito(Model.Estado) ? SgoLogic.Web.Services.EtiquetasEstadoOrden.Etiqueta(Model.Estado) : "Tarjeta tokenizada")</div>
                         </div>
                     }
                 </div>
@@ -738,7 +740,7 @@ else
         let despachoGuiaActual = container.getAttribute('data-despacho-guia') || '';
         const syncStatus = document.getElementById('sync-status');
 
-        const terminalStates = ['ENTREGADA', 'CANCELADA', 'RECHAZADA'];
+        const terminalStates = ['ENTREGADA', 'CANCELADA', 'RECHAZADA', 'CANCELADA_RESERVA_VENCIDA', 'DEVUELTA'];
 
         if (!terminalStates.includes(estadoActual)) {
             const interval = setInterval(async () => {

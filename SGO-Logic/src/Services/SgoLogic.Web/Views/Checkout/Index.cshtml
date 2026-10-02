@@ -18,6 +18,11 @@
         .OrderByDescending(t => t.UltimoUsoEn ?? DateTime.MinValue)
         .ThenByDescending(t => t.CreadaEn)
         .FirstOrDefault();
+    // Credito MegaStore: siempre visible; solo seleccionable si hay disponible para el total.
+    var opcionCredito = ViewBag.OpcionCredito as SgoLogic.Web.Services.OpcionCreditoCheckout
+        ?? new SgoLogic.Web.Services.OpcionCreditoCheckout(
+            SgoLogic.Web.Services.EstadoOpcionCredito.ServicioNoDisponible, null,
+            SgoLogic.Web.Services.OpcionCreditoCheckout.MensajeServicioNoDisponible);
     var sucursalSeleccionada = ViewBag.SucursalSeleccionada as string;
     if (string.IsNullOrWhiteSpace(sucursalSeleccionada) || tiendas.All(t => t.Id != sucursalSeleccionada))
     {
@@ -212,6 +217,37 @@
                                 <span class="material-symbols-outlined text-primary text-[20px]">account_balance</span>
                                 <span class="text-sm font-semibold text-primary">Transferencia bancaria</span>
                             </div>
+                        </div>
+                    </label>
+
+                    <label class="flex items-start gap-3 p-3.5 rounded-2xl border border-border-subtle bg-surface-container-low/30 transition-colors @(opcionCredito.Seleccionable ? "cursor-pointer hover:bg-surface-container-low" : "opacity-70 cursor-not-allowed")">
+                        <input type="radio" name="medioPago" value="CREDITO" class="text-primary focus:ring-primary h-4 w-4 mt-0.5"
+                               @(opcionCredito.Seleccionable ? "" : "disabled") />
+                        <div class="flex-1 flex flex-col gap-1">
+                            <div class="flex items-center gap-2">
+                                <span class="material-symbols-outlined text-primary text-[20px]">account_balance_wallet</span>
+                                <span class="text-sm font-semibold text-primary">Crédito MegaStore: compra ahora, paga en 30 días</span>
+                            </div>
+                            @if (opcionCredito.Estado == SgoLogic.Web.Services.EstadoOpcionCredito.Disponible)
+                            {
+                                <span class="text-[11px] text-emerald-800">
+                                    Disponible: Q @((opcionCredito.Disponible ?? 0m).ToString("N2"))
+                                    @if (opcionCredito.FechaLimitePago is DateTime fechaLimite)
+                                    {
+                                        <text>&bull; Pagas a más tardar el @fechaLimite.ToString("dd/MM/yyyy")</text>
+                                    }
+                                </span>
+                            }
+                            else if (opcionCredito.Estado == SgoLogic.Web.Services.EstadoOpcionCredito.NoDisponibleParaCliente)
+                            {
+                                <span class="text-[11px] font-semibold text-primary">@opcionCredito.Titulo</span>
+                                <span class="text-[11px] text-text-muted">@opcionCredito.Mensaje</span>
+                                <a href="/Cuenta/Credito" class="text-[11px] font-semibold text-primary underline self-start">Ver detalle en Mi crédito</a>
+                            }
+                            else
+                            {
+                                <span class="text-[11px] text-text-muted">@opcionCredito.Mensaje</span>
+                            }
                         </div>
                     </label>
                 </div>
@@ -969,7 +1005,7 @@
                 return;
             }
         } else {
-            // Con transferencia no se envia ningun token.
+            // Con transferencia o credito no se envia ningun token.
             document.getElementById('token-medio-pago').value = '';
         }
 

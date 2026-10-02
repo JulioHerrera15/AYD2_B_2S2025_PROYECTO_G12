@@ -4,6 +4,7 @@
     ViewData["Title"] = "Mi Crédito - MegaStore";
     var credito = Model.Estado == EstadoConsultaCredito.Ok ? Model.Credito : null;
     var factores = credito?.Factores ?? new List<FactorCreditoModel>();
+    var compras = credito?.Compras ?? new List<CompraCreditoModel>();
     string Monto(decimal valor) => "Q" + valor.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
     string ClaseValoracion(string valoracion) => valoracion switch
     {
@@ -155,6 +156,64 @@
                         <p class="text-sm text-primary max-w-md mx-auto mt-3">@credito.Recomendacion</p>
                     }
                 </div>
+            </div>
+        }
+
+        @if (credito.TieneCredito || compras.Count > 0)
+        {
+            <!-- Compras a credito -->
+            <div class="bg-surface-white rounded-3xl border border-border-subtle/60 overflow-hidden ambient-shadow">
+                <div class="px-6 pt-6">
+                    <h2 class="text-base font-bold text-primary">Tus compras a crédito</h2>
+                    <p class="text-xs text-text-muted">Primero las que tienes por pagar, de la más próxima a vencer.</p>
+                </div>
+                @if (compras.Count == 0)
+                {
+                    <p class="px-6 py-6 text-sm text-text-muted">Aún no tienes compras a crédito.</p>
+                }
+                else
+                {
+                    <div class="overflow-x-auto mt-4">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-surface-container-low/50 text-text-muted uppercase tracking-wider text-[11px]">
+                                <tr>
+                                    <th class="py-3 px-6">Pedido</th>
+                                    <th class="py-3 px-6">Monto</th>
+                                    <th class="py-3 px-6">Fecha límite</th>
+                                    <th class="py-3 px-6">Días restantes</th>
+                                    <th class="py-3 px-6">Estado</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-border-subtle/50">
+                                @foreach (var compra in compras)
+                                {
+                                    <tr>
+                                        <td class="py-3 px-6 font-bold text-primary">
+                                            <a href="/Estado?ordenId=@Uri.EscapeDataString(compra.OrdenId)" class="hover:underline">@compra.NumeroOrden</a>
+                                        </td>
+                                        <td class="py-3 px-6 font-semibold text-primary">@Monto(compra.Monto)</td>
+                                        <td class="py-3 px-6 text-text-muted">@compra.VenceEn.ToString("dd/MM/yyyy")</td>
+                                        <td class="py-3 px-6 text-text-muted">
+                                            @if (compra.DiasRestantes is int dias)
+                                            {
+                                                @(dias == 1 ? "1 día" : dias <= 0 ? "Vence hoy" : $"{dias} días")
+                                            }
+                                            else
+                                            {
+                                                <span>&mdash;</span>
+                                            }
+                                        </td>
+                                        <td class="py-3 px-6">
+                                            <span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold @(compra.EsVigente ? "text-amber-800 bg-amber-100" : "text-text-muted bg-surface-container-low")">
+                                                @compra.EtiquetaEstado
+                                            </span>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
             </div>
         }
 
