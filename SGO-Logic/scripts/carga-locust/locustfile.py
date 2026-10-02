@@ -28,12 +28,16 @@ Que simula, por usuario virtual:
      - GET /Catalogo (navegar).
      - GET /Catalogo/Stock?sku=... (consultar existencias de un SKU al azar).
      - POST /Carrito/Agregar (agregarlo al carrito).
-     - POST directo a http://localhost:8084/v1/tokens (el mock de PayKlik) —
-       asi es como lo hace el JS del navegador real (ver
-       Views/Checkout/Index.cshtml, URL_TOKENIZACION), no pasa por la Web ni
-       por el Gateway. OJO: si esto se omite o se manda despues del checkout,
-       Checkout/Procesar devuelve el formulario con el error "Valida tu
-       tarjeta antes de confirmar el pedido" y ninguna orden se crea.
+     - GET /Checkout (abrir la pagina de pago) para leer el token antiforgery
+       del formulario, igual que el navegador.
+     - POST /Checkout/Tokenizar con la tarjeta y el header
+       RequestVerificationToken: la Web la pasa a Pagos (POST
+       /api/pagos/tokens), que la valida, la cifra en su boveda transitoria y
+       devuelve un token opaco. Asi lo hace el JS del navegador real (ver
+       Views/Checkout/Index.cshtml, URL_TOKENIZACION); el navegador ya no habla
+       con PayKlik. OJO: si esto se omite, Checkout/Procesar devuelve el
+       formulario con el error "Valida tu tarjeta antes de confirmar el
+       pedido" y ninguna orden se crea.
      - POST /Checkout/Procesar con el token obtenido (crea + confirma la
        orden del lado del servidor; el endpoint real setup ya reintenta la
        confirmacion una vez si falla).
@@ -67,18 +71,20 @@ from locust.exception import StopUser
 # recorrido: se consulta directo, como estand-in de "revisar el correo".
 MENSAJERIA_URL = "http://localhost:8089/api/mensajes"
 
-# El navegador real tokeniza la tarjeta llamando directo a PayKlik (puerto
-# 8084), sin pasar por la Web ni por el Gateway. Ver
+# El navegador real tokeniza la tarjeta contra la propia Web (que la pasa a
+# Pagos), con el token antiforgery que trae el formulario del checkout. Ver
 # Views/Checkout/Index.cshtml, constante URL_TOKENIZACION.
-PAYKLIK_TOKEN_URL = "http://localhost:8084/v1/tokens"
+PATRON_ANTIFORGERY = re.compile(r'name="__RequestVerificationToken"[^>]*value="([^"]+)"')
+TITULAR_PRUEBA = "Comprador Locust"
 
-# Numero de tarjeta de prueba que pasa la validacion de Luhn del mock
+# Numero de tarjeta de prueba que pasa la validacion de Luhn de Pagos
 # (igual al que ya usa scripts/pruebas-carga/eac01-hu023-carga.js).
 NUMERO_TARJETA_PRUEBA = "4111111111111111"
 
-# Subconjunto de PROD-002..PROD-008 (sku, nombre, precio) tal como estan
-# hardcodeados en SgoLogic.Web/Controllers/CatalogoController.cs. Se excluyen
-# PROD-001 y PROD-005 a proposito (ver docstring del modulo).
+# Subconjunto de PROD-002..PROD-008 (sku, nombre, precio) del catalogo de
+# Inventario (inventario.producto). Se excluyen PROD-001 y PROD-005 a proposito
+# (ver docstring del modulo). El precio solo se manda porque el formulario lo
+# trae: Auth lo ignora y toma el vigente de Inventario.
 CATALOGO_PARA_CARGA = [
     {"sku": "PROD-002", "nombre": 'Smart Ultra HD LED TV 65"', "precio": "5499.00"},
     {"sku": "PROD-003", "nombre": "Lavadora de Carga Frontal EcoBubble 22kg", "precio": "7899.00"},
@@ -214,19 +220,31 @@ class CompradorMegaStore(HttpUser):
         self._confirmar_compra(token)
 
     def _tokenizar_tarjeta(self):
+        # Abrir el checkout como el navegador: trae el token antiforgery que exige
+        # /Checkout/Tokenizar (la cookie antiforgery queda en la sesion de Locust).
+        with self.client.get("/Checkout", name="/Checkout", catch_response=True) as pagina:
+            coincidencia = PATRON_ANTIFORGERY.search(pagina.text or "")
+            if coincidencia is None:
+                pagina.failure("el checkout no trajo el token antiforgery")
+                return None
+            pagina.success()
+
         anio_expiracion = datetime.now(timezone.utc).year + 3
         with self.client.post(
-            PAYKLIK_TOKEN_URL,
-            json={
-                "numeroTarjeta": NUMERO_TARJETA_PRUEBA,
+            "/Checkout/Tokenizar",
+            data={
+                "numero": NUMERO_TARJETA_PRUEBA,
+                "mesExp": 12,
+                "anioExp": anio_expiracion,
                 "cvv": "123",
-                "mesExpiracion": 12,
-                "anioExpiracion": anio_expiracion,
+                "titular": TITULAR_PRUEBA,
+                "guardar": "false",
             },
-            name="/v1/tokens (PayKlik)",
+            headers={"RequestVerificationToken": coincidencia.group(1), "Accept": "application/json"},
+            name="/Checkout/Tokenizar",
             catch_response=True,
         ) as resp:
-            if resp.status_code == 201:
+            if resp.status_code == 200:
                 resp.success()
                 try:
                     return resp.json().get("token")

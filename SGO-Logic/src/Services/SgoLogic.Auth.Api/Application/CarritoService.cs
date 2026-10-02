@@ -95,12 +95,19 @@ public sealed class CarritoService : ICarritoService
         return Construir(clienteOSesionId, clave, items);
     }
 
+    /// <summary>
+    /// Agrega o suma unidades de un SKU. El precio y la descripcion del cliente se
+    /// ignoran: se toman del catalogo de Inventario (B1). Si el SKU no existe o esta
+    /// inactivo lanza <see cref="ExcepcionProductoNoEncontrado" /> sin tocar nada.
+    /// </summary>
     public async Task AgregarItemAsync(string clienteOSesionId, AgregarItemRequest request, CancellationToken ct = default)
     {
         if (request.Cantidad <= 0)
             throw new ArgumentException("La cantidad debe ser mayor que cero.");
-        if (request.PrecioUnitario < 0)
-            throw new ArgumentException("El precio unitario no puede ser negativo.");
+        if (string.IsNullOrWhiteSpace(request.Sku))
+            throw new ArgumentException("El SKU es obligatorio.");
+
+        var producto = await ObtenerProductoVendibleAsync(request.Sku, ct);
 
         var clave = await ResolverClaveAsync(clienteOSesionId, ct);
         var items = await _almacen.LeerAsync(clave) ?? new List<ItemCarritoDto>();
@@ -111,14 +118,16 @@ public sealed class CarritoService : ICarritoService
         // Primero Inventario: si no aparta, Redis no cambia.
         var linea = await _inventario.RetenerAsync(clave, request.Sku, cantidadTotal, request.UbicacionPreferidaId, ct);
 
-        var itemBase = existente ?? new ItemCarritoDto(request.Sku, request.Descripcion, 0, request.PrecioUnitario);
+        var itemBase = existente ?? new ItemCarritoDto(request.Sku, producto.Nombre, 0, producto.Precio);
         if (existente is not null)
         {
             // Sumar cantidad si el SKU ya esta en el carrito
             items.Remove(existente);
         }
 
-        items.Add(ConRetencion(itemBase with { Cantidad = cantidadTotal }, linea));
+        items.Add(ConRetencion(
+            itemBase with { Cantidad = cantidadTotal, Descripcion = producto.Nombre, PrecioUnitario = producto.Precio },
+            linea));
         RenovarExpiraciones(items, linea.ExpiraEn);
 
         await _almacen.GuardarAsync(clave, items, TimeSpan.FromSeconds(_ttlSegundos));
@@ -144,10 +153,15 @@ public sealed class CarritoService : ICarritoService
         var existente = items.FirstOrDefault(i => i.Sku == sku);
         if (existente is null) return;
 
+        // El precio vigente se refresca desde Inventario en cada cambio de cantidad.
+        var producto = await ObtenerProductoVendibleAsync(sku, ct);
+
         var linea = await _inventario.RetenerAsync(clave, sku, nuevaCantidad, ubicacionPreferidaId, ct);
 
         items.Remove(existente);
-        items.Add(ConRetencion(existente with { Cantidad = nuevaCantidad }, linea));
+        items.Add(ConRetencion(
+            existente with { Cantidad = nuevaCantidad, Descripcion = producto.Nombre, PrecioUnitario = producto.Precio },
+            linea));
         RenovarExpiraciones(items, linea.ExpiraEn);
 
         await _almacen.GuardarAsync(clave, items, TimeSpan.FromSeconds(_ttlSegundos));
@@ -253,6 +267,18 @@ public sealed class CarritoService : ICarritoService
 
         await _almacen.GuardarAsync(claveCuenta, itemsCuenta, TimeSpan.FromSeconds(_ttlSegundos));
         await _almacen.BorrarAsync(claveInvitado);
+    }
+
+    /// <summary>El producto del catalogo de Inventario; 404 (excepcion) si no existe o esta inactivo.</summary>
+    private async Task<ProductoInventario> ObtenerProductoVendibleAsync(string sku, CancellationToken ct)
+    {
+        var producto = await _inventario.ObtenerProductoAsync(sku.Trim(), ct);
+        if (producto is null || !producto.Activo)
+        {
+            throw new ExcepcionProductoNoEncontrado(sku.Trim());
+        }
+
+        return producto;
     }
 
     private static ItemCarritoDto ConRetencion(ItemCarritoDto item, LineaRetencionInventario? linea) =>

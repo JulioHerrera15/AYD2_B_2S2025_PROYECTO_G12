@@ -7,6 +7,7 @@ using SgoLogic.Ordenes.Api.Application.Ordenes;
 using SgoLogic.Ordenes.Api.Consumers;
 using SgoLogic.Ordenes.Api.Domain;
 using SgoLogic.Ordenes.Api.Infrastructure.Carrito;
+using SgoLogic.Ordenes.Api.Infrastructure.Inventario;
 using SgoLogic.Ordenes.Api.Infrastructure.Persistencia;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -42,6 +43,15 @@ builder.Services.AddHttpClient<IClienteCarrito, ClienteCarritoHttp>(http =>
 {
     http.BaseAddress = new Uri(builder.Configuration["Auth:BaseUrl"] ?? "http://auth-api:8080");
     http.Timeout = TimeSpan.FromSeconds(5);
+});
+
+// B1: precios de la orden contra el catalogo de Inventario (red interna). Cache corta
+// por SKU en CatalogoProductosHttp; sin respuesta de Inventario la orden no se crea.
+builder.Services.AddMemoryCache();
+builder.Services.AddHttpClient<ICatalogoProductos, CatalogoProductosHttp>(http =>
+{
+    http.BaseAddress = new Uri(builder.Configuration["Inventario:BaseUrl"] ?? "http://inventario-api:8080");
+    http.Timeout = TimeSpan.FromSeconds(3);
 });
 
 // Consumo de los resultados de Pagos: avance de la saga y compensacion (HU-003).
@@ -100,6 +110,27 @@ ordenes.MapPost("/", async (
             detail: ex.Message,
             statusCode: StatusCodes.Status400BadRequest,
             extensions: new Dictionary<string, object?> { ["codigo"] = "token_medio_pago_requerido" });
+    }
+    catch (ExcepcionPrecioNoValido ex)
+    {
+        return Results.Problem(
+            title: "Precio no valido",
+            detail: ex.Message,
+            statusCode: StatusCodes.Status422UnprocessableEntity,
+            extensions: new Dictionary<string, object?>
+            {
+                ["codigo"] = "precio_no_valido",
+                ["sku"] = ex.Sku,
+                ["precioVigente"] = ex.PrecioVigente
+            });
+    }
+    catch (ExcepcionCatalogoNoDisponible ex)
+    {
+        return Results.Problem(
+            title: "Catalogo no disponible",
+            detail: "No se pudieron validar los precios con Inventario. Intenta de nuevo en unos momentos.",
+            statusCode: StatusCodes.Status503ServiceUnavailable,
+            extensions: new Dictionary<string, object?> { ["codigo"] = "catalogo_no_disponible", ["motivo"] = ex.Message });
     }
     catch (Exception ex) when (ex is ArgumentException or ArgumentOutOfRangeException)
     {

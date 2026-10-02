@@ -17,14 +17,15 @@ namespace SgoLogic.Notificaciones.Api.Consumers;
 /// sección 4.1). Por eso se declara una nueva cola que atiende exclusivamente el aviso
 /// al cliente de que puede pasar a recoger su pedido.
 ///
+/// El destinatario es el ClienteId (email) que trae el evento, el mismo que Despacho
+/// recibio en DespachoSolicitado; nunca el OrdenId.
+///
 /// MANEJO AISLADO DE FALLOS: idéntico al consumidor de Órdenes — si el proveedor falla,
-/// se loguea y se ackea. El aviso perdido no puede detener el flujo de Despacho.
+/// el aviso queda en notificacion_pendiente y se ackea. El flujo de Despacho no se detiene.
 /// </summary>
 public sealed class NotificacionesDespachoConsumidor
     : EventConsumerBase<NotificacionesDbContext, PedidoListoParaRecogerData>
 {
-    private readonly ILogger<NotificacionesDespachoConsumidor> _logger;
-
     public NotificacionesDespachoConsumidor(
         IServiceScopeFactory scopeFactory,
         IConexionRabbitMq conexion,
@@ -32,7 +33,6 @@ public sealed class NotificacionesDespachoConsumidor
         ILogger<NotificacionesDespachoConsumidor> logger)
         : base(scopeFactory, conexion, suscriptor, logger)
     {
-        _logger = logger;
     }
 
     protected override string Cola => "notificaciones.despacho";
@@ -51,33 +51,7 @@ public sealed class NotificacionesDespachoConsumidor
         IServiceProvider servicios,
         CancellationToken cancelacion)
     {
-        var data = evento.Data;
-
-        // Aislamiento de fallos: try/catch INTERNO — la excepción no debe salir de aquí
-        try
-        {
-            var cliente = servicios.GetRequiredService<IMockMensajeriaClient>();
-
-            // Reutilizamos la misma firma de EnviarAsync con estadoOrden = LISTA_PARA_RECOGER
-            // para que el mock notifique al cliente que puede pasar por su pedido.
-            await cliente.EnviarAsync(
-                clienteId: data.OrdenId,   // usamos OrdenId como referencia; el mock lo maneja
-                estadoOrden: "LISTA_PARA_RECOGER",
-                ordenId: data.OrdenId,
-                ct: cancelacion);
-
-            _logger.LogInformation(
-                "Notificación LISTA_PARA_RECOGER enviada para orden {OrdenId} en ubicación {UbicacionRecogidaId}",
-                data.OrdenId, data.UbicacionRecogidaId);
-        }
-        catch (Exception ex)
-        {
-            // INTENCIONALMENTE no relanzamos. El ack se completará con éxito.
-            // El aviso se pierde pero el flujo de Despacho no se afecta.
-            _logger.LogWarning(
-                ex,
-                "Falla al enviar notificación LISTA_PARA_RECOGER para la orden {OrdenId} — aislado, evento marcado procesado",
-                data.OrdenId);
-        }
+        var servicio = servicios.GetRequiredService<ServicioNotificaciones>();
+        await servicio.NotificarListoParaRecogerAsync(evento.Data, evento.EventId, cancelacion);
     }
 }

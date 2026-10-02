@@ -1,4 +1,3 @@
-using SgoLogic.Mocks.PayKlik;
 using SgoLogic.Pagos.Api.Application.Pagos;
 
 namespace SgoLogic.Pagos.Tests.Application.Dobles;
@@ -67,40 +66,27 @@ public sealed class ClientePayKlikFalso : IClientePayKlik
     }
 
     /// <summary>
-    /// PayKlik responde que el token no sirve (422 con un codigo TOKEN_*). El cliente
-    /// real lo traduce a <see cref="TokenMedioPagoInvalidoException" />.
+    /// PayKlik no acepta los datos del medio de pago (422/404 con un codigo como
+    /// TARJETA_INVALIDA o TARJETA_NO_ENCONTRADA). El cliente real lo traduce a
+    /// <see cref="TokenMedioPagoInvalidoException" />.
     /// </summary>
     public static ClientePayKlikFalso TokenNoValido(string codigo) =>
         new(_ => Task.FromException<ResultadoPayKlik>(
-            new TokenMedioPagoInvalidoException(codigo, "PayKlik rechazo el token del medio de pago.")));
+            new TokenMedioPagoInvalidoException(codigo, "PayKlik rechazo el medio de pago.")));
 
     /// <summary>
-    /// Se comporta como el cobro del mock de PayKlik: resuelve el token contra un
-    /// <see cref="AlmacenTokens" /> real, lo consume y devuelve los ultimos cuatro y
-    /// la marca de la tarjeta tokenizada. Un token inexistente, vencido o ya usado
-    /// lanza <see cref="TokenMedioPagoInvalidoException" />, igual que el 422.
+    /// Se comporta como el cobro del mock de PayKlik: aprueba, devuelve los ultimos
+    /// cuatro y la marca de la tarjeta recibida y, si se pidio guardar una tarjeta
+    /// nueva, la referencia de boveda <paramref name="referenciaGuardada" />.
     /// </summary>
-    public static ClientePayKlikFalso ResuelveTokens(AlmacenTokens almacen) =>
+    public static ClientePayKlikFalso ApruebaComoPayKlik(string referenciaGuardada = "card_pk_nueva") =>
         new(peticion =>
         {
-            var consumo = almacen.Consumir(peticion.TokenMedioPago);
-
-            if (consumo.Resultado != ResultadoConsumoToken.Consumido)
-            {
-                var codigo = consumo.Resultado switch
-                {
-                    ResultadoConsumoToken.Vencido => CodigosToken.Vencido,
-                    ResultadoConsumoToken.YaUsado => CodigosToken.YaUsado,
-                    _ => CodigosToken.Invalido
-                };
-
-                return Task.FromException<ResultadoPayKlik>(
-                    new TokenMedioPagoInvalidoException(codigo, "PayKlik rechazo el token del medio de pago."));
-            }
-
+            var ultimos = peticion.Tarjeta?.Numero[^4..];
             return Task.FromResult(new ResultadoPayKlik(
-                "PK-TEST-TOKEN", EstadoRespuestaPayKlik.APROBADO, "00", "Cargo aprobado",
-                consumo.Tarjeta!.UltimosCuatro, consumo.Tarjeta.Marca, DateTime.UtcNow));
+                "PK-TEST-TARJETA", EstadoRespuestaPayKlik.APROBADO, "00", "Cargo aprobado",
+                ultimos, ultimos is null ? null : "VISA", DateTime.UtcNow,
+                ReferenciaTarjeta: peticion.Tarjeta is not null && peticion.Guardar == true ? referenciaGuardada : null));
         });
 
     /// <summary>Simula el disyuntor abierto: lanza sin registrar la peticion.</summary>

@@ -268,6 +268,232 @@ namespace SgoLogic.Inventario.Api.Infrastructure.Persistencia.Migraciones
                     b.ToTable("movimiento_existencia", "inventario");
                 });
 
+            modelBuilder.Entity("SgoLogic.Inventario.Api.Domain.Producto", b =>
+                {
+                    b.Property<string>("Sku")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("sku");
+
+                    b.Property<bool>("Activo")
+                        .HasColumnType("boolean")
+                        .HasColumnName("activo");
+
+                    b.Property<string>("Categoria")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("categoria");
+
+                    b.Property<string>("Descripcion")
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)")
+                        .HasColumnName("descripcion");
+
+                    b.Property<string>("Etiqueta")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("etiqueta");
+
+                    b.Property<string>("Icono")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("icono");
+
+                    b.Property<string>("Nombre")
+                        .IsRequired()
+                        .HasMaxLength(160)
+                        .HasColumnType("character varying(160)")
+                        .HasColumnName("nombre");
+
+                    b.Property<decimal>("Precio")
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("precio");
+
+                    b.HasKey("Sku");
+
+                    b.ToTable("producto", "inventario");
+
+                    b.HasData(
+                        new
+                        {
+                            Sku = "PROD-001",
+                            Activo = true,
+                            Categoria = "Línea Blanca",
+                            Descripcion = "Refrigeradora inteligente de 28 pies cúbicos, compuerta French Door, panel táctil Wi-Fi y enfriamiento Twin Cooling Plus.",
+                            Etiqueta = "Más Vendido",
+                            Icono = "kitchen",
+                            Nombre = "Lumina Smart Refrigerator Pro",
+                            Precio = 14999.00m
+                        },
+                        new
+                        {
+                            Sku = "PROD-002",
+                            Activo = true,
+                            Categoria = "Televisores",
+                            Descripcion = "Pantalla 4K UHD con HDR10+, tasa de refresco de 120Hz nativos, Dolby Atmos y sistema operativo Google TV integrado.",
+                            Etiqueta = "Oferta",
+                            Icono = "tv",
+                            Nombre = "Smart Ultra HD LED TV 65\"",
+                            Precio = 5499.00m
+                        },
+                        new
+                        {
+                            Sku = "PROD-003",
+                            Activo = true,
+                            Categoria = "Línea Blanca",
+                            Descripcion = "Motor Digital Inverter con 10 años de garantía, lavado con vapor higiénico y dispensador automático de detergente.",
+                            Etiqueta = "Nuevo",
+                            Icono = "local_laundry_service",
+                            Nombre = "Lavadora de Carga Frontal EcoBubble 22kg",
+                            Precio = 7899.00m
+                        },
+                        new
+                        {
+                            Sku = "PROD-004",
+                            Activo = true,
+                            Categoria = "Audio",
+                            Descripcion = "Subwoofer inalámbrico potente, altavoces traseros satelitales, HDMI eARC y compatibilidad con AirPlay 2 y Spotify Connect.",
+                            Etiqueta = "Popular",
+                            Icono = "speaker",
+                            Nombre = "Barra de Sonido Dolby Atmos 5.1.2 550W",
+                            Precio = 3299.00m
+                        },
+                        new
+                        {
+                            Sku = "PROD-005",
+                            Activo = true,
+                            Categoria = "Informática",
+                            Descripcion = "Procesador AMD Ryzen 9 7945HX, GPU NVIDIA RTX 4070 8GB, 32GB RAM DDR5, 1TB NVMe Gen4 y pantalla 240Hz QHD.",
+                            Etiqueta = "Gamer",
+                            Icono = "laptop_chromebook",
+                            Nombre = "Laptop Gamer Ultra 16\" Ryzen 9",
+                            Precio = 16499.00m
+                        },
+                        new
+                        {
+                            Sku = "PROD-006",
+                            Activo = true,
+                            Categoria = "Climatización",
+                            Descripcion = "Tecnología WindFree silenciosa, filtro antibacteriano de alta densidad, modo frío/calor y control remoto por aplicación móvil.",
+                            Etiqueta = "Ahorro Energético",
+                            Icono = "ac_unit",
+                            Nombre = "Aire Acondicionado Inverter 18000 BTU",
+                            Precio = 4599.00m
+                        },
+                        new
+                        {
+                            Sku = "PROD-007",
+                            Activo = true,
+                            Categoria = "Línea Blanca",
+                            Descripcion = "Capacidad de 1.5 pies cúbicos, recubrimiento EasyClean antibacteriano, función de dorador al carbón y descongelado uniforme.",
+                            Etiqueta = "Básico",
+                            Icono = "microwave",
+                            Nombre = "Microondas Grill Smart Inverter 42L",
+                            Precio = 1899.00m
+                        },
+                        new
+                        {
+                            Sku = "PROD-008",
+                            Activo = true,
+                            Categoria = "Hogar Inteligente",
+                            Descripcion = "Navegación LiDAR de alta precisión, succión de 5000Pa, mapeo multinivel en 3D y estación de autovaciado de polvo.",
+                            Etiqueta = "Smart",
+                            Icono = "cleaning_services",
+                            Nombre = "Aspiradora Robot Láser con Fregado",
+                            Precio = 3899.00m
+                        },
+                        new
+                        {
+                            Sku = "PROD-101",
+                            Activo = true,
+                            Categoria = "Audio",
+                            Descripcion = "Cancelación activa de ruido híbrida, 40 horas de batería, audio espacial y carga rápida USB-C de 10 minutos para 5 horas.",
+                            Etiqueta = "Últimas Unidades",
+                            Icono = "headphones",
+                            Nombre = "Audífonos Inalámbricos ANC Pro",
+                            Precio = 1299.00m
+                        },
+                        new
+                        {
+                            Sku = "PROD-102",
+                            Activo = true,
+                            Categoria = "Informática",
+                            Descripcion = "Pantalla OLED de 120Hz, procesador octa-core, 8GB RAM, lápiz óptico incluido y conectividad Wi-Fi 6E.",
+                            Etiqueta = "Stock Limitado",
+                            Icono = "tablet_mac",
+                            Nombre = "Tablet 11\" OLED 256GB",
+                            Precio = 4299.00m
+                        },
+                        new
+                        {
+                            Sku = "PROD-103",
+                            Activo = true,
+                            Categoria = "Informática",
+                            Descripcion = "Panel VA curvo 1500R QHD, 165Hz con 1ms MPRT, FreeSync Premium y HDR400 para juegos competitivos.",
+                            Etiqueta = "Exclusivo",
+                            Icono = "monitor",
+                            Nombre = "Monitor Gamer Curvo 32\" 165Hz",
+                            Precio = 2899.00m
+                        },
+                        new
+                        {
+                            Sku = "PROD-104",
+                            Activo = true,
+                            Categoria = "Climatización",
+                            Descripcion = "Extrae hasta 30 litros diarios, control por aplicación, sensor de humedad automático y modo secado de ropa.",
+                            Etiqueta = "Temporada",
+                            Icono = "humidity_percentage",
+                            Nombre = "Deshumidificador Inteligente 30L",
+                            Precio = 2199.00m
+                        },
+                        new
+                        {
+                            Sku = "PROD-105",
+                            Activo = true,
+                            Categoria = "Hogar Inteligente",
+                            Descripcion = "Resolución 2K con visión nocturna a color, detección de personas, audio bidireccional y grabación en la nube.",
+                            Etiqueta = "Seguridad",
+                            Icono = "videocam",
+                            Nombre = "Cámara de Seguridad Wi-Fi 2K",
+                            Precio = 699.00m
+                        },
+                        new
+                        {
+                            Sku = "SKU-DEMO-001",
+                            Activo = true,
+                            Categoria = "Demo",
+                            Descripcion = "Artículo de demostración con existencias en CD-CENTRAL y TIENDA-01-CENTRAL.",
+                            Etiqueta = "Demo",
+                            Icono = "inventory_2",
+                            Nombre = "Producto de demostración 1",
+                            Precio = 100.00m
+                        },
+                        new
+                        {
+                            Sku = "SKU-DEMO-002",
+                            Activo = true,
+                            Categoria = "Demo",
+                            Descripcion = "Artículo de demostración con existencias en CD-CENTRAL.",
+                            Etiqueta = "Demo",
+                            Icono = "inventory_2",
+                            Nombre = "Producto de demostración 2",
+                            Precio = 250.00m
+                        },
+                        new
+                        {
+                            Sku = "SKU-DEMO-003",
+                            Activo = true,
+                            Categoria = "Demo",
+                            Descripcion = "Artículo de demostración con existencias en TIENDA-01-CENTRAL.",
+                            Etiqueta = "Demo",
+                            Icono = "inventory_2",
+                            Nombre = "Producto de demostración 3",
+                            Precio = 75.00m
+                        });
+                });
+
             modelBuilder.Entity("SgoLogic.Inventario.Api.Domain.Reserva", b =>
                 {
                     b.Property<string>("Id")

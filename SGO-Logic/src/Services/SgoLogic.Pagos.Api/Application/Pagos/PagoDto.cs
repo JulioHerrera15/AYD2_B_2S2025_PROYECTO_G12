@@ -70,7 +70,12 @@ public sealed record IntentoPagoDto(
         intento.FinalizadoEn);
 }
 
-/// <summary>Informacion publica de un enlace de reintento para mostrar al cliente antes de ejecutar el cobro.</summary>
+/// <summary>
+/// Informacion publica de un enlace de reintento para mostrar al cliente antes de
+/// ejecutar el cobro. <see cref="DatosRequeridos" /> dice que tiene que volver a
+/// escribir el cliente: NINGUNO (el token sigue vigente), CVV (el token vencio pero
+/// era de una tarjeta guardada activa) o TARJETA (el formulario completo).
+/// </summary>
 public sealed record EnlaceReintentoInfoDto(
     string Token,
     string OrdenId,
@@ -82,4 +87,24 @@ public sealed record EnlaceReintentoInfoDto(
     string EstadoPago,
     string? UltimosCuatro,
     string? Marca,
-    string? ClienteId);
+    string? ClienteId,
+    string DatosRequeridos = DatosRequeridosReintento.Ninguno);
+
+/// <summary>Valores de <see cref="EnlaceReintentoInfoDto.DatosRequeridos" />.</summary>
+public static class DatosRequeridosReintento
+{
+    public const string Ninguno = "NINGUNO";
+    public const string Cvv = "CVV";
+    public const string Tarjeta = "TARJETA";
+}
+
+/// <summary>
+/// Cuerpo opcional de POST /api/pagos/reintentos/{token}. Sin cuerpo se reintenta con
+/// el token del ultimo intento. <see cref="TokenMedioPago" /> trae un token nuevo de
+/// POST /api/pagos/tokens (tarjeta completa); <see cref="Cvv" /> pide uno nuevo desde
+/// la misma tarjeta guardada. <see cref="ToString" /> no imprime el CVV.
+/// </summary>
+public sealed record ReintentoPagoRequest(string? TokenMedioPago, string? Cvv)
+{
+    public override string ToString() => nameof(ReintentoPagoRequest) + " { datos omitidos }";
+}

@@ -28,7 +28,11 @@ public sealed record TarjetaGuardadaDto(
         tarjeta.UltimoUsoEn);
 }
 
-/// <summary>Cuerpo de POST /api/pagos/tarjetas: lo que devolvio PayKlik al tokenizar con guardar=true, mas el titular.</summary>
+/// <summary>
+/// Cuerpo de POST /api/pagos/tarjetas: una referencia de boveda de PayKlik, mas el
+/// titular. El checkout ya no lo usa (la tarjeta se guarda al cobrar con
+/// guardar=true); se conserva para registrar referencias existentes.
+/// </summary>
 public sealed record GuardarTarjetaRequest(
     string? ReferenciaTarjeta,
     string? Marca,
@@ -38,43 +42,13 @@ public sealed record GuardarTarjetaRequest(
     string? Titular);
 
 /// <summary>
-/// Cuerpo de POST /api/pagos/tarjetas/{id}/token. El CVV solo pasa por aqui hacia
-/// PayKlik: no se guarda ni se registra. <see cref="ToString" /> no lo imprime.
+/// Cuerpo de POST /api/pagos/tarjetas/{id}/token. El CVV solo pasa por aqui hacia la
+/// boveda transitoria, cifrado: no se registra. <see cref="ToString" /> no lo imprime.
 /// </summary>
 public sealed record SolicitarTokenTarjetaRequest(string? Cvv)
 {
     public override string ToString() => nameof(SolicitarTokenTarjetaRequest) + " { cvv omitido }";
 }
-
-/// <summary>
-/// Token de un solo uso emitido por PayKlik desde una tarjeta guardada. Misma forma
-/// que la respuesta de la tokenizacion directa (POST /v1/tokens), para que el
-/// checkout siga igual: el token viaja a Ordenes como TokenMedioPago.
-/// </summary>
-public sealed record TokenTarjetaDto(
-    string Token,
-    string UltimosCuatro,
-    string Marca,
-    int MesExpiracion,
-    int AnioExpiracion,
-    DateTime EmitidoEn,
-    DateTime VenceEn,
-    int VigenciaSegundos,
-    bool UsoUnico);
-
-public enum EstadoTokenTarjeta
-{
-    Emitido,
-    NoEncontrada,
-    Vencida,
-    CvvInvalido,
-    YaNoValida,
-    RechazadaPorProveedor,
-    ProveedorNoDisponible
-}
-
-/// <summary>Desenlace de pedir un token para una tarjeta guardada.</summary>
-public sealed record ResultadoTokenTarjeta(EstadoTokenTarjeta Estado, TokenTarjetaDto? Token = null, string? Mensaje = null);
 
 public enum EstadoGuardarTarjeta
 {

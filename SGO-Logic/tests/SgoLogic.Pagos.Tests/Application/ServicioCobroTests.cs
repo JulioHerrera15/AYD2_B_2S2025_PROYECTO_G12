@@ -22,13 +22,26 @@ public sealed class ServicioCobroTests
         Moneda.GTQ,
         1400.00m,
         MedioPago.TARJETA,
-        TokenMedioPago: "tok_pk_9f2a7c41d8",
+        TokenMedioPago: TokenDe(ordenId),
         UltimosCuatro: "4417",
         Marca: "VISA");
+
+    /// <summary>Cada orden de estas pruebas cobra con su propio token de la boveda.</summary>
+    private static string TokenDe(string ordenId) => $"tok_{ordenId}";
 
     private sealed class Escenario
     {
         private readonly string _baseDatos = $"pagos-{Guid.NewGuid()}";
+
+        public Escenario()
+        {
+            // Tokens vigentes (VISA terminada en 4417) para las ordenes que usan las pruebas.
+            using var contexto = NuevoContexto();
+            contexto.TokensPago.AddRange(Enumerable.Range(1, 20)
+                .Select(n => $"ORD-2026-{n:D6}")
+                .Select(ordenId => BovedaPruebas.TokenNuevo(TokenDe(ordenId), numero: "4000000000004417")));
+            contexto.SaveChanges();
+        }
 
         public OutboxWriterFalso Outbox { get; } = new();
 
@@ -48,6 +61,7 @@ public sealed class ServicioCobroTests
             // camino de llamada. Las pruebas de reintento pasan sus propias opciones.
             Options.Create(payklikOpciones ?? new PayKlikOptions { MaxReintentos = 0, BackoffBaseMs = 0 }),
             Options.Create(new ReintentoOptions { ExpiracionMinutos = 60 }),
+            BovedaPruebas.Cifrador,
             NullLogger<ServicioCobro>.Instance);
     }
 
@@ -392,7 +406,9 @@ public sealed class ServicioCobroTests
         var tipos = new[]
         {
             typeof(Pago), typeof(IntentoPago), typeof(EnlaceReintento),
-            typeof(SolicitudCobro), typeof(PeticionCargoPayKlik), typeof(ResultadoPayKlik),
+            // PeticionCargoPayKlik queda fuera a proposito: desde A4 lleva los datos de la
+            // tarjeta hacia PayKlik, descifrados solo en memoria durante el cobro.
+            typeof(SolicitudCobro), typeof(ResultadoPayKlik), typeof(TokenPago),
             typeof(PagoDto), typeof(IntentoPagoDto),
             typeof(PagoAplicadoData), typeof(PagoRechazadoData), typeof(PagoPendienteData),
             typeof(EnlaceReintentoData), typeof(IntentoPagoFallidoData)

@@ -15,16 +15,15 @@ namespace SgoLogic.Notificaciones.Api.Consumers;
 /// Nunca se agrega otro binding a esta cola — decision de topologia cerrada
 /// (ver docs/contratos/ordenes-eventos-v1.md seccion 4).
 ///
-/// MANEJO AISLADO DE FALLOS: si el proveedor de mensajeria falla, se loguea
-/// y se continua (ack). La excepcion NUNCA se propaga fuera de ManejarAsync
-/// para que EventConsumerBase no haga nack y reintente — una notificacion perdida
-/// no puede fallar la saga de Ordenes.
+/// MANEJO AISLADO DE FALLOS: si el proveedor de mensajeria falla, la notificacion
+/// se guarda en notificacion_pendiente (misma transaccion que la marca de procesado)
+/// y se continua (ack). La excepcion NUNCA se propaga fuera de ManejarAsync para que
+/// EventConsumerBase no haga nack: una notificacion fallida no puede fallar la saga
+/// de Ordenes, y ya no se pierde porque el worker de reintentos la vuelve a enviar.
 /// </summary>
 public sealed class NotificacionesOrdenesConsumidor
     : EventConsumerBase<NotificacionesDbContext, OrdenEstadoCambiadoData>
 {
-    private readonly ILogger<NotificacionesOrdenesConsumidor> _logger;
-
     public NotificacionesOrdenesConsumidor(
         IServiceScopeFactory scopeFactory,
         IConexionRabbitMq conexion,
@@ -32,7 +31,6 @@ public sealed class NotificacionesOrdenesConsumidor
         ILogger<NotificacionesOrdenesConsumidor> logger)
         : base(scopeFactory, conexion, suscriptor, logger)
     {
-        _logger = logger;
     }
 
     protected override string Cola => "notificaciones.ordenes";
@@ -51,27 +49,10 @@ public sealed class NotificacionesOrdenesConsumidor
         IServiceProvider servicios,
         CancellationToken cancelacion)
     {
-        var data = evento.Data;
-
-        // Aislamiento de fallos: try/catch INTERNO — la excepcion no debe salir de aqui
-        try
-        {
-            var cliente = servicios.GetRequiredService<IMockMensajeriaClient>();
-            await cliente.EnviarAsync(
-                clienteId: data.ClienteId,
-                estadoOrden: data.EstadoNuevo.ToString(),
-                ordenId: data.OrdenId,
-                ct: cancelacion);
-        }
-        catch (Exception ex)
-        {
-            // INTENCIONALMENTE no relanzamos. El ack se completara con exito.
-            // La notificacion se pierde pero la saga de Ordenes no se afecta.
-            _logger.LogWarning(
-                ex,
-                "Falla al notificar al cliente {ClienteId} para la orden {OrdenId} " +
-                "(estado: {Estado}) — aislado, el evento se marca procesado de todos modos",
-                data.ClienteId, data.OrdenId, data.EstadoNuevo);
-        }
+        // Aislamiento de fallos: si el proveedor falla, ServicioNotificaciones guarda la
+        // notificacion como pendiente (en esta misma transaccion) y no relanza. El ack se
+        // completa y la saga de Ordenes no se afecta; el worker la reintenta.
+        var servicio = servicios.GetRequiredService<ServicioNotificaciones>();
+        await servicio.NotificarEstadoOrdenAsync(evento.Data, evento.EventId, cancelacion);
     }
 }

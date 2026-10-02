@@ -16,18 +16,31 @@ public enum ModoMock
 }
 
 /// <summary>
-/// Peticion de cargo. Nunca recibe numero de tarjeta ni CVV: solo el token opaco
-/// que emitio POST /v1/tokens. Para TARJETA el token es obligatorio; para los demas
-/// medios de pago se ignora.
+/// Peticion de cargo (servidor a servidor, desde Pagos). Para TARJETA trae
+/// <see cref="Tarjeta" /> (tarjeta nueva; <see cref="Guardar" /> pide guardarla en la
+/// boveda si el cargo se aprueba) o <see cref="ReferenciaTarjeta" /> con
+/// <see cref="Cvv" /> (tarjeta guardada). Para los demas medios se ignoran.
+/// <see cref="ToString" /> no imprime datos de tarjeta.
 /// </summary>
 public sealed record PeticionCargo(
     string Referencia,
     string Monto,
     string Moneda,
     string MedioPago,
-    string? TokenMedioPago);
+    DatosTarjetaCargo? Tarjeta = null,
+    bool? Guardar = null,
+    string? ReferenciaTarjeta = null,
+    string? Cvv = null)
+{
+    public override string ToString() =>
+        $"{nameof(PeticionCargo)} {{ Referencia = {Referencia}, Monto = {Monto}, Moneda = {Moneda}, MedioPago = {MedioPago} }}";
+}
 
-/// <summary>Respuesta de un cargo procesado. Nunca devuelve numero de tarjeta ni CVV.</summary>
+/// <summary>
+/// Respuesta de un cargo procesado. Nunca devuelve numero de tarjeta ni CVV.
+/// <see cref="ReferenciaTarjeta" /> solo viene cuando el cargo aprobado pidio guardar
+/// la tarjeta.
+/// </summary>
 public sealed record RespuestaCargo(
     string? AutorizacionId,
     string Estado,
@@ -35,7 +48,8 @@ public sealed record RespuestaCargo(
     string Mensaje,
     string? UltimosCuatro,
     string? Marca,
-    DateTime ProcesadoEn);
+    DateTime ProcesadoEn,
+    string? ReferenciaTarjeta = null);
 
 /// <summary>
 /// Cambio de modo del mock via PUT /admin/modo. <c>LatenciaMs</c> y

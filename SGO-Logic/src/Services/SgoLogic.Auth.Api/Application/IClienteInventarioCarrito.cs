@@ -32,6 +32,34 @@ public interface IClienteInventarioCarrito
     Task<RetencionesCarritoInventario> TransferirAsync(string carritoOrigenId, string carritoDestinoId, CancellationToken ct = default);
 
     Task<RetencionesCarritoInventario> ObtenerAsync(string carritoId, CancellationToken ct = default);
+
+    /// <summary>
+    /// Producto del catalogo de Inventario (GET /api/inventario/productos/{sku}): la
+    /// fuente del precio y la descripcion del item. Null si el SKU no existe; lanza
+    /// <see cref="ExcepcionInventarioNoDisponible" /> si Inventario no responde.
+    /// </summary>
+    Task<ProductoInventario?> ObtenerProductoAsync(string sku, CancellationToken ct = default);
+}
+
+/// <summary>Producto del catalogo tal como lo devuelve Inventario.</summary>
+public sealed record ProductoInventario(
+    string Sku,
+    string Nombre,
+    string Categoria,
+    decimal Precio,
+    string Icono,
+    bool Activo);
+
+/// <summary>El SKU no existe en el catalogo de Inventario o esta inactivo: no se puede agregar al carrito (404).</summary>
+public sealed class ExcepcionProductoNoEncontrado : Exception
+{
+    public ExcepcionProductoNoEncontrado(string sku)
+        : base($"El producto '{sku}' no existe o no esta disponible para la venta.")
+    {
+        Sku = sku;
+    }
+
+    public string Sku { get; }
 }
 
 /// <summary>Una linea retenida tal como la devuelve Inventario.</summary>

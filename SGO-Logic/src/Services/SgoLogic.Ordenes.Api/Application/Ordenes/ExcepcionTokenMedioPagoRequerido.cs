@@ -4,8 +4,8 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes;
 
 /// <summary>
 /// Se lanza cuando la solicitud de creacion elige un medio de pago que se cobra con
-/// token (TARJETA) y no trae <c>tokenMedioPago</c>. El token lo emite PayKlik al
-/// tokenizar la tarjeta en el navegador; sin el, Pagos no podria cobrar. El endpoint
+/// token (TARJETA) y no trae <c>tokenMedioPago</c>. El token lo emite la boveda de
+/// Pagos al tokenizar la tarjeta en el checkout; sin el, Pagos no podria cobrar. El endpoint
 /// la traduce a 400 con codigo "token_medio_pago_requerido".
 /// </summary>
 public sealed class ExcepcionTokenMedioPagoRequerido : Exception

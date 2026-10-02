@@ -70,7 +70,7 @@ public class PosController : Controller
 
         ViewBag.TiendaActiva = tiendaActiva;
         ViewBag.TiendasDisponibles = tiendasOpciones;
-        ViewBag.Catalogo = CatalogoController.Productos;
+        ViewBag.Catalogo = await CatalogoController.CargarProductosAsync(_gateway);
         ViewBag.Busqueda = busqueda;
 
         CarritoModel? carrito = null;
@@ -130,7 +130,7 @@ public class PosController : Controller
         }
 
         var cant = cantidad <= 0 ? 1 : cantidad;
-        var prod = CatalogoController.Productos.FirstOrDefault(p => string.Equals(p.Sku, sku.Trim(), StringComparison.OrdinalIgnoreCase));
+        var prod = (await CatalogoController.CargarProductosAsync(_gateway)).FirstOrDefault(p => string.Equals(p.Sku, sku.Trim(), StringComparison.OrdinalIgnoreCase));
         var descripcion = prod?.Nombre ?? $"Artículo {sku.Trim().ToUpperInvariant()}";
         var precio = prod?.PrecioUnitario ?? 100.00m;
 

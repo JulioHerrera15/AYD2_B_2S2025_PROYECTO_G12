@@ -30,6 +30,9 @@ public sealed class InventarioDbContext : DbContext
     /// <summary>Catalogo de tiendas y centros de distribucion, con coordenadas.</summary>
     public DbSet<Sucursal> Sucursales => Set<Sucursal>();
 
+    /// <summary>Catalogo de productos con su precio vigente (fuente del precio del carrito y de la orden).</summary>
+    public DbSet<Producto> Productos => Set<Producto>();
+
     /// <summary>Retenciones de stock mientras el producto esta en el carrito.</summary>
     public DbSet<ReservaCarrito> ReservasCarrito => Set<ReservaCarrito>();
 

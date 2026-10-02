@@ -1,8 +1,8 @@
 #!/bin/bash
 # Crea, ademas de POSTGRES_DB, las bases listadas en POSTGRES_MULTIPLE_DATABASES
 # (separadas por coma). La imagen oficial de postgres solo crea una base por
-# contenedor via POSTGRES_DB; esto es lo que permite que sample-api y
-# sample-worker tengan cada uno su propia base dentro del mismo contenedor
+# contenedor via POSTGRES_DB; esto es lo que permite que cada servicio
+# tenga su propia base dentro del mismo contenedor
 # db-operacional, en vez de compartir una.
 set -e
 set -u

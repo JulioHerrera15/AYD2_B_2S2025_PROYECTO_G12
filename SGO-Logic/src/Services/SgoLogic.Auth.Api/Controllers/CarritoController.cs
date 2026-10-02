@@ -12,6 +12,9 @@ namespace SgoLogic.Auth.Api.Controllers;
 /// Ambos carritos comparten la misma clave de Redis una vez asociados con
 /// POST /api/carrito/asociar, que migra guest:{sesionId} → cart:{clienteId}.
 ///
+/// Agregar y actualizar toman precio y descripcion del catalogo de Inventario (404 si
+/// el SKU no existe o esta inactivo): lo que mande el cliente se ignora.
+///
 /// Agregar, actualizar, quitar, asociar y renovar pasan primero por Inventario,
 /// que retiene el stock. Si Inventario responde 409 se devuelve 409 con el mismo
 /// cuerpo; si no responde, 503. En ambos casos el carrito no cambia.
@@ -139,6 +142,15 @@ public sealed class CarritoController : ControllerBase
                 Content = ex.Cuerpo,
                 ContentType = string.IsNullOrWhiteSpace(ex.ContentType) ? "application/json" : ex.ContentType
             };
+        }
+        catch (ExcepcionProductoNoEncontrado ex)
+        {
+            return NotFound(new ProblemDetails
+            {
+                Title = "Producto no encontrado",
+                Detail = ex.Message,
+                Status = StatusCodes.Status404NotFound
+            });
         }
         catch (ExcepcionInventarioNoDisponible)
         {

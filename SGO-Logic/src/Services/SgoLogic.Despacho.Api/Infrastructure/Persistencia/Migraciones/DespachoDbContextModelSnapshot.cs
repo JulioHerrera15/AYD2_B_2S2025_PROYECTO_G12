@@ -149,6 +149,11 @@ namespace SgoLogic.Despacho.Api.Infrastructure.Persistencia.Migraciones
                         .HasColumnType("character varying(30)")
                         .HasColumnName("id");
 
+                    b.Property<string>("ClienteId")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("cliente_id");
+
                     b.Property<DateTime>("CreadoEn")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("creado_en");

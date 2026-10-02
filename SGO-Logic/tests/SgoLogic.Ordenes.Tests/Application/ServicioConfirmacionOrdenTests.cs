@@ -105,7 +105,8 @@ public sealed class ServicioConfirmacionOrdenTests
             unidad,
             new GeneradorCorrelativoOrdenFalso(correlativoInicial),
             new PoliticaMediosPago(MediosPago),
-            new ClienteCarritoFalso());
+            new ClienteCarritoFalso(),
+            new CatalogoProductosFalso());
         return (servicio, ordenes, outbox, unidad);
     }
 

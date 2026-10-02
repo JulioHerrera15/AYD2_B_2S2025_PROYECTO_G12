@@ -107,10 +107,21 @@ public sealed record SucursalCercanaModel(
 
 public sealed record LineaSimulacionModel(string Sku, int Cantidad);
 
+/// <summary>Producto del catalogo de Inventario (GET /api/inventario/productos). Su precio es el que vale.</summary>
+public sealed record ProductoInventarioModel(
+    string Sku,
+    string Nombre,
+    string Categoria,
+    decimal Precio,
+    string Icono,
+    bool Activo,
+    string? Descripcion = null,
+    string? Etiqueta = null);
+
 // ── Tarjetas guardadas (Pagos) ──────────────────────────────────────────────
 /// <summary>
 /// Tarjeta guardada del cliente. Solo metadatos para mostrarla: Pagos nunca expone
-/// la referencia de PayKlik, y ni Pagos ni la Web tienen el numero completo o el CVV.
+/// la referencia de PayKlik, y la Web no conserva el numero completo ni el CVV.
 /// </summary>
 public sealed record TarjetaGuardadaModel(
     Guid Id,
@@ -141,26 +152,33 @@ public sealed record TarjetaGuardadaModel(
     };
 }
 
-/// <summary>Lo que PayKlik devolvio al tokenizar con guardar=true, mas el titular que escribio el cliente.</summary>
-public sealed record GuardarTarjetaModel(
-    string ReferenciaTarjeta,
-    string Marca,
-    string Ultimos4,
-    int MesExp,
-    int AnioExp,
-    string? Titular);
+/// <summary>
+/// Cuerpo de POST /api/pagos/tokens. Lleva PAN y CVV hacia Pagos (no a PayKlik):
+/// <see cref="ToString" /> no los imprime y la Web nunca lo registra.
+/// </summary>
+public sealed record SolicitudTokenPagoModel(
+    string? Numero,
+    int? MesExp,
+    int? AnioExp,
+    string? Cvv,
+    string? Titular,
+    bool Guardar)
+{
+    public override string ToString() => nameof(SolicitudTokenPagoModel) + " { datos de tarjeta omitidos }";
+}
 
-/// <summary>Token de un solo uso de PayKlik: misma forma que la tokenizacion directa desde el navegador.</summary>
-public sealed record TokenTarjetaModel(
-    string Token,
-    string UltimosCuatro,
-    string Marca,
-    int MesExpiracion,
-    int AnioExpiracion,
-    DateTime EmitidoEn,
-    DateTime VenceEn,
-    int VigenciaSegundos,
-    bool UsoUnico);
+/// <summary>Token de la boveda de Pagos: lo que el checkout manda como tokenMedioPago.</summary>
+public sealed record TokenPagoModel(string Token, string Marca, string Ultimos4, DateTime ExpiraEn);
+
+/// <summary>Desenlace de tokenizar: el token, o el status con errores por campo (422) o un mensaje.</summary>
+public sealed record ResultadoTokenPagoModel(
+    TokenPagoModel? Token,
+    int Status,
+    Dictionary<string, string>? Errores,
+    string? Mensaje)
+{
+    public static ResultadoTokenPagoModel Falla(int status, string mensaje) => new(null, status, null, mensaje);
+}
 
 public sealed record SimularReservaModel(
     string? CarritoId,
@@ -312,7 +330,25 @@ public sealed record EnlaceReintentoInfoModel(
     [property: JsonPropertyName("estadoPago")] string EstadoPago,
     [property: JsonPropertyName("ultimosCuatro")] string? UltimosCuatro,
     [property: JsonPropertyName("marca")] string? Marca,
-    [property: JsonPropertyName("clienteId")] string? ClienteId);
+    [property: JsonPropertyName("clienteId")] string? ClienteId,
+    [property: JsonPropertyName("datosRequeridos")] string? DatosRequeridos = "NINGUNO")
+{
+    /// <summary>El token del ultimo intento vencio: hay que volver a escribir la tarjeta o el CVV.</summary>
+    [JsonIgnore]
+    public bool PideDatos => DatosRequeridos is "CVV" or "TARJETA";
+}
+
+/// <summary>
+/// Desenlace de POST /api/pagos/reintentos/{token}. Si Pagos pide datos de tarjeta
+/// (422 datos_tarjeta_requeridos) <see cref="DatosRequeridos" /> dice cuales; si los
+/// datos enviados no son validos vienen en <see cref="Errores" />.
+/// </summary>
+public sealed record ResultadoReintentoModel(
+    bool Exito,
+    PagoReintentoResultadoModel? Pago,
+    string? Error,
+    string? DatosRequeridos = null,
+    Dictionary<string, string>? Errores = null);
 
 public sealed record IntentoPagoResultadoModel(
     [property: JsonPropertyName("intentoNumero")] int IntentoNumero,
@@ -388,14 +424,21 @@ public sealed record ExistenciaUbicacionDto(
     public int CantidadDisponible => Disponible;
 }
 
+/// <summary>
+/// Cliente tipado hacia el API Gateway. No modifica DefaultRequestHeaders: los
+/// encabezados de la sesion (Authorization y X-Session-Id) los agrega
+/// <see cref="EncabezadosSesionHandler" /> a cada mensaje, asi que es seguro llamarlo
+/// en paralelo (Task.WhenAll).
+/// </summary>
 public sealed class GatewayClient
 {
     private readonly HttpClient _http;
-    private readonly IHttpContextAccessor _httpContextAccessor;
     private readonly IMemoryCache _cache;
 
     private const string ClaveCacheSucursales = "inventario:sucursales";
+    private const string ClaveCacheProductos = "inventario:productos";
     private static readonly TimeSpan VigenciaCacheSucursales = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan VigenciaCacheProductos = TimeSpan.FromMinutes(5);
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
         PropertyNameCaseInsensitive = true,
@@ -403,38 +446,10 @@ public sealed class GatewayClient
         Converters = { new JsonStringEnumConverter(), new DecimalComoTextoConverter() }
     };
 
-    public GatewayClient(HttpClient http, IHttpContextAccessor httpContextAccessor, IMemoryCache cache)
+    public GatewayClient(HttpClient http, IMemoryCache cache)
     {
         _http = http;
-        _httpContextAccessor = httpContextAccessor;
         _cache = cache;
-    }
-
-    private void SetAuthHeader(string? explicitToken = null)
-    {
-        var token = explicitToken
-            ?? _httpContextAccessor.HttpContext?.Request.Cookies["sgo_jwt"]
-            ?? _httpContextAccessor.HttpContext?.Items["sgo_jwt"] as string;
-
-        if (!string.IsNullOrWhiteSpace(token))
-        {
-            _http.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
-        }
-        else
-        {
-            _http.DefaultRequestHeaders.Authorization = null;
-        }
-
-        var guestId = _httpContextAccessor.HttpContext?.Request.Cookies["sgo_guest_id"]
-            ?? _httpContextAccessor.HttpContext?.Items["sgo_guest_id"] as string;
-
-        if (_http.DefaultRequestHeaders.Contains("X-Session-Id"))
-            _http.DefaultRequestHeaders.Remove("X-Session-Id");
-
-        if (!string.IsNullOrWhiteSpace(guestId))
-        {
-            _http.DefaultRequestHeaders.Add("X-Session-Id", guestId);
-        }
     }
 
     private static async Task<string> ParseProblemDetailsOrStringAsync(HttpResponseMessage response, CancellationToken ct)
@@ -561,7 +576,6 @@ public sealed class GatewayClient
 
     public async Task<(bool Exito, string? Error)> AsignarRolAsync(string email, string rol, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.PostAsJsonAsync("/api/auth/asignar-rol", new { Email = email, Rol = rol }, ct);
         if (res.IsSuccessStatusCode) return (true, null);
         var err = await ParseProblemDetailsOrStringAsync(res, ct);
@@ -570,7 +584,6 @@ public sealed class GatewayClient
 
     public async Task<UsuarioDto?> ObtenerUsuarioPorEmailAsync(string email, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.GetAsync($"/api/auth/usuario?email={Uri.EscapeDataString(email)}", ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<UsuarioDto>(JsonOptions, ct);
@@ -578,7 +591,6 @@ public sealed class GatewayClient
 
     public async Task<List<UsuarioDto>> ListarUsuariosAsync(CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.GetAsync("/api/auth/usuarios", ct);
         if (!res.IsSuccessStatusCode) return new List<UsuarioDto>();
         return await res.Content.ReadFromJsonAsync<List<UsuarioDto>>(JsonOptions, ct) ?? new List<UsuarioDto>();
@@ -587,7 +599,6 @@ public sealed class GatewayClient
     // ── Carrito ────────────────────────────────────────────────────────────────
     public async Task<CarritoModel?> ObtenerCarritoAsync(CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.GetAsync("/api/carrito", ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<CarritoModel>(JsonOptions, ct);
@@ -595,8 +606,11 @@ public sealed class GatewayClient
 
     public async Task<CarritoModel?> ObtenerCarritoPorIdAsync(string sesionOClienteId, CancellationToken ct = default)
     {
+        // El carrito que se consulta es el del identificador indicado, no el de quien
+        // navega: sin el JWT de la sesion, Auth resuelve por X-Session-Id.
         using var req = new HttpRequestMessage(HttpMethod.Get, "/api/carrito");
-        req.Headers.Add("X-Session-Id", sesionOClienteId);
+        req.Headers.Add(EncabezadosSesionHandler.EncabezadoSesion, sesionOClienteId);
+        req.Options.Set(EncabezadosSesionHandler.SinSesion, true);
         var res = await _http.SendAsync(req, ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<CarritoModel>(JsonOptions, ct);
@@ -604,7 +618,6 @@ public sealed class GatewayClient
 
     public async Task<ResultadoCarritoModel> AgregarItemCarritoAsync(AgregarItemModel model, CancellationToken ct = default)
     {
-        SetAuthHeader();
         return await EjecutarCarritoAsync(() => _http.PostAsJsonAsync("/api/carrito/items", model, ct), ct);
     }
 
@@ -614,7 +627,6 @@ public sealed class GatewayClient
         string? ubicacionPreferidaId = null,
         CancellationToken ct = default)
     {
-        SetAuthHeader();
         return await EjecutarCarritoAsync(
             () => _http.PutAsJsonAsync(
                 $"/api/carrito/items/{Uri.EscapeDataString(sku)}",
@@ -625,14 +637,12 @@ public sealed class GatewayClient
 
     public async Task<ResultadoCarritoModel> EliminarItemCarritoAsync(string sku, CancellationToken ct = default)
     {
-        SetAuthHeader();
         return await EjecutarCarritoAsync(() => _http.DeleteAsync($"/api/carrito/items/{Uri.EscapeDataString(sku)}", ct), ct);
     }
 
     /// <summary>Pide a Auth que reactive o extienda la retencion de stock de todo el carrito.</summary>
     public async Task<(ResultadoCarritoModel Resultado, CarritoModel? Carrito)> RenovarReservaCarritoAsync(CancellationToken ct = default)
     {
-        SetAuthHeader();
         try
         {
             var res = await _http.PostAsync("/api/carrito/reserva/renovar", null, ct);
@@ -718,10 +728,24 @@ public sealed class GatewayClient
         return new ResultadoCarritoModel(false, status, mensaje, cercana);
     }
 
+    /// <summary>
+    /// Asocia el carrito de invitado a la cuenta. <paramref name="token" /> es el JWT
+    /// recien emitido en el login, cuando la cookie todavia no viaja en la peticion;
+    /// sin el, el handler usa el de la sesion.
+    /// </summary>
     public async Task<bool> AsociarCarritoAsync(string guestSessionId, string? token = null, CancellationToken ct = default)
     {
-        SetAuthHeader(token);
-        var res = await _http.PostAsJsonAsync("/api/carrito/asociar", new { SesionId = guestSessionId }, ct);
+        using var req = new HttpRequestMessage(HttpMethod.Post, "/api/carrito/asociar")
+        {
+            Content = JsonContent.Create(new { SesionId = guestSessionId })
+        };
+
+        if (!string.IsNullOrWhiteSpace(token))
+        {
+            req.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        }
+
+        var res = await _http.SendAsync(req, ct);
         return res.IsSuccessStatusCode;
     }
 
@@ -743,7 +767,6 @@ public sealed class GatewayClient
     // ── Facturacion ────────────────────────────────────────────────────────────
     public async Task<FacturaModel?> ObtenerFacturaAsync(string ordenId, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.GetAsync($"/api/facturacion/documentos/{ordenId}", ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<FacturaModel>(JsonOptions, ct);
@@ -752,7 +775,6 @@ public sealed class GatewayClient
     // ── Informe de ventas / ERP ────────────────────────────────────────────────
     public async Task<InformeVentasModel?> ObtenerInformeVentasAsync(DateTime? desde, DateTime? hasta, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var filtros = new List<string>();
         if (desde.HasValue) filtros.Add($"desde={desde:yyyy-MM-dd}");
         if (hasta.HasValue) filtros.Add($"hasta={hasta:yyyy-MM-dd}");
@@ -763,14 +785,12 @@ public sealed class GatewayClient
 
     public async Task<(bool Exito, string? Error)> EjecutarConciliacionAsync(CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.PostAsync("/api/erp/conciliar", null, ct);
         return res.IsSuccessStatusCode ? (true, null) : (false, await ParseProblemDetailsOrStringAsync(res, ct));
     }
 
     public async Task<List<EventoAuditoriaModel>> ObtenerAuditoriaAgregadoAsync(string aggregateId, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.GetAsync($"/api/auditoria/agregados/{Uri.EscapeDataString(aggregateId)}?tamano=50", ct);
         if (!res.IsSuccessStatusCode) return new();
         return (await res.Content.ReadFromJsonAsync<PaginaAuditoriaModel>(JsonOptions, ct))?.Items ?? new();
@@ -792,7 +812,6 @@ public sealed class GatewayClient
     // ── Órdenes y Checkout ─────────────────────────────────────────────────────
     public async Task<(bool Exito, OrdenCreadaModel? Orden, string? Error)> CrearOrdenAsync(CrearOrdenModel model, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.PostAsJsonAsync("/api/ordenes", model, JsonOptions, ct);
         if (res.IsSuccessStatusCode)
         {
@@ -805,7 +824,6 @@ public sealed class GatewayClient
 
     public async Task<(bool Exito, OrdenCreadaModel? Orden, string? Error)> ConfirmarOrdenAsync(string ordenId, string? motivo = null, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.PostAsJsonAsync($"/api/ordenes/{ordenId}/confirmar", new { Motivo = motivo }, JsonOptions, ct);
         if (res.IsSuccessStatusCode)
         {
@@ -823,7 +841,6 @@ public sealed class GatewayClient
     /// </summary>
     public async Task<(bool Exito, string? Error)> CancelarOrdenAsync(string ordenId, string clienteId, string? motivo = null, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.PostAsJsonAsync(
             $"/api/ordenes/{Uri.EscapeDataString(ordenId)}/cancelar",
             new { ClienteId = clienteId, Motivo = motivo },
@@ -841,7 +858,6 @@ public sealed class GatewayClient
     /// </summary>
     public async Task<DespachoOrdenModel?> ObtenerDespachoOrdenAsync(string ordenId, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.GetAsync($"/api/despacho/{ordenId}", ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<DespachoOrdenModel>(JsonOptions, ct);
@@ -849,7 +865,6 @@ public sealed class GatewayClient
 
     public async Task<List<DespachoPreparacionDto>?> ObtenerColaPreparacionAsync(string ubicacionId, string? estado = null, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var url = $"/api/despacho/ubicaciones/{ubicacionId}/preparacion" + (!string.IsNullOrWhiteSpace(estado) ? $"?estado={estado}" : "");
         var res = await _http.GetAsync(url, ct);
         if (!res.IsSuccessStatusCode) return null;
@@ -858,7 +873,6 @@ public sealed class GatewayClient
 
     public async Task<(bool Exito, string? Error)> ActualizarEstadoDespachoAsync(string ordenId, string estado, string? detalle = null, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var payload = new { Estado = estado, Detalle = detalle, OcurridoEn = DateTime.UtcNow };
         var res = await _http.PostAsJsonAsync($"/api/despacho/{ordenId}/estados", payload, JsonOptions, ct);
         if (res.IsSuccessStatusCode) return (true, null);
@@ -868,7 +882,6 @@ public sealed class GatewayClient
 
     public async Task<(bool Exito, string? Error)> ReasignarMetodoEntregaDespachoAsync(string ordenId, string nuevoMetodo, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.PutAsJsonAsync($"/api/despacho/{ordenId}/metodo-entrega", new { MetodoEntrega = nuevoMetodo }, JsonOptions, ct);
         if (res.IsSuccessStatusCode) return (true, null);
         var err = await ParseProblemDetailsOrStringAsync(res, ct);
@@ -878,23 +891,21 @@ public sealed class GatewayClient
     // ── Inventario ─────────────────────────────────────────────────────────────
     public async Task<List<ExistenciaSkuDto>?> ObtenerExistenciasSkuAsync(string sku, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.GetAsync($"/api/inventario/existencias/{sku}", ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<List<ExistenciaSkuDto>>(JsonOptions, ct);
     }
 
-    // ── Tarjetas guardadas ─────────────────────────────────────────────────────
-    // Pagos toma el cliente del JWT de la sesion (SetAuthHeader), nunca de un
-    // parametro. Estas llamadas no registran nada: el CVV de ObtenerTokenTarjetaAsync
-    // solo viaja en el cuerpo hacia Pagos.
+    // ── Tarjetas guardadas y tokenizacion ──────────────────────────────────────
+    // Pagos toma el cliente del JWT de la sesion (EncabezadosSesionHandler), nunca de
+    // un parametro. Estas llamadas no registran nada: el PAN y el CVV solo viajan en
+    // el cuerpo hacia Pagos, que los cifra en su boveda transitoria.
 
     /// <summary>Tarjetas activas del cliente; lista vacia si no hay sesion o Pagos no responde.</summary>
     public async Task<IReadOnlyList<TarjetaGuardadaModel>> ListarTarjetasAsync(CancellationToken ct = default)
     {
         try
         {
-            SetAuthHeader();
             var res = await _http.GetAsync("/api/pagos/tarjetas", ct);
             if (!res.IsSuccessStatusCode) return Array.Empty<TarjetaGuardadaModel>();
             return await res.Content.ReadFromJsonAsync<List<TarjetaGuardadaModel>>(JsonOptions, ct)
@@ -906,25 +917,10 @@ public sealed class GatewayClient
         }
     }
 
-    public async Task<(bool Exito, string? Error)> GuardarTarjetaAsync(GuardarTarjetaModel model, CancellationToken ct = default)
-    {
-        try
-        {
-            SetAuthHeader();
-            var res = await _http.PostAsJsonAsync("/api/pagos/tarjetas", model, ct);
-            return res.IsSuccessStatusCode ? (true, null) : (false, await ParseProblemDetailsOrStringAsync(res, ct));
-        }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
-        {
-            return (false, "No pudimos comunicarnos con el servicio de pagos.");
-        }
-    }
-
     public async Task<(bool Exito, string? Error)> EliminarTarjetaAsync(Guid id, CancellationToken ct = default)
     {
         try
         {
-            SetAuthHeader();
             var res = await _http.DeleteAsync($"/api/pagos/tarjetas/{id}", ct);
             return res.IsSuccessStatusCode ? (true, null) : (false, await ParseProblemDetailsOrStringAsync(res, ct));
         }
@@ -935,30 +931,76 @@ public sealed class GatewayClient
     }
 
     /// <summary>
-    /// Pide a Pagos un token de un solo uso para pagar con la tarjeta guardada.
-    /// Status 201 con token; 404, 410 (ya no valida), 422 (vencida o CVV) o 503 con mensaje.
+    /// Tokeniza una tarjeta nueva en la boveda de Pagos (POST /api/pagos/tokens). Pagos
+    /// la valida (autoridad) y, con sesion y guardar=true, la guarda al cobrar. 201 con
+    /// token; 422 con errores por campo; cualquier otra cosa, mensaje generico. El
+    /// cuerpo lleva el PAN y el CVV: no se registra.
     /// </summary>
-    public async Task<(TokenTarjetaModel? Token, int Status, string? Error)> ObtenerTokenTarjetaAsync(
-        Guid id,
-        string cvv,
-        CancellationToken ct = default)
+    public Task<ResultadoTokenPagoModel> TokenizarTarjetaAsync(SolicitudTokenPagoModel solicitud, CancellationToken ct = default) =>
+        EnviarTokenizacionAsync(() => _http.PostAsJsonAsync("/api/pagos/tokens", solicitud, ct), ct);
+
+    /// <summary>
+    /// Token de la boveda de Pagos para pagar con una tarjeta guardada, con el CVV que
+    /// escribio el cliente. 201 con token; 404 si no es suya; 422 con errores por campo.
+    /// </summary>
+    public Task<ResultadoTokenPagoModel> ObtenerTokenTarjetaAsync(Guid id, string cvv, CancellationToken ct = default) =>
+        EnviarTokenizacionAsync(() => _http.PostAsJsonAsync($"/api/pagos/tarjetas/{id}/token", new { cvv }, ct), ct);
+
+    private static async Task<ResultadoTokenPagoModel> EnviarTokenizacionAsync(
+        Func<Task<HttpResponseMessage>> llamada,
+        CancellationToken ct)
     {
         try
         {
-            SetAuthHeader();
-            var res = await _http.PostAsJsonAsync($"/api/pagos/tarjetas/{id}/token", new { cvv }, ct);
+            using var res = await llamada();
             if (res.IsSuccessStatusCode)
             {
-                var token = await res.Content.ReadFromJsonAsync<TokenTarjetaModel>(JsonOptions, ct);
-                return (token, (int)res.StatusCode, token is null ? "Respuesta vacia del servicio de pagos." : null);
+                var token = await res.Content.ReadFromJsonAsync<TokenPagoModel>(JsonOptions, ct);
+                return token is null
+                    ? ResultadoTokenPagoModel.Falla(StatusCodes.Status502BadGateway, "Respuesta vacia del servicio de pagos.")
+                    : new ResultadoTokenPagoModel(token, (int)res.StatusCode, null, null);
             }
 
-            return (null, (int)res.StatusCode, await ParseProblemDetailsOrStringAsync(res, ct));
+            var status = (int)res.StatusCode;
+            if (status == StatusCodes.Status422UnprocessableEntity)
+            {
+                var errores = await LeerErroresPorCampoAsync(res, ct);
+                return new ResultadoTokenPagoModel(null, status, errores, "Revisa los datos de la tarjeta.");
+            }
+
+            return ResultadoTokenPagoModel.Falla(status, await ParseProblemDetailsOrStringAsync(res, ct));
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
-            return (null, StatusCodes.Status503ServiceUnavailable, "No pudimos comunicarnos con el servicio de pagos.");
+            return ResultadoTokenPagoModel.Falla(
+                StatusCodes.Status503ServiceUnavailable, "No pudimos comunicarnos con el servicio de pagos.");
         }
+    }
+
+    /// <summary>Lee {errores:{campo:mensaje}} de un 422; diccionario vacio si el cuerpo no lo trae.</summary>
+    private static async Task<Dictionary<string, string>> LeerErroresPorCampoAsync(HttpResponseMessage res, CancellationToken ct)
+    {
+        var errores = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        try
+        {
+            using var documento = JsonDocument.Parse(await res.Content.ReadAsStringAsync(ct));
+            if (documento.RootElement.TryGetProperty("errores", out var porCampo) && porCampo.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var campo in porCampo.EnumerateObject())
+                {
+                    if (campo.Value.ValueKind == JsonValueKind.String)
+                    {
+                        errores[campo.Name] = campo.Value.GetString() ?? string.Empty;
+                    }
+                }
+            }
+        }
+        catch (JsonException)
+        {
+            // Cuerpo no JSON: sin errores por campo.
+        }
+
+        return errores;
     }
 
     /// <summary>
@@ -976,7 +1018,6 @@ public sealed class GatewayClient
 
         try
         {
-            SetAuthHeader();
             var res = await _http.GetAsync("/api/inventario/sucursales", ct);
             if (!res.IsSuccessStatusCode)
             {
@@ -995,12 +1036,43 @@ public sealed class GatewayClient
         }
     }
 
+    /// <summary>
+    /// Catalogo de productos activos de Inventario (GET /api/inventario/productos), la
+    /// fuente del precio. Se guarda 5 minutos en memoria de la Web. Si Inventario no
+    /// responde devuelve una lista vacia y no la cachea.
+    /// </summary>
+    public async Task<IReadOnlyList<ProductoInventarioModel>> ObtenerProductosAsync(CancellationToken ct = default)
+    {
+        if (_cache.TryGetValue(ClaveCacheProductos, out IReadOnlyList<ProductoInventarioModel>? enCache) && enCache is not null)
+        {
+            return enCache;
+        }
+
+        try
+        {
+            var res = await _http.GetAsync("/api/inventario/productos", ct);
+            if (!res.IsSuccessStatusCode)
+            {
+                return Array.Empty<ProductoInventarioModel>();
+            }
+
+            var productos = await res.Content.ReadFromJsonAsync<List<ProductoInventarioModel>>(JsonOptions, ct)
+                ?? new List<ProductoInventarioModel>();
+
+            _cache.Set(ClaveCacheProductos, (IReadOnlyList<ProductoInventarioModel>)productos, VigenciaCacheProductos);
+            return productos;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            return Array.Empty<ProductoInventarioModel>();
+        }
+    }
+
     /// <summary>Tienda mas cercana a <paramref name="desde" /> con stock del SKU, o null si ninguna tiene (404).</summary>
     public async Task<SucursalCercanaModel?> ObtenerSucursalCercanaAsync(string sku, string? desde, int cantidad = 1, CancellationToken ct = default)
     {
         try
         {
-            SetAuthHeader();
             var url = $"/api/inventario/existencias/{Uri.EscapeDataString(sku)}/cercana?cantidad={cantidad}"
                       + (string.IsNullOrWhiteSpace(desde) ? string.Empty : $"&desde={Uri.EscapeDataString(desde)}");
             var res = await _http.GetAsync(url, ct);
@@ -1021,7 +1093,6 @@ public sealed class GatewayClient
     {
         try
         {
-            SetAuthHeader();
             var res = await _http.PostAsJsonAsync("/api/inventario/reservas/simular", model, ct);
             if (!res.IsSuccessStatusCode) return null;
             return await res.Content.ReadFromJsonAsync<SimulacionReservaModel>(JsonOptions, ct);
@@ -1034,7 +1105,6 @@ public sealed class GatewayClient
 
     public async Task<List<UbicacionResumenDto>?> ObtenerUbicacionesInventarioAsync(CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.GetAsync("/api/inventario/ubicaciones", ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<List<UbicacionResumenDto>>(JsonOptions, ct);
@@ -1042,7 +1112,6 @@ public sealed class GatewayClient
 
     public async Task<List<ExistenciaUbicacionDto>?> ObtenerExistenciasPorUbicacionAsync(string ubicacionId, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var res = await _http.GetAsync($"/api/inventario/ubicaciones/{ubicacionId}/existencias", ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<List<ExistenciaUbicacionDto>>(JsonOptions, ct);
@@ -1051,7 +1120,6 @@ public sealed class GatewayClient
     // ── Incidencias (Listar / Resolver) ────────────────────────────────────────
     public async Task<List<IncidenciaModel>?> ListarIncidenciasAsync(string? ordenId = null, string? estado = null, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var query = new List<string>();
         if (!string.IsNullOrWhiteSpace(ordenId)) query.Add($"ordenId={Uri.EscapeDataString(ordenId)}");
         if (!string.IsNullOrWhiteSpace(estado)) query.Add($"estado={Uri.EscapeDataString(estado)}");
@@ -1064,7 +1132,6 @@ public sealed class GatewayClient
 
     public async Task<(bool Exito, string? Error)> ActualizarIncidenciaAsync(Guid id, string? descripcion, string? estado, string? resolucion, CancellationToken ct = default)
     {
-        SetAuthHeader();
         var payload = new { Descripcion = descripcion, Estado = estado, Resolucion = resolucion };
         var res = await _http.PutAsJsonAsync($"/api/incidencias/{id}", payload, JsonOptions, ct);
         if (res.IsSuccessStatusCode) return (true, null);
@@ -1118,33 +1185,88 @@ public sealed class GatewayClient
         }
     }
 
-    public async Task<(bool Exito, PagoReintentoResultadoModel? Pago, string? Error)> EjecutarReintentoPagoAsync(string token, CancellationToken ct = default)
+    /// <summary>
+    /// Ejecuta el reintento. Sin <paramref name="tokenMedioPago" /> ni <paramref name="cvv" />
+    /// Pagos reusa el token del ultimo intento; si vencio responde 422 con los datos
+    /// que hay que volver a pedir (<see cref="ResultadoReintentoModel.DatosRequeridos" />).
+    /// </summary>
+    public async Task<ResultadoReintentoModel> EjecutarReintentoPagoAsync(
+        string token,
+        string? tokenMedioPago = null,
+        string? cvv = null,
+        CancellationToken ct = default)
     {
         try
         {
-            var res = await _http.PostAsync($"/api/pagos/reintentos/{Uri.EscapeDataString(token)}", null, ct);
+            var url = $"/api/pagos/reintentos/{Uri.EscapeDataString(token)}";
+            using var res = string.IsNullOrWhiteSpace(tokenMedioPago) && string.IsNullOrWhiteSpace(cvv)
+                ? await _http.PostAsync(url, null, ct)
+                : await _http.PostAsJsonAsync(url, new { tokenMedioPago, cvv }, ct);
+
             if (res.StatusCode == System.Net.HttpStatusCode.Gone)
             {
-                return (false, null, "El enlace de reintento ya se utilizó o ha expirado.");
+                return new ResultadoReintentoModel(false, null, "El enlace de reintento ya se utilizó o ha expirado.");
             }
 
             if (res.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                return (false, null, "El enlace de reintento no fue encontrado.");
+                return new ResultadoReintentoModel(false, null, "El enlace de reintento no fue encontrado.");
+            }
+
+            if (res.StatusCode == System.Net.HttpStatusCode.UnprocessableEntity)
+            {
+                var cuerpo = await res.Content.ReadAsStringAsync(ct);
+                string? datosRequeridos = null;
+                string? detalle = null;
+                var errores = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+
+                try
+                {
+                    using var documento = JsonDocument.Parse(cuerpo);
+                    var raiz = documento.RootElement;
+                    if (raiz.TryGetProperty("datosRequeridos", out var requeridos) && requeridos.ValueKind == JsonValueKind.String)
+                    {
+                        datosRequeridos = requeridos.GetString();
+                    }
+
+                    if (raiz.TryGetProperty("detail", out var detalleProp) && detalleProp.ValueKind == JsonValueKind.String)
+                    {
+                        detalle = detalleProp.GetString();
+                    }
+
+                    if (raiz.TryGetProperty("errores", out var porCampo) && porCampo.ValueKind == JsonValueKind.Object)
+                    {
+                        foreach (var campo in porCampo.EnumerateObject())
+                        {
+                            errores[campo.Name] = campo.Value.GetString() ?? string.Empty;
+                        }
+                    }
+                }
+                catch (JsonException)
+                {
+                    // Cuerpo no JSON: mensaje generico.
+                }
+
+                return new ResultadoReintentoModel(
+                    false,
+                    null,
+                    detalle ?? "Revisa los datos de tu tarjeta.",
+                    datosRequeridos,
+                    errores.Count > 0 ? errores : null);
             }
 
             if (!res.IsSuccessStatusCode)
             {
                 var err = await ParseProblemDetailsOrStringAsync(res, ct);
-                return (false, null, err);
+                return new ResultadoReintentoModel(false, null, err);
             }
 
             var pago = await res.Content.ReadFromJsonAsync<PagoReintentoResultadoModel>(JsonOptions, ct);
-            return (true, pago, null);
+            return new ResultadoReintentoModel(true, pago, null);
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
-            return (false, null, ex.Message);
+            return new ResultadoReintentoModel(false, null, "No pudimos comunicarnos con el servicio de pagos.");
         }
     }
 }

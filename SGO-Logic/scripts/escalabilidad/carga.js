@@ -29,6 +29,9 @@ import { Counter } from 'k6/metrics';
 
 const ORDENES_URL = (__ENV.ORDENES_URL || 'http://ordenes-api:8080').replace(/\/+$/, '');
 const INVENTARIO_URL = (__ENV.INVENTARIO_URL || 'http://inventario-api:8080').replace(/\/+$/, '');
+// Tokenizacion de la tarjeta en la boveda de Pagos (no en PayKlik).
+const PAGOS_URL = (__ENV.PAGOS_URL || 'http://pagos-api:8080').replace(/\/+$/, '');
+const PRECIO_UNITARIO = 100.0;
 
 const VUS = parseInt(__ENV.VUS || '20', 10);
 const CALENTAMIENTO_SEG = parseInt(__ENV.CALENTAMIENTO_SEG || '10', 10);
@@ -82,7 +85,41 @@ function sembrarExistencias() {
   console.log(`[hu025-escala] existencias sembradas: ${SKU} en CD-01`);
 }
 
+// Ordenes valida el precio de cada linea contra el catalogo de Inventario: el SKU
+// de la corrida se registra con el precio que mandan las ordenes.
+function registrarProducto() {
+  const body = JSON.stringify({
+    nombre: 'Producto de prueba de escalabilidad HU-025/EAC-04',
+    categoria: 'Pruebas',
+    precio: PRECIO_UNITARIO,
+    icono: 'inventory_2',
+    activo: true,
+  });
+  const res = http.put(`${INVENTARIO_URL}/api/inventario/productos/${SKU}`, body, JSON_HEADERS);
+  if (res.status !== 200 && res.status !== 201) {
+    throw new Error(`Registro del producto ${SKU} fallo con status ${res.status}: ${res.body}`);
+  }
+}
+
+// Una orden con TARJETA exige el token de la boveda de Pagos. Null si no se emitio.
+function tokenizarTarjeta() {
+  const res = http.post(
+    `${PAGOS_URL}/api/pagos/tokens`,
+    JSON.stringify({
+      numero: '4111111111111111',
+      mesExp: 12,
+      anioExp: new Date().getFullYear() + 3,
+      cvv: '123',
+      titular: 'Cliente Escalabilidad',
+      guardar: false,
+    }),
+    { ...JSON_HEADERS, tags: { paso: 'tokenizar' } }
+  );
+  return check(res, { 'tarjeta tokenizada (201)': (r) => r.status === 201 }) ? JSON.parse(res.body).token : null;
+}
+
 export function setup() {
+  registrarProducto();
   sembrarExistencias();
   console.log(
     `[hu025-escala] arrancando: ${VUS} VUs sostenidos, calentamiento=${CALENTAMIENTO_SEG}s ` +
@@ -94,19 +131,27 @@ export function setup() {
 export default function () {
   const clienteId = `${PREFIJO_CLIENTE}-${__VU}-${__ITER}`;
 
+  const tokenMedioPago = tokenizarTarjeta();
+  if (!tokenMedioPago) {
+    fallos.add(1);
+    sleep(0.1);
+    return;
+  }
+
   const crearBody = JSON.stringify({
     clienteId,
     canal: 'WEB',
     metodoEntrega: 'DOMICILIO',
     moneda: 'GTQ',
     medioPago: 'TARJETA',
+    tokenMedioPago,
     impuestos: 12.0,
     lineas: [
       {
         sku: SKU,
         descripcion: 'Producto de prueba de escalabilidad HU-025/EAC-04',
         cantidad: 1,
-        precioUnitario: 100.0,
+        precioUnitario: PRECIO_UNITARIO,
       },
     ],
   });

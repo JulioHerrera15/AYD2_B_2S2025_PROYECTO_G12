@@ -85,6 +85,39 @@ public sealed class ClienteInventarioCarritoHttp : IClienteInventarioCarrito
         return await LeerAsync<RetencionesCarritoInventario>(respuesta, ct);
     }
 
+    public async Task<ProductoInventario?> ObtenerProductoAsync(string sku, CancellationToken ct = default)
+    {
+        HttpResponseMessage respuesta;
+        try
+        {
+            respuesta = await _http.GetAsync($"/api/inventario/productos/{Escapar(sku)}", ct);
+        }
+        catch (HttpRequestException ex)
+        {
+            throw new ExcepcionInventarioNoDisponible("Inventario no respondio.", ex);
+        }
+        catch (TaskCanceledException ex) when (!ct.IsCancellationRequested)
+        {
+            throw new ExcepcionInventarioNoDisponible("Inventario no respondio a tiempo.", ex);
+        }
+
+        using (respuesta)
+        {
+            if (respuesta.StatusCode == HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            if (!respuesta.IsSuccessStatusCode)
+            {
+                throw new ExcepcionInventarioNoDisponible(
+                    $"Inventario respondio {(int)respuesta.StatusCode} al consultar el producto.");
+            }
+
+            return await LeerAsync<ProductoInventario>(respuesta, ct);
+        }
+    }
+
     /// <summary>
     /// Ejecuta la llamada y clasifica el resultado: 2xx sigue, 409 sube con su cuerpo,
     /// 400 es un error de quien llamo, y todo lo demas (sin respuesta, timeout, 5xx)

@@ -16,6 +16,8 @@ public sealed class DespachoConfiguration : IEntityTypeConfiguration<Domain.Desp
         builder.Property(d => d.OrdenId).HasColumnName("orden_id").HasMaxLength(30).IsRequired();
         builder.Property(d => d.ReservaId).HasColumnName("reserva_id").HasMaxLength(40).IsRequired();
 
+        builder.Property(d => d.ClienteId).HasColumnName("cliente_id").HasMaxLength(254);
+
         builder.Property(d => d.MetodoEntrega)
             .HasColumnName("metodo_entrega").HasConversion<string>().HasMaxLength(30).IsRequired();
 

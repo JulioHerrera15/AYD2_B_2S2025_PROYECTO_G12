@@ -182,7 +182,7 @@ public sealed partial class Orden
     public string ReceptorCui { get; private set; }
 
     /// <summary>
-    /// Token opaco de la tarjeta que emitio PayKlik (ADR-010). Existe solo para
+    /// Token opaco de la tarjeta que emitio la boveda de Pagos (ADR-010). Existe solo para
     /// cruzar el tramo entre crear la orden y emitir CobroSolicitado, que sale
     /// despues, cuando Inventario confirma la reserva. Se pone en null en cuanto
     /// se emite el evento (<see cref="TomarTokenMedioPago" />) o la orden llega a un
