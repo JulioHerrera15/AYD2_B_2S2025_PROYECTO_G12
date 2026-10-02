@@ -47,6 +47,9 @@ public static class CreditoServicios
         servicios.AddScoped<IConsultasCredito, ConsultasCredito>();
         servicios.AddScoped<ServicioPerfilCrediticio>();
         servicios.AddScoped<ServicioElegibilidad>();
+        servicios.AddScoped<ServicioEvaluacionCredito>();
+        servicios.AddScoped<ServicioAnulacionCargos>();
+        servicios.AddScoped<ServicioDemoCredito>();
 
         return servicios.BuildServiceProvider();
     }
