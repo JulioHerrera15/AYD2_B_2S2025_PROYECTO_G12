@@ -86,6 +86,37 @@ public class CuentaController : Controller
         return View(await _gateway.ListarTarjetasAsync());
     }
 
+    /// <summary>
+    /// Mi credito: limite, disponible y factores del perfil. Si Credito no responde se
+    /// muestra un aviso con reintento; el resto de la cuenta sigue funcionando.
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> Credito()
+    {
+        var userEmail = Request.Cookies["sgo_user_email"];
+        var jwt = Request.Cookies["sgo_jwt"];
+        if (string.IsNullOrWhiteSpace(userEmail) || string.IsNullOrWhiteSpace(jwt))
+        {
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Cuenta/Credito" });
+        }
+
+        var userRole = Request.Cookies["sgo_user_role"] ?? "CLIENTE";
+        if (PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt))
+        {
+            return RedirectToAction("Index", "Estado");
+        }
+
+        var resultado = await _gateway.ObtenerMiCreditoAsync(HttpContext.RequestAborted);
+        if (resultado.Estado == EstadoConsultaCredito.SesionInvalida)
+        {
+            TempData["Error"] = "Tu sesión expiró. Inicia sesión nuevamente para ver tu crédito.";
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Cuenta/Credito" });
+        }
+
+        ViewBag.UserEmail = userEmail;
+        return View(resultado);
+    }
+
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> EliminarTarjeta(Guid id)

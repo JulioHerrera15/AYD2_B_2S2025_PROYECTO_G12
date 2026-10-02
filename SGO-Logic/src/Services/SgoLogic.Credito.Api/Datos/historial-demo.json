@@ -1,0 +1,80 @@
+[
+  {
+    "email": "cliente1@sgo.local",
+    "codigoClienteErp": "ERP-CLI-0001",
+    "diasComoCliente": 1100,
+    "compras12m": 18,
+    "monto12m": 14500,
+    "pagosPuntuales": 18,
+    "pagosTardios": 0,
+    "maxDiasAtraso": 0,
+    "devoluciones": 1,
+    "incidentesGraves": 0,
+    "otrosIncidentes": 0
+  },
+  {
+    "email": "cliente2@sgo.local",
+    "codigoClienteErp": "ERP-CLI-0002",
+    "diasComoCliente": 500,
+    "compras12m": 9,
+    "monto12m": 8400,
+    "pagosPuntuales": 8,
+    "pagosTardios": 1,
+    "maxDiasAtraso": 6,
+    "devoluciones": 1,
+    "incidentesGraves": 0,
+    "otrosIncidentes": 0
+  },
+  {
+    "email": "cliente3@sgo.local",
+    "codigoClienteErp": "ERP-CLI-0003",
+    "diasComoCliente": 300,
+    "compras12m": 5,
+    "monto12m": 6000,
+    "pagosPuntuales": 4,
+    "pagosTardios": 1,
+    "maxDiasAtraso": 12,
+    "devoluciones": 1,
+    "incidentesGraves": 0,
+    "otrosIncidentes": 0
+  },
+  {
+    "email": "cliente4@sgo.local",
+    "codigoClienteErp": "ERP-CLI-0004",
+    "diasComoCliente": 800,
+    "compras12m": 10,
+    "monto12m": 9000,
+    "pagosPuntuales": 3,
+    "pagosTardios": 7,
+    "maxDiasAtraso": 45,
+    "devoluciones": 2,
+    "incidentesGraves": 0,
+    "otrosIncidentes": 1
+  },
+  {
+    "email": "cliente5@sgo.local",
+    "codigoClienteErp": "ERP-CLI-0005",
+    "diasComoCliente": 40,
+    "compras12m": 2,
+    "monto12m": 900,
+    "pagosPuntuales": 2,
+    "pagosTardios": 0,
+    "maxDiasAtraso": 0,
+    "devoluciones": 0,
+    "incidentesGraves": 0,
+    "otrosIncidentes": 0
+  },
+  {
+    "email": "cliente6@sgo.local",
+    "codigoClienteErp": "ERP-CLI-0006",
+    "diasComoCliente": 900,
+    "compras12m": 14,
+    "monto12m": 11000,
+    "pagosPuntuales": 14,
+    "pagosTardios": 0,
+    "maxDiasAtraso": 0,
+    "devoluciones": 1,
+    "incidentesGraves": 1,
+    "otrosIncidentes": 0
+  }
+]

@@ -20,6 +20,8 @@ USUARIOS_DEMO=(
   "cliente2@sgo.local|Carlos Ramirez"
   "cliente3@sgo.local|Maria Guzman"
   "cliente4@sgo.local|Luis Morales"
+  "cliente5@sgo.local|Sofia Herrera"
+  "cliente6@sgo.local|Jorge Castillo"
   "operador1@sgo.local|Operador de Bodega"
   "operador2@sgo.local|Operador de Despacho"
 )

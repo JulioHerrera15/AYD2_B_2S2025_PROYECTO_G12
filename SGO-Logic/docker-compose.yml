@@ -336,6 +336,38 @@ services:
       timeout: 5s
       retries: 5
 
+  credito-api:
+    build:
+      context: .
+      dockerfile: src/Services/SgoLogic.Credito.Api/Dockerfile
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Postgres: Host=db-finanzas;Port=5432;Database=sgo_credito;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ConnectionStrings__RabbitMq: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      Outbox__Source: credito
+      Outbox__PollingIntervalMs: ${OUTBOX_POLLING_MS}
+      Outbox__MaxReintentos: ${OUTBOX_MAX_REINTENTOS}
+      Outbox__BatchSize: ${OUTBOX_BATCH_SIZE}
+      # El cliente sale del claim email del JWT de Auth, igual que en Pagos.
+      Auth__JwtSecret: ${JWT_SECRET}
+      # Demo: historiales de cliente1..cliente6 al arrancar con la base vacia, y
+      # POST /interno/credito/historiales (no enrutado por el gateway).
+      Credito__SembrarDemo: "true"
+      Credito__EndpointsInternos: "true"
+    ports:
+      - "8099:8080"
+    depends_on:
+      db-finanzas:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
   logiexpress-mock:
     build:
       context: .
@@ -491,6 +523,8 @@ services:
       ordenes-api:
         condition: service_healthy
       pagos-api:
+        condition: service_healthy
+      credito-api:
         condition: service_healthy
       facturacion-api:
         condition: service_healthy
