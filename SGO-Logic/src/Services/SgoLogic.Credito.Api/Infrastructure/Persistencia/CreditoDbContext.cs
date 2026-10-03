@@ -29,6 +29,11 @@ public sealed class CreditoDbContext : DbContext
 
     public DbSet<DecisionCredito> Decisiones => Set<DecisionCredito>();
 
+    public DbSet<AbonoCredito> Abonos => Set<AbonoCredito>();
+
+    /// <summary>Secuencia de las referencias de abono (ABO-{yyyy}-{correlativo}).</summary>
+    public const string SecuenciaAbonos = "abono_correlativo";
+
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     public DbSet<MensajeProcesado> MensajesProcesados => Set<MensajeProcesado>();
@@ -36,6 +41,7 @@ public sealed class CreditoDbContext : DbContext
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.HasDefaultSchema(EsquemaPorDefecto);
+        modelBuilder.HasSequence<long>(SecuenciaAbonos).StartsAt(1).IncrementsBy(1);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(CreditoDbContext).Assembly);
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
         modelBuilder.ApplyConfiguration(new MensajeProcesadoConfiguration());

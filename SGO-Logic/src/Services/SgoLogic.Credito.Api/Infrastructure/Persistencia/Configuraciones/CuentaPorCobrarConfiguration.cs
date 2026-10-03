@@ -84,9 +84,26 @@ public sealed class CuentaPorCobrarConfiguration : IEntityTypeConfiguration<Cuen
             .HasColumnName("motivo_anulacion")
             .HasMaxLength(CuentaPorCobrar.LargoMaximoMotivo);
 
+        builder.Property(cuenta => cuenta.PagadaEn)
+            .HasColumnName("pagada_en")
+            .HasColumnType("timestamp with time zone");
+
+        builder.Property(cuenta => cuenta.PagoPuntual)
+            .HasColumnName("pago_puntual");
+
+        builder.Property(cuenta => cuenta.RecordatorioEnviadoEn)
+            .HasColumnName("recordatorio_enviado_en")
+            .HasColumnType("timestamp with time zone");
+
+        // El worker de cobranza barre por estado y fecha de vencimiento.
+        builder.HasIndex(cuenta => new { cuenta.Estado, cuenta.VenceEn })
+            .HasDatabaseName("ix_cuenta_por_cobrar_estado_vence_en");
+
         builder.Property(cuenta => cuenta.Version)
             .HasColumnName("version")
             .IsConcurrencyToken()
             .IsRequired();
+
+        builder.Ignore(cuenta => cuenta.EsPagable);
     }
 }

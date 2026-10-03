@@ -54,6 +54,14 @@ public sealed class ConsultasCredito : IConsultasCredito
                 cuenta.SaldoPendiente,
                 cuenta.EmitidaEn,
                 cuenta.VenceEn,
-                cuenta.Estado))
+                cuenta.Estado,
+                cuenta.Id,
+                cuenta.PagadaEn,
+                cuenta.PagoPuntual))
+            .ToListAsync(cancelacion);
+
+    public async Task<IReadOnlyList<AbonoCredito>> ListarAbonosAsync(string clienteId, CancellationToken cancelacion) =>
+        await _contexto.Abonos.AsNoTracking()
+            .Where(abono => abono.ClienteId == clienteId)
             .ToListAsync(cancelacion);
 }

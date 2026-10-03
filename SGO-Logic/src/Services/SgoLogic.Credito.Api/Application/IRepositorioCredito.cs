@@ -31,9 +31,40 @@ public interface IRepositorioCredito
 
     void AgregarCuenta(CuentaPorCobrar cuenta);
 
+    Task<CuentaPorCobrar?> ObtenerCuentaAsync(Guid cuentaId, CancellationToken cancelacion);
+
+    /// <summary>
+    /// Todas las cuentas del cliente, con seguimiento. Si alguna ya estaba cargada y
+    /// modificada en esta unidad de trabajo se devuelve esa misma instancia, asi el
+    /// comportamiento propio y la mora se calculan con los cambios aun sin guardar.
+    /// </summary>
+    Task<IReadOnlyList<CuentaPorCobrar>> ListarCuentasClienteAsync(string clienteId, CancellationToken cancelacion);
+
+    /// <summary>Ids de cuentas VIGENTE con saldo que vencen a mas tardar en <paramref name="limite" /> y sin recordatorio.</summary>
+    Task<IReadOnlyList<Guid>> ListarCuentasParaRecordatorioAsync(DateTime limite, int maximo, CancellationToken cancelacion);
+
+    /// <summary>Ids de cuentas VIGENTE con saldo cuyo VenceEn ya paso.</summary>
+    Task<IReadOnlyList<Guid>> ListarCuentasPorVencerseAsync(DateTime ahora, int maximo, CancellationToken cancelacion);
+
+    Task<AbonoCredito?> ObtenerAbonoAsync(Guid abonoId, CancellationToken cancelacion);
+
+    Task<bool> HayAbonoEnCursoAsync(Guid cuentaId, CancellationToken cancelacion);
+
+    Task<IReadOnlyList<AbonoCredito>> ListarAbonosAplicadosAsync(Guid cuentaId, CancellationToken cancelacion);
+
+    void AgregarAbono(AbonoCredito abono);
+
+    /// <summary>Siguiente valor de la secuencia de referencias de abono.</summary>
+    Task<long> SiguienteCorrelativoAbonoAsync(CancellationToken cancelacion);
+
+    /// <summary>Clientes con historial, para recalcular perfiles tras el reinicio de demo.</summary>
+    Task<IReadOnlyList<string>> ListarClientesConHistorialAsync(CancellationToken cancelacion);
+
     /// <summary>
     /// Confirma lo pendiente. Lanza <see cref="ExcepcionConcurrenciaCredito" /> si otra
-    /// operacion cambio la misma linea o cuenta (token Version) entre la lectura y el guardado.
+    /// operacion cambio la misma linea o cuenta (token Version) entre la lectura y el
+    /// guardado, y <see cref="ExcepcionDuplicadoCredito" /> si choca con un indice unico
+    /// (por ejemplo, un segundo abono en curso para la misma cuenta).
     /// </summary>
     Task GuardarCambiosAsync(CancellationToken cancelacion);
 
@@ -41,8 +72,9 @@ public interface IRepositorioCredito
     void DescartarCambios();
 
     /// <summary>
-    /// Reinicio de demo: borra cuentas por cobrar y decisiones y deja el saldo utilizado
-    /// de todas las lineas en 0. No toca perfiles ni historiales.
+    /// Reinicio de demo: borra abonos, cuentas por cobrar y decisiones, deja el saldo
+    /// utilizado de todas las lineas en 0 y quita la pausa por mora. No toca perfiles ni
+    /// historiales (el servicio los recalcula despues).
     /// </summary>
     Task<ResultadoReinicioDemo> ReiniciarDemoAsync(DateTime ahora, CancellationToken cancelacion);
 }
@@ -56,7 +88,16 @@ public sealed class ExcepcionConcurrenciaCredito : Exception
     }
 }
 
-public sealed record ResultadoReinicioDemo(int CuentasBorradas, int DecisionesBorradas, int LineasReiniciadas);
+/// <summary>Un indice unico rechazo el cambio (por ejemplo, otro abono en curso para la cuenta).</summary>
+public sealed class ExcepcionDuplicadoCredito : Exception
+{
+    public ExcepcionDuplicadoCredito(string mensaje, Exception? interna = null)
+        : base(mensaje, interna)
+    {
+    }
+}
+
+public sealed record ResultadoReinicioDemo(int CuentasBorradas, int DecisionesBorradas, int LineasReiniciadas, int AbonosBorrados = 0);
 
 /// <summary>
 /// Lectura para la consulta de oferta y "Mi credito": perfil, linea y antiguedad
@@ -68,6 +109,9 @@ public interface IConsultasCredito
 
     /// <summary>Cuentas por cobrar del cliente, sin seguimiento de cambios.</summary>
     Task<IReadOnlyList<CompraCredito>> ListarComprasAsync(string clienteId, CancellationToken cancelacion);
+
+    /// <summary>Abonos del cliente (todas sus cuentas), sin seguimiento de cambios.</summary>
+    Task<IReadOnlyList<AbonoCredito>> ListarAbonosAsync(string clienteId, CancellationToken cancelacion);
 }
 
 /// <summary>Proyeccion de lectura de una cuenta por cobrar.</summary>
@@ -78,7 +122,10 @@ public sealed record CompraCredito(
     decimal SaldoPendiente,
     DateTime EmitidaEn,
     DateTime VenceEn,
-    EstadoCuentaPorCobrar Estado);
+    EstadoCuentaPorCobrar Estado,
+    Guid CuentaId = default,
+    DateTime? PagadaEn = null,
+    bool? PagoPuntual = null);
 
 /// <summary>Proyeccion de lectura. Null en la linea si aun no existe; null en ClienteDesde si no hay historial.</summary>
 public sealed record ResumenCredito(

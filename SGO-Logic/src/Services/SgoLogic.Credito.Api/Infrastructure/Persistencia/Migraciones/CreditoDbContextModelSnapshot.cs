@@ -23,6 +23,8 @@ namespace SgoLogic.Credito.Api.Infrastructure.Persistencia.Migraciones
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.HasSequence("abono_correlativo");
+
             modelBuilder.Entity("SgoLogic.BuildingBlocks.Idempotencia.MensajeProcesado", b =>
                 {
                     b.Property<Guid>("Id")
@@ -140,6 +142,105 @@ namespace SgoLogic.Credito.Api.Infrastructure.Persistencia.Migraciones
                     b.ToTable("outbox_messages", "public");
                 });
 
+            modelBuilder.Entity("SgoLogic.Credito.Api.Domain.AbonoCredito", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AutorizacionId")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("autorizacion_id");
+
+                    b.Property<string>("ClienteId")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("cliente_id");
+
+                    b.Property<string>("CodigoRespuesta")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("codigo_respuesta");
+
+                    b.Property<Guid>("CuentaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cuenta_id");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(25)
+                        .HasColumnType("character varying(25)")
+                        .HasColumnName("estado");
+
+                    b.Property<int>("IntentoNumero")
+                        .HasColumnType("integer")
+                        .HasColumnName("intento_numero");
+
+                    b.Property<string>("Marca")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("marca");
+
+                    b.Property<string>("Moneda")
+                        .IsRequired()
+                        .HasMaxLength(3)
+                        .HasColumnType("character varying(3)")
+                        .HasColumnName("moneda");
+
+                    b.Property<decimal>("Monto")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("monto");
+
+                    b.Property<string>("Referencia")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("referencia");
+
+                    b.Property<DateTime?>("ResueltoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resuelto_en");
+
+                    b.Property<DateTime>("SolicitadoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("solicitado_en");
+
+                    b.Property<string>("UltimosCuatro")
+                        .HasMaxLength(4)
+                        .HasColumnType("character varying(4)")
+                        .HasColumnName("ultimos_cuatro");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClienteId")
+                        .HasDatabaseName("ix_abono_credito_cliente_id");
+
+                    b.HasIndex("CuentaId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_abono_credito_cuenta_en_curso")
+                        .HasFilter("estado IN ('SOLICITADO', 'PENDIENTE')");
+
+                    b.HasIndex("Referencia")
+                        .IsUnique()
+                        .HasDatabaseName("ux_abono_credito_referencia");
+
+                    b.HasIndex("CuentaId", "Estado")
+                        .HasDatabaseName("ix_abono_credito_cuenta_estado");
+
+                    b.ToTable("abono_credito", "credito", t =>
+                        {
+                            t.HasCheckConstraint("ck_abono_credito_monto_positivo", "monto > 0");
+                        });
+                });
+
             modelBuilder.Entity("SgoLogic.Credito.Api.Domain.CuentaPorCobrar", b =>
                 {
                     b.Property<Guid>("Id")
@@ -194,6 +295,18 @@ namespace SgoLogic.Credito.Api.Infrastructure.Persistencia.Migraciones
                         .HasColumnType("character varying(40)")
                         .HasColumnName("orden_id");
 
+                    b.Property<DateTime?>("PagadaEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("pagada_en");
+
+                    b.Property<bool?>("PagoPuntual")
+                        .HasColumnType("boolean")
+                        .HasColumnName("pago_puntual");
+
+                    b.Property<DateTime?>("RecordatorioEnviadoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recordatorio_enviado_en");
+
                     b.Property<decimal>("SaldoPendiente")
                         .HasPrecision(12, 2)
                         .HasColumnType("numeric(12,2)")
@@ -216,6 +329,9 @@ namespace SgoLogic.Credito.Api.Infrastructure.Persistencia.Migraciones
                     b.HasIndex("OrdenId")
                         .IsUnique()
                         .HasDatabaseName("ux_cuenta_por_cobrar_orden_id");
+
+                    b.HasIndex("Estado", "VenceEn")
+                        .HasDatabaseName("ix_cuenta_por_cobrar_estado_vence_en");
 
                     b.ToTable("cuenta_por_cobrar", "credito", t =>
                         {

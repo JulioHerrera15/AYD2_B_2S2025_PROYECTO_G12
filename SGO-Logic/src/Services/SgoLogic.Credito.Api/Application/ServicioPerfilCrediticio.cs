@@ -96,7 +96,84 @@ public sealed class ServicioPerfilCrediticio
                 datos.IncidentesGraves, datos.OtrosIncidentes, Utc(datos.FechaCorte), datos.LoteOrigen, ahora);
         }
 
-        var evaluacion = _politica.Evaluar(historial, ahora);
+        var (perfil, huboCambios) = await EvaluarYAplicarAsync(clienteId, historial, ahora, cancelacion);
+
+        if (confirmar)
+        {
+            await _repositorio.GuardarCambiosAsync(cancelacion);
+        }
+
+        return Resultado(perfil, aplicado: true, huboCambios);
+    }
+
+    /// <summary>
+    /// Recalcula el perfil con el historial vigente y el comportamiento propio actual
+    /// (cuentas pagadas a tiempo, tarde y vencidas), dentro de la unidad de trabajo de
+    /// quien llama: NO guarda. Lo usan la cobranza (pago total, vencimiento) y la
+    /// anulacion. Sin historial no hay perfil que recalcular y devuelve false.
+    /// </summary>
+    public async Task<bool> RecalcularSinGuardarAsync(string clienteId, CancellationToken cancelacion)
+    {
+        var cliente = NormalizarCliente(clienteId);
+        var historial = await _repositorio.ObtenerHistorialAsync(cliente, cancelacion);
+        if (historial is null)
+        {
+            return false;
+        }
+
+        var (_, huboCambios) = await EvaluarYAplicarAsync(cliente, historial, _reloj(), cancelacion);
+        return huboCambios;
+    }
+
+    /// <summary>
+    /// Mora y perfil en un solo lugar, sin guardar: si el cliente tiene alguna cuenta
+    /// VENCIDA con saldo la linea queda en pausa (BLOQUEADA); si no, se le quita la
+    /// pausa. Despues recalcula el perfil con el comportamiento propio actualizado
+    /// (DEUDA_VENCIDA mientras haya vencidas; pagos tardios o puntuales al pagar).
+    /// </summary>
+    public async Task ActualizarMoraYPerfilAsync(string clienteId, CancellationToken cancelacion)
+    {
+        var cliente = NormalizarCliente(clienteId);
+        var ahora = _reloj();
+        var cuentas = await _repositorio.ListarCuentasClienteAsync(cliente, cancelacion);
+        var linea = await _repositorio.ObtenerLineaAsync(cliente, cancelacion);
+
+        if (linea is not null)
+        {
+            if (cuentas.Any(c => c.Estado == EstadoCuentaPorCobrar.VENCIDA && c.SaldoPendiente > 0m))
+            {
+                linea.Bloquear(ahora);
+            }
+            else
+            {
+                linea.Desbloquear(ahora);
+            }
+        }
+
+        await RecalcularSinGuardarAsync(cliente, cancelacion);
+    }
+
+    /// <summary>
+    /// Comportamiento propio a partir de las cuentas del cliente. Usa las instancias
+    /// con seguimiento, asi incluye los cambios aun no guardados de esta unidad de trabajo.
+    /// </summary>
+    public async Task<ComportamientoPropio> ComportamientoAsync(string clienteId, CancellationToken cancelacion)
+    {
+        var cuentas = await _repositorio.ListarCuentasClienteAsync(clienteId, cancelacion);
+        return new ComportamientoPropio(
+            cuentas.Count(c => c.Estado == EstadoCuentaPorCobrar.PAGADA && c.PagoPuntual == true),
+            cuentas.Count(c => c.Estado == EstadoCuentaPorCobrar.PAGADA && c.PagoPuntual == false),
+            cuentas.Count(c => c.Estado == EstadoCuentaPorCobrar.VENCIDA && c.SaldoPendiente > 0m));
+    }
+
+    private async Task<(PerfilCrediticio Perfil, bool HuboCambios)> EvaluarYAplicarAsync(
+        string clienteId,
+        HistorialCliente historial,
+        DateTime ahora,
+        CancellationToken cancelacion)
+    {
+        var comportamiento = await ComportamientoAsync(clienteId, cancelacion);
+        var evaluacion = _politica.Evaluar(historial, comportamiento, ahora);
 
         var perfil = await _repositorio.ObtenerPerfilAsync(clienteId, cancelacion);
         bool huboCambios;
@@ -142,17 +219,12 @@ public sealed class ServicioPerfilCrediticio
                     perfil.CalculadoEn));
         }
 
-        if (confirmar)
-        {
-            await _repositorio.GuardarCambiosAsync(cancelacion);
-        }
-
         MetricasCredito.PerfilesRecalculadosTotal.Inc();
         _logger.LogInformation(
             "Perfil crediticio de {ClienteId} recalculado: nivel {Nivel}, elegible {Elegible}, motivo {Motivo}, cambios {HuboCambios}.",
             clienteId, perfil.Nivel, perfil.Elegible, perfil.CodigoMotivo ?? "ninguno", huboCambios);
 
-        return Resultado(perfil, aplicado: true, huboCambios);
+        return (perfil, huboCambios);
     }
 
     public static string NormalizarCliente(string clienteId) => clienteId.Trim().ToLowerInvariant();

@@ -56,7 +56,45 @@ public sealed record MiCreditoDto(
     int PlazoDias,
     DateTime? ActualizadoEn,
     IReadOnlyList<FactorCreditoDto> Factores,
-    IReadOnlyList<CompraCreditoDto> Compras);
+    IReadOnlyList<CompraCreditoDto> Compras,
+    decimal TotalPorPagar = 0m,
+    DateTime? ProximoVencimiento = null,
+    IReadOnlyList<AvisoCreditoDto>? Avisos = null);
+
+/// <summary>Aviso destacado de "Mi credito". Tipo: POR_VENCER, VENCIDA o LINEA_EN_PAUSA (no se muestra).</summary>
+public sealed record AvisoCreditoDto(string Tipo, string Titulo, string Mensaje, string Recomendacion, string? CuentaId);
+
+/// <summary>Un pago de una compra a credito, para el historial. Sin codigos internos para mostrar.</summary>
+public sealed record AbonoHistorialDto(
+    string AbonoId,
+    string Referencia,
+    DateTime Fecha,
+    decimal Monto,
+    string? Tarjeta,
+    string Estado,
+    string EtiquetaEstado);
+
+/// <summary>
+/// Estado de un abono para la Web. Estado es el codigo; Titulo y Mensaje son para el
+/// cliente. PuedeReintentar solo con el abono PENDIENTE.
+/// </summary>
+public sealed record AbonoDto(
+    string Id,
+    string Referencia,
+    string CuentaId,
+    string Estado,
+    bool EnCurso,
+    string Titulo,
+    string Mensaje,
+    string Recomendacion,
+    decimal Monto,
+    string Moneda,
+    decimal SaldoPendienteCuenta,
+    bool PuedeReintentar);
+
+public sealed record CrearAbonoRequest(string? CuentaId, decimal Monto, string? TokenMedioPago);
+
+public sealed record ReintentarAbonoRequest(string? TokenMedioPago);
 
 /// <summary>
 /// Una compra a credito del cliente. Estado es el codigo (VIGENTE, PAGADA, VENCIDA,
@@ -71,7 +109,12 @@ public sealed record CompraCreditoDto(
     DateTime VenceEn,
     int? DiasRestantes,
     string Estado,
-    string EtiquetaEstado);
+    string EtiquetaEstado,
+    string CuentaId = "",
+    bool PuedePagar = false,
+    string? AbonoEnCursoId = null,
+    bool AbonoEnCursoPuedeReintentar = false,
+    IReadOnlyList<AbonoHistorialDto>? Abonos = null);
 
 /// <summary>
 /// Resultado de aplicar un historial. Aplicado es false si se ignoro por traer una

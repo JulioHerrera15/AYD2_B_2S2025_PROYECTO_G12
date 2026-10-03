@@ -11,3 +11,18 @@ public sealed class CreditoOptions
     /// <summary>Habilita POST /interno/credito/historiales (demo y pruebas). Falso por defecto.</summary>
     public bool EndpointsInternos { get; set; }
 }
+
+/// <summary>Cobranza (seccion Credito:Cobranza): abonos, recordatorios y vencimientos.</summary>
+public sealed class CobranzaOptions
+{
+    public const string Seccion = "Credito:Cobranza";
+
+    /// <summary>Abono minimo; si el saldo es menor, solo se acepta el saldo completo.</summary>
+    public decimal MontoMinimoAbono { get; set; } = 10m;
+
+    /// <summary>Cada cuanto corre el worker de vencimientos.</summary>
+    public int IntervaloSegundos { get; set; } = 60;
+
+    /// <summary>Dias antes del vencimiento en que se emite el recordatorio (una sola vez).</summary>
+    public int DiasRecordatorio { get; set; } = 3;
+}

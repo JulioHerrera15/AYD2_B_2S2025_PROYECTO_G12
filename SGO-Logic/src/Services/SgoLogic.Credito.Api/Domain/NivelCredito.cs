@@ -9,7 +9,7 @@ public enum NivelCredito
     NO_CALIFICA
 }
 
-/// <summary>Estado de la linea de credito. BLOQUEADA queda reservada para un bloque posterior.</summary>
+/// <summary>Estado de la linea de credito. BLOQUEADA es la pausa por una cuenta vencida.</summary>
 public enum EstadoLineaCredito
 {
     ACTIVA,
@@ -21,6 +21,9 @@ public enum EstadoLineaCredito
 public static class CodigosMotivoCredito
 {
     public const string SinHistorial = "SIN_HISTORIAL";
+
+    /// <summary>v2: el cliente tiene una cuenta a credito vencida sin pagar. Se evalua justo despues de SIN_HISTORIAL.</summary>
+    public const string DeudaVencida = "DEUDA_VENCIDA";
     public const string IncidenteGrave = "INCIDENTE_GRAVE";
     public const string AntiguedadInsuficiente = "ANTIGUEDAD_INSUFICIENTE";
     public const string DevolucionesExcesivas = "DEVOLUCIONES_EXCESIVAS";
