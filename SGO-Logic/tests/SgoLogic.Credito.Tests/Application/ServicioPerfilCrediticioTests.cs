@@ -47,7 +47,7 @@ public sealed class ServicioPerfilCrediticioTests
         Assert.Null(data.CodigoMotivo);
         Assert.Equal(7500m, data.LimiteAprobado);
         Assert.Equal("GTQ", data.Moneda);
-        Assert.Equal("2026.10-v1", data.VersionPolitica);
+        Assert.Equal("2026.10-v2", data.VersionPolitica);
         Assert.Equal(perfil.FechaCorteHistorial, data.FechaCorteHistorial);
     }
 

@@ -162,7 +162,7 @@ public sealed class PoliticaCreditoTests
         Assert.Equal((decimal)limite, evaluacion.LimiteAprobado);
         Assert.Equal(elegible, evaluacion.Elegible);
         Assert.Equal(motivo, evaluacion.CodigoMotivo);
-        Assert.Equal("2026.10-v1", evaluacion.VersionPolitica);
+        Assert.Equal("2026.10-v2", evaluacion.VersionPolitica);
     }
 
     [Fact]

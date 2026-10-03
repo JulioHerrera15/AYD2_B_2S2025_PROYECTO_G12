@@ -166,7 +166,8 @@ public sealed class ManejadorDocumentoFiscalCertificadoTests
         Assert.Equal("00000001", dataFiscal.NumeroDocumento);
         Assert.Equal("89958267-C72E-4760-B3A8-490454540678", dataFiscal.NumeroAutorizacion);
         Assert.Equal(Moneda.GTQ, dataFiscal.Moneda);
-        Assert.Equal(1400.00m, dataFiscal.Total);
+        // Precios con IVA incluido: el total es la suma de las lineas (1 x 1250.00).
+        Assert.Equal(1250.00m, dataFiscal.Total);
     }
 
     [Fact]

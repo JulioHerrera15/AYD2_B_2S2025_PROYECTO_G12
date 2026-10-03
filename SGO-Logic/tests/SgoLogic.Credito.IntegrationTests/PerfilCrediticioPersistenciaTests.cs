@@ -90,7 +90,7 @@ public sealed class PerfilCrediticioPersistenciaTests
         Assert.True(perfil.Elegible);
         Assert.Equal(40m, perfil.PuntosPuntualidad);
         Assert.Equal(8.15m, perfil.PuntosDevoluciones);
-        Assert.Equal("2026.10-v1", perfil.VersionPolitica);
+        Assert.Equal("2026.10-v2", perfil.VersionPolitica);
 
         var linea = await contexto.Lineas.AsNoTracking().SingleAsync(l => l.ClienteId == clienteId);
         Assert.Equal(EstadoLineaCredito.ACTIVA, linea.Estado);
