@@ -61,6 +61,11 @@ public sealed class ManejadorEventosCredito
             return ResultadoEventoCredito.Duplicado;
         }
 
+        if (evento.TipoEvento == DevolucionCreditoAplicada.EventType)
+        {
+            return await ManejarDevolucionAsync(evento, cancelacion);
+        }
+
         if (evento.TipoEvento is not (CreditoAprobado.EventType or CreditoRechazado.EventType))
         {
             _logger.LogWarning(
@@ -138,6 +143,59 @@ public sealed class ManejadorEventosCredito
         return ResultadoEventoCredito.Aplicado;
     }
 
+    /// <summary>
+    /// DevolucionCreditoAplicada: Credito ya desconto la devolucion de la deuda. Se cierra
+    /// la devolucion igual que con ReembolsoAplicado: la orden vuelve a ENTREGADA si fue
+    /// parcial o queda DEVUELTA si fue total. No espera el reembolso a tarjeta de un
+    /// excedente ya pagado (eso lo sigue Credito). Devolucion inexistente: ack sin error.
+    /// </summary>
+    private async Task<ResultadoEventoCredito> ManejarDevolucionAsync(EventoCreditoRecibido evento, CancellationToken cancelacion)
+    {
+        _registro.Registrar(evento.MessageId, evento.TipoEvento);
+
+        var devolucion = string.IsNullOrWhiteSpace(evento.DevolucionId)
+            ? null
+            : await _ordenes.ObtenerDevolucionPorIdAsync(evento.DevolucionId, cancelacion);
+        if (devolucion is null)
+        {
+            _logger.LogWarning(
+                "Devolucion {DevolucionId} no encontrada al procesar {TipoEvento} ({MessageId}); se hace ack.",
+                evento.DevolucionId, evento.TipoEvento, evento.MessageId);
+            await _unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
+            return ResultadoEventoCredito.Ignorado;
+        }
+
+        devolucion.MarcarReembolsoAplicado();
+        var estadoDestino = devolucion.EsParcial ? EstadoOrden.ENTREGADA : EstadoOrden.DEVUELTA;
+
+        ResultadoTransicionOrdenDto resultado;
+        try
+        {
+            resultado = await _servicio.AplicarTransicionAsync(
+                devolucion.OrdenOriginalId,
+                estadoDestino,
+                null,
+                $"Devolucion {devolucion.Id} aplicada al credito",
+                esCompensacion: false,
+                cancelacion);
+        }
+        catch (ExcepcionTransicionInvalida ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "Transicion invalida al aplicar DevolucionCreditoAplicada sobre la orden {OrdenId} ({MessageId}); ack sin reencolar.",
+                devolucion.OrdenOriginalId, evento.MessageId);
+            return ResultadoEventoCredito.Ignorado;
+        }
+
+        if (resultado.SinCambios)
+        {
+            await _unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
+        }
+
+        return ResultadoEventoCredito.Aplicado;
+    }
+
     /// <summary>Texto si Credito no mandara mensaje: nunca deberia pasar, pero el cliente siempre ve algo legible.</summary>
     public const string MensajeRechazoPorDefecto =
         "No pudimos aprobar tu compra a crédito. No se realizó ningún cargo; puedes pagar con tarjeta.";
@@ -165,7 +223,8 @@ public sealed record EventoCreditoRecibido(
     string OrdenId,
     string? CargoId = null,
     string? CodigoMotivo = null,
-    string? MensajeCliente = null);
+    string? MensajeCliente = null,
+    string? DevolucionId = null);
 
 public enum ResultadoEventoCredito
 {

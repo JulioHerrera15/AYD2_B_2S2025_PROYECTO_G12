@@ -189,12 +189,109 @@ public sealed class ServicioFacturacion
 
         var montoReembolso = decimal.Parse(datos.MontoReembolso, System.Globalization.CultureInfo.InvariantCulture);
 
+        var documento = await GenerarNotaCreditoAsync(
+            documentoOriginal,
+            transactionId,
+            datos.Lineas.Select(linea => (linea.Sku, linea.Cantidad)).ToList(),
+            montoReembolso,
+            ahora,
+            cancelacion);
+
+        _logger.LogInformation(
+            "NOTA_CREDITO {DocumentoId} creada para devolucion {DevolucionId}, orden {OrdenOriginalId}, serie {Serie} numero {Numero}.",
+            documento.Id, datos.DevolucionId, datos.OrdenOriginalId, documento.Serie, documento.NumeroDocumento);
+
+        return documento;
+    }
+
+    /// <summary>
+    /// OrdenCancelada (por cualquier ruta de pago). Idempotente por orden:
+    /// <list type="bullet">
+    ///   <item>Sin factura: no hace nada.</item>
+    ///   <item>Factura certificada: genera su NOTA_CREDITO por el total con el mismo flujo
+    ///   de la nota de credito de devoluciones.</item>
+    ///   <item>Factura aun sin certificar: la marca; la nota se genera en cuanto la SAT la
+    ///   certifique (<see cref="ProcesarEnvioAsync" />).</item>
+    /// </list>
+    /// Devuelve la nota de credito si la genero en este momento.
+    /// </summary>
+    public async Task<DocumentoFiscal?> ProcesarCancelacionOrdenAsync(
+        OrdenCanceladaData datos,
+        DateTime ahora,
+        CancellationToken cancelacion)
+    {
+        var factura = await _contexto.DocumentosFiscales
+            .Include(d => d.Lineas)
+            .FirstOrDefaultAsync(d => d.OrdenId == datos.OrdenId && d.TipoDocumento == TipoDocumentoFiscal.FACTURA, cancelacion);
+
+        if (factura is null)
+        {
+            _logger.LogInformation(
+                "La orden {OrdenId} se cancelo sin documento fiscal; no hay nota de credito que emitir.", datos.OrdenId);
+            return null;
+        }
+
+        if (!factura.MarcarCancelacionOrden(ahora))
+        {
+            _logger.LogInformation(
+                "La cancelacion de la orden {OrdenId} ya estaba registrada en la factura {DocumentoId}; no se repite.",
+                datos.OrdenId, factura.Id);
+            return null;
+        }
+
+        if (factura.Estado != EstadoDocumentoFiscal.CERTIFICADO)
+        {
+            _logger.LogInformation(
+                "La factura {DocumentoId} de la orden cancelada {OrdenId} aun no esta certificada; la nota de credito se emitira al certificarse.",
+                factura.Id, datos.OrdenId);
+            return null;
+        }
+
+        return await GenerarNotaCreditoCancelacionAsync(factura, ahora, cancelacion);
+    }
+
+    /// <summary>Nota de credito por el total de una factura cuya orden se cancelo.</summary>
+    private async Task<DocumentoFiscal> GenerarNotaCreditoCancelacionAsync(
+        DocumentoFiscal factura,
+        DateTime ahora,
+        CancellationToken cancelacion)
+    {
+        var nota = await GenerarNotaCreditoAsync(
+            factura,
+            factura.TransactionId,
+            factura.Lineas.OrderBy(linea => linea.NumeroLinea).Select(linea => (linea.Sku, linea.Cantidad)).ToList(),
+            factura.Total,
+            ahora,
+            cancelacion);
+
+        factura.RegistrarNotaCreditoCancelacion(nota.Id, ahora);
+
+        _logger.LogInformation(
+            "NOTA_CREDITO {DocumentoId} creada por la cancelacion de la orden {OrdenId} (factura {FacturaId}), serie {Serie} numero {Numero}.",
+            nota.Id, factura.OrdenId, factura.Id, nota.Serie, nota.NumeroDocumento);
+
+        return nota;
+    }
+
+    /// <summary>
+    /// Arma y agrega una NOTA_CREDITO sobre <paramref name="documentoOriginal" /> con las
+    /// lineas devueltas (precio, IVA y descripcion de la factura original) y el total
+    /// indicado. Consume un correlativo. No guarda.
+    /// </summary>
+    private async Task<DocumentoFiscal> GenerarNotaCreditoAsync(
+        DocumentoFiscal documentoOriginal,
+        string transactionId,
+        IReadOnlyList<(string Sku, int Cantidad)> lineasDevueltas,
+        decimal total,
+        DateTime ahora,
+        CancellationToken cancelacion)
+    {
         var lineas = new List<DocumentoFiscalLinea>();
         var lineasXml = new List<DatosXmlLinea>();
 
-        for (int i = 0; i < datos.Lineas.Count; i++)
+        for (int i = 0; i < lineasDevueltas.Count; i++)
         {
-            var lineaDevolucion = datos.Lineas[i];
+            var lineaDevolucion = lineasDevueltas[i];
             var lineaOriginal = documentoOriginal.Lineas
                 .FirstOrDefault(l => l.Sku == lineaDevolucion.Sku);
 
@@ -228,7 +325,7 @@ public sealed class ServicioFacturacion
         var numeroDocumento = correlativo.ToString("D8", System.Globalization.CultureInfo.InvariantCulture);
 
         var xml = _generadorXml.Generar(new DatosXmlFiscal(
-            datos.OrdenOriginalId,
+            documentoOriginal.OrdenId,
             TipoDocumentoFiscal.NOTA_CREDITO,
             _opciones.Serie,
             numeroDocumento,
@@ -239,12 +336,12 @@ public sealed class ServicioFacturacion
             documentoOriginal.Moneda,
             subtotalLineas,
             impuestosLineas,
-            montoReembolso,
+            total,
             ahora,
             lineasXml));
 
         var documento = new DocumentoFiscal(
-            datos.OrdenOriginalId,
+            documentoOriginal.OrdenId,
             transactionId,
             TipoDocumentoFiscal.NOTA_CREDITO,
             documentoOriginal.Id.ToString(),
@@ -255,7 +352,7 @@ public sealed class ServicioFacturacion
             documentoOriginal.Moneda,
             subtotalLineas,
             impuestosLineas,
-            montoReembolso,
+            total,
             _opciones.Serie,
             correlativo,
             xml,
@@ -263,10 +360,6 @@ public sealed class ServicioFacturacion
             ahora);
 
         _contexto.DocumentosFiscales.Add(documento);
-
-        _logger.LogInformation(
-            "NOTA_CREDITO {DocumentoId} creada para devolucion {DevolucionId}, orden {OrdenOriginalId}, serie {Serie} numero {Numero}.",
-            documento.Id, datos.DevolucionId, datos.OrdenOriginalId, documento.Serie, documento.NumeroDocumento);
 
         return documento;
     }
@@ -389,6 +482,15 @@ public sealed class ServicioFacturacion
             _logger.LogInformation(
                 "Documento fiscal {DocumentoId} certificado por la SAT: autorizacion {Autorizacion}.",
                 documento.Id, documento.NumeroAutorizacion);
+
+            // La orden se cancelo con la certificacion en curso: ahora que la factura
+            // existe ante la SAT se emite su nota de credito por el total, en la misma
+            // transaccion.
+            if (documento.RequiereNotaCreditoCancelacion)
+            {
+                await GenerarNotaCreditoCancelacionAsync(documento, ahora, cancelacion);
+            }
+
             return;
         }
 

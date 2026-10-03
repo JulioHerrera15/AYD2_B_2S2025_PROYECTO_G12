@@ -13,9 +13,9 @@ using SgoLogic.Ordenes.Api.Application.Ordenes;
 namespace SgoLogic.Ordenes.Api.Consumers;
 
 /// <summary>
-/// Consume la cola <c>ordenes.credito</c> (bindings a <c>credito.evaluacion.aprobada</c>
-/// y <c>credito.evaluacion.rechazada</c>) y avanza la ruta de credito de la saga con
-/// <see cref="ManejadorEventosCredito" />. Mismo patron que
+/// Consume la cola <c>ordenes.credito</c> (bindings a <c>credito.evaluacion.aprobada</c>,
+/// <c>credito.evaluacion.rechazada</c> y <c>credito.devolucion.aplicada</c>) y avanza la
+/// ruta de credito de la saga con <see cref="ManejadorEventosCredito" />. Mismo patron que
 /// <see cref="PagosEventosConsumidor" />: cola quorum con dead letter, deduplicacion
 /// por eventId en <c>ordenes.mensaje_procesado</c> y correlacion via
 /// <see cref="EventContext" />.
@@ -31,7 +31,8 @@ public sealed class CreditoEventosConsumidor : BackgroundService
     private static readonly IReadOnlyCollection<BindingCola> BindingsCola = new[]
     {
         new BindingCola(TopologiaMensajeria.ExchangeEventos, CreditoAprobado.RoutingKey),
-        new BindingCola(TopologiaMensajeria.ExchangeEventos, CreditoRechazado.RoutingKey)
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, CreditoRechazado.RoutingKey),
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, DevolucionCreditoAplicada.RoutingKey)
     };
 
     private readonly IServiceScopeFactory _scopeFactory;
@@ -139,6 +140,13 @@ public sealed class CreditoEventosConsumidor : BackgroundService
                 return new EventoCreditoRecibido(
                     sobre.EventId, sobre.TransactionId, sobre.EventType, datos.OrdenId,
                     CodigoMotivo: datos.CodigoMotivo, MensajeCliente: datos.MensajeCliente);
+            }
+
+            case DevolucionCreditoAplicada.EventType:
+            {
+                var datos = Leer<DevolucionCreditoAplicadaData>(sobre.Data);
+                return new EventoCreditoRecibido(
+                    sobre.EventId, sobre.TransactionId, sobre.EventType, datos.OrdenOriginalId, DevolucionId: datos.DevolucionId);
             }
 
             default:

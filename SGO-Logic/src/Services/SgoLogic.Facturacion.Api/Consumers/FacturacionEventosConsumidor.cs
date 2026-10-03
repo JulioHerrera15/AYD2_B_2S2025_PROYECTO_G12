@@ -17,9 +17,9 @@ namespace SgoLogic.Facturacion.Api.Consumers;
 
 /// <summary>
 /// Consume la cola <c>facturacion.ordenes</c> (bindings a
-/// <c>ordenes.fiscal.certificacion-solicitada</c> y
-/// <c>ordenes.devolucion.registrada</c>) y genera el documento fiscal
-/// correspondiente (FACTURA o NOTA_CREDITO).
+/// <c>ordenes.fiscal.certificacion-solicitada</c>,
+/// <c>ordenes.devolucion.registrada</c> y <c>ordenes.orden.cancelada</c>) y genera el
+/// documento fiscal correspondiente (FACTURA o NOTA_CREDITO).
 ///
 /// No usa <c>EventConsumerBase</c> porque esta cola recibe multiples <c>data</c>
 /// distintos sobre un solo binding-set y la clase base esta tipada a un unico
@@ -35,7 +35,8 @@ public sealed class FacturacionEventosConsumidor : BackgroundService
     private static readonly IReadOnlyCollection<BindingCola> BindingsCola = new[]
     {
         new BindingCola(TopologiaMensajeria.ExchangeEventos, CertificacionFiscalSolicitada.RoutingKey),
-        new BindingCola(TopologiaMensajeria.ExchangeEventos, DevolucionRegistrada.RoutingKey)
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, DevolucionRegistrada.RoutingKey),
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, OrdenCancelada.RoutingKey)
     };
 
     private readonly IServiceScopeFactory _scopeFactory;
@@ -121,6 +122,10 @@ public sealed class FacturacionEventosConsumidor : BackgroundService
                     await ProcesarDevolucion(sobre, servicio, ahora, cancelacion);
                     break;
 
+                case OrdenCancelada.EventType:
+                    await ProcesarCancelacion(sobre, servicio, ahora, cancelacion);
+                    break;
+
                 default:
                     _logger.LogWarning(
                         "Tipo de evento desconocido {EventType} en {Cola}; se hace ack.",
@@ -175,5 +180,17 @@ public sealed class FacturacionEventosConsumidor : BackgroundService
             ?? throw new InvalidOperationException("El data del evento DevolucionRegistrada es invalido.");
 
         await servicio.CrearNotaCreditoAsync(datos, sobre.TransactionId, ahora, cancelacion);
+    }
+
+    private static async Task ProcesarCancelacion(
+        IntegrationEvent<JsonElement> sobre,
+        ServicioFacturacion servicio,
+        DateTime ahora,
+        CancellationToken cancelacion)
+    {
+        var datos = sobre.Data.Deserialize<OrdenCanceladaData>(SgoJsonSerializerOptions.Default)
+            ?? throw new InvalidOperationException("El data del evento OrdenCancelada es invalido.");
+
+        await servicio.ProcesarCancelacionOrdenAsync(datos, ahora, cancelacion);
     }
 }

@@ -420,6 +420,14 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
                         .HasColumnType("character varying(40)")
                         .HasColumnName("estado");
 
+                    b.Property<string>("EstadoReembolso")
+                        .IsRequired()
+                        .ValueGeneratedOnAdd()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasDefaultValue("NO_APLICA")
+                        .HasColumnName("estado_reembolso");
+
                     b.Property<decimal>("Impuestos")
                         .HasPrecision(18, 2)
                         .HasColumnType("numeric(18,2)")
@@ -461,6 +469,10 @@ namespace SgoLogic.Ordenes.Api.Infrastructure.Persistencia.Migraciones
                         .HasColumnType("character varying(64)")
                         .HasDefaultValue("CF")
                         .HasColumnName("receptor_cui");
+
+                    b.Property<DateTime?>("ReembolsoActualizadoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reembolso_actualizado_en");
 
                     b.Property<string>("ReservaId")
                         .HasMaxLength(128)

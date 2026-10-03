@@ -159,6 +159,19 @@ public sealed class DocumentoFiscal
 
     public DateTime? CertificadoEn { get; private set; }
 
+    /// <summary>
+    /// Solo FACTURA: la orden se cancelo. Si la factura ya estaba certificada se genero en
+    /// ese momento su nota de credito por el total; si no, se genera en cuanto se certifique.
+    /// </summary>
+    public DateTime? CancelacionOrdenEn { get; private set; }
+
+    /// <summary>Solo FACTURA: nota de credito por cancelacion ya generada (idempotencia).</summary>
+    public Guid? NotaCreditoCancelacionId { get; private set; }
+
+    /// <summary>La orden de esta factura se cancelo y aun falta su nota de credito.</summary>
+    public bool RequiereNotaCreditoCancelacion =>
+        TipoDocumento == TipoDocumentoFiscal.FACTURA && CancelacionOrdenEn is not null && NotaCreditoCancelacionId is null;
+
     public IReadOnlyList<DocumentoFiscalLinea> Lineas => _lineas.AsReadOnly();
 
     /// <summary>Reserva el siguiente numero de secuencia para un evento que se va a encolar.</summary>
@@ -223,6 +236,27 @@ public sealed class DocumentoFiscal
         ProximoIntentoEn = null;
         CertificadoEn = momento;
         ActualizadoEn = momento;
+    }
+
+    /// <summary>Registra que la orden de esta factura se cancelo. Devuelve false si ya estaba registrado.</summary>
+    public bool MarcarCancelacionOrden(DateTime ahora)
+    {
+        if (CancelacionOrdenEn is not null)
+        {
+            return false;
+        }
+
+        var momento = ahora.ToUniversalTime();
+        CancelacionOrdenEn = momento;
+        ActualizadoEn = momento;
+        return true;
+    }
+
+    /// <summary>Asocia la nota de credito generada por la cancelacion de la orden.</summary>
+    public void RegistrarNotaCreditoCancelacion(Guid notaCreditoId, DateTime ahora)
+    {
+        NotaCreditoCancelacionId = notaCreditoId;
+        ActualizadoEn = ahora.ToUniversalTime();
     }
 
     /// <summary>

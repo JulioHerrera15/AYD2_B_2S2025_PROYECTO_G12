@@ -76,6 +76,11 @@ public sealed class ManejadorEventosPagos
             return await ManejarReembolsoAsync(evento, cancelacion);
         }
 
+        if (EsEventoReembolsoCancelacion(evento.TipoEvento))
+        {
+            return await ManejarReembolsoCancelacionAsync(evento, cancelacion);
+        }
+
         if (!TryMapearDestino(evento.TipoEvento, out var estadoDestino, out var esCompensacion, out var motivoLiberacion))
         {
             _logger.LogWarning(
@@ -220,8 +225,51 @@ public sealed class ManejadorEventosPagos
         return ResultadoEventoPago.Aplicado;
     }
 
+    /// <summary>
+    /// Resultado del reembolso de una orden cancelada (ReembolsoCancelacionAplicado o
+    /// ReembolsoCancelacionFallido): solo actualiza el estado del reembolso de la orden,
+    /// sin transicion ni eventos. Una orden inexistente se confirma sin error.
+    /// </summary>
+    private async Task<ResultadoEventoPago> ManejarReembolsoCancelacionAsync(
+        EventoPagoRecibido evento,
+        CancellationToken cancelacion)
+    {
+        _registro.Registrar(evento.MessageId, evento.TipoEvento);
+
+        var orden = await _ordenes.ObtenerPorIdAsync(evento.OrdenId, cancelacion);
+        if (orden is null)
+        {
+            _logger.LogWarning(
+                "{TipoEvento} para la orden {OrdenId} no encontrada ({MessageId}); se hace ack.",
+                evento.TipoEvento,
+                evento.OrdenId,
+                evento.MessageId);
+            await _unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
+            return ResultadoEventoPago.Ignorado;
+        }
+
+        var aplicado = evento.TipoEvento == ReembolsoCancelacionAplicado.EventType;
+        var cambio = orden.RegistrarResultadoReembolso(aplicado, DateTime.UtcNow);
+        await _unidadDeTrabajo.GuardarCambiosAsync(cancelacion);
+
+        if (aplicado)
+        {
+            _logger.LogInformation("Reembolso por cancelacion de la orden {OrdenId} aplicado.", orden.Id);
+        }
+        else
+        {
+            _logger.LogWarning(
+                "Reembolso por cancelacion de la orden {OrdenId} no se pudo completar: {Motivo}.", orden.Id, evento.Motivo);
+        }
+
+        return cambio ? ResultadoEventoPago.Aplicado : ResultadoEventoPago.Ignorado;
+    }
+
     private static bool EsEventoReembolso(string tipoEvento) =>
         tipoEvento is ReembolsoAplicado.EventType or ReembolsoFallido.EventType;
+
+    private static bool EsEventoReembolsoCancelacion(string tipoEvento) =>
+        tipoEvento is ReembolsoCancelacionAplicado.EventType or ReembolsoCancelacionFallido.EventType;
 
     private static bool TryMapearDestino(
         string tipoEvento,

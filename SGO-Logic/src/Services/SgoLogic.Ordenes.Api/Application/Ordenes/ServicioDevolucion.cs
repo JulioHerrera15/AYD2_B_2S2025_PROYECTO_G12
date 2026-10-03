@@ -178,7 +178,10 @@ public sealed class ServicioDevolucion
                 PagoOriginalId: devolucion.PagoOriginalId,
                 DocumentoFiscalOriginalId: devolucion.DocumentoFiscalOriginalId,
                 RegistradaPor: devolucion.RegistradaPor,
-                RegistradaEn: devolucion.RegistradaEn));
+                RegistradaEn: devolucion.RegistradaEn,
+                // Con CREDITO la devolucion la aplica Credito (baja la deuda) y Pagos la
+                // ignora; con cualquier otro medio sigue el reembolso de siempre.
+                MedioPago: orden.MedioPago));
 
         await _servicioConfirmacion.AplicarTransicionAsync(
             solicitud.OrdenId,
