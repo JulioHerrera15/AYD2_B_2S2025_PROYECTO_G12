@@ -4,8 +4,9 @@
     var despacho = ViewBag.Despacho as SgoLogic.Web.Services.DespachoOrdenModel;
     var ordenId = ViewBag.OrdenId as string ?? Model?.OrdenId ?? "";
     var total = Model?.Total ?? 0m;
-    var baseImponible = Math.Round(total / 1.12m, 2);
-    var iva = total - baseImponible;
+    // Mismo desglose que hace Ordenes: el total ya incluye IVA.
+    var iva = SgoLogic.Web.Services.IvaIncluido.De(total);
+    var baseImponible = total - iva;
     var fechaEmision = FechaHelper.Formatear(Model?.CreadaEn ?? Model?.ActualizadaEn ?? DateTime.UtcNow);
 }
 

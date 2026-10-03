@@ -127,8 +127,8 @@
                                 <th class="py-2.5 px-3">Descripción</th>
                                 <th class="py-2.5 px-3 text-center">Cant.</th>
                                 <th class="py-2.5 px-3 text-right">Precio unitario</th>
-                                <th class="py-2.5 px-3 text-right">IVA</th>
-                                <th class="py-2.5 px-3 text-right">Subtotal</th>
+                                <th class="py-2.5 px-3 text-right">IVA incluido</th>
+                                <th class="py-2.5 px-3 text-right">Importe</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-border-subtle/50">
@@ -152,7 +152,7 @@
 
                 <div class="mt-5 ml-auto max-w-xs space-y-1.5 text-xs">
                     <div class="flex justify-between text-text-muted">
-                        <span>Subtotal</span>
+                        <span>Base sin IVA</span>
                         <span>@moneda @Model.Subtotal.ToString("N2")</span>
                     </div>
                     <div class="flex justify-between text-text-muted">

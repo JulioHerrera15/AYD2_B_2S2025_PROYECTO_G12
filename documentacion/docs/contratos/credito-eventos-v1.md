@@ -4,7 +4,7 @@
 **Curso:** Análisis y Diseño de Sistemas 2, Sección B
 **Contexto:** Crédito ("Compra ahora, paga en 30 días")
 **Servicio:** `credito-api` (puerto 8099 en el host, base `sgo_credito` en `db-finanzas`, esquema `credito`)
-**Estado:** bloques 1 y 2 de 4 (perfil, política, oferta, "Mi crédito" y evaluación dentro de la saga)
+**Estado:** bloques 1, 2 y 3 de 4 (perfil, política, oferta, "Mi crédito", evaluación dentro de la saga y cobranza)
 **Fecha:** 2026-10-02
 **Depende de:** `sgo-eventos-envelope-v1.md`
 
@@ -24,8 +24,18 @@ cuenta por cobrar a 30 días) o rechaza, y anula el cargo si la orden se cancela
 Estados, transiciones y timeout del lado de Órdenes: `ordenes-eventos-v1.md`,
 secciones 2.3 y 7.13.
 
-Fuera de estos bloques: el pago de la cuenta por cobrar (abono), el vencimiento
-(`PAGADA`, `VENCIDA`) y el bloqueo de líneas (`BLOQUEADA` existe pero no se usa).
+**Bloque 3 (cobranza).** El cliente paga sus cuentas por cobrar desde "Mi
+crédito", total o por partes (abonos). Crédito registra el abono y pide el cobro
+a Pagos por evento (`CobroAbonoCreditoSolicitado`); nunca llama a PayKlik ni a
+Pagos por HTTP. Pagos cobra con la tarjeta tokenizada del cliente y responde con
+`AbonoCreditoCobrado`, `AbonoCreditoRechazado` o `AbonoCreditoPendiente`. Un
+worker envía recordatorios antes del vencimiento y marca las cuentas vencidas,
+lo que pone la línea en pausa (`BLOQUEADA`) hasta que el cliente se ponga al día.
+No hay intereses ni recargos.
+
+Fuera de estos bloques (bloque 4): devoluciones de órdenes pagadas a crédito,
+reembolsos de abonos y saldo a favor. Solo existe el estado de abono
+`REEMBOLSO_PENDIENTE` para dejarlo registrado.
 
 El cliente se identifica siempre por su **email en minúsculas**, el mismo
 identificador que usan Órdenes y Pagos.
@@ -182,6 +192,107 @@ Lo consume Órdenes: `RECHAZADA` como compensación, con `LiberacionReservaSolic
 
 Hoy solo lo registra Auditoría.
 
+### 2.7 `CobroAbonoCreditoSolicitado` (lo publica Crédito, lo consume Pagos)
+
+| Campo del envelope | Valor |
+|---|---|
+| `eventType` | `CobroAbonoCreditoSolicitado` |
+| `routingKey` | `credito.abono.cobro-solicitado` |
+| `aggregateType` | `AbonoCredito` |
+| `aggregateId` | `abonoId` |
+| `source` | `credito` |
+
+| Campo de `data` | Tipo | Descripción |
+|---|---|---|
+| `abonoId` | string | Id del abono (32 hex). Estable entre reintentos. |
+| `referencia` | string | `ABO-{yyyy}-{6 dígitos}`; Pagos la usa como referencia del cargo. |
+| `clienteId` | string | Email en minúsculas. |
+| `moneda` | string | `GTQ`. |
+| `monto` | decimal | Mayor que 0 y no mayor que el saldo de la cuenta. |
+| `tokenMedioPago` | string | Token de la bóveda de Pagos, del mismo cliente. Nunca PAN ni CVV. |
+| `intentoNumero` | int | 1 al crear; sube en 1 con cada reintento del mismo abono. |
+| `solicitadoEn` | fecha | |
+
+Cola en Pagos: `pagos.credito`.
+
+### 2.8 Resultados del cobro (los publica Pagos, los consume Crédito)
+
+`AbonoCreditoCobrado` (`pagos.abono-credito.cobrado`), `AbonoCreditoRechazado`
+(`pagos.abono-credito.rechazado`) y `AbonoCreditoPendiente`
+(`pagos.abono-credito.pendiente`). Detalle de campos en `pagos-eventos-v1.md`,
+sección 7.7. Cola en Crédito: `credito.pagos`, idempotente por `eventId` y,
+además, por `abonoId`: un resultado sobre un abono que ya está en estado final
+no cambia nada.
+
+| Resultado | Efecto en Crédito |
+|---|---|
+| Cobrado | Abono `APLICADO`; resta el monto del saldo de la cuenta y del `saldoUtilizado` de la línea; emite `AbonoCreditoAplicado`. Con saldo 0, la cuenta pasa a `PAGADA` (`pagadaEn`, `pagoPuntual = pagadaEn <= venceEn`), emite `CuentaCreditoPagada` y recalcula el perfil. Si ya no quedan cuentas `VENCIDA` con saldo, la línea sale de la pausa. |
+| Cobrado con la cuenta `ANULADA` | Abono `REEMBOLSO_PENDIENTE`; no toca la línea (la anulación ya liberó el cupo). La devolución del dinero es del bloque 4. |
+| Rechazado | Abono `RECHAZADO`. Nada más cambia. |
+| Pendiente | Abono `PENDIENTE`. El cliente puede reintentar el mismo abono (3.6). |
+
+### 2.9 `AbonoCreditoAplicado`
+
+| Campo del envelope | Valor |
+|---|---|
+| `eventType` | `AbonoCreditoAplicado` |
+| `routingKey` | `credito.abono.aplicado` |
+| `aggregateType` | `AbonoCredito` |
+| `aggregateId` | `abonoId` |
+
+| Campo de `data` | Tipo | Descripción |
+|---|---|---|
+| `abonoId` | string | |
+| `clienteId` | string | |
+| `cuentaId` | string | Id de la cuenta por cobrar (32 hex). |
+| `ordenId` | string | |
+| `monto` | decimal | |
+| `moneda` | string | |
+| `saldoPendienteCuenta` | decimal | Saldo de la cuenta después del abono. |
+| `disponibleLinea` | decimal | Disponible de la línea después del abono. |
+| `aplicadoEn` | fecha | |
+
+### 2.10 `CuentaCreditoPagada`
+
+| Campo del envelope | Valor |
+|---|---|
+| `eventType` | `CuentaCreditoPagada` |
+| `routingKey` | `credito.cuenta.pagada` |
+| `aggregateType` | `CuentaPorCobrar` |
+| `aggregateId` | `cuentaId` |
+
+`data`: `cuentaId`, `ordenId`, `clienteId`, `pagadaEn` y `puntual` (bool,
+`pagadaEn <= venceEn`).
+
+### 2.11 `CuentaCreditoPorVencer`
+
+Mismo envelope que 2.10 con `routingKey` `credito.cuenta.por-vencer`. Se emite una
+sola vez por cuenta (`recordatorio_enviado_en`), cuando una cuenta `VIGENTE` con
+saldo vence dentro de `Credito:Cobranza:DiasRecordatorio` días.
+
+`data`: `cuentaId`, `ordenId`, `numeroOrden`, `clienteId`, `saldoPendiente`,
+`moneda`, `venceEn` y `diasRestantes`.
+
+### 2.12 `CuentaCreditoVencida`
+
+Mismo envelope que 2.10 con `routingKey` `credito.cuenta.vencida`. Se emite al
+pasar una cuenta `VIGENTE` con saldo a `VENCIDA` (una sola vez).
+
+`data`: `cuentaId`, `ordenId`, `numeroOrden`, `clienteId`, `saldoPendiente`,
+`moneda`, `venceEn` y `vencidaEn`.
+
+### 2.13 Bindings del bloque 3
+
+| Cola | Routing keys |
+|---|---|
+| `pagos.credito` | `credito.abono.cobro-solicitado` |
+| `credito.pagos` | `pagos.abono-credito.cobrado`, `pagos.abono-credito.rechazado`, `pagos.abono-credito.pendiente` |
+
+Ninguna cola con comodín recibe estos eventos salvo la de Auditoría (`#`). En
+particular, Órdenes no escucha `pagos.abono-credito.*`: un abono nunca emite
+`PagoAplicado`, `PagoRechazado` ni `PagoPendiente`. `AbonoCreditoAplicado` y los
+tres eventos de cuenta hoy solo los registra Auditoría.
+
 ## 3. Endpoints
 
 ### 3.1 `GET /api/credito/elegibilidad?monto={decimal opcional}`
@@ -217,7 +328,7 @@ Respuesta 200 (`OfertaCreditoDto`, sin puntaje):
 | `CUPO_INSUFICIENTE` | Elegible y línea activa, pero el disponible es menor que el monto. |
 | `NO_ELEGIBLE` | Hay perfil y no es elegible; `codigoMotivo` dice por qué. |
 | `SIN_HISTORIAL` | No hay perfil del cliente. |
-| `LINEA_BLOQUEADA` | Reservado para un bloque posterior. |
+| `LINEA_BLOQUEADA` | La línea está en pausa por una compra vencida sin pagar (bloque 3). Se revisa antes que la elegibilidad del perfil; `ofrecer = false`. |
 
 `titulo`, `mensaje` y `recomendacion` salen de `CatalogoMensajesCredito`: lenguaje
 llano, sin códigos internos, sin hablar de puntaje.
@@ -234,6 +345,18 @@ puntaje): `estado`, `nivel`, `etiquetaNivel`, `titulo`, `mensaje`,
 pagar", "Pagada", "Vencida", "Anulada"). Primero las vigentes, de la más próxima
 a vencer; después el resto, de la más reciente. `saldoUtilizado` y `disponible`
 son reales: suben al aprobar y bajan al anular.
+
+**Bloque 3.** Se agregan `totalPorPagar` (suma de saldos `VIGENTE` y `VENCIDA`),
+`proximoVencimiento` (el `venceEn` más próximo con saldo, o null) y `avisos[]`
+(`tipo`, `titulo`, `mensaje`, `recomendacion`, `cuentaId`), primero los más
+urgentes: `LINEA_EN_PAUSA`, `VENCIDA` (una por compra vencida) y `POR_VENCER`
+(compras que vencen dentro de `DiasRecordatorio`). `tipo` solo sirve para dar
+estilo; la Web nunca lo muestra. Cada compra agrega `cuentaId`, `puedePagar`
+(cuenta `VIGENTE` o `VENCIDA` con saldo y sin abono en curso), `abonoEnCursoId`,
+`abonoEnCursoPuedeReintentar` y `abonos[]` (`abonoId`, `referencia`, `fecha`,
+`monto`, `tarjeta` como "Visa terminada en 4242", `estado`, `etiquetaEstado`).
+`etiquetaEstado` de la compra: "Por pagar", "Vence pronto", "Vencida", "Pagada"
+o "Anulada". Primero las pagables, de la más próxima a vencer.
 
 Los cuatro factores para el cliente agrupan los de la política: "Pagos a tiempo"
 (puntualidad), "Monto de tus compras" (monto), "Tiempo y frecuencia como cliente"
@@ -263,7 +386,66 @@ gateway). Borra todas las cuentas por cobrar y decisiones y deja el
 límites. Responde 200 con `cuentasBorradas`, `decisionesBorradas` y
 `lineasReiniciadas`. Para repetir pruebas y demos.
 
-## 4. Política `2026.10-v1`
+### 3.5 `POST /api/credito/abonos`
+
+Enrutado por el gateway con `RequireAuthenticatedUser`; el cliente sale del claim
+`email`. Cuerpo: `{ "cuentaId": "...", "monto": "200.00", "tokenMedioPago": "tok_..." }`.
+
+Respuesta 202 con `AbonoDto`: `id`, `referencia`, `cuentaId`, `estado`
+(`SOLICITADO`, `PENDIENTE`, `APLICADO`, `RECHAZADO`, `REEMBOLSO_PENDIENTE`),
+`enCurso`, `titulo`, `mensaje`, `recomendacion`, `monto`, `moneda`,
+`saldoPendienteCuenta` y `puedeReintentar`. Los textos salen de
+`CatalogoMensajesCredito`; la Web muestra esos y nunca `estado`.
+
+Errores (`ProblemDetails` con `codigo` y `detail` legible para el cliente):
+
+| Status | `codigo` | Cuándo |
+|---|---|---|
+| 404 | `cuenta_no_encontrada` | No existe o es de otro cliente (no se distingue). |
+| 409 | `abono_en_curso` | La cuenta ya tiene un abono `SOLICITADO` o `PENDIENTE`. Lo garantiza también el índice único parcial `ux_abono_credito_cuenta_en_curso`. |
+| 409 | `cuenta_no_pagable` | La cuenta está `PAGADA` o `ANULADA`. |
+| 422 | `monto_invalido` | Monto menor o igual a 0, mayor que el saldo, con más de dos decimales o menor que `MontoMinimoAbono` (10.00). Si el saldo es menor que el mínimo, solo se acepta el saldo completo. |
+| 422 | `token_requerido` | Falta `tokenMedioPago`. |
+
+El abono, la referencia y `CobroAbonoCreditoSolicitado` se guardan en una sola
+transacción.
+
+### 3.6 `GET /api/credito/abonos/{id}` y `POST /api/credito/abonos/{id}/reintentar`
+
+`GET` devuelve el `AbonoDto` (404 `abono_no_encontrado` si no existe o es de otro
+cliente). La Web lo consulta cada 2 s hasta que sale de `SOLICITADO`.
+
+`POST .../reintentar` con `{ "tokenMedioPago": "tok_..." }` (un token nuevo: los
+de tarjeta nueva son de un solo uso). Solo para abonos `PENDIENTE` (si no, 409
+`abono_no_reintentable`): vuelve a `SOLICITADO` con el **mismo** `abonoId`,
+`intentoNumero + 1`, y emite otra vez `CobroAbonoCreditoSolicitado`. Pagos reutiliza
+el mismo pago y la misma clave de idempotencia, así que PayKlik no cobra dos veces.
+
+### 3.7 `POST /interno/credito/demo/cuentas/{ordenId}/vencimiento`
+
+Mismas condiciones que 3.3. Cuerpo `{ "diasDesdeHoy": -1 }`: fija `venceEn` de la
+cuenta de la orden a hoy + `diasDesdeHoy` días (negativo = ya vencida) y limpia
+el recordatorio enviado. 404 si la orden no tiene cuenta.
+
+### 3.8 `POST /interno/credito/demo/procesar-vencimientos`
+
+Mismas condiciones que 3.3. Ejecuta una pasada del worker de vencimientos sin
+esperar el intervalo y responde 200 con `recordadas` y `vencidas`.
+
+`POST /interno/credito/demo/reiniciar` (3.4) además borra los abonos, desbloquea
+las líneas y recalcula los perfiles; responde también `abonosBorrados`.
+
+## 4. Política `2026.10-v2`
+
+**Cambio respecto a `2026.10-v1` (bloque 3).** La política considera el
+comportamiento propio del cliente con su crédito:
+
+- Las cuentas `PAGADA` a tiempo y tarde se suman a los pagos puntuales y tardíos
+  del ERP en el factor de puntualidad.
+- Una cuenta `VENCIDA` con saldo descarta con `DEUDA_VENCIDA`, inmediatamente
+  después de `SIN_HISTORIAL`.
+- Sin comportamiento propio (cero pagadas y cero vencidas) el resultado es
+  idéntico al de `v1`.
 
 Todos los números son configurables en `Credito:Politica` (`appsettings.json`);
 estos son los valores por defecto. Cambiarlos es una política nueva y debe ir con
@@ -274,10 +456,11 @@ otra `VersionPolitica`.
 Se evalúan en este orden; el primero que aplica define `codigoMotivo`:
 
 1. `SIN_HISTORIAL`: no hay historial del cliente.
-2. `INCIDENTE_GRAVE`: `incidentesGraves > 0`.
-3. `ANTIGUEDAD_INSUFICIENTE`: menos de 90 días desde `clienteDesde`.
-4. `DEVOLUCIONES_EXCESIVAS`: `devoluciones / comprasUltimos12Meses > 0.30`.
-5. `PUNTAJE_INSUFICIENTE`: puntaje menor que 60.
+2. `DEUDA_VENCIDA`: el cliente tiene una cuenta `VENCIDA` con saldo (v2).
+3. `INCIDENTE_GRAVE`: `incidentesGraves > 0`.
+4. `ANTIGUEDAD_INSUFICIENTE`: menos de 90 días desde `clienteDesde`.
+5. `DEVOLUCIONES_EXCESIVAS`: `devoluciones / comprasUltimos12Meses > 0.30`.
+6. `PUNTAJE_INSUFICIENTE`: puntaje menor que 60.
 
 Un cliente descartado queda `NO_CALIFICA`, con límite 0 y línea `INACTIVA`,
 aunque su puntaje sea alto.
@@ -288,7 +471,7 @@ Se calcula siempre, aunque haya descarte.
 
 | Factor | Máximo | Cálculo |
 |---|---|---|
-| Puntualidad | 40 | `40 * puntuales / (puntuales + tardíos)`; sin pagos registrados, 20. |
+| Puntualidad | 40 | `40 * puntuales / (puntuales + tardíos)`; sin pagos registrados, 20. En v2, puntuales y tardíos incluyen las cuentas propias pagadas a tiempo y tarde. |
 | Monto | 30 | `30 * min(monto12m / 12000, 1)`. |
 | Antigüedad | 8 | `8 * min(díasComoCliente / 730, 1)`. |
 | Frecuencia | 7 | `7 * min(compras12m / 12, 1)`. |
@@ -319,8 +502,8 @@ define `codigoMotivo`:
 | Código | Cuándo |
 |---|---|
 | `SIN_HISTORIAL` | El cliente no tiene perfil. |
-| Motivo del perfil | `INCIDENTE_GRAVE`, `ANTIGUEDAD_INSUFICIENTE`, `DEVOLUCIONES_EXCESIVAS` o `PUNTAJE_INSUFICIENTE` (sección 4.1). |
-| `LINEA_BLOQUEADA` | La línea está `BLOQUEADA` (reservado). |
+| Motivo del perfil | `DEUDA_VENCIDA`, `INCIDENTE_GRAVE`, `ANTIGUEDAD_INSUFICIENTE`, `DEVOLUCIONES_EXCESIVAS` o `PUNTAJE_INSUFICIENTE` (sección 4.1). |
+| `LINEA_BLOQUEADA` | La línea está `BLOQUEADA` (cuenta vencida sin pagar). Se revisa antes que el motivo del perfil. |
 | `CUPO_INSUFICIENTE` | Sin línea activa, o el disponible no cubre el monto. |
 | `ORDEN_CANCELADA` | La orden se canceló antes de que llegara la evaluación. |
 
@@ -338,9 +521,11 @@ superan el límite.
 
 Al consumir `OrdenCancelada` con `medioPago = CREDITO`:
 
-- Si hay cuenta `VIGENTE`: pasa a `ANULADA`, el saldo pendiente vuelve al
-  disponible de la línea y se emite `CargoCreditoAnulado`. Anular dos veces no
-  libera dos veces.
+- Si hay cuenta `VIGENTE` o `VENCIDA`: pasa a `ANULADA`, el saldo pendiente vuelve
+  al disponible de la línea y se emite `CargoCreditoAnulado` (`monto` = saldo
+  liberado). Anular dos veces no libera dos veces. Los abonos `APLICADO` de esa
+  cuenta pasan a `REEMBOLSO_PENDIENTE` (lo ya pagado no se libera otra vez; su
+  devolución es del bloque 4) y se reevalúa la pausa de la línea.
 - Si no hay decisión todavía (la orden se canceló o rechazó antes de que Crédito
   la evaluara): se guarda una decisión `ANULADA_SIN_CARGO`. Una evaluación que
   llegue después se rechaza con `ORDEN_CANCELADA` sin apartar cupo, y la decisión
@@ -359,6 +544,40 @@ timeout (anula y devuelve), y el saldo termina igual que antes.
 | `credito.decision_credito` | `id`; `orden_id` único | `cliente_id`, `monto`, `resultado` (`APROBADA`, `RECHAZADA`, `ANULADA_SIN_CARGO`), `codigo_motivo`, `puntaje`, `nivel`, `limite_aprobado`, `disponible_antes`, `version_politica`, `decidido_en`. Sustento auditable de cada solicitud. |
 
 Migración `CuentasPorCobrarYDecisiones`.
+
+### 4.7 Vencimientos y recordatorios (bloque 3)
+
+`VencimientosCreditoWorker` corre cada `Credito:Cobranza:IntervaloSegundos` (60) y
+delega en `ServicioVencimientos`:
+
+1. **Recordatorio.** Cuentas `VIGENTE` con saldo, sin recordatorio y que vencen
+   dentro de `DiasRecordatorio` (3) días: guarda `recordatorio_enviado_en` y emite
+   `CuentaCreditoPorVencer`. Una sola vez por cuenta.
+2. **Vencimiento.** Cuentas `VIGENTE` con saldo y `venceEn` ya pasado: pasan a
+   `VENCIDA`, la línea del cliente pasa a `BLOQUEADA`, se recalcula el perfil
+   (`DEUDA_VENCIDA`) y se emite `CuentaCreditoVencida`. Una sola vez por cuenta.
+
+Sin intereses ni recargos. Pagar todas las cuentas vencidas devuelve la línea a
+`ACTIVA` (o `INACTIVA` si el límite es 0) y recalcula el perfil; ese pago cuenta
+como tardío.
+
+### 4.8 Estados
+
+| Entidad | Estados |
+|---|---|
+| Cuenta por cobrar | `VIGENTE` -> `PAGADA` (saldo 0), `VIGENTE` -> `VENCIDA` -> `PAGADA`, `VIGENTE`/`VENCIDA` -> `ANULADA`. |
+| Abono | `SOLICITADO` -> `APLICADO` / `RECHAZADO` / `PENDIENTE`; `PENDIENTE` -> `SOLICITADO` (reintento); `SOLICITADO`/`PENDIENTE`/`APLICADO` -> `REEMBOLSO_PENDIENTE` (cuenta anulada). |
+| Línea | `ACTIVA` <-> `BLOQUEADA` mientras haya cuentas vencidas con saldo. |
+
+### 4.9 Tablas del bloque 3
+
+| Tabla | Clave | Contenido |
+|---|---|---|
+| `credito.abono_credito` | `id`; `referencia` única; índice único parcial `ux_abono_credito_cuenta_en_curso` sobre `cuenta_id` con `estado IN ('SOLICITADO','PENDIENTE')` | `cuenta_id`, `cliente_id`, `monto`, `moneda`, `estado`, `intento_numero`, `autorizacion_id`, `ultimos_cuatro`, `marca`, `codigo_respuesta`, fechas y `version`. |
+| `credito.cuenta_por_cobrar` | | Nuevas columnas `pagada_en`, `pago_puntual`, `recordatorio_enviado_en`. |
+| Secuencia `credito.abono_correlativo` | | Correlativo de `ABO-{yyyy}-{6 dígitos}`. |
+
+Migración `Cobranza`.
 
 ## 5. Contrato para Integración ERP y mock ERP (pendiente, lo implementa su dueño)
 
@@ -449,15 +668,19 @@ clientes iniciales.
 |---|---|---|
 | `Credito:SembrarDemo` | `false` | `true` |
 | `Credito:EndpointsInternos` | `false` | `true` |
-| `Credito:Politica:*` | sección 4 | sin cambios |
+| `Credito:Politica:*` | sección 4 (`VersionPolitica` = `2026.10-v2`) | sin cambios |
+| `Credito:Cobranza:MontoMinimoAbono` | `10` | sin cambios |
+| `Credito:Cobranza:IntervaloSegundos` | `60` | sin cambios |
+| `Credito:Cobranza:DiasRecordatorio` | `3` | sin cambios |
 | `Auth:JwtSecret` | vacío (todo 401) | `${JWT_SECRET}` |
 | `Outbox:Source` | `credito` | `credito` |
 
-`Credito:EndpointsInternos` habilita los dos endpoints internos (3.3 y 3.4). En
+`Credito:EndpointsInternos` habilita los endpoints internos (3.3, 3.4, 3.7 y 3.8). En
 Órdenes, `Credito:TimeoutEvaluacionSegundos` (30) fija el timeout de la
 evaluación y `Auth:JwtSecret` la validación del JWT para órdenes a crédito.
 
 Métricas propias en `/metrics`: `credito_consultas_elegibilidad_total{estado}`,
 `credito_perfiles_recalculados_total`, `credito_evaluaciones_total{resultado}` y
-`credito_cargos_anulados_total`, además de las transversales de outbox y consumo.
+`credito_cargos_anulados_total`, `credito_abonos_total{estado}`,
+`credito_cuentas_vencidas_total` y `credito_recordatorios_total`, además de las transversales de outbox y consumo.
 Órdenes expone `ordenes_credito_timeouts_total`.
