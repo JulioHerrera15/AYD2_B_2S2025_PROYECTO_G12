@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Microsoft.Extensions.Options;
 using SgoLogic.BuildingBlocks.Messaging;
 using SgoLogic.BuildingBlocks.Outbox;
 using SgoLogic.Contracts.Enumeraciones;
@@ -35,6 +36,7 @@ public sealed class ServicioConfirmacionOrden
     private readonly PoliticaMediosPago _politicaMediosPago;
     private readonly IClienteCarrito _carrito;
     private readonly ICatalogoProductos _catalogo;
+    private readonly FiscalOptions _fiscal;
 
     public ServicioConfirmacionOrden(
         IRepositorioOrdenes ordenes,
@@ -43,8 +45,10 @@ public sealed class ServicioConfirmacionOrden
         IGeneradorCorrelativoOrden generadorCorrelativo,
         PoliticaMediosPago politicaMediosPago,
         IClienteCarrito carrito,
-        ICatalogoProductos catalogo)
+        ICatalogoProductos catalogo,
+        IOptions<FiscalOptions>? fiscal = null)
     {
+        _fiscal = fiscal?.Value ?? new FiscalOptions();
         _ordenes = ordenes;
         _outbox = outbox;
         _unidadDeTrabajo = unidadDeTrabajo;
@@ -135,6 +139,11 @@ public sealed class ServicioConfirmacionOrden
 
         var receptorCui = ResolverReceptorCui(solicitud.ReceptorCui);
 
+        // Los precios ya incluyen IVA: el total es la suma de las lineas y el IVA se
+        // desglosa de ese total en el servidor. solicitud.Impuestos se ignora (sigue en
+        // el contrato HTTP solo por compatibilidad con quien todavia lo manda).
+        var impuestos = CalculadoraIva.IvaIncluido(lineas.Sum(linea => linea.Subtotal), _fiscal.TasaIva);
+
         var correlativo = await _generadorCorrelativo.SiguienteAsync(cancelacion);
         var numeroOrden = correlativo.ToString("D6");
         var id = $"ORD-{DateTime.UtcNow:yyyy}-{numeroOrden}";
@@ -148,7 +157,7 @@ public sealed class ServicioConfirmacionOrden
             solicitud.Moneda,
             medioPago,
             lineas,
-            solicitud.Impuestos,
+            impuestos,
             solicitud.UbicacionSolicitadaId,
             receptorCui: receptorCui,
             direccionEntrega: solicitud.DireccionEntrega,
@@ -561,10 +570,7 @@ public sealed class ServicioConfirmacionOrden
                 Subtotal: orden.Subtotal,
                 Impuestos: orden.Impuestos,
                 Total: orden.Total,
-                Lineas: orden.Lineas
-                    .Select(linea => new CertificacionFiscalLineaData(
-                        linea.Sku, linea.Descripcion, linea.Cantidad, linea.PrecioUnitario, 0m))
-                    .ToList(),
+                Lineas: MapaEventosSagaOrden.LineasFiscales(orden),
                 SolicitadaEn: DateTime.UtcNow));
 
         await _unidadDeTrabajo.GuardarCambiosAsync(cancelacion);

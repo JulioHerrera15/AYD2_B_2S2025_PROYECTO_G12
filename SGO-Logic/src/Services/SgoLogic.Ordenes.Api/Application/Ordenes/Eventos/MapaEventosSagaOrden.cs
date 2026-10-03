@@ -187,11 +187,22 @@ public static class MapaEventosSagaOrden
                 Subtotal: orden.Subtotal,
                 Impuestos: orden.Impuestos,
                 Total: orden.Total,
-                Lineas: orden.Lineas
-                    .Select(linea => new CertificacionFiscalLineaData(
-                        linea.Sku, linea.Descripcion, linea.Cantidad, linea.PrecioUnitario, 0m))
-                    .ToList(),
+                Lineas: LineasFiscales(orden),
                 SolicitadaEn: transicion.CambiadoEn));
+    }
+
+    /// <summary>
+    /// Lineas de la factura con el IVA incluido desglosado por linea; la suma es
+    /// exactamente <see cref="Orden.Impuestos" />.
+    /// </summary>
+    public static IReadOnlyList<CertificacionFiscalLineaData> LineasFiscales(Orden orden)
+    {
+        var lineas = orden.Lineas.ToList();
+        var ivaPorLinea = CalculadoraIva.IvaPorLinea(lineas.Select(linea => linea.Subtotal).ToList(), orden.Impuestos);
+        return lineas
+            .Select((linea, indice) => new CertificacionFiscalLineaData(
+                linea.Sku, linea.Descripcion, linea.Cantidad, linea.PrecioUnitario, ivaPorLinea[indice]))
+            .ToList();
     }
 
     /// <summary>
