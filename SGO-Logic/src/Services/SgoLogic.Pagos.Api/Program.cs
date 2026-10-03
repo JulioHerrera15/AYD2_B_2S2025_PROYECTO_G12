@@ -88,6 +88,9 @@ builder.Services.AddScoped<ServicioCobro>();
 builder.Services.AddScoped<ServicioReembolso>();
 builder.Services.AddHostedService<PagosEventosConsumidor>();
 
+// Cobro de abonos a credito (cola pagos.credito): mismo ServicioCobro, otro flujo.
+builder.Services.AddHostedService<CreditoAbonosConsumidor>();
+
 var app = builder.Build();
 
 app.UseSgoDefaults();
