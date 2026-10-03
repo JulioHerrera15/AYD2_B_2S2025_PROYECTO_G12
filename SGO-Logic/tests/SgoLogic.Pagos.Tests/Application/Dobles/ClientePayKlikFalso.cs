@@ -114,11 +114,18 @@ public sealed class ClientePayKlikFalso : IClientePayKlik
 
     public Func<PeticionReembolsoPayKlik, Task<ResultadoPayKlik>>? ComportamientoReembolso { get; set; }
 
+    public List<PeticionReembolsoPayKlik> PeticionesReembolso { get; } = new();
+
+    public List<string> ClavesReembolso { get; } = new();
+
     public async Task<ResultadoPayKlik> ReembolsoAsync(
         PeticionReembolsoPayKlik peticion,
         string claveIdempotencia,
         CancellationToken cancelacion)
     {
+        PeticionesReembolso.Add(peticion);
+        ClavesReembolso.Add(claveIdempotencia);
+
         if (ComportamientoReembolso is not null)
         {
             return await ComportamientoReembolso(peticion);

@@ -267,8 +267,7 @@ public static class MapaEventosSagaOrden
 
         // Una orden a credito nunca cobra: no hay reembolso. Si llego a tener cargo,
         // lo anula Credito al consumir este mismo evento (medioPago = CREDITO).
-        var requiereReembolso = orden.MedioPago != MedioPago.CREDITO
-            && orden.Transiciones.Any(t => t.EstadoNuevo == EstadoOrden.PAGO_APLICADO);
+        var requiereReembolso = orden.RequiereReembolsoPorCancelacion;
 
         Encolar(
             outbox,

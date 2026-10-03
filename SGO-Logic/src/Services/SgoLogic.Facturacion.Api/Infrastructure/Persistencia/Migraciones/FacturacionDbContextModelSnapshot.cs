@@ -152,6 +152,10 @@ namespace SgoLogic.Facturacion.Api.Infrastructure.Persistencia.Migraciones
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("actualizado_en");
 
+                    b.Property<DateTime?>("CancelacionOrdenEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancelacion_orden_en");
+
                     b.Property<DateTime?>("CertificadoEn")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("certificado_en");
@@ -212,6 +216,10 @@ namespace SgoLogic.Facturacion.Api.Infrastructure.Persistencia.Migraciones
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)")
                         .HasColumnName("nombre_receptor");
+
+                    b.Property<Guid?>("NotaCreditoCancelacionId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("nota_credito_cancelacion_id");
 
                     b.Property<string>("NumeroAutorizacion")
                         .HasMaxLength(64)

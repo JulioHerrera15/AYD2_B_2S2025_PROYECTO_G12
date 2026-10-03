@@ -38,4 +38,21 @@ public static class MetricasCredito
     public static readonly Counter RecordatoriosTotal = Metrics.CreateCounter(
         "credito_recordatorios_total",
         "Recordatorios de cuenta por vencer emitidos (CuentaCreditoPorVencer).");
+
+    public static readonly Counter DevolucionesTotal = Metrics.CreateCounter(
+        "credito_devoluciones_total",
+        "Devoluciones de compras a credito aplicadas (descuento de la deuda y, si sobra, reembolso de abonos).");
+
+    public static readonly Counter ReembolsosSolicitadosTotal = Metrics.CreateCounter(
+        "credito_reembolsos_solicitados_total",
+        "Reembolsos de abonos pedidos a Pagos, por motivo (cancelacion o devolucion).",
+        new CounterConfiguration { LabelNames = new[] { "motivo" } });
+
+    public static readonly Counter ReembolsosAplicadosTotal = Metrics.CreateCounter(
+        "credito_reembolsos_aplicados_total",
+        "Reembolsos de abonos confirmados por Pagos.");
+
+    public static readonly Counter ReembolsosFallidosTotal = Metrics.CreateCounter(
+        "credito_reembolsos_fallidos_total",
+        "Reembolsos de abonos que Pagos no pudo completar; el abono queda para atencion manual.");
 }

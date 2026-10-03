@@ -145,9 +145,61 @@ public sealed class CuentaPorCobrar
         Version++;
     }
 
+    /// <summary>MotivoAnulacion de una cuenta que se anulo por devolucion total sin pagos.</summary>
+    public const string MotivoDevolucion = "DEVOLUCION";
+
+    /// <summary>Anulada por una devolucion total antes de cualquier pago.</summary>
+    public bool AnuladaPorDevolucion => Estado == EstadoCuentaPorCobrar.ANULADA && MotivoAnulacion == MotivoDevolucion;
+
+    /// <summary>
+    /// Devolucion de lo comprado: descuenta del saldo lo que alcance (minimo entre el monto
+    /// devuelto y el saldo) y devuelve lo descontado, que es lo que hay que liberar en la
+    /// linea; el resto ya lo habia pagado el cliente y se reembolsa aparte. Si el saldo
+    /// llega a 0 la cuenta se cierra: ANULADA con motivo DEVOLUCION si fue una devolucion
+    /// total sin pagos; si no, PAGADA sin marca de puntualidad (PagoPuntual null), para que
+    /// no cuente como pago puntual ni tardio. Una cuenta PAGADA o ANULADA no cambia y
+    /// devuelve 0.
+    /// </summary>
+    public decimal AplicarDevolucion(decimal monto, bool devolucionTotal, bool huboPagos, DateTime ahora)
+    {
+        if (monto <= 0m)
+        {
+            throw new ArgumentOutOfRangeException(nameof(monto), "El monto devuelto debe ser mayor que 0.");
+        }
+
+        if (!EsPagable)
+        {
+            return 0m;
+        }
+
+        var descontado = Math.Min(monto, SaldoPendiente);
+        SaldoPendiente -= descontado;
+        Version++;
+
+        if (SaldoPendiente > 0m)
+        {
+            return descontado;
+        }
+
+        if (devolucionTotal && !huboPagos)
+        {
+            Estado = EstadoCuentaPorCobrar.ANULADA;
+            AnuladaEn = ahora;
+            MotivoAnulacion = MotivoDevolucion;
+        }
+        else
+        {
+            Estado = EstadoCuentaPorCobrar.PAGADA;
+            PagadaEn = ahora;
+            PagoPuntual = null;
+        }
+
+        return descontado;
+    }
+
     /// <summary>
     /// Anula una cuenta con saldo (VIGENTE o VENCIDA) y devuelve el saldo pendiente
-    /// que hay que liberar en la linea; lo ya abonado no se toca (reembolso, bloque 4).
+    /// que hay que liberar en la linea; lo ya abonado no se toca (se reembolsa aparte).
     /// Devuelve 0 si ya estaba PAGADA o ANULADA (anular dos veces no libera dos veces).
     /// </summary>
     public decimal Anular(string motivo, DateTime ahora)

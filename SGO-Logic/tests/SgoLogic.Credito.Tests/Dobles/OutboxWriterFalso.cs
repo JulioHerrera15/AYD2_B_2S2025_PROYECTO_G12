@@ -19,6 +19,9 @@ public sealed class OutboxWriterFalso : IOutboxWriter
 
     public List<EventoEncolado> Eventos { get; } = new();
 
+    public IEnumerable<EventoEncolado> PorTipo(string eventType) =>
+        Eventos.Where(evento => evento.EventType == eventType);
+
     public void Encolar<TData>(
         string eventType,
         string aggregateType,

@@ -25,4 +25,7 @@ public sealed class CobranzaOptions
 
     /// <summary>Dias antes del vencimiento en que se emite el recordatorio (una sola vez).</summary>
     public int DiasRecordatorio { get; set; } = 3;
+
+    /// <summary>Cada cuanto se piden los reembolsos de abonos en REEMBOLSO_PENDIENTE sin solicitud.</summary>
+    public int IntervaloReembolsosSegundos { get; set; } = 60;
 }

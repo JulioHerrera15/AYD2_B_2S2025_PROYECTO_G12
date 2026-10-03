@@ -12,7 +12,7 @@ namespace SgoLogic.Credito.Api.Consumers;
 /// <summary>
 /// Consume la cola <c>credito.pagos</c>: el resultado del cobro de los abonos que
 /// publica Pagos (<c>pagos.abono-credito.cobrado</c>, <c>.rechazado</c> y
-/// <c>.pendiente</c>). Deduplica por eventId con EventConsumerBase y, ademas, el
+/// <c>.pendiente</c>) y el de su reembolso (<c>.reembolsado</c> y <c>.reembolso-fallido</c>). Deduplica por eventId con EventConsumerBase y, ademas, el
 /// servicio es idempotente por abonoId (un abono con resultado final no cambia).
 ///
 /// Como en <c>credito.ordenes</c>, el servicio guarda por su cuenta (reintenta ante
@@ -43,7 +43,9 @@ public sealed class PagosCreditoConsumidor : EventConsumerBase<CreditoDbContext,
     [
         new BindingCola(TopologiaMensajeria.ExchangeEventos, AbonoCreditoCobrado.RoutingKey),
         new BindingCola(TopologiaMensajeria.ExchangeEventos, AbonoCreditoRechazado.RoutingKey),
-        new BindingCola(TopologiaMensajeria.ExchangeEventos, AbonoCreditoPendiente.RoutingKey)
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, AbonoCreditoPendiente.RoutingKey),
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, AbonoCreditoReembolsado.RoutingKey),
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, ReembolsoAbonoCreditoFallido.RoutingKey)
     ];
 
     protected override async Task ManejarAsync(
@@ -65,6 +67,16 @@ public sealed class PagosCreditoConsumidor : EventConsumerBase<CreditoDbContext,
 
             case AbonoCreditoPendiente.EventType:
                 await servicio.PendienteAsync(Leer<AbonoCreditoPendienteData>(evento.Data), cancelacion);
+                break;
+
+            case AbonoCreditoReembolsado.EventType:
+                await servicios.GetRequiredService<ServicioReembolsosAbono>()
+                    .ReembolsadoAsync(Leer<AbonoCreditoReembolsadoData>(evento.Data), cancelacion);
+                break;
+
+            case ReembolsoAbonoCreditoFallido.EventType:
+                await servicios.GetRequiredService<ServicioReembolsosAbono>()
+                    .FallidoAsync(Leer<ReembolsoAbonoCreditoFallidoData>(evento.Data), cancelacion);
                 break;
 
             default:

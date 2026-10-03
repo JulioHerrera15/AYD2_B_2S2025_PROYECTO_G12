@@ -46,6 +46,17 @@ public sealed class ManejadorDocumentoFiscalCertificado
 
     public async Task ManejarAsync(DocumentoFiscalCertificadoData datos, CancellationToken cancelacion)
     {
+        // Una nota de credito (devolucion u orden cancelada) no mueve la saga ni toca los
+        // datos de la factura de la orden: solo se confirma el mensaje.
+        if (datos.TipoDocumento == TipoDocumentoFiscal.NOTA_CREDITO)
+        {
+            _logger.LogInformation(
+                "Nota de credito {DocumentoId} certificada para la orden {OrdenId}; no cambia la orden.",
+                datos.DocumentoFiscalId,
+                datos.OrdenId);
+            return;
+        }
+
         var orden = await _ordenes.ObtenerPorIdAsync(datos.OrdenId, cancelacion);
 
         if (orden is null)

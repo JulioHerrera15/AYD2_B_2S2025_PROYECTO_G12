@@ -87,6 +87,16 @@ public class EstadoController : Controller
         ViewBag.Despacho = despacho;
         ViewBag.TiendaOrigen = await ResolverTiendaOrigenAsync(orden, despacho);
 
+        // Reembolso a la tarjeta: se lee siempre de Ordenes (fuente de verdad), asi el
+        // banner aparece en cuanto se cancela aunque la vista de estado aun no lo refleje.
+        // Vista devuelve null si la orden no tiene reembolso.
+        ViewBag.Reembolso = ReembolsoOrden.Vista(await _gateway.ObtenerOrdenAsync(idLimpio));
+
+        if (orden.Estado is "CANCELADA" or "CANCELADA_RESERVA_VENCIDA" or "RECHAZADA" or "ENTREGADA" or "DEVOLUCION_EN_PROCESO" or "DEVUELTA")
+        {
+            ViewBag.NotasCredito = await _gateway.ObtenerNotasCreditoAsync(idLimpio);
+        }
+
         return View(orden);
     }
 
@@ -205,6 +215,9 @@ public class EstadoController : Controller
         var factura = await _gateway.ObtenerFacturaAsync(idLimpio);
 
         ViewBag.OrdenId = idLimpio;
+        ViewBag.NotasCredito = factura is null
+            ? new List<FacturaModel>()
+            : await _gateway.ObtenerNotasCreditoAsync(idLimpio);
         ViewBag.Orden = orden;
         ViewBag.Autenticado = autenticado;
         ViewBag.VistaCompleta = autenticado && PermisosHelper.PuedeVerOrden(orden, userEmail, userRole, jwt);

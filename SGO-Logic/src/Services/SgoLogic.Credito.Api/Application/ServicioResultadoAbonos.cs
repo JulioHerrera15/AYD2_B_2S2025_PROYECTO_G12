@@ -13,7 +13,7 @@ public enum ResultadoCobroAbono
     Rechazado,
     Pendiente,
 
-    /// <summary>Se cobro, pero la cuenta ya estaba anulada: queda para reembolso (bloque 4).</summary>
+    /// <summary>Se cobro, pero la cuenta ya estaba anulada: se pidio su reembolso a Pagos.</summary>
     ReembolsoPendiente,
 
     /// <summary>El abono ya tenia un resultado final o no existe: no se hizo nada.</summary>
@@ -105,10 +105,12 @@ public sealed class ServicioResultadoAbonos
         var cuenta = await _repositorio.ObtenerCuentaAsync(abono.CuentaId, cancelacion);
 
         // La cuenta se anulo (orden cancelada) mientras se cobraba: el dinero entro pero
-        // ya no hay deuda. No se toca la linea; el reembolso es del bloque 4.
+        // ya no hay deuda. No se toca la linea; se pide el reembolso completo del abono en
+        // la misma transaccion.
         if (cuenta is null || !cuenta.EsPagable || abono.Monto > cuenta.SaldoPendiente)
         {
             abono.MarcarReembolsoPendiente(datos.AutorizacionId, datos.UltimosCuatro, datos.Marca, ahora);
+            SolicitudesReembolsoAbono.SolicitarCompleto(_outbox, abono, cuenta, ahora);
             await _repositorio.GuardarCambiosAsync(cancelacion);
             MetricasCredito.AbonosTotal.WithLabels("reembolso_pendiente").Inc();
             _logger.LogWarning(

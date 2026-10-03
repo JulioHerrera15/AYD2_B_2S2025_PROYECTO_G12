@@ -31,6 +31,9 @@ public sealed class CreditoDbContext : DbContext
 
     public DbSet<AbonoCredito> Abonos => Set<AbonoCredito>();
 
+    /// <summary>Devoluciones y reembolsos confirmados de las cuentas por cobrar.</summary>
+    public DbSet<MovimientoCuenta> Movimientos => Set<MovimientoCuenta>();
+
     /// <summary>Secuencia de las referencias de abono (ABO-{yyyy}-{correlativo}).</summary>
     public const string SecuenciaAbonos = "abono_correlativo";
 

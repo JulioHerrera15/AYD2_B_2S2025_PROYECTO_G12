@@ -4,8 +4,8 @@
 **Curso:** Análisis y Diseño de Sistemas 2, Sección B
 **Contexto:** Crédito ("Compra ahora, paga en 30 días")
 **Servicio:** `credito-api` (puerto 8099 en el host, base `sgo_credito` en `db-finanzas`, esquema `credito`)
-**Estado:** bloques 1, 2 y 3 de 4 (perfil, política, oferta, "Mi crédito", evaluación dentro de la saga y cobranza)
-**Fecha:** 2026-10-02
+**Estado:** bloques 1 a 4 (perfil, política, oferta, "Mi crédito", evaluación dentro de la saga, cobranza y reversos de dinero)
+**Fecha:** 2026-10-03
 **Depende de:** `sgo-eventos-envelope-v1.md`
 
 ---
@@ -33,9 +33,15 @@ worker envía recordatorios antes del vencimiento y marca las cuentas vencidas,
 lo que pone la línea en pausa (`BLOQUEADA`) hasta que el cliente se ponga al día.
 No hay intereses ni recargos.
 
-Fuera de estos bloques (bloque 4): devoluciones de órdenes pagadas a crédito,
-reembolsos de abonos y saldo a favor. Solo existe el estado de abono
-`REEMBOLSO_PENDIENTE` para dejarlo registrado.
+**Bloque 4 (reversos de dinero).** Una devolución de una compra a crédito
+(`DevolucionRegistrada` con `medioPago = CREDITO`) la aplica Crédito: baja la
+deuda y libera el cupo; si lo devuelto supera lo que faltaba pagar, pide a Pagos
+el reembolso a la tarjeta del excedente sobre los abonos ya cobrados
+(`ReembolsoAbonoCreditoSolicitado`) y avisa a Órdenes con
+`DevolucionCreditoAplicada`. Los abonos de una cuenta anulada (o cobrados con la
+cuenta ya anulada) también piden su reembolso. Pagos responde con
+`AbonoCreditoReembolsado` o `ReembolsoAbonoCreditoFallido`. No hay saldo a favor:
+lo pagado de más siempre vuelve a la tarjeta.
 
 El cliente se identifica siempre por su **email en minúsculas**, el mismo
 identificador que usan Órdenes y Pagos.
@@ -227,7 +233,7 @@ no cambia nada.
 | Resultado | Efecto en Crédito |
 |---|---|
 | Cobrado | Abono `APLICADO`; resta el monto del saldo de la cuenta y del `saldoUtilizado` de la línea; emite `AbonoCreditoAplicado`. Con saldo 0, la cuenta pasa a `PAGADA` (`pagadaEn`, `pagoPuntual = pagadaEn <= venceEn`), emite `CuentaCreditoPagada` y recalcula el perfil. Si ya no quedan cuentas `VENCIDA` con saldo, la línea sale de la pausa. |
-| Cobrado con la cuenta `ANULADA` | Abono `REEMBOLSO_PENDIENTE`; no toca la línea (la anulación ya liberó el cupo). La devolución del dinero es del bloque 4. |
+| Cobrado con la cuenta `ANULADA` | Abono `REEMBOLSO_PENDIENTE`; no toca la línea (la anulación ya liberó el cupo). En la misma transacción pide el reembolso completo del abono (2.14). |
 | Rechazado | Abono `RECHAZADO`. Nada más cambia. |
 | Pendiente | Abono `PENDIENTE`. El cliente puede reintentar el mismo abono (3.6). |
 
@@ -293,6 +299,87 @@ particular, Órdenes no escucha `pagos.abono-credito.*`: un abono nunca emite
 `PagoAplicado`, `PagoRechazado` ni `PagoPendiente`. `AbonoCreditoAplicado` y los
 tres eventos de cuenta hoy solo los registra Auditoría.
 
+### 2.14 `ReembolsoAbonoCreditoSolicitado` (lo publica Crédito, lo consume Pagos)
+
+| Campo del envelope | Valor |
+|---|---|
+| `eventType` | `ReembolsoAbonoCreditoSolicitado` |
+| `routingKey` | `credito.abono.reembolso-solicitado` |
+| `aggregateType` | `AbonoCredito` |
+| `aggregateId` | `abonoId` |
+| `source` | `credito` |
+
+| Campo de `data` | Tipo | Descripción |
+|---|---|---|
+| `reembolsoId` | string | Id de esta solicitud (32 hex). Pagos es idempotente por él. |
+| `abonoId` | string | Abono cuyo cobro se devuelve. |
+| `referencia` | string | `ABO-...` del abono; Pagos encuentra el cobro por ella. |
+| `clienteId` | string | Email en minúsculas. |
+| `moneda` | string | `GTQ`. |
+| `monto` | decimal | Lo que se devuelve; nunca más que lo cobrado en el abono menos lo ya pedido. |
+| `motivo` | string | `CANCELACION` (cuenta anulada) o `DEVOLUCION` (excedente de una devolución). |
+| `solicitadoEn` | fecha | |
+
+Se emite en la misma transacción que el cambio que lo origina:
+
+- Al pasar un abono a `REEMBOLSO_PENDIENTE` (cuenta anulada con abonos aplicados, o
+  cobro que llegó con la cuenta ya anulada): por todo el abono.
+- Al aplicar una devolución que supera el saldo pendiente: por el excedente,
+  repartido sobre los abonos `APLICADO` de la cuenta, del más reciente al más
+  antiguo.
+- `ReembolsosAbonoCreditoWorker` (cada `Credito:Cobranza:IntervaloReembolsosSegundos`)
+  lo emite para los abonos en `REEMBOLSO_PENDIENTE` que todavía no tienen solicitud
+  (`reembolso_solicitado_en` nulo), por ejemplo los que quedaron así antes de este
+  bloque.
+
+Cola en Pagos: `pagos.credito`.
+
+### 2.15 Resultados del reembolso (los publica Pagos, los consume Crédito)
+
+`AbonoCreditoReembolsado` (`pagos.abono-credito.reembolsado`) y
+`ReembolsoAbonoCreditoFallido` (`pagos.abono-credito.reembolso-fallido`). Campos en
+`pagos-eventos-v1.md`, sección 7.9. Cola en Crédito: `credito.pagos`.
+
+| Resultado | Efecto en Crédito |
+|---|---|
+| Reembolsado | Suma `monto` a `montoReembolsado` del abono; si ya se devolvió todo lo cobrado, el abono pasa a `REEMBOLSADO`. Registra un movimiento `REEMBOLSO_ABONO` con `referencia = reembolsoId`: una confirmación repetida no suma dos veces. |
+| Fallido | El abono queda marcado para atención manual (`reembolso_fallido_en`, `motivo_falla_reembolso`) y sube `credito_reembolsos_fallidos_total`. No se vuelve a pedir solo. |
+
+### 2.16 `DevolucionCreditoAplicada` (lo publica Crédito, lo consume Órdenes)
+
+| Campo del envelope | Valor |
+|---|---|
+| `eventType` | `DevolucionCreditoAplicada` |
+| `routingKey` | `credito.devolucion.aplicada` |
+| `aggregateType` | `CuentaPorCobrar` |
+| `aggregateId` | `cuentaId` |
+| `source` | `credito` |
+
+| Campo de `data` | Tipo | Descripción |
+|---|---|---|
+| `devolucionId` | string | `DEV-...` de Órdenes. |
+| `ordenOriginalId` | string | |
+| `clienteId` | string | |
+| `moneda` | string | |
+| `montoDescontadoDeuda` | decimal | Lo que bajó la deuda (y volvió al disponible). |
+| `montoAReembolsar` | decimal | Lo ya pagado que se pidió reembolsar a la tarjeta (0 si no hubo). |
+| `aplicadaEn` | fecha | |
+
+Órdenes la consume en `ordenes.credito` y cierra la devolución igual que con
+`ReembolsoAplicado` (sección 7.11 de `ordenes-eventos-v1.md`). No espera el
+reembolso a tarjeta del excedente.
+
+### 2.17 Bindings del bloque 4
+
+| Cola | Routing keys nuevas |
+|---|---|
+| `credito.ordenes` | `ordenes.devolucion.registrada` (solo actúa con `medioPago = CREDITO`) |
+| `credito.pagos` | `pagos.abono-credito.reembolsado`, `pagos.abono-credito.reembolso-fallido` |
+| `pagos.credito` | `credito.abono.reembolso-solicitado` |
+| `ordenes.credito` | `credito.devolucion.aplicada` |
+
+Ninguna cola con comodín recibe estos eventos salvo la de Auditoría (`#`).
+
 ## 3. Endpoints
 
 ### 3.1 `GET /api/credito/elegibilidad?monto={decimal opcional}`
@@ -357,6 +444,17 @@ estilo; la Web nunca lo muestra. Cada compra agrega `cuentaId`, `puedePagar`
 `monto`, `tarjeta` como "Visa terminada en 4242", `estado`, `etiquetaEstado`).
 `etiquetaEstado` de la compra: "Por pagar", "Vence pronto", "Vencida", "Pagada"
 o "Anulada". Primero las pagables, de la más próxima a vencer.
+
+**Bloque 4.** Cada compra agrega `movimientos[]` con sus devoluciones (`tipo` =
+`DEVOLUCION`, `referencia` = `DEV-...`, `fecha`, `monto`, `montoDescontadoDeuda`,
+`montoAReembolsar` y `descripcion` en lenguaje llano, por ejemplo "Devolviste
+productos por Q100.00. Tu deuda bajó Q100.00."). Cada elemento de `abonos[]`
+agrega `estadoReembolso` (null si de ese pago no se devuelve nada; si no, "Reembolso
+a tu tarjeta en proceso", "Reembolsado a tu tarjeta" o "No pudimos completar el
+reembolso; contáctanos"), `montoReembolsado` y `montoReembolsoSolicitado`. El
+`etiquetaEstado` del abono suma "Reembolsado" y el de la compra "Devuelta" (cuenta
+anulada por devolución total sin pagos). `totalPorPagar`, `saldoUtilizado` y
+`disponible` ya reflejan las devoluciones.
 
 Los cuatro factores para el cliente agrupan los de la política: "Pagos a tiempo"
 (puntualidad), "Monto de tus compras" (monto), "Tiempo y frecuencia como cliente"
@@ -433,7 +531,8 @@ Mismas condiciones que 3.3. Ejecuta una pasada del worker de vencimientos sin
 esperar el intervalo y responde 200 con `recordadas` y `vencidas`.
 
 `POST /interno/credito/demo/reiniciar` (3.4) además borra los abonos, desbloquea
-las líneas y recalcula los perfiles; responde también `abonosBorrados`.
+las líneas y recalcula los perfiles; responde también `abonosBorrados`. Desde el
+bloque 4 borra también los movimientos de cuenta y responde `movimientosBorrados`.
 
 ## 4. Política `2026.10-v2`
 
@@ -524,8 +623,10 @@ Al consumir `OrdenCancelada` con `medioPago = CREDITO`:
 - Si hay cuenta `VIGENTE` o `VENCIDA`: pasa a `ANULADA`, el saldo pendiente vuelve
   al disponible de la línea y se emite `CargoCreditoAnulado` (`monto` = saldo
   liberado). Anular dos veces no libera dos veces. Los abonos `APLICADO` de esa
-  cuenta pasan a `REEMBOLSO_PENDIENTE` (lo ya pagado no se libera otra vez; su
-  devolución es del bloque 4) y se reevalúa la pausa de la línea.
+  cuenta pasan a `REEMBOLSO_PENDIENTE` (lo ya pagado no se libera otra vez) y, en
+  la misma transacción, piden su reembolso a la tarjeta con
+  `ReembolsoAbonoCreditoSolicitado` (motivo `CANCELACION`). Se reevalúa la pausa
+  de la línea.
 - Si no hay decisión todavía (la orden se canceló o rechazó antes de que Crédito
   la evaluara): se guarda una decisión `ANULADA_SIN_CARGO`. Una evaluación que
   llegue después se rechaza con `ORDEN_CANCELADA` sin apartar cupo, y la decisión
@@ -565,8 +666,8 @@ como tardío.
 
 | Entidad | Estados |
 |---|---|
-| Cuenta por cobrar | `VIGENTE` -> `PAGADA` (saldo 0), `VIGENTE` -> `VENCIDA` -> `PAGADA`, `VIGENTE`/`VENCIDA` -> `ANULADA`. |
-| Abono | `SOLICITADO` -> `APLICADO` / `RECHAZADO` / `PENDIENTE`; `PENDIENTE` -> `SOLICITADO` (reintento); `SOLICITADO`/`PENDIENTE`/`APLICADO` -> `REEMBOLSO_PENDIENTE` (cuenta anulada). |
+| Cuenta por cobrar | `VIGENTE` -> `PAGADA` (saldo 0), `VIGENTE` -> `VENCIDA` -> `PAGADA`, `VIGENTE`/`VENCIDA` -> `ANULADA`. Bloque 4: una devolución que deja el saldo en 0 la cierra en `ANULADA` (motivo `DEVOLUCION`, devolución total sin pagos) o en `PAGADA` sin marca de puntualidad. |
+| Abono | `SOLICITADO` -> `APLICADO` / `RECHAZADO` / `PENDIENTE`; `PENDIENTE` -> `SOLICITADO` (reintento); `SOLICITADO`/`PENDIENTE`/`APLICADO` -> `REEMBOLSO_PENDIENTE` (cuenta anulada); `APLICADO`/`REEMBOLSO_PENDIENTE` -> `REEMBOLSADO` (se devolvió todo lo cobrado). |
 | Línea | `ACTIVA` <-> `BLOQUEADA` mientras haya cuentas vencidas con saldo. |
 
 ### 4.9 Tablas del bloque 3
@@ -578,6 +679,36 @@ como tardío.
 | Secuencia `credito.abono_correlativo` | | Correlativo de `ABO-{yyyy}-{6 dígitos}`. |
 
 Migración `Cobranza`.
+
+### 4.10 Devolución de una compra a crédito (bloque 4)
+
+Al consumir `DevolucionRegistrada` con `medioPago = CREDITO` (cualquier otro medio
+se ignora: lo reembolsa Pagos). Idempotente por `devolucionId` (movimiento
+`DEVOLUCION` único). Todo en una transacción, con reintento ante choque de versión:
+
+1. Descuenta del saldo pendiente el mínimo entre el monto devuelto y el saldo, y
+   lo libera en la línea.
+2. Si el monto devuelto supera el saldo, el excedente ya lo pagó el cliente: pide su
+   reembolso con `ReembolsoAbonoCreditoSolicitado` (motivo `DEVOLUCION`) sobre los
+   abonos `APLICADO` de la cuenta, del más reciente al más antiguo, hasta cubrirlo.
+3. Si el saldo queda en 0: devolución total y sin pagos deja la cuenta `ANULADA`
+   con motivo `DEVOLUCION`; en otro caso `PAGADA` con `pagoPuntual` nulo. Una cuenta
+   cerrada por devolución no cuenta como pago puntual ni tardío.
+4. Si la cuenta estaba `VENCIDA` y ya no quedan vencidas, la línea sale de la pausa
+   y se recalcula el perfil.
+5. Registra el movimiento (`monto`, `montoDescontadoDeuda`, `montoAReembolsar`) y
+   emite `DevolucionCreditoAplicada`.
+
+Sin cuenta por cobrar para la orden, se confirma el mensaje sin cambios.
+
+### 4.11 Tablas del bloque 4
+
+| Tabla | Clave | Contenido |
+|---|---|---|
+| `credito.movimiento_cuenta` | `id`; único (`tipo`, `referencia`) | `cuenta_id`, `cliente_id`, `tipo` (`DEVOLUCION`, `REEMBOLSO_ABONO`), `monto`, `referencia` (`devolucionId` o `reembolsoId`), `fecha`, `monto_descontado_deuda`, `monto_a_reembolsar`, `abono_id`. |
+| `credito.abono_credito` | | Nuevas columnas `monto_reembolsado`, `monto_reembolso_solicitado`, `reembolso_solicitado_en`, `reembolso_fallido_en`, `motivo_falla_reembolso`; estado nuevo `REEMBOLSADO`. |
+
+Migración `DevolucionesYReembolsos`.
 
 ## 5. Contrato para Integración ERP y mock ERP (pendiente, lo implementa su dueño)
 
@@ -661,6 +792,11 @@ clientes iniciales.
   `data.codigoClienteErp` = `codigoCliente`.
 - Si el ERP está caído (reintentos agotados) no publica nada y lo intenta en el
   siguiente ciclo. Crédito sigue respondiendo con el último perfil calculado.
+- Recomendación: incluir `MEDIO_PAGO` en cada registro del lote de ventas que se
+  envía al ERP. `OrdenConfirmada` ya lo trae (`medioPago`), así que no hace falta
+  otra consulta. Con él el ERP distingue las ventas a crédito (cuya cobranza sigue
+  abierta y cuyas devoluciones bajan una deuda en vez de reembolsar) y puede
+  calcular el historial de pagos que luego devuelve a Crédito.
 
 ## 6. Configuración
 
@@ -672,6 +808,7 @@ clientes iniciales.
 | `Credito:Cobranza:MontoMinimoAbono` | `10` | sin cambios |
 | `Credito:Cobranza:IntervaloSegundos` | `60` | sin cambios |
 | `Credito:Cobranza:DiasRecordatorio` | `3` | sin cambios |
+| `Credito:Cobranza:IntervaloReembolsosSegundos` | `60` | sin cambios |
 | `Auth:JwtSecret` | vacío (todo 401) | `${JWT_SECRET}` |
 | `Outbox:Source` | `credito` | `credito` |
 
@@ -682,5 +819,7 @@ evaluación y `Auth:JwtSecret` la validación del JWT para órdenes a crédito.
 Métricas propias en `/metrics`: `credito_consultas_elegibilidad_total{estado}`,
 `credito_perfiles_recalculados_total`, `credito_evaluaciones_total{resultado}` y
 `credito_cargos_anulados_total`, `credito_abonos_total{estado}`,
-`credito_cuentas_vencidas_total` y `credito_recordatorios_total`, además de las transversales de outbox y consumo.
+`credito_cuentas_vencidas_total` y `credito_recordatorios_total`; desde el bloque 4,
+`credito_devoluciones_total`, `credito_reembolsos_solicitados_total{motivo}`,
+`credito_reembolsos_aplicados_total` y `credito_reembolsos_fallidos_total`, además de las transversales de outbox y consumo.
 Órdenes expone `ordenes_credito_timeouts_total`.

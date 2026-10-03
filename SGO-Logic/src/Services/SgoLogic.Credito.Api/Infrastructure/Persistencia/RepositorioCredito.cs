@@ -91,6 +91,25 @@ public sealed class RepositorioCredito : IRepositorioCredito
 
     public void AgregarAbono(AbonoCredito abono) => _contexto.Abonos.Add(abono);
 
+    public Task<bool> HayAbonosCobradosAsync(Guid cuentaId, CancellationToken cancelacion) =>
+        _contexto.Abonos.AnyAsync(
+            abono => abono.CuentaId == cuentaId
+                && (abono.Estado == EstadoAbonoCredito.APLICADO || abono.Estado == EstadoAbonoCredito.REEMBOLSADO),
+            cancelacion);
+
+    public async Task<IReadOnlyList<Guid>> ListarAbonosReembolsoSinSolicitudAsync(int maximo, CancellationToken cancelacion) =>
+        await _contexto.Abonos.AsNoTracking()
+            .Where(abono => abono.Estado == EstadoAbonoCredito.REEMBOLSO_PENDIENTE && abono.ReembolsoSolicitadoEn == null)
+            .OrderBy(abono => abono.SolicitadoEn)
+            .Select(abono => abono.Id)
+            .Take(maximo)
+            .ToListAsync(cancelacion);
+
+    public Task<bool> ExisteMovimientoAsync(TipoMovimientoCuenta tipo, string referencia, CancellationToken cancelacion) =>
+        _contexto.Movimientos.AnyAsync(movimiento => movimiento.Tipo == tipo && movimiento.Referencia == referencia, cancelacion);
+
+    public void AgregarMovimiento(MovimientoCuenta movimiento) => _contexto.Movimientos.Add(movimiento);
+
     public async Task<long> SiguienteCorrelativoAbonoAsync(CancellationToken cancelacion) =>
         await _contexto.Database
             .SqlQueryRaw<long>("SELECT nextval('credito.abono_correlativo') AS \"Value\"")
@@ -122,6 +141,7 @@ public sealed class RepositorioCredito : IRepositorioCredito
     {
         await using var transaccion = await _contexto.Database.BeginTransactionAsync(cancelacion);
 
+        var movimientos = await _contexto.Movimientos.ExecuteDeleteAsync(cancelacion);
         var abonos = await _contexto.Abonos.ExecuteDeleteAsync(cancelacion);
         var cuentas = await _contexto.CuentasPorCobrar.ExecuteDeleteAsync(cancelacion);
         var decisiones = await _contexto.Decisiones.ExecuteDeleteAsync(cancelacion);
@@ -140,6 +160,6 @@ public sealed class RepositorioCredito : IRepositorioCredito
         await transaccion.CommitAsync(cancelacion);
         _contexto.ChangeTracker.Clear();
 
-        return new ResultadoReinicioDemo(cuentas, decisiones, lineas, abonos);
+        return new ResultadoReinicioDemo(cuentas, decisiones, lineas, abonos, movimientos);
     }
 }

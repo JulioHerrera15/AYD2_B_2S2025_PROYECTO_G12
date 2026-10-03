@@ -54,6 +54,8 @@ public static class CreditoServicios
         servicios.AddScoped<ServicioAbonos>();
         servicios.AddScoped<ServicioResultadoAbonos>();
         servicios.AddScoped<ServicioVencimientos>();
+        servicios.AddScoped<ServicioDevolucionesCredito>();
+        servicios.AddScoped<ServicioReembolsosAbono>();
 
         return servicios.BuildServiceProvider();
     }

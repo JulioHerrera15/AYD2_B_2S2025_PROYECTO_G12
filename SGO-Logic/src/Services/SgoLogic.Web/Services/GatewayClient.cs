@@ -233,7 +233,8 @@ public sealed record CompraCreditoModel(
     bool PuedePagar = false,
     string? AbonoEnCursoId = null,
     bool AbonoEnCursoPuedeReintentar = false,
-    List<AbonoHistorialModel>? Abonos = null)
+    List<AbonoHistorialModel>? Abonos = null,
+    List<MovimientoCreditoModel>? Movimientos = null)
 {
     [JsonIgnore]
     public bool EsVigente => string.Equals(Estado, "VIGENTE", StringComparison.OrdinalIgnoreCase);
@@ -245,7 +246,10 @@ public sealed record CompraCreditoModel(
 /// <summary>Aviso destacado de Mi credito. Tipo solo decide el estilo; nunca se muestra.</summary>
 public sealed record AvisoCreditoModel(string Tipo, string Titulo, string Mensaje, string Recomendacion, string? CuentaId);
 
-/// <summary>Un pago de una compra a credito para el historial.</summary>
+/// <summary>
+/// Un pago de una compra a credito para el historial. EstadoReembolso es el texto del
+/// reembolso a la tarjeta (en proceso, reembolsado o no se pudo); null si no aplica.
+/// </summary>
 public sealed record AbonoHistorialModel(
     string AbonoId,
     string Referencia,
@@ -253,7 +257,25 @@ public sealed record AbonoHistorialModel(
     decimal Monto,
     string? Tarjeta,
     string Estado,
-    string EtiquetaEstado);
+    string EtiquetaEstado,
+    string? EstadoReembolso = null,
+    decimal MontoReembolsado = 0m,
+    decimal MontoReembolsoSolicitado = 0m)
+{
+    /// <summary>El reembolso no se pudo completar: la vista lo destaca para que el cliente nos contacte.</summary>
+    [JsonIgnore]
+    public bool ReembolsoFallido => EstadoReembolso?.StartsWith("No pudimos", StringComparison.Ordinal) == true;
+}
+
+/// <summary>Devolucion sobre una compra a credito (Descripcion ya viene en lenguaje llano).</summary>
+public sealed record MovimientoCreditoModel(
+    string Tipo,
+    string Referencia,
+    DateTime Fecha,
+    decimal Monto,
+    decimal MontoDescontadoDeuda,
+    decimal MontoAReembolsar,
+    string Descripcion);
 
 /// <summary>Estado de un abono (GET/POST /api/credito/abonos). Titulo y Mensaje son para el cliente.</summary>
 public sealed record AbonoCreditoModel(
@@ -305,14 +327,26 @@ public sealed record ResultadoOfertaCreditoModel(EstadoConsultaCredito Estado, O
 /// <summary>Linea de una orden tal como la devuelve Ordenes (GET /api/ordenes/{id}).</summary>
 public sealed record LineaOrdenModel(string Sku, string Descripcion, int Cantidad, decimal PrecioUnitario);
 
-/// <summary>Lo que la Web necesita de una orden de Ordenes para rearmar el carrito.</summary>
+/// <summary>
+/// Lo que la Web necesita de una orden de Ordenes (OrdenDto): rearmar el carrito y el
+/// reembolso a la tarjeta de una orden cancelada (EstadoReembolso NO_APLICA, PENDIENTE,
+/// APLICADO o FALLIDO; el monto es Total).
+/// </summary>
 public sealed record OrdenDetalleModel(
     string Id,
     string NumeroOrden,
     string ClienteId,
     string Estado,
     string MedioPago,
-    List<LineaOrdenModel>? Lineas);
+    List<LineaOrdenModel>? Lineas,
+    decimal Total = 0m,
+    string? EstadoReembolso = null,
+    DateTime? ReembolsoActualizadoEn = null)
+{
+    /// <summary>Hay un reembolso a la tarjeta que mostrar (la orden se cancelo despues de pagarse).</summary>
+    [JsonIgnore]
+    public bool TieneReembolso => EstadoReembolso is "PENDIENTE" or "APLICADO" or "FALLIDO";
+}
 
 /// <summary>Resultado de crear una orden con el codigo HTTP, para distinguir 401 y 403.</summary>
 public sealed record ResultadoCrearOrdenModel(bool Exito, int Status, OrdenCreadaModel? Orden, string? Error);
@@ -444,7 +478,10 @@ public sealed record FacturaModel(
     decimal Total = 0m,
     List<FacturaLineaModel>? Lineas = null,
     string? CuiReceptor = null,
-    string? Moneda = null)
+    string? Moneda = null,
+    string? Id = null,
+    string? TipoDocumento = null,
+    DateTime? CreadoEn = null)
 {
     [JsonIgnore]
     public bool EstaCertificada => string.Equals(Estado, "CERTIFICADO", StringComparison.OrdinalIgnoreCase);
@@ -934,6 +971,24 @@ public sealed class GatewayClient
         var res = await _http.GetAsync($"/api/facturacion/documentos/{ordenId}", ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<FacturaModel>(JsonOptions, ct);
+    }
+
+    /// <summary>
+    /// Notas de credito de la orden (por devolucion o cancelacion), de la mas antigua a la
+    /// mas reciente. Lista vacia si no hay o si Facturacion no responde.
+    /// </summary>
+    public async Task<List<FacturaModel>> ObtenerNotasCreditoAsync(string ordenId, CancellationToken ct = default)
+    {
+        try
+        {
+            var res = await _http.GetAsync($"/api/facturacion/documentos/{Uri.EscapeDataString(ordenId)}/notas-credito", ct);
+            if (!res.IsSuccessStatusCode) return new();
+            return await res.Content.ReadFromJsonAsync<List<FacturaModel>>(JsonOptions, ct) ?? new();
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            return new();
+        }
     }
 
     // ── Informe de ventas / ERP ────────────────────────────────────────────────

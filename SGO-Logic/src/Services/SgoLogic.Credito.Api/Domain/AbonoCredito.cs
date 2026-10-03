@@ -2,7 +2,7 @@ namespace SgoLogic.Credito.Api.Domain;
 
 /// <summary>
 /// Estado de un abono. SOLICITADO y PENDIENTE estan "en curso" (solo uno por
-/// cuenta); APLICADO, RECHAZADO y REEMBOLSO_PENDIENTE son finales.
+/// cuenta); APLICADO, RECHAZADO, REEMBOLSO_PENDIENTE y REEMBOLSADO son finales.
 /// </summary>
 public enum EstadoAbonoCredito
 {
@@ -14,8 +14,11 @@ public enum EstadoAbonoCredito
     APLICADO,
     RECHAZADO,
 
-    /// <summary>Se cobro, pero la cuenta ya estaba anulada: el reembolso es del bloque 4.</summary>
-    REEMBOLSO_PENDIENTE
+    /// <summary>Se cobro, pero la cuenta ya estaba anulada (o se anulo): hay que devolverlo completo.</summary>
+    REEMBOLSO_PENDIENTE,
+
+    /// <summary>Lo cobrado se devolvio completo a la tarjeta (MontoReembolsado = Monto).</summary>
+    REEMBOLSADO
 }
 
 /// <summary>
@@ -63,8 +66,28 @@ public sealed class AbonoCredito
     public DateTime SolicitadoEn { get; private set; }
     public DateTime? ResueltoEn { get; private set; }
 
+    /// <summary>Lo ya devuelto a la tarjeta (confirmado por Pagos). Nunca mayor que Monto.</summary>
+    public decimal MontoReembolsado { get; private set; }
+
+    /// <summary>
+    /// Lo pedido a Pagos para devolver (en curso mas confirmado). Impide pedir dos veces
+    /// el mismo dinero; una solicitud fallida sigue contando hasta la atencion manual.
+    /// </summary>
+    public decimal MontoReembolsoSolicitado { get; private set; }
+
+    /// <summary>Ultima vez que se pidio un reembolso de este abono. Null si nunca se pidio.</summary>
+    public DateTime? ReembolsoSolicitadoEn { get; private set; }
+
+    /// <summary>Un reembolso de este abono fallo: requiere atencion manual. Null si no.</summary>
+    public DateTime? ReembolsoFallidoEn { get; private set; }
+
+    public string? MotivoFallaReembolso { get; private set; }
+
     /// <summary>Concurrencia optimista.</summary>
     public int Version { get; private set; }
+
+    /// <summary>Lo cobrado que aun no se ha pedido devolver.</summary>
+    public decimal PendientePorSolicitarReembolso => Math.Max(0m, Monto - MontoReembolsoSolicitado);
 
     public bool EnCurso => Estado is EstadoAbonoCredito.SOLICITADO or EstadoAbonoCredito.PENDIENTE;
 
@@ -113,7 +136,7 @@ public sealed class AbonoCredito
 
     /// <summary>
     /// El dinero se cobro pero la cuenta ya no lo admite (anulada), o una cuenta con
-    /// este abono aplicado se anulo. Queda para el reembolso del bloque 4.
+    /// este abono aplicado se anulo. Hay que devolverlo completo a la tarjeta.
     /// </summary>
     public void MarcarReembolsoPendiente(string? autorizacionId, string? ultimosCuatro, string? marca, DateTime ahora)
     {
@@ -126,6 +149,54 @@ public sealed class AbonoCredito
         ResueltoEn ??= ahora;
         Version++;
     }
+
+    /// <summary>Se pidio a Pagos devolver <paramref name="monto" /> de este abono.</summary>
+    public void RegistrarSolicitudReembolso(decimal monto, DateTime ahora)
+    {
+        if (monto <= 0m || monto > PendientePorSolicitarReembolso)
+        {
+            throw new ArgumentOutOfRangeException(nameof(monto), "El reembolso debe ser mayor que 0 y no mayor que lo cobrado sin reembolsar.");
+        }
+
+        MontoReembolsoSolicitado += monto;
+        ReembolsoSolicitadoEn = ahora;
+        Version++;
+    }
+
+    /// <summary>
+    /// Pagos confirmo un reembolso de este abono. Si ya se devolvio todo lo cobrado pasa a
+    /// REEMBOLSADO. Devuelve true si quedo completo.
+    /// </summary>
+    public bool AplicarReembolso(decimal monto, DateTime ahora)
+    {
+        if (monto > 0m)
+        {
+            MontoReembolsado = Math.Min(Monto, MontoReembolsado + monto);
+            MontoReembolsoSolicitado = Math.Max(MontoReembolsoSolicitado, MontoReembolsado);
+        }
+
+        var completo = MontoReembolsado >= Monto;
+        if (completo)
+        {
+            Estado = EstadoAbonoCredito.REEMBOLSADO;
+            ReembolsoFallidoEn = null;
+            MotivoFallaReembolso = null;
+        }
+
+        ResueltoEn ??= ahora;
+        Version++;
+        return completo;
+    }
+
+    /// <summary>Un reembolso de este abono no se pudo completar: queda para atencion manual.</summary>
+    public void MarcarReembolsoFallido(string? motivo, DateTime ahora)
+    {
+        ReembolsoFallidoEn = ahora;
+        MotivoFallaReembolso = motivo is { Length: > LargoMaximoMotivoFalla } ? motivo[..LargoMaximoMotivoFalla] : motivo;
+        Version++;
+    }
+
+    public const int LargoMaximoMotivoFalla = 300;
 
     private void RegistrarTarjeta(string autorizacionId, string? ultimosCuatro, string? marca)
     {

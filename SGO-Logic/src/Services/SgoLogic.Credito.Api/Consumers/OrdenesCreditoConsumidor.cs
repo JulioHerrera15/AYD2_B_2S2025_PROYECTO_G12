@@ -11,8 +11,8 @@ namespace SgoLogic.Credito.Api.Consumers;
 
 /// <summary>
 /// Consume la cola <c>credito.ordenes</c> con bindings a
-/// <c>ordenes.credito.evaluacion-solicitada</c> y <c>ordenes.orden.cancelada</c>.
-/// Al llegar dos tipos de data, la clase base se tipa a <see cref="JsonElement" /> y
+/// <c>ordenes.credito.evaluacion-solicitada</c>, <c>ordenes.orden.cancelada</c> y
+/// <c>ordenes.devolucion.registrada</c>. Al llegar varios tipos de data, la clase base se tipa a <see cref="JsonElement" /> y
 /// el despacho se hace por eventType; la deduplicacion por eventId sigue siendo la
 /// de EventConsumerBase.
 ///
@@ -46,7 +46,8 @@ public sealed class OrdenesCreditoConsumidor : EventConsumerBase<CreditoDbContex
     protected override IReadOnlyCollection<BindingCola> Bindings { get; } =
     [
         new BindingCola(TopologiaMensajeria.ExchangeEventos, EvaluacionCreditoSolicitada.RoutingKey),
-        new BindingCola(TopologiaMensajeria.ExchangeEventos, OrdenCancelada.RoutingKey)
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, OrdenCancelada.RoutingKey),
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, DevolucionRegistrada.RoutingKey)
     ];
 
     protected override async Task ManejarAsync(
@@ -65,6 +66,12 @@ public sealed class OrdenesCreditoConsumidor : EventConsumerBase<CreditoDbContex
             case OrdenCancelada.EventType:
                 await servicios.GetRequiredService<ServicioAnulacionCargos>()
                     .ProcesarCancelacionAsync(Leer<OrdenCanceladaData>(evento.Data), cancelacion);
+                break;
+
+            case DevolucionRegistrada.EventType:
+                // Solo actua con medioPago CREDITO; cualquier otra devolucion la reembolsa Pagos.
+                await servicios.GetRequiredService<ServicioDevolucionesCredito>()
+                    .ProcesarAsync(Leer<DevolucionRegistradaData>(evento.Data), cancelacion);
                 break;
 
             default:

@@ -33,14 +33,17 @@
         "VENCIDA" => "text-rose-700 bg-rose-100",
         "VIGENTE" => compra.EtiquetaEstado == "Vence pronto" ? "text-amber-800 bg-amber-100" : "text-sky-800 bg-sky-100",
         "PAGADA" => "text-emerald-800 bg-emerald-100",
-        _ => "text-text-muted bg-surface-container-low"
+        _ => compra.EtiquetaEstado == "Devuelta" ? "text-indigo-800 bg-indigo-100" : "text-text-muted bg-surface-container-low"
     };
     string ClaseEstadoAbono(string estado) => estado switch
     {
-        "APLICADO" => "text-emerald-800",
+        "APLICADO" or "REEMBOLSADO" => "text-emerald-800",
         "RECHAZADO" => "text-rose-700",
         _ => "text-amber-800"
     };
+    string ClaseReembolso(AbonoHistorialModel abono) => abono.ReembolsoFallido
+        ? "text-rose-700"
+        : abono.EstadoReembolso == "Reembolsado a tu tarjeta" ? "text-emerald-800" : "text-amber-800";
 }
 
 <div class="w-full max-w-container-max mx-auto flex flex-col gap-8">
@@ -264,6 +267,7 @@
                                 @foreach (var compra in compras)
                                 {
                                     var abonos = compra.Abonos ?? new List<AbonoHistorialModel>();
+                                    var movimientos = compra.Movimientos ?? new List<MovimientoCreditoModel>();
                                     <tr>
                                         <td class="py-3 px-6 font-bold text-primary">
                                             <a href="/Estado?ordenId=@Uri.EscapeDataString(compra.OrdenId)" class="hover:underline">@compra.NumeroOrden</a>
@@ -308,6 +312,24 @@
                                             }
                                         </td>
                                     </tr>
+                                    @if (movimientos.Count > 0)
+                                    {
+                                        <tr class="bg-indigo-50/40">
+                                            <td colspan="7" class="px-6 py-3">
+                                                <div class="text-[11px] font-semibold text-text-muted mb-1">Devoluciones de esta compra</div>
+                                                <ul class="space-y-1">
+                                                    @foreach (var movimiento in movimientos)
+                                                    {
+                                                        <li class="flex flex-wrap gap-x-4 text-[11px]">
+                                                            <span class="text-text-muted">@FechaHelper.Formatear(movimiento.Fecha)</span>
+                                                            <span class="font-semibold text-primary">-@Monto(movimiento.Monto)</span>
+                                                            <span class="text-primary">@movimiento.Descripcion</span>
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            </td>
+                                        </tr>
+                                    }
                                     @if (abonos.Count > 0)
                                     {
                                         <tr class="bg-surface-container-low/30">
@@ -321,6 +343,12 @@
                                                             <span class="font-semibold text-primary">@Monto(abono.Monto)</span>
                                                             <span class="text-text-muted">@(abono.Tarjeta ?? "Tarjeta")</span>
                                                             <span class="font-semibold @ClaseEstadoAbono(abono.Estado)">@abono.EtiquetaEstado</span>
+                                                            @if (!string.IsNullOrWhiteSpace(abono.EstadoReembolso))
+                                                            {
+                                                                <span class="font-semibold @ClaseReembolso(abono)">
+                                                                    @abono.EstadoReembolso @(abono.MontoReembolsoSolicitado > 0m && abono.MontoReembolsoSolicitado < abono.Monto ? $"({Monto(abono.MontoReembolsoSolicitado)})" : "")
+                                                                </span>
+                                                            }
                                                         </li>
                                                     }
                                                 </ul>

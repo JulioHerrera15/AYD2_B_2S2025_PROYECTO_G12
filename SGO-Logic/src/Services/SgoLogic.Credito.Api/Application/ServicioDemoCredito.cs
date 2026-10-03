@@ -38,7 +38,7 @@ public sealed class ServicioDemoCredito
     }
 
     /// <summary>
-    /// Borra abonos, cuentas y decisiones, deja todos los saldos utilizados en 0 y quita
+    /// Borra movimientos, abonos, cuentas y decisiones, deja todos los saldos utilizados en 0 y quita
     /// la pausa por mora. Despues recalcula los perfiles: sin cuentas ya no hay deuda
     /// vencida ni pagos propios que cuenten. Historiales y limites de politica no cambian.
     /// </summary>
@@ -57,8 +57,8 @@ public sealed class ServicioDemoCredito
         }
 
         _logger.LogWarning(
-            "Reinicio de demo de credito: {Abonos} abonos, {Cuentas} cuentas y {Decisiones} decisiones borradas, {Lineas} lineas con saldo en 0.",
-            resultado.AbonosBorrados, resultado.CuentasBorradas, resultado.DecisionesBorradas, resultado.LineasReiniciadas);
+            "Reinicio de demo de credito: {Movimientos} movimientos, {Abonos} abonos, {Cuentas} cuentas y {Decisiones} decisiones borradas, {Lineas} lineas con saldo en 0.",
+            resultado.MovimientosBorrados, resultado.AbonosBorrados, resultado.CuentasBorradas, resultado.DecisionesBorradas, resultado.LineasReiniciadas);
 
         return resultado;
     }

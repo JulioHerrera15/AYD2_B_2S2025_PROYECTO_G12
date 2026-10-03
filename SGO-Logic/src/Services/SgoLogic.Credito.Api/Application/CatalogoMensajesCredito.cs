@@ -130,8 +130,49 @@ public static class CatalogoMensajesCredito
         EstadoAbonoCredito.RECHAZADO => "No autorizado",
         EstadoAbonoCredito.PENDIENTE => "En confirmación",
         EstadoAbonoCredito.SOLICITADO => "En proceso",
+        EstadoAbonoCredito.REEMBOLSADO => "Reembolsado",
         _ => "Por reembolsar"
     };
+
+    public const string ReembolsoEnProceso = "Reembolso a tu tarjeta en proceso";
+    public const string ReembolsoAplicado = "Reembolsado a tu tarjeta";
+    public const string ReembolsoFallido = "No pudimos completar el reembolso; contáctanos";
+
+    /// <summary>
+    /// Estado legible del reembolso de un pago: no se pudo (requiere atencion), en proceso
+    /// (pedido y aun sin confirmar) o reembolsado. Null si de ese pago no se devuelve nada.
+    /// </summary>
+    public static string? EstadoReembolsoAbono(AbonoCredito abono)
+    {
+        if (abono.ReembolsoFallidoEn is not null && abono.Estado != EstadoAbonoCredito.REEMBOLSADO)
+        {
+            return ReembolsoFallido;
+        }
+
+        if (abono.Estado == EstadoAbonoCredito.REEMBOLSO_PENDIENTE || abono.MontoReembolsoSolicitado > abono.MontoReembolsado)
+        {
+            return ReembolsoEnProceso;
+        }
+
+        return abono.MontoReembolsado > 0m ? ReembolsoAplicado : null;
+    }
+
+    /// <summary>"Devolviste productos por Q500.00. ..." con lo que bajo la deuda y lo que se reembolsa.</summary>
+    public static string DescripcionDevolucion(decimal monto, decimal descontadoDeuda, decimal aReembolsar)
+    {
+        var texto = $"Devolviste productos por {Monto(monto)}.";
+        if (descontadoDeuda > 0m)
+        {
+            texto += $" Tu deuda bajó {Monto(descontadoDeuda)}.";
+        }
+
+        if (aReembolsar > 0m)
+        {
+            texto += $" Te devolveremos {Monto(aReembolsar)} a tu tarjeta.";
+        }
+
+        return texto;
+    }
 
     /// <summary>"Visa terminada en 4242", o null si no se conoce la tarjeta.</summary>
     public static string? Tarjeta(string? marca, string? ultimosCuatro)
@@ -215,12 +256,12 @@ public static class CatalogoMensajesCredito
     public static string MensajeRechazo(MensajeCredito mensaje) => $"{mensaje.Mensaje} {mensaje.Recomendacion}";
 
     /// <summary>Etiqueta legible del estado de una compra a credito.</summary>
-    public static string EtiquetaEstadoCompra(EstadoCuentaPorCobrar estado, bool vencePronto = false) => estado switch
+    public static string EtiquetaEstadoCompra(EstadoCuentaPorCobrar estado, bool vencePronto = false, bool devuelta = false) => estado switch
     {
         EstadoCuentaPorCobrar.VIGENTE => vencePronto ? "Vence pronto" : "Por pagar",
         EstadoCuentaPorCobrar.PAGADA => "Pagada",
         EstadoCuentaPorCobrar.VENCIDA => "Vencida",
-        _ => "Anulada"
+        _ => devuelta ? "Devuelta" : "Anulada"
     };
 
     public static string NombreFactor(FactorCliente factor) => factor switch

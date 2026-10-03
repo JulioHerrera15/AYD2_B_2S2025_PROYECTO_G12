@@ -105,5 +105,6 @@ public sealed class CuentaPorCobrarConfiguration : IEntityTypeConfiguration<Cuen
             .IsRequired();
 
         builder.Ignore(cuenta => cuenta.EsPagable);
+        builder.Ignore(cuenta => cuenta.AnuladaPorDevolucion);
     }
 }

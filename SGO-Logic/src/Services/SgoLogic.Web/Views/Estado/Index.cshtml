@@ -10,6 +10,8 @@
     var totalOrdenes = (int)(ViewBag.TotalOrdenes ?? (historial?.Count ?? 0));
     var buscar = ViewBag.Buscar as string;
     var filtro = ViewBag.Filtro as string ?? "TODOS";
+    var reembolso = ViewBag.Reembolso as SgoLogic.Web.Services.ReembolsoOrdenVista;
+    var notasCredito = ViewBag.NotasCredito as List<SgoLogic.Web.Services.FacturaModel> ?? new List<SgoLogic.Web.Services.FacturaModel>();
 }
 
 <!-- Header -->
@@ -386,20 +388,31 @@ else
             var isCancelledOrRejected = Model.Estado == "CANCELADA" || Model.Estado == "RECHAZADA";
         }
 
+        @if (reembolso is not null)
+        {
+            <!-- Reembolso a la tarjeta: primero y destacado; se actualiza solo mientras esta en proceso -->
+            <partial name="_ReembolsoOrden" model="new SgoLogic.Web.Services.ReembolsoBannerModel(Model.OrdenId, reembolso)" />
+        }
+
         @if (isCancelledOrRejected)
         {
-            <div class="mb-6 p-4 rounded-2xl bg-red-50 border border-red-200 text-red-950 flex items-start gap-3">
-                <span class="material-symbols-outlined text-red-600 text-[24px] flex-shrink-0 mt-0.5">error</span>
+            var esRechazada = Model.Estado == "RECHAZADA";
+            <div class="mb-6 p-4 rounded-2xl border flex items-start gap-3 @(esRechazada ? "bg-red-50 border-red-200 text-red-950" : "bg-surface-white border-border-subtle text-primary")">
+                <span class="material-symbols-outlined text-[24px] flex-shrink-0 mt-0.5 @(esRechazada ? "text-red-600" : "text-primary")">@(esRechazada ? "error" : "task_alt")</span>
                 <div class="flex-1">
-                    <h3 class="font-bold text-sm text-red-900">
-                        @(Model.Estado == "RECHAZADA" ? "Orden Rechazada" : "Orden Cancelada")
+                    <h3 class="font-bold text-sm">
+                        @(esRechazada ? "Orden rechazada" : "Orden cancelada")
                     </h3>
-                    <p class="text-xs text-red-800 mt-1 leading-relaxed">
-                        Motivo: <strong>@(string.IsNullOrWhiteSpace(Model.MotivoUltimoCambio) ? "No fue posible procesar la orden con los datos o inventario provistos." : Model.MotivoUltimoCambio)</strong>
-                    </p>
-                    <p class="text-[11px] text-red-700/90 mt-1.5">
-                        Los procesos de facturación electrónica y despacho han sido anulados automáticamente. Ningún cobro definitivo fue aplicado.
-                    </p>
+                    @if (!string.IsNullOrWhiteSpace(Model.MotivoUltimoCambio))
+                    {
+                        <p class="text-xs mt-1 leading-relaxed opacity-90">
+                            Motivo: <strong>@Model.MotivoUltimoCambio</strong>
+                        </p>
+                    }
+                    else if (esRechazada)
+                    {
+                        <p class="text-xs mt-1 leading-relaxed opacity-90">No fue posible completar tu compra.</p>
+                    }
                 </div>
             </div>
         }
@@ -598,6 +611,23 @@ else
                             <span class="font-semibold text-amber-700">En Trámite</span>
                         }
                     </div>
+                    @if (notasCredito.Count > 0)
+                    {
+                        <div class="flex justify-between">
+                            <span class="text-text-muted">Nota de crédito:</span>
+                            <span class="font-semibold text-primary">@(notasCredito.Any(n => n.EstaCertificada) ? "Emitida" : "En trámite")</span>
+                        </div>
+                    }
+                    @if (isCancelledOrRejected && notasCredito.Count > 0)
+                    {
+                        <div class="pt-2">
+                            <a href="/Estado/Factura?ordenId=@Uri.EscapeDataString(Model.OrdenId)"
+                               class="w-full inline-flex items-center justify-center gap-1.5 bg-surface-white hover:bg-surface-container text-primary px-3 py-2 rounded-xl text-xs font-semibold border border-border-subtle/70 transition-colors">
+                                <span class="material-symbols-outlined text-[16px]">description</span>
+                                Ver factura y nota de crédito
+                            </a>
+                        </div>
+                    }
                     @if (!isCancelledOrRejected)
                     {
                         <div class="pt-2">
