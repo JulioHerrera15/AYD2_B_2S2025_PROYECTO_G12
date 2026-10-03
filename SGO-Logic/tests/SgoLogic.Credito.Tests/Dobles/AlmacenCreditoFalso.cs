@@ -16,6 +16,7 @@ public sealed class AlmacenCreditoFalso : IRepositorioCredito, IConsultasCredito
     public List<DecisionCredito> Decisiones { get; } = new();
     public List<CuentaPorCobrar> Cuentas { get; } = new();
     public List<AbonoCredito> Abonos { get; } = new();
+    public List<MovimientoCuenta> Movimientos { get; } = new();
 
     private long _correlativoAbonos;
 
@@ -98,6 +99,23 @@ public sealed class AlmacenCreditoFalso : IRepositorioCredito, IConsultasCredito
 
     public void AgregarAbono(AbonoCredito abono) => Abonos.Add(abono);
 
+    public Task<bool> HayAbonosCobradosAsync(Guid cuentaId, CancellationToken cancelacion) =>
+        Task.FromResult(Abonos.Any(a => a.CuentaId == cuentaId
+            && a.Estado is EstadoAbonoCredito.APLICADO or EstadoAbonoCredito.REEMBOLSADO));
+
+    public Task<IReadOnlyList<Guid>> ListarAbonosReembolsoSinSolicitudAsync(int maximo, CancellationToken cancelacion) =>
+        Task.FromResult<IReadOnlyList<Guid>>(Abonos
+            .Where(a => a.Estado == EstadoAbonoCredito.REEMBOLSO_PENDIENTE && a.ReembolsoSolicitadoEn is null)
+            .OrderBy(a => a.SolicitadoEn).Take(maximo).Select(a => a.Id).ToList());
+
+    public Task<bool> ExisteMovimientoAsync(TipoMovimientoCuenta tipo, string referencia, CancellationToken cancelacion) =>
+        Task.FromResult(Movimientos.Any(m => m.Tipo == tipo && m.Referencia == referencia));
+
+    public void AgregarMovimiento(MovimientoCuenta movimiento) => Movimientos.Add(movimiento);
+
+    public Task<IReadOnlyList<MovimientoCuenta>> ListarMovimientosAsync(string clienteId, CancellationToken cancelacion) =>
+        Task.FromResult<IReadOnlyList<MovimientoCuenta>>(Movimientos.Where(m => m.ClienteId == clienteId).ToList());
+
     public Task<long> SiguienteCorrelativoAbonoAsync(CancellationToken cancelacion) =>
         Task.FromResult(++_correlativoAbonos);
 
@@ -111,7 +129,8 @@ public sealed class AlmacenCreditoFalso : IRepositorioCredito, IConsultasCredito
 
     public Task<ResultadoReinicioDemo> ReiniciarDemoAsync(DateTime ahora, CancellationToken cancelacion)
     {
-        var resultado = new ResultadoReinicioDemo(Cuentas.Count, Decisiones.Count, Lineas.Count, Abonos.Count);
+        var resultado = new ResultadoReinicioDemo(Cuentas.Count, Decisiones.Count, Lineas.Count, Abonos.Count, Movimientos.Count);
+        Movimientos.Clear();
         Abonos.Clear();
         Cuentas.Clear();
         Decisiones.Clear();
@@ -128,7 +147,8 @@ public sealed class AlmacenCreditoFalso : IRepositorioCredito, IConsultasCredito
         Task.FromResult<IReadOnlyList<CompraCredito>>(Cuentas
             .Where(c => c.ClienteId == clienteId)
             .Select(c => new CompraCredito(
-                c.OrdenId, c.NumeroOrden, c.MontoOriginal, c.SaldoPendiente, c.EmitidaEn, c.VenceEn, c.Estado, c.Id, c.PagadaEn, c.PagoPuntual))
+                c.OrdenId, c.NumeroOrden, c.MontoOriginal, c.SaldoPendiente, c.EmitidaEn, c.VenceEn, c.Estado, c.Id, c.PagadaEn, c.PagoPuntual,
+                c.MotivoAnulacion))
             .ToList());
 
     public Task<ResumenCredito?> ObtenerResumenAsync(string clienteId, CancellationToken cancelacion)
