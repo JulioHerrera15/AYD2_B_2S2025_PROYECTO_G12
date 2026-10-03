@@ -94,6 +94,11 @@ public sealed class ServicioElegibilidad
             .GroupBy(abono => abono.CuentaId)
             .ToDictionary(grupo => grupo.Key, grupo => grupo.OrderByDescending(abono => abono.SolicitadoEn).ToList());
 
+        var devolucionesPorCuenta = (await _consultas.ListarMovimientosAsync(cliente, cancelacion))
+            .Where(movimiento => movimiento.Tipo == TipoMovimientoCuenta.DEVOLUCION)
+            .GroupBy(movimiento => movimiento.CuentaId)
+            .ToDictionary(grupo => grupo.Key, grupo => grupo.OrderBy(movimiento => movimiento.Fecha).ToList());
+
         var cuentas = (await _consultas.ListarComprasAsync(cliente, cancelacion))
             .OrderBy(compra => Pagable(compra) ? 0 : 1)
             .ThenBy(compra => Pagable(compra) ? compra.VenceEn : DateTime.MaxValue)
@@ -101,7 +106,11 @@ public sealed class ServicioElegibilidad
             .ToList();
 
         var compras = cuentas
-            .Select(compra => Compra(compra, abonosPorCuenta.GetValueOrDefault(compra.CuentaId) ?? new List<AbonoCredito>(), ahora))
+            .Select(compra => Compra(
+                compra,
+                abonosPorCuenta.GetValueOrDefault(compra.CuentaId) ?? new List<AbonoCredito>(),
+                devolucionesPorCuenta.GetValueOrDefault(compra.CuentaId) ?? new List<MovimientoCuenta>(),
+                ahora))
             .ToArray();
 
         var pagables = cuentas.Where(Pagable).ToList();
@@ -136,7 +145,8 @@ public sealed class ServicioElegibilidad
         compra.Estado == EstadoCuentaPorCobrar.VIGENTE && compra.SaldoPendiente > 0m
         && DiasRestantes(compra, ahora) <= _cobranza.DiasRecordatorio;
 
-    private CompraCreditoDto Compra(CompraCredito compra, IReadOnlyList<AbonoCredito> abonos, DateTime ahora)
+    private CompraCreditoDto Compra(
+        CompraCredito compra, IReadOnlyList<AbonoCredito> abonos, IReadOnlyList<MovimientoCuenta> devoluciones, DateTime ahora)
     {
         var enCurso = abonos.FirstOrDefault(abono => abono.EnCurso);
         return new CompraCreditoDto(
@@ -148,7 +158,8 @@ public sealed class ServicioElegibilidad
             compra.VenceEn,
             compra.Estado == EstadoCuentaPorCobrar.VIGENTE ? DiasRestantes(compra, ahora) : null,
             compra.Estado.ToString(),
-            CatalogoMensajesCredito.EtiquetaEstadoCompra(compra.Estado, VencePronto(compra, ahora)),
+            CatalogoMensajesCredito.EtiquetaEstadoCompra(
+                compra.Estado, VencePronto(compra, ahora), compra.MotivoAnulacion == CuentaPorCobrar.MotivoDevolucion),
             compra.CuentaId.ToString("N"),
             Pagable(compra) && enCurso is null,
             enCurso?.Id.ToString("N"),
@@ -161,7 +172,21 @@ public sealed class ServicioElegibilidad
                     abono.Monto,
                     CatalogoMensajesCredito.Tarjeta(abono.Marca, abono.UltimosCuatro),
                     abono.Estado.ToString(),
-                    CatalogoMensajesCredito.EtiquetaEstadoAbono(abono.Estado)))
+                    CatalogoMensajesCredito.EtiquetaEstadoAbono(abono.Estado),
+                    CatalogoMensajesCredito.EstadoReembolsoAbono(abono),
+                    abono.MontoReembolsado,
+                    abono.MontoReembolsoSolicitado))
+                .ToArray(),
+            devoluciones
+                .Select(movimiento => new MovimientoCreditoDto(
+                    movimiento.Tipo.ToString(),
+                    movimiento.Referencia,
+                    movimiento.Fecha,
+                    movimiento.Monto,
+                    movimiento.MontoDescontadoDeuda,
+                    movimiento.MontoAReembolsar,
+                    CatalogoMensajesCredito.DescripcionDevolucion(
+                        movimiento.Monto, movimiento.MontoDescontadoDeuda, movimiento.MontoAReembolsar)))
                 .ToArray());
     }
 

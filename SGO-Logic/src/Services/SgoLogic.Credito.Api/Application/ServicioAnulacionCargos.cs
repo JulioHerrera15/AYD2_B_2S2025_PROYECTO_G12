@@ -110,14 +110,16 @@ public sealed class ServicioAnulacionCargos
             var motivo = $"Orden cancelada ({datos.Motivo})";
             var liberado = cuenta.Anular(motivo, ahora);
 
-            // Solo vuelve al disponible lo que faltaba pagar; lo ya abonado queda
-            // pendiente de reembolso (bloque 4).
+            // Solo vuelve al disponible lo que faltaba pagar; lo ya abonado se devuelve a
+            // la tarjeta: cada abono aplicado pasa a REEMBOLSO_PENDIENTE y se pide su
+            // reembolso a Pagos en esta misma transaccion.
             var linea = await _repositorio.ObtenerLineaAsync(cuenta.ClienteId, cancelacion);
             linea?.Liberar(liberado, ahora);
 
             foreach (var abono in await _repositorio.ListarAbonosAplicadosAsync(cuenta.Id, cancelacion))
             {
                 abono.MarcarReembolsoPendiente(null, null, null, ahora);
+                SolicitudesReembolsoAbono.SolicitarCompleto(_outbox, abono, cuenta, ahora);
             }
 
             if (_perfiles is not null)

@@ -67,10 +67,34 @@ public sealed class AbonoCreditoConfiguration : IEntityTypeConfiguration<AbonoCr
             .HasColumnName("resuelto_en")
             .HasColumnType("timestamp with time zone");
 
+        builder.Property(abono => abono.MontoReembolsado).HasColumnName("monto_reembolsado").HasPrecision(12, 2).IsRequired();
+        builder.Property(abono => abono.MontoReembolsoSolicitado)
+            .HasColumnName("monto_reembolso_solicitado")
+            .HasPrecision(12, 2)
+            .IsRequired();
+
+        builder.Property(abono => abono.ReembolsoSolicitadoEn)
+            .HasColumnName("reembolso_solicitado_en")
+            .HasColumnType("timestamp with time zone");
+
+        builder.Property(abono => abono.ReembolsoFallidoEn)
+            .HasColumnName("reembolso_fallido_en")
+            .HasColumnType("timestamp with time zone");
+
+        builder.Property(abono => abono.MotivoFallaReembolso)
+            .HasColumnName("motivo_falla_reembolso")
+            .HasMaxLength(AbonoCredito.LargoMaximoMotivoFalla);
+
+        // El worker busca los REEMBOLSO_PENDIENTE que aun no tienen solicitud.
+        builder.HasIndex(abono => abono.Estado)
+            .HasFilter("reembolso_solicitado_en IS NULL")
+            .HasDatabaseName("ix_abono_credito_reembolso_sin_solicitud");
+
         builder.Property(abono => abono.Version).HasColumnName("version").IsConcurrencyToken().IsRequired();
 
         builder.Ignore(abono => abono.EnCurso);
         builder.Ignore(abono => abono.EsFinal);
         builder.Ignore(abono => abono.PuedeReintentar);
+        builder.Ignore(abono => abono.PendientePorSolicitarReembolso);
     }
 }

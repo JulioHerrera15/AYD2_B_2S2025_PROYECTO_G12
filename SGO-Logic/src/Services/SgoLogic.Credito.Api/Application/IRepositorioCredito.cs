@@ -54,6 +54,17 @@ public interface IRepositorioCredito
 
     void AgregarAbono(AbonoCredito abono);
 
+    /// <summary>True si la cuenta tiene algun abono que pago deuda (APLICADO o ya REEMBOLSADO).</summary>
+    Task<bool> HayAbonosCobradosAsync(Guid cuentaId, CancellationToken cancelacion);
+
+    /// <summary>Ids de abonos REEMBOLSO_PENDIENTE a los que aun no se les pidio el reembolso.</summary>
+    Task<IReadOnlyList<Guid>> ListarAbonosReembolsoSinSolicitudAsync(int maximo, CancellationToken cancelacion);
+
+    /// <summary>True si ya existe el movimiento (idempotencia por devolucionId o reembolsoId).</summary>
+    Task<bool> ExisteMovimientoAsync(TipoMovimientoCuenta tipo, string referencia, CancellationToken cancelacion);
+
+    void AgregarMovimiento(MovimientoCuenta movimiento);
+
     /// <summary>Siguiente valor de la secuencia de referencias de abono.</summary>
     Task<long> SiguienteCorrelativoAbonoAsync(CancellationToken cancelacion);
 
@@ -72,7 +83,7 @@ public interface IRepositorioCredito
     void DescartarCambios();
 
     /// <summary>
-    /// Reinicio de demo: borra abonos, cuentas por cobrar y decisiones, deja el saldo
+    /// Reinicio de demo: borra movimientos, abonos, cuentas por cobrar y decisiones, deja el saldo
     /// utilizado de todas las lineas en 0 y quita la pausa por mora. No toca perfiles ni
     /// historiales (el servicio los recalcula despues).
     /// </summary>
@@ -97,7 +108,8 @@ public sealed class ExcepcionDuplicadoCredito : Exception
     }
 }
 
-public sealed record ResultadoReinicioDemo(int CuentasBorradas, int DecisionesBorradas, int LineasReiniciadas, int AbonosBorrados = 0);
+public sealed record ResultadoReinicioDemo(
+    int CuentasBorradas, int DecisionesBorradas, int LineasReiniciadas, int AbonosBorrados = 0, int MovimientosBorrados = 0);
 
 /// <summary>
 /// Lectura para la consulta de oferta y "Mi credito": perfil, linea y antiguedad
@@ -112,6 +124,9 @@ public interface IConsultasCredito
 
     /// <summary>Abonos del cliente (todas sus cuentas), sin seguimiento de cambios.</summary>
     Task<IReadOnlyList<AbonoCredito>> ListarAbonosAsync(string clienteId, CancellationToken cancelacion);
+
+    /// <summary>Movimientos (devoluciones y reembolsos) de las cuentas del cliente, sin seguimiento.</summary>
+    Task<IReadOnlyList<MovimientoCuenta>> ListarMovimientosAsync(string clienteId, CancellationToken cancelacion);
 }
 
 /// <summary>Proyeccion de lectura de una cuenta por cobrar.</summary>
@@ -125,7 +140,8 @@ public sealed record CompraCredito(
     EstadoCuentaPorCobrar Estado,
     Guid CuentaId = default,
     DateTime? PagadaEn = null,
-    bool? PagoPuntual = null);
+    bool? PagoPuntual = null,
+    string? MotivoAnulacion = null);
 
 /// <summary>Proyeccion de lectura. Null en la linea si aun no existe; null en ClienteDesde si no hay historial.</summary>
 public sealed record ResumenCredito(

@@ -194,6 +194,29 @@ namespace SgoLogic.Credito.Api.Infrastructure.Persistencia.Migraciones
                         .HasColumnType("numeric(12,2)")
                         .HasColumnName("monto");
 
+                    b.Property<decimal>("MontoReembolsado")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("monto_reembolsado");
+
+                    b.Property<decimal>("MontoReembolsoSolicitado")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("monto_reembolso_solicitado");
+
+                    b.Property<string>("MotivoFallaReembolso")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("motivo_falla_reembolso");
+
+                    b.Property<DateTime?>("ReembolsoFallidoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reembolso_fallido_en");
+
+                    b.Property<DateTime?>("ReembolsoSolicitadoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reembolso_solicitado_en");
+
                     b.Property<string>("Referencia")
                         .IsRequired()
                         .HasMaxLength(20)
@@ -227,6 +250,10 @@ namespace SgoLogic.Credito.Api.Infrastructure.Persistencia.Migraciones
                         .IsUnique()
                         .HasDatabaseName("ux_abono_credito_cuenta_en_curso")
                         .HasFilter("estado IN ('SOLICITADO', 'PENDIENTE')");
+
+                    b.HasIndex("Estado")
+                        .HasDatabaseName("ix_abono_credito_reembolso_sin_solicitud")
+                        .HasFilter("reembolso_solicitado_en IS NULL");
 
                     b.HasIndex("Referencia")
                         .IsUnique()
@@ -533,6 +560,75 @@ namespace SgoLogic.Credito.Api.Infrastructure.Persistencia.Migraciones
                             t.HasCheckConstraint("ck_linea_credito_limite_no_negativo", "limite_aprobado >= 0");
 
                             t.HasCheckConstraint("ck_linea_credito_saldo_no_negativo", "saldo_utilizado >= 0");
+                        });
+                });
+
+            modelBuilder.Entity("SgoLogic.Credito.Api.Domain.MovimientoCuenta", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("AbonoId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("abono_id");
+
+                    b.Property<string>("ClienteId")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("cliente_id");
+
+                    b.Property<Guid>("CuentaId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("cuenta_id");
+
+                    b.Property<DateTime>("Fecha")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("fecha");
+
+                    b.Property<decimal>("Monto")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("monto");
+
+                    b.Property<decimal>("MontoAReembolsar")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("monto_a_reembolsar");
+
+                    b.Property<decimal>("MontoDescontadoDeuda")
+                        .HasPrecision(12, 2)
+                        .HasColumnType("numeric(12,2)")
+                        .HasColumnName("monto_descontado_deuda");
+
+                    b.Property<string>("Referencia")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("referencia");
+
+                    b.Property<string>("Tipo")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("tipo");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ClienteId")
+                        .HasDatabaseName("ix_movimiento_cuenta_cliente_id");
+
+                    b.HasIndex("CuentaId")
+                        .HasDatabaseName("ix_movimiento_cuenta_cuenta_id");
+
+                    b.HasIndex("Tipo", "Referencia")
+                        .IsUnique()
+                        .HasDatabaseName("ux_movimiento_cuenta_tipo_referencia");
+
+                    b.ToTable("movimiento_cuenta", "credito", t =>
+                        {
+                            t.HasCheckConstraint("ck_movimiento_cuenta_monto_positivo", "monto > 0");
                         });
                 });
 

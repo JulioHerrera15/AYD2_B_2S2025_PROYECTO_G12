@@ -64,7 +64,11 @@ public sealed record MiCreditoDto(
 /// <summary>Aviso destacado de "Mi credito". Tipo: POR_VENCER, VENCIDA o LINEA_EN_PAUSA (no se muestra).</summary>
 public sealed record AvisoCreditoDto(string Tipo, string Titulo, string Mensaje, string Recomendacion, string? CuentaId);
 
-/// <summary>Un pago de una compra a credito, para el historial. Sin codigos internos para mostrar.</summary>
+/// <summary>
+/// Un pago de una compra a credito, para el historial. Sin codigos internos para mostrar.
+/// EstadoReembolso es el texto para el cliente cuando parte o todo el pago se devuelve a
+/// la tarjeta (en proceso, reembolsado o no se pudo); null si no hay reembolso.
+/// </summary>
 public sealed record AbonoHistorialDto(
     string AbonoId,
     string Referencia,
@@ -72,7 +76,20 @@ public sealed record AbonoHistorialDto(
     decimal Monto,
     string? Tarjeta,
     string Estado,
-    string EtiquetaEstado);
+    string EtiquetaEstado,
+    string? EstadoReembolso = null,
+    decimal MontoReembolsado = 0m,
+    decimal MontoReembolsoSolicitado = 0m);
+
+/// <summary>Devolucion sobre una compra a credito, para mostrar en Mi credito.</summary>
+public sealed record MovimientoCreditoDto(
+    string Tipo,
+    string Referencia,
+    DateTime Fecha,
+    decimal Monto,
+    decimal MontoDescontadoDeuda,
+    decimal MontoAReembolsar,
+    string Descripcion);
 
 /// <summary>
 /// Estado de un abono para la Web. Estado es el codigo; Titulo y Mensaje son para el
@@ -114,7 +131,8 @@ public sealed record CompraCreditoDto(
     bool PuedePagar = false,
     string? AbonoEnCursoId = null,
     bool AbonoEnCursoPuedeReintentar = false,
-    IReadOnlyList<AbonoHistorialDto>? Abonos = null);
+    IReadOnlyList<AbonoHistorialDto>? Abonos = null,
+    IReadOnlyList<MovimientoCreditoDto>? Movimientos = null);
 
 /// <summary>
 /// Resultado de aplicar un historial. Aplicado es false si se ignoro por traer una

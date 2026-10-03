@@ -80,6 +80,11 @@ builder.Services.AddScoped<ServicioResultadoAbonos>();
 builder.Services.AddScoped<ServicioVencimientos>();
 builder.Services.AddHostedService<PagosCreditoConsumidor>();
 builder.Services.AddHostedService<VencimientosCreditoWorker>();
+
+// Bloque 4: devoluciones de compras a credito y reembolso de abonos.
+builder.Services.AddScoped<ServicioDevolucionesCredito>();
+builder.Services.AddScoped<ServicioReembolsosAbono>();
+builder.Services.AddHostedService<ReembolsosAbonoCreditoWorker>();
 builder.Services.AddHostedService<HistorialClienteErpConsumidor>();
 
 // Bloque 2: evaluacion de compras a credito dentro de la saga y anulacion de cargos.

@@ -57,11 +57,18 @@ public sealed class ConsultasCredito : IConsultasCredito
                 cuenta.Estado,
                 cuenta.Id,
                 cuenta.PagadaEn,
-                cuenta.PagoPuntual))
+                cuenta.PagoPuntual,
+                cuenta.MotivoAnulacion))
             .ToListAsync(cancelacion);
 
     public async Task<IReadOnlyList<AbonoCredito>> ListarAbonosAsync(string clienteId, CancellationToken cancelacion) =>
         await _contexto.Abonos.AsNoTracking()
             .Where(abono => abono.ClienteId == clienteId)
+            .ToListAsync(cancelacion);
+
+    public async Task<IReadOnlyList<MovimientoCuenta>> ListarMovimientosAsync(string clienteId, CancellationToken cancelacion) =>
+        await _contexto.Movimientos.AsNoTracking()
+            .Where(movimiento => movimiento.ClienteId == clienteId)
+            .OrderBy(movimiento => movimiento.Fecha)
             .ToListAsync(cancelacion);
 }
