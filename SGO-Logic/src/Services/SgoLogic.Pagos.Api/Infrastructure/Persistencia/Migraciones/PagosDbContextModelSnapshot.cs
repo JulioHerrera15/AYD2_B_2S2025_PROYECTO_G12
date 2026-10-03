@@ -344,6 +344,110 @@ namespace SgoLogic.Pagos.Api.Infrastructure.Persistencia.Migraciones
                     b.ToTable("pago", "pagos");
                 });
 
+            modelBuilder.Entity("SgoLogic.Pagos.Api.Domain.Reembolso", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("AbonoId")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("abono_id");
+
+                    b.Property<string>("AutorizacionId")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("autorizacion_id");
+
+                    b.Property<string>("ClienteId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("cliente_id");
+
+                    b.Property<string>("CodigoRespuesta")
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)")
+                        .HasColumnName("codigo_respuesta");
+
+                    b.Property<string>("Concepto")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("concepto");
+
+                    b.Property<DateTime>("CreadoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("creado_en");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("estado");
+
+                    b.Property<int>("Intentos")
+                        .HasColumnType("integer")
+                        .HasColumnName("intentos");
+
+                    b.Property<string>("Moneda")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("moneda");
+
+                    b.Property<decimal>("Monto")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("monto");
+
+                    b.Property<string>("MotivoFalla")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("motivo_falla");
+
+                    b.Property<Guid>("PagoId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("pago_id");
+
+                    b.Property<DateTime?>("ProximoIntentoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("proximo_intento_en");
+
+                    b.Property<string>("ReferenciaId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("referencia_id");
+
+                    b.Property<DateTime?>("ResueltoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("resuelto_en");
+
+                    b.Property<int>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("integer")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PagoId")
+                        .HasDatabaseName("ix_reembolso_pago_id");
+
+                    b.HasIndex("Concepto", "ReferenciaId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_reembolso_concepto_referencia");
+
+                    b.HasIndex("Estado", "ProximoIntentoEn")
+                        .HasDatabaseName("ix_reembolso_estado_proximo_intento");
+
+                    b.ToTable("reembolso", "pagos", t =>
+                        {
+                            t.HasCheckConstraint("ck_reembolso_monto_positivo", "monto > 0");
+                        });
+                });
+
             modelBuilder.Entity("SgoLogic.Pagos.Api.Domain.TarjetaGuardada", b =>
                 {
                     b.Property<Guid>("Id")
@@ -505,6 +609,16 @@ namespace SgoLogic.Pagos.Api.Infrastructure.Persistencia.Migraciones
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired()
                         .HasConstraintName("fk_intento_pago_pago");
+                });
+
+            modelBuilder.Entity("SgoLogic.Pagos.Api.Domain.Reembolso", b =>
+                {
+                    b.HasOne("SgoLogic.Pagos.Api.Domain.Pago", null)
+                        .WithMany()
+                        .HasForeignKey("PagoId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_reembolso_pago");
                 });
 
             modelBuilder.Entity("SgoLogic.Pagos.Api.Domain.Pago", b =>

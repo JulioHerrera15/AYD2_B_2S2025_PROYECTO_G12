@@ -15,7 +15,12 @@ public static class DevolucionRegistrada
     public const string AggregateType = "Devolucion";
 }
 
-/// <summary>Contenido de data del evento DevolucionRegistrada (seccion 7.11 del contrato).</summary>
+/// <summary>
+/// Contenido de data del evento DevolucionRegistrada (seccion 7.11 del contrato).
+/// MedioPago (v1.4) es el de la orden original: con CREDITO la devolucion la aplica
+/// Credito y Pagos la ignora. Opcional y al final para no romper a los consumidores
+/// existentes; null se trata como un pago con tarjeta, igual que antes.
+/// </summary>
 public sealed record DevolucionRegistradaData(
     string DevolucionId,
     string OrdenOriginalId,
@@ -29,7 +34,8 @@ public sealed record DevolucionRegistradaData(
     string PagoOriginalId,
     string DocumentoFiscalOriginalId,
     string RegistradaPor,
-    DateTime RegistradaEn);
+    DateTime RegistradaEn,
+    MedioPago? MedioPago = null);
 
 /// <summary>
 /// Linea devuelta dentro del evento DevolucionRegistrada. UbicacionOrigenReservaId

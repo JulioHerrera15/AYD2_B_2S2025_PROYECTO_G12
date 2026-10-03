@@ -17,8 +17,9 @@ namespace SgoLogic.Pagos.Api.Consumers;
 
 /// <summary>
 /// Consume la cola <c>pagos.ordenes</c> (bindings a
-/// <c>ordenes.cobro.solicitado</c> y <c>ordenes.devolucion.registrada</c>) y
-/// delega a <see cref="ServicioCobro" /> o <see cref="ServicioReembolso" />.
+/// <c>ordenes.cobro.solicitado</c>, <c>ordenes.devolucion.registrada</c> y
+/// <c>ordenes.orden.cancelada</c>) y delega a <see cref="ServicioCobro" />,
+/// <see cref="ServicioReembolso" /> o <see cref="ServicioReembolsosPendientes" />.
 ///
 /// No usa EventConsumerBase porque esta cola recibe multiples tipos de data
 /// sobre un solo binding-set y la clase base esta tipada a un unico TData. Aun
@@ -45,7 +46,8 @@ public sealed class PagosEventosConsumidor : BackgroundService
     private static readonly IReadOnlyCollection<BindingCola> BindingsCola = new[]
     {
         new BindingCola(TopologiaMensajeria.ExchangeEventos, "ordenes.cobro.solicitado"),
-        new BindingCola(TopologiaMensajeria.ExchangeEventos, DevolucionRegistrada.RoutingKey)
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, DevolucionRegistrada.RoutingKey),
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, OrdenCancelada.RoutingKey)
     };
 
     private const string NombreServicio = "pagos";
@@ -130,6 +132,10 @@ public sealed class PagosEventosConsumidor : BackgroundService
                     await ManejarDevolucionAsync(sobre, contexto, scope.ServiceProvider, cancelacion);
                     break;
 
+                case OrdenCancelada.EventType:
+                    await ManejarCancelacionAsync(sobre, scope.ServiceProvider, cancelacion);
+                    break;
+
                 default:
                     _logger.LogWarning(
                         "Tipo de evento desconocido {EventType} en {Cola}; se hace ack sin procesar.",
@@ -200,5 +206,20 @@ public sealed class PagosEventosConsumidor : BackgroundService
 
         var servicio = servicios.GetRequiredService<ServicioReembolso>();
         await servicio.ProcesarReembolsoAsync(datos, cancelacion);
+    }
+
+    /// <summary>
+    /// Orden pagada con tarjeta y cancelada: registra el reembolso PENDIENTE (lo envia el
+    /// worker). Se guarda en el mismo SaveChanges que la marca de procesado.
+    /// </summary>
+    private static async Task ManejarCancelacionAsync(
+        IntegrationEvent<JsonElement> sobre,
+        IServiceProvider servicios,
+        CancellationToken cancelacion)
+    {
+        var datos = sobre.Data.Deserialize<OrdenCanceladaData>(SgoJsonSerializerOptions.Default)
+            ?? throw new JsonException("El campo data no coincide con OrdenCanceladaData.");
+
+        await servicios.GetRequiredService<ServicioReembolsosPendientes>().CrearPorCancelacionAsync(datos, cancelacion);
     }
 }

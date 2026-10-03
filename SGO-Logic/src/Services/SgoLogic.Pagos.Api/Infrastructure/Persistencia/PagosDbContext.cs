@@ -31,6 +31,9 @@ public sealed class PagosDbContext : DbContext
     /// <summary>Boveda transitoria: tokens con PAN y CVV cifrados con AES-GCM mientras se cobra.</summary>
     public DbSet<TokenPago> TokensPago => Set<TokenPago>();
 
+    /// <summary>Reembolsos por cancelacion de orden y de abonos a credito (los procesa un worker).</summary>
+    public DbSet<Reembolso> Reembolsos => Set<Reembolso>();
+
     public DbSet<OutboxMessage> OutboxMessages => Set<OutboxMessage>();
 
     public DbSet<MensajeProcesado> MensajesProcesados => Set<MensajeProcesado>();
