@@ -35,28 +35,36 @@ public sealed class ServicioAnulacionCargos
     private readonly PoliticaCredito _politica;
     private readonly ILogger<ServicioAnulacionCargos> _logger;
     private readonly Func<DateTime> _reloj;
-
-    public ServicioAnulacionCargos(
-        IRepositorioCredito repositorio,
-        IOutboxWriter outbox,
-        PoliticaCredito politica,
-        ILogger<ServicioAnulacionCargos> logger)
-        : this(repositorio, outbox, politica, logger, () => DateTime.UtcNow)
-    {
-    }
+    private readonly ServicioPerfilCrediticio? _perfiles;
 
     public ServicioAnulacionCargos(
         IRepositorioCredito repositorio,
         IOutboxWriter outbox,
         PoliticaCredito politica,
         ILogger<ServicioAnulacionCargos> logger,
-        Func<DateTime> reloj)
+        ServicioPerfilCrediticio? perfiles = null)
+        : this(repositorio, outbox, politica, logger, () => DateTime.UtcNow, perfiles)
+    {
+    }
+
+    /// <param name="perfiles">
+    /// Para quitar la pausa por mora si la cuenta anulada era la vencida. Sin el (pruebas
+    /// de bloque 2) la anulacion funciona igual pero no toca la mora.
+    /// </param>
+    public ServicioAnulacionCargos(
+        IRepositorioCredito repositorio,
+        IOutboxWriter outbox,
+        PoliticaCredito politica,
+        ILogger<ServicioAnulacionCargos> logger,
+        Func<DateTime> reloj,
+        ServicioPerfilCrediticio? perfiles = null)
     {
         _repositorio = repositorio;
         _outbox = outbox;
         _politica = politica;
         _logger = logger;
         _reloj = reloj;
+        _perfiles = perfiles;
     }
 
     public async Task<ResultadoAnulacion> ProcesarCancelacionAsync(OrdenCanceladaData datos, CancellationToken cancelacion)
@@ -94,7 +102,7 @@ public sealed class ServicioAnulacionCargos
         var cuenta = await _repositorio.ObtenerCuentaPorOrdenAsync(ordenId, cancelacion);
         if (cuenta is not null)
         {
-            if (cuenta.Estado != EstadoCuentaPorCobrar.VIGENTE)
+            if (cuenta.Estado is not (EstadoCuentaPorCobrar.VIGENTE or EstadoCuentaPorCobrar.VENCIDA))
             {
                 return ResultadoAnulacion.SinEfecto;
             }
@@ -102,8 +110,20 @@ public sealed class ServicioAnulacionCargos
             var motivo = $"Orden cancelada ({datos.Motivo})";
             var liberado = cuenta.Anular(motivo, ahora);
 
+            // Solo vuelve al disponible lo que faltaba pagar; lo ya abonado queda
+            // pendiente de reembolso (bloque 4).
             var linea = await _repositorio.ObtenerLineaAsync(cuenta.ClienteId, cancelacion);
             linea?.Liberar(liberado, ahora);
+
+            foreach (var abono in await _repositorio.ListarAbonosAplicadosAsync(cuenta.Id, cancelacion))
+            {
+                abono.MarcarReembolsoPendiente(null, null, null, ahora);
+            }
+
+            if (_perfiles is not null)
+            {
+                await _perfiles.ActualizarMoraYPerfilAsync(cuenta.ClienteId, cancelacion);
+            }
 
             _outbox.Encolar(
                 CargoCreditoAnulado.EventType,

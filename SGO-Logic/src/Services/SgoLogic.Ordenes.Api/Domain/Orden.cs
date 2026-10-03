@@ -80,6 +80,11 @@ public sealed partial class Orden
             throw new ArgumentOutOfRangeException(nameof(impuestos), "Los impuestos no pueden ser negativos.");
         }
 
+        if (impuestos > lineasMaterializadas.Sum(linea => linea.Subtotal))
+        {
+            throw new ArgumentOutOfRangeException(nameof(impuestos), "El IVA incluido no puede superar el total de la orden.");
+        }
+
         if (metodoEntrega == MetodoEntrega.RECOGIDA_TIENDA && string.IsNullOrWhiteSpace(ubicacionSolicitadaId))
         {
             throw new ArgumentException(
@@ -272,9 +277,14 @@ public sealed partial class Orden
 
     public IReadOnlyList<TransicionOrden> Transiciones => _transiciones.AsReadOnly();
 
-    public decimal Subtotal => _lineas.Sum(linea => linea.Subtotal);
+    /// <summary>
+    /// Lo que paga el cliente: suma de cantidad por precio de las lineas. Los precios
+    /// del catalogo ya incluyen IVA, asi que el impuesto no se suma encima.
+    /// </summary>
+    public decimal Total => _lineas.Sum(linea => linea.Subtotal);
 
-    public decimal Total => Subtotal + Impuestos;
+    /// <summary>Base sin IVA: el total menos el IVA incluido (<see cref="Impuestos" />).</summary>
+    public decimal Subtotal => Total - Impuestos;
 
     public bool EsTerminal => MaquinaEstadosOrden.EsTerminal(Estado);
 

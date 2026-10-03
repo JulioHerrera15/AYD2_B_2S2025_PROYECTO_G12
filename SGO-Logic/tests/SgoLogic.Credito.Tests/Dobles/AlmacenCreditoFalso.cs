@@ -15,6 +15,12 @@ public sealed class AlmacenCreditoFalso : IRepositorioCredito, IConsultasCredito
     public List<LineaCredito> Lineas { get; } = new();
     public List<DecisionCredito> Decisiones { get; } = new();
     public List<CuentaPorCobrar> Cuentas { get; } = new();
+    public List<AbonoCredito> Abonos { get; } = new();
+
+    private long _correlativoAbonos;
+
+    /// <summary>Si es true, el siguiente GuardarCambiosAsync lanza ExcepcionDuplicadoCredito (indice unico).</summary>
+    public bool DuplicadoEnSiguienteGuardado { get; set; }
 
     public int Descartes { get; private set; }
 
@@ -53,20 +59,66 @@ public sealed class AlmacenCreditoFalso : IRepositorioCredito, IConsultasCredito
 
     public Task GuardarCambiosAsync(CancellationToken cancelacion)
     {
+        if (DuplicadoEnSiguienteGuardado)
+        {
+            DuplicadoEnSiguienteGuardado = false;
+            throw new ExcepcionDuplicadoCredito("indice unico simulado");
+        }
+
         Guardados++;
         return Task.CompletedTask;
     }
+
+    public Task<CuentaPorCobrar?> ObtenerCuentaAsync(Guid cuentaId, CancellationToken cancelacion) =>
+        Task.FromResult(Cuentas.FirstOrDefault(c => c.Id == cuentaId));
+
+    public Task<IReadOnlyList<CuentaPorCobrar>> ListarCuentasClienteAsync(string clienteId, CancellationToken cancelacion) =>
+        Task.FromResult<IReadOnlyList<CuentaPorCobrar>>(Cuentas.Where(c => c.ClienteId == clienteId).ToList());
+
+    public Task<IReadOnlyList<Guid>> ListarCuentasParaRecordatorioAsync(DateTime limite, int maximo, CancellationToken cancelacion) =>
+        Task.FromResult<IReadOnlyList<Guid>>(Cuentas
+            .Where(c => c.Estado == EstadoCuentaPorCobrar.VIGENTE && c.SaldoPendiente > 0m
+                && c.RecordatorioEnviadoEn is null && c.VenceEn <= limite)
+            .OrderBy(c => c.VenceEn).Take(maximo).Select(c => c.Id).ToList());
+
+    public Task<IReadOnlyList<Guid>> ListarCuentasPorVencerseAsync(DateTime ahora, int maximo, CancellationToken cancelacion) =>
+        Task.FromResult<IReadOnlyList<Guid>>(Cuentas
+            .Where(c => c.Estado == EstadoCuentaPorCobrar.VIGENTE && c.SaldoPendiente > 0m && c.VenceEn < ahora)
+            .OrderBy(c => c.VenceEn).Take(maximo).Select(c => c.Id).ToList());
+
+    public Task<AbonoCredito?> ObtenerAbonoAsync(Guid abonoId, CancellationToken cancelacion) =>
+        Task.FromResult(Abonos.FirstOrDefault(a => a.Id == abonoId));
+
+    public Task<bool> HayAbonoEnCursoAsync(Guid cuentaId, CancellationToken cancelacion) =>
+        Task.FromResult(Abonos.Any(a => a.CuentaId == cuentaId && a.EnCurso));
+
+    public Task<IReadOnlyList<AbonoCredito>> ListarAbonosAplicadosAsync(Guid cuentaId, CancellationToken cancelacion) =>
+        Task.FromResult<IReadOnlyList<AbonoCredito>>(Abonos
+            .Where(a => a.CuentaId == cuentaId && a.Estado == EstadoAbonoCredito.APLICADO).ToList());
+
+    public void AgregarAbono(AbonoCredito abono) => Abonos.Add(abono);
+
+    public Task<long> SiguienteCorrelativoAbonoAsync(CancellationToken cancelacion) =>
+        Task.FromResult(++_correlativoAbonos);
+
+    public Task<IReadOnlyList<string>> ListarClientesConHistorialAsync(CancellationToken cancelacion) =>
+        Task.FromResult<IReadOnlyList<string>>(Historiales.Select(h => h.ClienteId).ToList());
+
+    public Task<IReadOnlyList<AbonoCredito>> ListarAbonosAsync(string clienteId, CancellationToken cancelacion) =>
+        Task.FromResult<IReadOnlyList<AbonoCredito>>(Abonos.Where(a => a.ClienteId == clienteId).ToList());
 
     public void DescartarCambios() => Descartes++;
 
     public Task<ResultadoReinicioDemo> ReiniciarDemoAsync(DateTime ahora, CancellationToken cancelacion)
     {
-        var resultado = new ResultadoReinicioDemo(Cuentas.Count, Decisiones.Count, Lineas.Count);
+        var resultado = new ResultadoReinicioDemo(Cuentas.Count, Decisiones.Count, Lineas.Count, Abonos.Count);
+        Abonos.Clear();
         Cuentas.Clear();
         Decisiones.Clear();
         foreach (var linea in Lineas)
         {
             linea.ReiniciarSaldo(ahora);
+            linea.Desbloquear(ahora);
         }
 
         return Task.FromResult(resultado);
@@ -75,7 +127,8 @@ public sealed class AlmacenCreditoFalso : IRepositorioCredito, IConsultasCredito
     public Task<IReadOnlyList<CompraCredito>> ListarComprasAsync(string clienteId, CancellationToken cancelacion) =>
         Task.FromResult<IReadOnlyList<CompraCredito>>(Cuentas
             .Where(c => c.ClienteId == clienteId)
-            .Select(c => new CompraCredito(c.OrdenId, c.NumeroOrden, c.MontoOriginal, c.SaldoPendiente, c.EmitidaEn, c.VenceEn, c.Estado))
+            .Select(c => new CompraCredito(
+                c.OrdenId, c.NumeroOrden, c.MontoOriginal, c.SaldoPendiente, c.EmitidaEn, c.VenceEn, c.Estado, c.Id, c.PagadaEn, c.PagoPuntual))
             .ToList());
 
     public Task<ResumenCredito?> ObtenerResumenAsync(string clienteId, CancellationToken cancelacion)

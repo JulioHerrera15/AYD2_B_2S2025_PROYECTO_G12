@@ -3,7 +3,7 @@ namespace SgoLogic.Credito.Api.Domain;
 /// <summary>
 /// Linea de credito del cliente. El limite lo fija el perfil; el saldo utilizado lo
 /// mueven los cargos (compra aprobada) y su anulacion, por eso al recalcular se
-/// conserva. BLOQUEADA todavia no se usa. Version es el token de concurrencia que
+/// conserva. BLOQUEADA es la pausa por mora (cuenta vencida). Version es el token de concurrencia que
 /// impide que dos compras simultaneas superen el limite.
 /// </summary>
 public sealed class LineaCredito
@@ -87,6 +87,35 @@ public sealed class LineaCredito
         }
 
         SaldoUtilizado = Math.Max(0m, SaldoUtilizado - monto);
+        ActualizadoEn = ahora;
+        Version++;
+    }
+
+    /// <summary>Mora: la linea queda en pausa (BLOQUEADA) hasta que no haya cuentas vencidas.</summary>
+    public void Bloquear(DateTime ahora)
+    {
+        if (Estado == EstadoLineaCredito.BLOQUEADA)
+        {
+            return;
+        }
+
+        Estado = EstadoLineaCredito.BLOQUEADA;
+        ActualizadoEn = ahora;
+        Version++;
+    }
+
+    /// <summary>
+    /// Quita la pausa. Queda ACTIVA si tiene limite; el recalculo del perfil que sigue
+    /// la deja ACTIVA o INACTIVA segun la elegibilidad.
+    /// </summary>
+    public void Desbloquear(DateTime ahora)
+    {
+        if (Estado != EstadoLineaCredito.BLOQUEADA)
+        {
+            return;
+        }
+
+        Estado = LimiteAprobado > 0m ? EstadoLineaCredito.ACTIVA : EstadoLineaCredito.INACTIVA;
         ActualizadoEn = ahora;
         Version++;
     }

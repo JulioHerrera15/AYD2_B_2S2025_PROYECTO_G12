@@ -185,8 +185,15 @@ public sealed record MiCreditoModel(
     int PlazoDias,
     DateTime? ActualizadoEn,
     List<FactorCreditoModel>? Factores,
-    List<CompraCreditoModel>? Compras = null)
+    List<CompraCreditoModel>? Compras = null,
+    decimal TotalPorPagar = 0m,
+    DateTime? ProximoVencimiento = null,
+    List<AvisoCreditoModel>? Avisos = null)
 {
+    /// <summary>La linea esta en pausa por una compra vencida.</summary>
+    [JsonIgnore]
+    public bool EnPausa => string.Equals(Estado, "LINEA_BLOQUEADA", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>El cliente tiene una linea activa con limite: la vista muestra montos.</summary>
     [JsonIgnore]
     public bool TieneCredito =>
@@ -221,10 +228,56 @@ public sealed record CompraCreditoModel(
     DateTime VenceEn,
     int? DiasRestantes,
     string Estado,
-    string EtiquetaEstado)
+    string EtiquetaEstado,
+    string? CuentaId = null,
+    bool PuedePagar = false,
+    string? AbonoEnCursoId = null,
+    bool AbonoEnCursoPuedeReintentar = false,
+    List<AbonoHistorialModel>? Abonos = null)
 {
     [JsonIgnore]
     public bool EsVigente => string.Equals(Estado, "VIGENTE", StringComparison.OrdinalIgnoreCase);
+
+    [JsonIgnore]
+    public bool EsVencida => string.Equals(Estado, "VENCIDA", StringComparison.OrdinalIgnoreCase);
+}
+
+/// <summary>Aviso destacado de Mi credito. Tipo solo decide el estilo; nunca se muestra.</summary>
+public sealed record AvisoCreditoModel(string Tipo, string Titulo, string Mensaje, string Recomendacion, string? CuentaId);
+
+/// <summary>Un pago de una compra a credito para el historial.</summary>
+public sealed record AbonoHistorialModel(
+    string AbonoId,
+    string Referencia,
+    DateTime Fecha,
+    decimal Monto,
+    string? Tarjeta,
+    string Estado,
+    string EtiquetaEstado);
+
+/// <summary>Estado de un abono (GET/POST /api/credito/abonos). Titulo y Mensaje son para el cliente.</summary>
+public sealed record AbonoCreditoModel(
+    string Id,
+    string Referencia,
+    string CuentaId,
+    string Estado,
+    bool EnCurso,
+    string Titulo,
+    string Mensaje,
+    string Recomendacion,
+    decimal Monto,
+    string Moneda,
+    decimal SaldoPendienteCuenta,
+    bool PuedeReintentar);
+
+/// <summary>
+/// Resultado de una operacion de abono. Nunca lanza: Abono con datos, o Status y un
+/// mensaje para el cliente (el detail del backend o uno generico si no respondio).
+/// </summary>
+public sealed record ResultadoAbonoCreditoModel(AbonoCreditoModel? Abono, int Status, string? Mensaje)
+{
+    public const string MensajeNoDisponible =
+        "En este momento no podemos procesar tu pago. Inténtalo de nuevo en unos minutos.";
 }
 
 /// <summary>Respuesta de GET /api/credito/elegibilidad. No trae puntaje.</summary>
@@ -1095,6 +1148,43 @@ public sealed class GatewayClient
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException or NotSupportedException)
         {
             return new ResultadoOfertaCreditoModel(EstadoConsultaCredito.NoDisponible);
+        }
+    }
+
+    /// <summary>Crea un abono (POST /api/credito/abonos). 202 con el abono; si no, Status y mensaje.</summary>
+    public Task<ResultadoAbonoCreditoModel> CrearAbonoCreditoAsync(string cuentaId, decimal monto, string token, CancellationToken ct = default) =>
+        EnviarAbonoAsync(() => _http.PostAsJsonAsync("/api/credito/abonos", new { cuentaId, monto, tokenMedioPago = token }, JsonOptions, ct), ct);
+
+    /// <summary>Reintenta un abono pendiente con un token nuevo (mismo abono).</summary>
+    public Task<ResultadoAbonoCreditoModel> ReintentarAbonoCreditoAsync(string abonoId, string token, CancellationToken ct = default) =>
+        EnviarAbonoAsync(() => _http.PostAsJsonAsync(
+            $"/api/credito/abonos/{Uri.EscapeDataString(abonoId)}/reintentar", new { tokenMedioPago = token }, JsonOptions, ct), ct);
+
+    public Task<ResultadoAbonoCreditoModel> ObtenerAbonoCreditoAsync(string abonoId, CancellationToken ct = default) =>
+        EnviarAbonoAsync(() => _http.GetAsync($"/api/credito/abonos/{Uri.EscapeDataString(abonoId)}", ct), ct);
+
+    private static async Task<ResultadoAbonoCreditoModel> EnviarAbonoAsync(Func<Task<HttpResponseMessage>> llamada, CancellationToken ct)
+    {
+        try
+        {
+            using var res = await llamada();
+            if (res.IsSuccessStatusCode)
+            {
+                var abono = await res.Content.ReadFromJsonAsync<AbonoCreditoModel>(JsonOptions, ct);
+                return abono is null
+                    ? new ResultadoAbonoCreditoModel(null, StatusCodes.Status502BadGateway, ResultadoAbonoCreditoModel.MensajeNoDisponible)
+                    : new ResultadoAbonoCreditoModel(abono, (int)res.StatusCode, null);
+            }
+
+            var status = (int)res.StatusCode;
+            var mensaje = status is >= 400 and < 500
+                ? await ParseProblemDetailsOrStringAsync(res, ct)
+                : ResultadoAbonoCreditoModel.MensajeNoDisponible;
+            return new ResultadoAbonoCreditoModel(null, status, mensaje);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or JsonException or NotSupportedException)
+        {
+            return new ResultadoAbonoCreditoModel(null, StatusCodes.Status503ServiceUnavailable, ResultadoAbonoCreditoModel.MensajeNoDisponible);
         }
     }
 

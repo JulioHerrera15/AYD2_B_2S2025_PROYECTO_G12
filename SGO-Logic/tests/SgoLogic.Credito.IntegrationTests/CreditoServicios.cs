@@ -50,6 +50,10 @@ public static class CreditoServicios
         servicios.AddScoped<ServicioEvaluacionCredito>();
         servicios.AddScoped<ServicioAnulacionCargos>();
         servicios.AddScoped<ServicioDemoCredito>();
+        servicios.Configure<CobranzaOptions>(configuracion.GetSection(CobranzaOptions.Seccion));
+        servicios.AddScoped<ServicioAbonos>();
+        servicios.AddScoped<ServicioResultadoAbonos>();
+        servicios.AddScoped<ServicioVencimientos>();
 
         return servicios.BuildServiceProvider();
     }

@@ -114,7 +114,82 @@ public class CuentaController : Controller
         }
 
         ViewBag.UserEmail = userEmail;
+        // Tarjetas guardadas para pagar compras a credito desde esta misma pagina.
+        ViewBag.Tarjetas = resultado.Estado == EstadoConsultaCredito.Ok
+            ? await _gateway.ListarTarjetasAsync()
+            : Array.Empty<TarjetaGuardadaModel>();
         return View(resultado);
+    }
+
+    // ── Pago de compras a credito (AJAX desde Cuenta/Credito) ─────────────────
+    // La tarjeta se tokeniza con los mismos endpoints del checkout
+    // (/Checkout/Tokenizar y /Checkout/TokenTarjetaGuardada); aqui solo viaja el token.
+
+    private const string MensajeSesionPago = "Tu sesión expiró. Inicia sesión de nuevo para pagar.";
+
+    /// <summary>Crea el pago (abono) de una compra a credito. 202 con el abono; error con {mensaje} para el cliente.</summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> PagarCredito(string? cuentaId, decimal monto, string? tokenMedioPago)
+    {
+        if (string.IsNullOrWhiteSpace(Request.Cookies["sgo_jwt"]))
+        {
+            return StatusCode(StatusCodes.Status401Unauthorized, new { mensaje = MensajeSesionPago });
+        }
+
+        if (string.IsNullOrWhiteSpace(cuentaId) || string.IsNullOrWhiteSpace(tokenMedioPago))
+        {
+            return UnprocessableEntity(new { mensaje = "Elige la compra y valida tu tarjeta antes de pagar." });
+        }
+
+        return RespuestaAbono(await _gateway.CrearAbonoCreditoAsync(cuentaId, monto, tokenMedioPago));
+    }
+
+    /// <summary>Estado actual de un pago; la pagina lo consulta hasta que termina.</summary>
+    [HttpGet]
+    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    public async Task<IActionResult> AbonoCredito(string id)
+    {
+        if (string.IsNullOrWhiteSpace(Request.Cookies["sgo_jwt"]))
+        {
+            return StatusCode(StatusCodes.Status401Unauthorized, new { mensaje = MensajeSesionPago });
+        }
+
+        return RespuestaAbono(await _gateway.ObtenerAbonoCreditoAsync(id));
+    }
+
+    /// <summary>Reintenta un pago pendiente con un token nuevo; es el mismo pago, nunca un cobro doble.</summary>
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public async Task<IActionResult> ReintentarAbonoCredito(string? id, string? tokenMedioPago)
+    {
+        if (string.IsNullOrWhiteSpace(Request.Cookies["sgo_jwt"]))
+        {
+            return StatusCode(StatusCodes.Status401Unauthorized, new { mensaje = MensajeSesionPago });
+        }
+
+        if (string.IsNullOrWhiteSpace(id) || string.IsNullOrWhiteSpace(tokenMedioPago))
+        {
+            return UnprocessableEntity(new { mensaje = "Valida tu tarjeta antes de reintentar el pago." });
+        }
+
+        return RespuestaAbono(await _gateway.ReintentarAbonoCreditoAsync(id, tokenMedioPago));
+    }
+
+    private IActionResult RespuestaAbono(ResultadoAbonoCreditoModel resultado)
+    {
+        if (resultado.Abono is not null)
+        {
+            return Json(resultado.Abono);
+        }
+
+        if (resultado.Status == StatusCodes.Status401Unauthorized)
+        {
+            return StatusCode(StatusCodes.Status401Unauthorized, new { mensaje = MensajeSesionPago });
+        }
+
+        var status = resultado.Status is >= 400 and < 600 ? resultado.Status : StatusCodes.Status502BadGateway;
+        return StatusCode(status, new { mensaje = resultado.Mensaje ?? ResultadoAbonoCreditoModel.MensajeNoDisponible });
     }
 
     [HttpPost]

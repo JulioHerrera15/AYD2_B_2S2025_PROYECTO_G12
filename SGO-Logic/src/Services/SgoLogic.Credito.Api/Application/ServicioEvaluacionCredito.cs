@@ -179,14 +179,15 @@ public sealed class ServicioEvaluacionCredito
             return CodigosMotivoCredito.SinHistorial;
         }
 
-        if (!perfil.Elegible)
-        {
-            return perfil.CodigoMotivo ?? CodigosMotivoCredito.PuntajeInsuficiente;
-        }
-
+        // La pausa por mora manda sobre el perfil (que en ese caso dice DEUDA_VENCIDA).
         if (linea?.Estado == EstadoLineaCredito.BLOQUEADA)
         {
             return CodigosMotivoCredito.LineaBloqueada;
+        }
+
+        if (!perfil.Elegible)
+        {
+            return perfil.CodigoMotivo ?? CodigosMotivoCredito.PuntajeInsuficiente;
         }
 
         if (linea is null || linea.Estado != EstadoLineaCredito.ACTIVA || linea.Disponible < monto)

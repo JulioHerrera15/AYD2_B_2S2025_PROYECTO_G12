@@ -24,7 +24,8 @@ public sealed record OpcionCreditoCheckout(
     string? Titulo,
     string Mensaje,
     decimal? Disponible = null,
-    DateTime? FechaLimitePago = null)
+    DateTime? FechaLimitePago = null,
+    bool EnPausa = false)
 {
     public const string MensajeServicioNoDisponible =
         "En este momento no contamos con la opción de crédito. Si deseas pagar con crédito, vuelve a intentarlo más tarde.";
@@ -49,6 +50,10 @@ public sealed record OpcionCreditoCheckout(
         var oferta = resultado.Oferta;
         return oferta.Ofrecer
             ? new OpcionCreditoCheckout(EstadoOpcionCredito.Disponible, oferta.Titulo, oferta.Mensaje, oferta.Disponible, oferta.FechaPagoEstimada)
-            : new OpcionCreditoCheckout(EstadoOpcionCredito.NoDisponibleParaCliente, oferta.Titulo, oferta.Mensaje);
+            : new OpcionCreditoCheckout(
+                EstadoOpcionCredito.NoDisponibleParaCliente,
+                oferta.Titulo,
+                oferta.Mensaje,
+                EnPausa: string.Equals(oferta.Estado, "LINEA_BLOQUEADA", StringComparison.OrdinalIgnoreCase));
     }
 }

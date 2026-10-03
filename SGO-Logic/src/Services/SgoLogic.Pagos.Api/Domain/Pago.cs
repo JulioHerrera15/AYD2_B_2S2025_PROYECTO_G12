@@ -25,7 +25,8 @@ public sealed class Pago
         Moneda moneda,
         decimal monto,
         MedioPago medioPago,
-        DateTime? creadoEn = null)
+        DateTime? creadoEn = null,
+        ConceptoPago concepto = ConceptoPago.ORDEN)
     {
         if (string.IsNullOrWhiteSpace(ordenId))
         {
@@ -49,6 +50,7 @@ public sealed class Pago
         Moneda = moneda;
         Monto = monto;
         MedioPago = medioPago;
+        Concepto = concepto;
         Estado = EstadoPago.INICIADO;
         Secuencia = 0;
         CreadoEn = (creadoEn ?? DateTime.UtcNow).ToUniversalTime();
@@ -68,6 +70,9 @@ public sealed class Pago
     public decimal Monto { get; private set; }
 
     public MedioPago MedioPago { get; private set; }
+
+    /// <summary>ORDEN (cobro de una orden) o ABONO_CREDITO (OrdenId lleva la referencia del abono).</summary>
+    public ConceptoPago Concepto { get; private set; }
 
     public EstadoPago Estado { get; private set; }
 

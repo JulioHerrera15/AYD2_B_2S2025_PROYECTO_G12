@@ -217,7 +217,7 @@ public sealed class EvaluacionCreditoTests
 
         var textos = _outbox.Eventos.Select(e => ((CreditoRechazadoData)e.Data).MensajeCliente)
             .Append(CatalogoMensajesCredito.MensajeRechazo(CatalogoMensajesCredito.OrdenCancelada()))
-            .Concat(Enum.GetValues<EstadoCuentaPorCobrar>().Select(CatalogoMensajesCredito.EtiquetaEstadoCompra))
+            .Concat(Enum.GetValues<EstadoCuentaPorCobrar>().Select(estado => CatalogoMensajesCredito.EtiquetaEstadoCompra(estado)))
             .ToList();
 
         Assert.Equal(5, _outbox.Eventos.Count);

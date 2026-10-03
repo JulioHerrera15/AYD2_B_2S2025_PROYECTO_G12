@@ -1,9 +1,9 @@
 @model SgoLogic.Web.Services.CarritoModel
 @{
     ViewData["Title"] = "Finalizar compra";
-    var subtotal = Model.Items?.Sum(i => i.Subtotal) ?? 0m;
-    var iva = Math.Round(subtotal * 0.12m / 1.12m, 2);
-    var subtotalNeto = subtotal - iva;
+    // Los precios ya incluyen IVA: el total de la orden es la suma de las lineas.
+    var total = Model.Items?.Sum(i => i.Subtotal) ?? 0m;
+    var iva = SgoLogic.Web.Services.IvaIncluido.De(total);
     var tiendas = (ViewBag.Sucursales as IReadOnlyList<SgoLogic.Web.Services.SucursalModel>
         ?? Array.Empty<SgoLogic.Web.Services.SucursalModel>())
         .Where(s => s.EsTienda)
@@ -242,7 +242,14 @@
                             {
                                 <span class="text-[11px] font-semibold text-primary">@opcionCredito.Titulo</span>
                                 <span class="text-[11px] text-text-muted">@opcionCredito.Mensaje</span>
-                                <a href="/Cuenta/Credito" class="text-[11px] font-semibold text-primary underline self-start">Ver detalle en Mi crédito</a>
+                                @if (opcionCredito.EnPausa)
+                                {
+                                    <a href="/Cuenta/Credito" class="text-[11px] font-semibold text-primary underline self-start">Ir a Mi crédito para ponerte al día</a>
+                                }
+                                else
+                                {
+                                    <a href="/Cuenta/Credito" class="text-[11px] font-semibold text-primary underline self-start">Ver detalle en Mi crédito</a>
+                                }
                             }
                             else
                             {
@@ -435,20 +442,16 @@
                 <!-- Financial Breakdown -->
                 <div class="space-y-2.5 pt-4 border-t border-border-subtle/50 text-xs">
                     <div class="flex justify-between text-text-muted">
-                        <span>Subtotal</span>
-                        <span>Q @subtotalNeto.ToString("N2")</span>
-                    </div>
-                    <div class="flex justify-between text-text-muted">
-                        <span>IVA (12%)</span>
-                        <span>Q @iva.ToString("N2")</span>
-                    </div>
-                    <div class="flex justify-between text-text-muted">
                         <span>Envío</span>
                         <span class="text-secondary font-semibold" id="costo-envio">Gratis</span>
                     </div>
                     <div class="flex justify-between text-base font-bold text-primary pt-3 border-t border-border-subtle/80">
                         <span>Total a pagar</span>
-                        <span>Q @subtotal.ToString("N2")</span>
+                        <span>Q @total.ToString("N2")</span>
+                    </div>
+                    <div class="flex justify-between text-text-muted">
+                        <span>Incluye IVA (12%)</span>
+                        <span>Q @iva.ToString("N2")</span>
                     </div>
                 </div>
 

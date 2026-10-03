@@ -57,8 +57,100 @@ public static class CatalogoMensajesCredito
     public static MensajeCredito LineaBloqueada() =>
         new(
             "Tu crédito está en pausa",
-            "Por ahora no puedes usar tu crédito en nuevas compras.",
-            "Comunícate con atención al cliente si tienes dudas. Tus compras con tarjeta funcionan con normalidad.");
+            "Tienes una compra a crédito vencida, por eso por ahora no puedes usar tu crédito en nuevas compras.",
+            "Paga la compra vencida desde Mi crédito y tu crédito se reactivará de inmediato. No cobramos intereses ni recargos, y tus compras con tarjeta funcionan con normalidad.");
+
+    // ── Cobranza (bloque 3) ────────────────────────────────────────────────────
+
+    public static MensajeCredito AbonoEnProceso(decimal monto) =>
+        new(
+            "Estamos procesando tu pago",
+            $"Estamos procesando tu pago de {Monto(monto)}. Toma solo unos segundos.",
+            "No cierres esta página.");
+
+    public static MensajeCredito AbonoAplicadoParcial(decimal monto, decimal saldoRestante) =>
+        new(
+            "Recibimos tu pago",
+            $"Recibimos tu pago de {Monto(monto)}. Te quedan {Monto(saldoRestante)} por pagar de esta compra.",
+            "Puedes pagar el resto cuando quieras antes de la fecha límite.");
+
+    public static MensajeCredito AbonoAplicadoTotal(decimal monto) =>
+        new(
+            "Tu compra quedó pagada",
+            $"Recibimos tu pago de {Monto(monto)} y esta compra quedó pagada. Tu crédito disponible aumentó.",
+            "Puedes volver a usar tu crédito en tu próxima compra.");
+
+    public static MensajeCredito AbonoRechazado() =>
+        new(
+            "Tu banco no autorizó el pago",
+            "Tu banco no autorizó el pago y no se hizo ningún cargo.",
+            "Revisa los datos de tu tarjeta o intenta con otra tarjeta.");
+
+    public static MensajeCredito AbonoPendiente() =>
+        new(
+            "Estamos confirmando tu pago",
+            "Estamos confirmando tu pago con el banco. No pagues de nuevo todavía.",
+            "En unos minutos podrás reintentar el pago sin riesgo de que se te cobre dos veces.");
+
+    public static MensajeCredito AbonoReembolsoPendiente() =>
+        new(
+            "Recibimos tu pago",
+            "Esta compra se canceló antes de que se aplicara tu pago. Te devolveremos ese monto.",
+            "Si tienes dudas, comunícate con atención al cliente.");
+
+    public static MensajeCredito CompraPorVencer(string numeroOrden, decimal saldo, DateTime venceEn, int diasRestantes) =>
+        new(
+            "Tienes una compra que vence pronto",
+            $"Tu compra {numeroOrden} tiene {Monto(saldo)} por pagar y vence el {Fecha(venceEn)}"
+                + (diasRestantes <= 0 ? ", hoy." : diasRestantes == 1 ? " (falta 1 día)." : $" (faltan {diasRestantes} días)."),
+            "Págala desde Mi crédito antes de esa fecha para mantener tu crédito activo.");
+
+    public static MensajeCredito CompraVencida(string numeroOrden, decimal saldo, DateTime venceEn) =>
+        new(
+            "Tienes una compra vencida",
+            $"Tu compra {numeroOrden} venció el {Fecha(venceEn)} y aún tiene {Monto(saldo)} por pagar.",
+            "Págala desde Mi crédito. No cobramos intereses ni recargos, y tu crédito se reactiva en cuanto la pagues.");
+
+    // Errores al crear un abono: texto para el cliente.
+    public const string CuentaNoEncontrada = "No encontramos esa compra a crédito.";
+    public const string AbonoYaEnCurso = "Ya hay un pago en proceso para esta compra. Espera a que termine antes de pagar de nuevo.";
+    public const string CuentaNoPagable = "Esta compra no tiene saldo por pagar.";
+    public const string AbonoNoEncontrado = "No encontramos ese pago.";
+    public const string AbonoNoReintentable = "Este pago no se puede reintentar en este momento.";
+
+    public static string MontoInvalido(decimal saldo, decimal minimo) =>
+        saldo < minimo
+            ? $"Como te quedan {Monto(saldo)} por pagar, debes pagar el saldo completo."
+            : $"El monto debe ser de al menos {Monto(minimo)} y no mayor que tu saldo de {Monto(saldo)}.";
+
+    /// <summary>Etiqueta legible del estado de un abono.</summary>
+    public static string EtiquetaEstadoAbono(EstadoAbonoCredito estado) => estado switch
+    {
+        EstadoAbonoCredito.APLICADO => "Aplicado",
+        EstadoAbonoCredito.RECHAZADO => "No autorizado",
+        EstadoAbonoCredito.PENDIENTE => "En confirmación",
+        EstadoAbonoCredito.SOLICITADO => "En proceso",
+        _ => "Por reembolsar"
+    };
+
+    /// <summary>"Visa terminada en 4242", o null si no se conoce la tarjeta.</summary>
+    public static string? Tarjeta(string? marca, string? ultimosCuatro)
+    {
+        if (string.IsNullOrWhiteSpace(ultimosCuatro))
+        {
+            return null;
+        }
+
+        var nombre = marca?.ToUpperInvariant() switch
+        {
+            "VISA" => "Visa",
+            "MASTERCARD" => "Mastercard",
+            "AMEX" => "American Express",
+            null or "" => "Tarjeta",
+            _ => "Tarjeta"
+        };
+        return $"{nombre} terminada en {ultimosCuatro}";
+    }
 
     /// <summary>
     /// Mensaje para un cliente no elegible segun el motivo del descarte.
@@ -92,6 +184,9 @@ public static class CatalogoMensajesCredito
                     "Una parte alta de tus compras recientes terminó en devolución.",
                     RevisionPeriodica);
 
+            case CodigosMotivoCredito.DeudaVencida:
+                return LineaBloqueada();
+
             case CodigosMotivoCredito.IncidenteGrave:
                 return new MensajeCredito(
                     "Necesitamos revisar tu cuenta",
@@ -120,9 +215,9 @@ public static class CatalogoMensajesCredito
     public static string MensajeRechazo(MensajeCredito mensaje) => $"{mensaje.Mensaje} {mensaje.Recomendacion}";
 
     /// <summary>Etiqueta legible del estado de una compra a credito.</summary>
-    public static string EtiquetaEstadoCompra(EstadoCuentaPorCobrar estado) => estado switch
+    public static string EtiquetaEstadoCompra(EstadoCuentaPorCobrar estado, bool vencePronto = false) => estado switch
     {
-        EstadoCuentaPorCobrar.VIGENTE => "Por pagar",
+        EstadoCuentaPorCobrar.VIGENTE => vencePronto ? "Vence pronto" : "Por pagar",
         EstadoCuentaPorCobrar.PAGADA => "Pagada",
         EstadoCuentaPorCobrar.VENCIDA => "Vencida",
         _ => "Anulada"

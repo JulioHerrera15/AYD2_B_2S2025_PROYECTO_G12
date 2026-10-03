@@ -156,7 +156,8 @@ public sealed class ManejadorEventosPagosTests
         Assert.Equal(orden.Secuencia, certificacion.Sequence);
         var data = Assert.IsType<CertificacionFiscalSolicitadaData>(certificacion.Data);
         Assert.Equal(orden.Id, data.OrdenId);
-        Assert.Equal(1400.00m, data.Total);
+        // Precios con IVA incluido: el total es la suma de las lineas (1 x 1250.00).
+        Assert.Equal(1250.00m, data.Total);
 
         var confirmada = Assert.Single(outbox.PorTipo(OrdenConfirmada.EventType));
         Assert.Equal(OrdenConfirmada.RoutingKey, confirmada.RoutingKey);

@@ -22,6 +22,12 @@ public sealed class PagoConfiguration : IEntityTypeConfiguration<Pago>
             .IsUnique()
             .HasDatabaseName("ix_pago_orden_id");
 
+        builder.Property(pago => pago.Concepto)
+            .HasColumnName("concepto")
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired();
+
         builder.Property(pago => pago.ClienteId)
             .HasColumnName("cliente_id")
             .HasMaxLength(64)

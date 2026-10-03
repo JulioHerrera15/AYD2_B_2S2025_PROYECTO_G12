@@ -18,6 +18,22 @@
 #                 CREDITO_SIN_RESPUESTA antes de 45 s y stock liberado; levanta
 #                 credito-api y el saldo utilizado termina igual que al inicio.
 #   reiniciar     POST /interno/credito/demo/reiniciar.
+#   iva           orden por API de 7 x Q100: total 700.00, IVA incluido 75.00 calculado
+#                 en el servidor aunque el request mande otro impuesto.
+#   abono-parcial cliente1 compra a credito Q500 y abona Q200: APLICADO, saldo 300 y
+#                 el disponible sube 200.
+#   pago-total    paga el resto de la compra anterior: PAGADA, puntual y cupo completo.
+#   pago-rechazado PayKlik en modo RECHAZO (se restaura NORMAL): abono RECHAZADO sin
+#                 cambio de saldo.
+#   pago-pendiente detiene payklik-mock: abono PENDIENTE y 409 abono_en_curso; lo
+#                 levanta, reintenta el mismo abono hasta APLICADO y verifica un solo
+#                 pago y un solo cargo aprobado en Pagos.
+#   recordatorio  vencimiento a 2 dias, procesa dos veces: un solo CuentaCreditoPorVencer
+#                 en Auditoria y la compra aparece como "Vence pronto".
+#   vencimiento   cliente2: cuenta vencida, linea en pausa, elegibilidad LINEA_BLOQUEADA,
+#                 orden nueva a credito RECHAZADA; al pagar se reactiva y cuenta tardio.
+#                 Se usa cliente2 (BUENO): con el pago tardio sigue sobre el minimo
+#                 de 60; cliente3 (62) quedaria NO_ELEGIBLE por la politica v2.
 #   todos         reiniciar y luego todos los anteriores.
 #
 # Cada paso imprime lo esperado y lo obtenido; cada escenario termina con
@@ -28,13 +44,16 @@
 #   .\scripts\pruebas\credito-saga.ps1 -Escenario aprobado -TimeoutSeg 90
 
 param(
-    [ValidateSet('aprobado', 'cupo', 'no-elegible', 'suplantacion', 'sin-sesion', 'cancelacion', 'timeout', 'reiniciar', 'todos')]
+    [ValidateSet('aprobado', 'cupo', 'no-elegible', 'suplantacion', 'sin-sesion', 'cancelacion', 'timeout', 'reiniciar',
+        'iva', 'abono-parcial', 'pago-total', 'pago-rechazado', 'pago-pendiente', 'recordatorio', 'vencimiento', 'todos')]
     [string]$Escenario = 'todos',
     [string]$BaseUrl = 'http://localhost:8083',
     [string]$GatewayUrl = 'http://localhost:8080',
     [string]$CreditoUrl = 'http://localhost:8099',
     [string]$InventarioUrl = 'http://localhost:8094',
     [string]$AuditoriaUrl = 'http://localhost:8093',
+    [string]$PagosUrl = 'http://localhost:8085',
+    [string]$PayKlikUrl = 'http://localhost:8084',
     # cliente1..cliente3 vienen del seed SQL (1234); cliente4..cliente6 de sembrar-demo.sh (Demo1234!).
     [string[]]$Contrasenas = @('Demo1234!', '1234'),
     [int]$TimeoutSeg = 60,
@@ -423,10 +442,309 @@ function Escenario-Timeout {
     $pasos += Write-Paso 'Levantar credito-api' 'sano' $(if ($arriba) { 'sano' } else { 'sin respuesta' }) $arriba
 
     # Credito procesa la evaluacion pendiente (aprueba y aparta) y despues la
-    # cancelacion (anula y devuelve): el saldo debe volver al de inicio.
+    # cancelacion (anula y devuelve): el saldo debe volver al de inicio. Antes de
+    # comparar se espera la decision registrada y la cola credito.ordenes vacia.
+    if ($orden) {
+        $decidida = Esperar-Condicion { "$(Consultar-Sql 'db-finanzas' 'sgo_credito' "select count(*) from credito.decision_credito where orden_id = '$($orden.id)'")" -eq '1' } 60
+        $pasos += Write-Paso 'Credito registra la decision de la orden' 'decision = 1' $(if ($decidida) { 'decision = 1' } else { 'sin decision' }) $decidida
+    }
+    $vacia = Esperar-Condicion { (Mensajes-Cola 'credito.ordenes') -eq 0 } 60
+    $pasos += Write-Paso 'Cola credito.ordenes sin pendientes' '0' "$(Mensajes-Cola 'credito.ordenes')" $vacia
     $igual = Esperar-Condicion { [decimal](Get-MiCredito $token).saldoUtilizado -eq $saldoAntes } 60
     $pasos += Write-Paso 'El saldo utilizado termina igual que al inicio' "$saldoAntes" "$((Get-MiCredito $token).saldoUtilizado)" $igual
     return Resultado 'timeout' $pasos
+}
+
+function Mensajes-Cola {
+    param([string]$Cola)
+    $salida = docker compose -f $compose exec -T rabbitmq rabbitmqctl list_queues -q name messages 2>$null | Where-Object { $_ -is [string] }
+    if ($LASTEXITCODE -ne 0) { return -1 }
+    $fila = @($salida) | Where-Object { ($_ -split '\s+')[0] -eq $Cola } | Select-Object -First 1
+    if ($null -eq $fila) { return -1 }
+    return [int](($fila -split '\s+')[1])
+}
+
+# ---------------------------------------------------------------------------
+# Cobranza (bloque 3): IVA, abonos, rechazo, pendiente, recordatorio y vencimiento
+# ---------------------------------------------------------------------------
+
+# Token de la boveda de Pagos para el cliente de la sesion (tarjeta de prueba Visa).
+function Tokenizar-Tarjeta {
+    param([string]$Token)
+    $res = Invoke-Http -Method 'POST' -Url "$PagosUrl/api/pagos/tokens" -Token $Token -Body @{
+        numero = '4111111111111111'; mesExp = 12; anioExp = (Get-Date).Year + 3; cvv = '123'
+        titular = 'Cliente Arnes Credito'; guardar = $false
+    }
+    if ($res.Status -ne 201 -or $null -eq $res.Body) { return $null }
+    return $res.Body.token
+}
+
+function Get-Compra {
+    param([string]$Token, [string]$OrdenId)
+    $credito = Get-MiCredito $Token
+    if ($null -eq $credito) { return $null }
+    return @($credito.compras) | Where-Object { $_.ordenId -eq $OrdenId } | Select-Object -First 1
+}
+
+# Compra a credito confirmada; devuelve @{ Orden; Compra } o $null.
+function Compra-Confirmada {
+    param([string]$Email, [int]$Cantidad, [string]$Token)
+    $orden = Crear-OrdenCredito $Email $Cantidad $Token
+    if ($null -eq $orden) { return $null }
+    $final = Esperar-Orden $orden.id 'CONFIRMADA_PENDIENTE_FISCAL'
+    if ($null -eq $final -or ($script:Terminales -contains $final.estado)) { return $null }
+    $null = Esperar-Condicion { $null -ne (Get-Compra $Token $orden.id) } 15
+    return @{ Orden = $orden; Compra = (Get-Compra $Token $orden.id) }
+}
+
+function Crear-Abono {
+    param([string]$Token, [string]$CuentaId, [decimal]$Monto, [string]$TokenPago)
+    return Invoke-Http -Method 'POST' -Url "$CreditoUrl/api/credito/abonos" -Token $Token -Body @{
+        cuentaId = $CuentaId; monto = $Monto.ToString('0.00', [System.Globalization.CultureInfo]::InvariantCulture); tokenMedioPago = $TokenPago
+    }
+}
+
+# Espera a que el abono salga de SOLICITADO; devuelve el ultimo abono visto.
+function Esperar-Abono {
+    param([string]$Token, [string]$AbonoId, [int]$Segundos = $TimeoutSeg)
+    $limite = $script:Reloj.ElapsedMilliseconds + ($Segundos * 1000)
+    $ultimo = $null
+    while ($script:Reloj.ElapsedMilliseconds -lt $limite) {
+        $res = Invoke-Http -Method 'GET' -Url "$CreditoUrl/api/credito/abonos/$AbonoId" -Token $Token
+        if ($res.Status -eq 200) {
+            $ultimo = $res.Body
+            if ($ultimo.estado -ne 'SOLICITADO') { return $ultimo }
+        }
+        Start-Sleep -Milliseconds 1000
+    }
+    return $ultimo
+}
+
+function Contar-EventoAuditoria {
+    param([string]$AggregateId, [string]$EventType)
+    $res = Invoke-Http -Method 'GET' -Url "$AuditoriaUrl/auditoria/agregados/$AggregateId"
+    if ($res.Status -ne 200) { return 0 }
+    return @(@($res.Body.items) | Where-Object { $_.eventType -eq $EventType }).Count
+}
+
+function Evento-Auditoria {
+    param([string]$AggregateId, [string]$EventType)
+    $res = Invoke-Http -Method 'GET' -Url "$AuditoriaUrl/auditoria/agregados/$AggregateId"
+    if ($res.Status -ne 200) { return $null }
+    return @($res.Body.items) | Where-Object { $_.eventType -eq $EventType } | Select-Object -Last 1
+}
+
+function Consultar-Sql {
+    param([string]$Servicio, [string]$Base, [string]$Sql)
+    $salida = docker compose -f $compose exec -T $Servicio psql -U $DbUsuario -d $Base -Atc $Sql 2>$null | Where-Object { $_ -is [string] }
+    if ($LASTEXITCODE -ne 0) { return $null }
+    return ($salida | Select-Object -First 1)
+}
+
+function Modo-PayKlik {
+    param([string]$Modo)
+    return (Invoke-Http -Method 'PUT' -Url "$PayKlikUrl/admin/modo" -Body @{ modo = $Modo }).Status -eq 200
+}
+
+function Escenario-Iva {
+    Write-Host "Escenario iva (orden por API, total = suma de lineas)"
+    $pasos = @()
+    $cuerpo = Cuerpo-Orden 'iva-arnes@sgo.local' 7
+    $cuerpo.medioPago = 'TRANSFERENCIA'
+    # Ordenes debe ignorar el impuesto que mande el cliente.
+    $cuerpo.impuestos = 999.99
+    $res = Invoke-Http -Method 'POST' -Url "$BaseUrl/api/ordenes" -Body $cuerpo
+    $pasos += Write-Paso 'Crear orden de 7 x Q100.00' '201' "$($res.Status)" ($res.Status -eq 201)
+    if ($res.Status -ne 201) { return Resultado 'iva' $pasos }
+    $orden = Get-Orden $res.Body.id
+    $pasos += Write-Paso 'Total igual a la suma de las lineas' '700.00' "$($orden.total)" ([decimal]$orden.total -eq 700)
+    $pasos += Write-Paso 'IVA incluido calculado en el servidor (impuestos del request ignorados)' '75.00' "$($orden.impuestos)" ([decimal]$orden.impuestos -eq 75)
+    $pasos += Write-Paso 'Base sin IVA' '625.00' "$($orden.subtotal)" ([decimal]$orden.subtotal -eq 625)
+    return Resultado 'iva' $pasos
+}
+
+function Escenario-AbonoParcial {
+    Write-Host "Escenario abono-parcial (cliente1)"
+    $pasos = @()
+    $token = Iniciar-Sesion 'cliente1@sgo.local'
+    $pasos += Write-Paso 'Inicio de sesion cliente1' 'token' $(if ($token) { 'token recibido' } else { 'sin token' }) ($null -ne $token)
+    if (-not $token) { return Resultado 'abono-parcial' $pasos }
+
+    $script:DisponibleAntesCompra = [decimal](Get-MiCredito $token).disponible
+    $compra = Compra-Confirmada 'cliente1@sgo.local' 5 $token
+    $pasos += Write-Paso 'Compra a credito de Q500.00 confirmada' 'cuenta por cobrar' $(if ($compra) { $compra.Orden.id } else { 'sin cuenta' }) ($null -ne $compra -and $null -ne $compra.Compra)
+    if (-not $compra -or -not $compra.Compra) { return Resultado 'abono-parcial' $pasos }
+    $script:CompraParcial = $compra
+
+    $disponibleAntes = [decimal](Get-MiCredito $token).disponible
+    $tokenPago = Tokenizar-Tarjeta $token
+    $res = Crear-Abono $token $compra.Compra.cuentaId 200 $tokenPago
+    $pasos += Write-Paso 'Abono de Q200.00 aceptado' '202' "$($res.Status)" ($res.Status -eq 202)
+    if ($res.Status -ne 202) { return Resultado 'abono-parcial' $pasos }
+
+    $abono = Esperar-Abono $token $res.Body.id
+    $pasos += Write-Paso 'El abono se aplica' 'APLICADO' "$($abono.estado) - $($abono.mensaje)" ($abono.estado -eq 'APLICADO')
+    $despues = Get-Compra $token $compra.Orden.id
+    $pasos += Write-Paso 'Baja el saldo de la cuenta' '300.00' "$($despues.saldoPendiente)" ([decimal]$despues.saldoPendiente -eq 300)
+    $disponible = [decimal](Get-MiCredito $token).disponible
+    $pasos += Write-Paso 'Sube el disponible en el mismo monto' "$($disponibleAntes + 200)" "$disponible" ($disponible -eq ($disponibleAntes + 200))
+    return Resultado 'abono-parcial' $pasos
+}
+
+function Escenario-PagoTotal {
+    Write-Host "Escenario pago-total (cliente1)"
+    $pasos = @()
+    $token = Iniciar-Sesion 'cliente1@sgo.local'
+    if ($null -eq $script:CompraParcial) {
+        $null = Escenario-AbonoParcial
+    }
+    $compra = $script:CompraParcial
+    $pasos += Write-Paso 'Compra con saldo pendiente' 'cuenta' $(if ($compra) { $compra.Orden.id } else { 'sin compra' }) ($null -ne $compra)
+    if (-not $compra) { return Resultado 'pago-total' $pasos }
+
+    $saldo = [decimal](Get-Compra $token $compra.Orden.id).saldoPendiente
+    $res = Crear-Abono $token $compra.Compra.cuentaId $saldo (Tokenizar-Tarjeta $token)
+    $pasos += Write-Paso "Pago del resto (Q$saldo)" '202' "$($res.Status)" ($res.Status -eq 202)
+    if ($res.Status -ne 202) { return Resultado 'pago-total' $pasos }
+
+    $abono = Esperar-Abono $token $res.Body.id
+    $pasos += Write-Paso 'Mensaje de compra pagada' 'Tu compra quedo pagada' "$($abono.titulo)" ($abono.estado -eq 'APLICADO' -and "$($abono.titulo)" -like '*pagada*')
+    $final = Get-Compra $token $compra.Orden.id
+    $pasos += Write-Paso 'La cuenta queda PAGADA' 'PAGADA' "$($final.estado)" ($final.estado -eq 'PAGADA')
+    $null = Esperar-Condicion { $null -ne (Evento-Auditoria $compra.Compra.cuentaId 'CuentaCreditoPagada') } 15
+    $evento = Evento-Auditoria $compra.Compra.cuentaId 'CuentaCreditoPagada'
+    $pasos += Write-Paso 'Pago puntual (CuentaCreditoPagada en Auditoria)' 'puntual = True' "puntual = $($evento.data.puntual)" ($null -ne $evento -and $evento.data.puntual -eq $true)
+    $disponible = [decimal](Get-MiCredito $token).disponible
+    $pasos += Write-Paso 'El cupo vuelve completo' "$($script:DisponibleAntesCompra)" "$disponible" ($disponible -eq $script:DisponibleAntesCompra)
+    return Resultado 'pago-total' $pasos
+}
+
+function Escenario-PagoRechazado {
+    Write-Host "Escenario pago-rechazado (cliente2, PayKlik en modo RECHAZO)"
+    $pasos = @()
+    $token = Iniciar-Sesion 'cliente2@sgo.local'
+    $compra = Compra-Confirmada 'cliente2@sgo.local' 2 $token
+    $pasos += Write-Paso 'Compra a credito de Q200.00' 'cuenta' $(if ($compra) { $compra.Orden.id } else { 'sin cuenta' }) ($null -ne $compra -and $null -ne $compra.Compra)
+    if (-not $compra -or -not $compra.Compra) { return Resultado 'pago-rechazado' $pasos }
+
+    try {
+        $pasos += Write-Paso 'PayKlik rechaza todo (modo RECHAZO)' 'modo cambiado' $(if (Modo-PayKlik 'RECHAZO') { 'modo cambiado' } else { 'sin cambio' }) $true
+        $res = Crear-Abono $token $compra.Compra.cuentaId 200 (Tokenizar-Tarjeta $token)
+        $abono = $null
+        if ($res.Status -eq 202) { $abono = Esperar-Abono $token $res.Body.id }
+        $pasos += Write-Paso 'El abono queda RECHAZADO' 'RECHAZADO' "$($abono.estado)" ($null -ne $abono -and $abono.estado -eq 'RECHAZADO')
+        $pasos += Write-Paso 'Mensaje sin cargo' 'no se hizo ningun cargo' "$($abono.titulo). $($abono.mensaje)" ("$($abono.mensaje)" -like '*ning*n cargo*')
+    }
+    finally {
+        $null = Modo-PayKlik 'NORMAL'
+    }
+
+    $final = Get-Compra $token $compra.Orden.id
+    $pasos += Write-Paso 'El saldo no cambia' '200.00' "$($final.saldoPendiente)" ([decimal]$final.saldoPendiente -eq 200)
+    $script:CompraRechazo = $compra
+    return Resultado 'pago-rechazado' $pasos
+}
+
+function Escenario-PagoPendiente {
+    Write-Host "Escenario pago-pendiente (cliente2, payklik-mock detenido)"
+    $pasos = @()
+    $token = Iniciar-Sesion 'cliente2@sgo.local'
+    $compra = Compra-Confirmada 'cliente2@sgo.local' 2 $token
+    $pasos += Write-Paso 'Compra a credito de Q200.00' 'cuenta' $(if ($compra) { $compra.Orden.id } else { 'sin cuenta' }) ($null -ne $compra -and $null -ne $compra.Compra)
+    if (-not $compra -or -not $compra.Compra) { return Resultado 'pago-pendiente' $pasos }
+
+    $abono = $null
+    try {
+        $null = docker compose -f $compose stop payklik-mock 2>&1
+        $res = Crear-Abono $token $compra.Compra.cuentaId 200 (Tokenizar-Tarjeta $token)
+        if ($res.Status -eq 202) { $abono = Esperar-Abono $token $res.Body.id 90 }
+        $pasos += Write-Paso 'Con el proveedor caido el abono queda PENDIENTE' 'PENDIENTE' "$($abono.estado) - $($abono.mensaje)" ($null -ne $abono -and $abono.estado -eq 'PENDIENTE')
+
+        $otro = Crear-Abono $token $compra.Compra.cuentaId 50 (Tokenizar-Tarjeta $token)
+        $pasos += Write-Paso 'No se puede crear otro abono' '409 abono_en_curso' "$($otro.Status) $($otro.Body.codigo)" (($otro.Status -eq 409) -and ($otro.Body.codigo -eq 'abono_en_curso'))
+    }
+    finally {
+        $null = docker compose -f $compose start payklik-mock 2>&1
+    }
+
+    if ($null -eq $abono) { return Resultado 'pago-pendiente' $pasos }
+    $null = Esperar-Condicion { (Invoke-Http -Method 'GET' -Url "$PayKlikUrl/health/live").Status -eq 200 } 90
+
+    # El disyuntor puede seguir abierto unos segundos: se reintenta hasta que aplique.
+    $null = Esperar-Condicion {
+        $r = Invoke-Http -Method 'POST' -Url "$CreditoUrl/api/credito/abonos/$($abono.id)/reintentar" -Token $token -Body @{ tokenMedioPago = (Tokenizar-Tarjeta $token) }
+        if ($r.Status -ne 202) { return $false }
+        $script:abonoReintento = Esperar-Abono $token $abono.id 60
+        if ($script:abonoReintento.estado -eq 'APLICADO') { return $true }
+        Start-Sleep -Seconds 5
+        return $false
+    } 120
+    $final = $script:abonoReintento
+    $pasos += Write-Paso 'Al reintentar queda APLICADO (mismo abono)' "APLICADO, id $($abono.id)" "$($final.estado), id $($final.id)" ($null -ne $final -and $final.estado -eq 'APLICADO' -and $final.id -eq $abono.id)
+
+    $cargos = Consultar-Sql 'db-finanzas' 'sgo_pagos' "select count(*) from pagos.intento_pago i join pagos.pago p on p.id = i.pago_id where p.orden_id = '$($abono.referencia)' and i.estado = 'EXITOSO'"
+    $pagos = Consultar-Sql 'db-finanzas' 'sgo_pagos' "select count(*) from pagos.pago where orden_id = '$($abono.referencia)'"
+    $pasos += Write-Paso 'En Pagos hay un solo pago y un solo cargo aprobado para el abono' 'pagos = 1, cargos = 1' "pagos = $pagos, cargos = $cargos" (("$pagos" -eq '1') -and ("$cargos" -eq '1'))
+    return Resultado 'pago-pendiente' $pasos
+}
+
+function Escenario-Recordatorio {
+    Write-Host "Escenario recordatorio (cliente1, vence en 2 dias)"
+    $pasos = @()
+    $token = Iniciar-Sesion 'cliente1@sgo.local'
+    $compra = Compra-Confirmada 'cliente1@sgo.local' 1 $token
+    $pasos += Write-Paso 'Compra a credito de Q100.00' 'cuenta' $(if ($compra) { $compra.Orden.id } else { 'sin cuenta' }) ($null -ne $compra -and $null -ne $compra.Compra)
+    if (-not $compra -or -not $compra.Compra) { return Resultado 'recordatorio' $pasos }
+
+    $fijar = Invoke-Http -Method 'POST' -Url "$CreditoUrl/interno/credito/demo/cuentas/$($compra.Orden.id)/vencimiento" -Body @{ diasDesdeHoy = 2 }
+    $pasos += Write-Paso 'Vencimiento a 2 dias' '200' "$($fijar.Status)" ($fijar.Status -eq 200)
+    $primero = Invoke-Http -Method 'POST' -Url "$CreditoUrl/interno/credito/demo/procesar-vencimientos"
+    $segundo = Invoke-Http -Method 'POST' -Url "$CreditoUrl/interno/credito/demo/procesar-vencimientos"
+    $pasos += Write-Paso 'Procesar dos veces' 'recordadas >= 1 y luego 0' "$($primero.Body.recordadas) y $($segundo.Body.recordadas)" (([int]$primero.Body.recordadas -ge 1) -and ([int]$segundo.Body.recordadas -eq 0))
+
+    $null = Esperar-Condicion { (Contar-EventoAuditoria $compra.Compra.cuentaId 'CuentaCreditoPorVencer') -ge 1 } 15
+    Start-Sleep -Seconds 3
+    $cantidad = Contar-EventoAuditoria $compra.Compra.cuentaId 'CuentaCreditoPorVencer'
+    $pasos += Write-Paso 'Un solo CuentaCreditoPorVencer en Auditoria' '1' "$cantidad" ($cantidad -eq 1)
+    $actual = Get-Compra $token $compra.Orden.id
+    $pasos += Write-Paso 'Mi credito la muestra como "Vence pronto"' 'Vence pronto' "$($actual.etiquetaEstado)" ($actual.etiquetaEstado -eq 'Vence pronto')
+    return Resultado 'recordatorio' $pasos
+}
+
+function Escenario-Vencimiento {
+    Write-Host "Escenario vencimiento (cliente2)"
+    $pasos = @()
+    $token = Iniciar-Sesion 'cliente2@sgo.local'
+    $compra = Compra-Confirmada 'cliente2@sgo.local' 1 $token
+    $pasos += Write-Paso 'Compra a credito de Q100.00' 'cuenta' $(if ($compra) { $compra.Orden.id } else { 'sin cuenta' }) ($null -ne $compra -and $null -ne $compra.Compra)
+    if (-not $compra -or -not $compra.Compra) { return Resultado 'vencimiento' $pasos }
+
+    $null = Invoke-Http -Method 'POST' -Url "$CreditoUrl/interno/credito/demo/cuentas/$($compra.Orden.id)/vencimiento" -Body @{ diasDesdeHoy = -1 }
+    $proceso = Invoke-Http -Method 'POST' -Url "$CreditoUrl/interno/credito/demo/procesar-vencimientos"
+    $pasos += Write-Paso 'Procesar vencimientos' 'vencidas >= 1' "$($proceso.Body.vencidas)" ([int]$proceso.Body.vencidas -ge 1)
+
+    $actual = Get-Compra $token $compra.Orden.id
+    $pasos += Write-Paso 'La cuenta queda vencida' 'VENCIDA' "$($actual.estado)" ($actual.estado -eq 'VENCIDA')
+    $credito = Get-MiCredito $token
+    $pasos += Write-Paso 'La linea queda en pausa' 'LINEA_BLOQUEADA' "$($credito.estado) - $($credito.titulo)" ($credito.estado -eq 'LINEA_BLOQUEADA')
+    $oferta = Invoke-Http -Method 'GET' -Url "$CreditoUrl/api/credito/elegibilidad?monto=100" -Token $token
+    $pasos += Write-Paso 'Elegibilidad LINEA_BLOQUEADA' 'LINEA_BLOQUEADA, no ofrecer' "$($oferta.Body.estado), ofrecer=$($oferta.Body.ofrecer)" ($oferta.Body.estado -eq 'LINEA_BLOQUEADA' -and $oferta.Body.ofrecer -eq $false)
+
+    $nueva = Crear-OrdenCredito 'cliente2@sgo.local' 1 $token
+    $rechazada = $null
+    if ($nueva) { $rechazada = Esperar-Orden $nueva.id 'RECHAZADA' }
+    $pasos += Write-Paso 'Una orden nueva a credito termina RECHAZADA' 'RECHAZADA' "$($rechazada.estado) - $(Ultimo-Motivo $rechazada)" ($null -ne $rechazada -and $rechazada.estado -eq 'RECHAZADA')
+
+    $res = Crear-Abono $token $compra.Compra.cuentaId ([decimal]$actual.saldoPendiente) (Tokenizar-Tarjeta $token)
+    $abono = $null
+    if ($res.Status -eq 202) { $abono = Esperar-Abono $token $res.Body.id }
+    $pasos += Write-Paso 'Pagar la cuenta vencida' 'APLICADO' "$($abono.estado)" ($null -ne $abono -and $abono.estado -eq 'APLICADO')
+    $credito = Get-MiCredito $token
+    $pasos += Write-Paso 'La linea se reactiva' 'DISPONIBLE' "$($credito.estado)" ($credito.estado -eq 'DISPONIBLE')
+    $null = Esperar-Condicion { $null -ne (Evento-Auditoria $compra.Compra.cuentaId 'CuentaCreditoPagada') } 15
+    $evento = Evento-Auditoria $compra.Compra.cuentaId 'CuentaCreditoPagada'
+    $pasos += Write-Paso 'El pago cuenta como tardio' 'puntual = False' "puntual = $($evento.data.puntual)" ($null -ne $evento -and $evento.data.puntual -eq $false)
+    return Resultado 'vencimiento' $pasos
 }
 
 # ---------------------------------------------------------------------------
@@ -440,6 +758,7 @@ Write-Host "  Gateway:     $GatewayUrl"
 Write-Host "  Credito:     $CreditoUrl"
 Write-Host "  Inventario:  $InventarioUrl"
 Write-Host "  Auditoria:   $AuditoriaUrl"
+Write-Host "  Pagos:       $PagosUrl"
 Write-Host "  Escenario:   $Escenario"
 Write-Host ""
 
@@ -460,6 +779,13 @@ switch ($Escenario) {
     'sin-sesion' { $resultados['sin-sesion'] = Escenario-SinSesion }
     'cancelacion' { $resultados['cancelacion'] = Escenario-Cancelacion }
     'timeout' { $resultados['timeout'] = Escenario-Timeout }
+    'iva' { $resultados['iva'] = Escenario-Iva }
+    'abono-parcial' { $resultados['abono-parcial'] = Escenario-AbonoParcial }
+    'pago-total' { $resultados['pago-total'] = Escenario-PagoTotal }
+    'pago-rechazado' { $resultados['pago-rechazado'] = Escenario-PagoRechazado }
+    'pago-pendiente' { $resultados['pago-pendiente'] = Escenario-PagoPendiente }
+    'recordatorio' { $resultados['recordatorio'] = Escenario-Recordatorio }
+    'vencimiento' { $resultados['vencimiento'] = Escenario-Vencimiento }
     'todos' {
         $resultados['reiniciar'] = Escenario-Reiniciar
         $resultados['aprobado'] = Escenario-Aprobado
@@ -469,12 +795,19 @@ switch ($Escenario) {
         $resultados['sin-sesion'] = Escenario-SinSesion
         $resultados['cancelacion'] = Escenario-Cancelacion
         $resultados['timeout'] = Escenario-Timeout
+        $resultados['iva'] = Escenario-Iva
+        $resultados['abono-parcial'] = Escenario-AbonoParcial
+        $resultados['pago-total'] = Escenario-PagoTotal
+        $resultados['pago-rechazado'] = Escenario-PagoRechazado
+        $resultados['pago-pendiente'] = Escenario-PagoPendiente
+        $resultados['recordatorio'] = Escenario-Recordatorio
+        $resultados['vencimiento'] = Escenario-Vencimiento
     }
 }
 
 Write-Host "=== Resumen ==="
 foreach ($nombre in $resultados.Keys) {
-    Write-Host ("  {0,-14} {1}" -f $nombre, $(if ($resultados[$nombre]) { 'APROBADO' } else { 'FALLIDO' }))
+    Write-Host ("  {0,-16} {1}" -f $nombre, $(if ($resultados[$nombre]) { 'APROBADO' } else { 'FALLIDO' }))
 }
 
 $fallidos = @($resultados.Values | Where-Object { -not $_ }).Count

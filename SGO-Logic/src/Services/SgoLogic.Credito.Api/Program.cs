@@ -13,6 +13,7 @@ using SgoLogic.Credito.Api.Controllers;
 using SgoLogic.Credito.Api.Domain;
 using SgoLogic.Credito.Api.Infrastructure.Demo;
 using SgoLogic.Credito.Api.Infrastructure.Persistencia;
+using SgoLogic.Credito.Api.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -71,6 +72,14 @@ builder.Services.AddScoped<ServicioElegibilidad>();
 builder.Services.AddScoped<ServicioEvaluacionCredito>();
 builder.Services.AddScoped<ServicioAnulacionCargos>();
 builder.Services.AddScoped<ServicioDemoCredito>();
+
+// Bloque 3: cobranza (abonos, resultado del cobro, recordatorios y vencimientos).
+builder.Services.Configure<CobranzaOptions>(builder.Configuration.GetSection(CobranzaOptions.Seccion));
+builder.Services.AddScoped<ServicioAbonos>();
+builder.Services.AddScoped<ServicioResultadoAbonos>();
+builder.Services.AddScoped<ServicioVencimientos>();
+builder.Services.AddHostedService<PagosCreditoConsumidor>();
+builder.Services.AddHostedService<VencimientosCreditoWorker>();
 builder.Services.AddHostedService<HistorialClienteErpConsumidor>();
 
 // Bloque 2: evaluacion de compras a credito dentro de la saga y anulacion de cargos.

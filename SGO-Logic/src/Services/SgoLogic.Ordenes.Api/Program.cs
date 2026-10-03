@@ -32,6 +32,9 @@ builder.Services.Configure<MediosPagoPorCanalOptions>(
     builder.Configuration.GetSection(MediosPagoPorCanalOptions.Seccion));
 builder.Services.AddSingleton<PoliticaMediosPago>();
 
+// Tasa del IVA incluido en los precios: Ordenes calcula total e impuestos en el servidor.
+builder.Services.Configure<FiscalOptions>(builder.Configuration.GetSection(FiscalOptions.Seccion));
+
 builder.Services.AddScoped<IRepositorioOrdenes, RepositorioOrdenes>();
 builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
 builder.Services.AddScoped<IGeneradorCorrelativoOrden, GeneradorCorrelativoOrden>();

@@ -25,4 +25,17 @@ public static class MetricasCredito
     public static readonly Counter CargosAnuladosTotal = Metrics.CreateCounter(
         "credito_cargos_anulados_total",
         "Cuentas por cobrar anuladas por cancelacion de la orden, con el monto devuelto a la linea.");
+
+    public static readonly Counter AbonosTotal = Metrics.CreateCounter(
+        "credito_abonos_total",
+        "Abonos a cuentas por cobrar por estado alcanzado (solicitado, aplicado, rechazado, pendiente, reembolso_pendiente).",
+        new CounterConfiguration { LabelNames = new[] { "estado" } });
+
+    public static readonly Counter CuentasVencidasTotal = Metrics.CreateCounter(
+        "credito_cuentas_vencidas_total",
+        "Cuentas por cobrar que pasaron a VENCIDA con saldo (la linea del cliente queda en pausa).");
+
+    public static readonly Counter RecordatoriosTotal = Metrics.CreateCounter(
+        "credito_recordatorios_total",
+        "Recordatorios de cuenta por vencer emitidos (CuentaCreditoPorVencer).");
 }

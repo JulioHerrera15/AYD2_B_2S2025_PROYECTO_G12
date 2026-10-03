@@ -52,7 +52,7 @@ public sealed class ServicioReembolso
     {
         var pago = await _contexto.Pagos
             .Include(p => p.Intentos)
-            .FirstOrDefaultAsync(p => p.OrdenId == datos.OrdenOriginalId, cancelacion);
+            .FirstOrDefaultAsync(p => p.OrdenId == datos.OrdenOriginalId && p.Concepto == ConceptoPago.ORDEN, cancelacion);
 
         if (pago is null)
         {

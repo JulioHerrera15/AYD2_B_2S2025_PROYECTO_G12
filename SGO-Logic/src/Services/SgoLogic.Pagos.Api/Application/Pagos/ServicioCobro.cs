@@ -50,7 +50,7 @@ namespace SgoLogic.Pagos.Api.Application.Pagos;
 /// datos otra vez. Los datos descifrados nunca se escriben en logs, excepciones ni
 /// eventos.
 /// </summary>
-public sealed class ServicioCobro
+public sealed partial class ServicioCobro
 {
     private readonly PagosDbContext _contexto;
     private readonly IClientePayKlik _payklik;
@@ -101,7 +101,7 @@ public sealed class ServicioCobro
     {
         var pago = await _contexto.Pagos
             .Include(p => p.Intentos)
-            .FirstOrDefaultAsync(p => p.OrdenId == solicitud.OrdenId, cancelacion);
+            .FirstOrDefaultAsync(p => p.OrdenId == solicitud.OrdenId && p.Concepto == ConceptoPago.ORDEN, cancelacion);
 
         if (pago is null)
         {

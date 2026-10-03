@@ -6,15 +6,15 @@ CREATE TEMP TABLE seed_pago (
 ) ON COMMIT DROP;
 
 INSERT INTO seed_pago VALUES
-    (1, 'cliente1@sgo.local', 'WEB',         'TARJETA',            6158.88, 'APLICADO',  '20 days'),
-    (2, 'cliente1@sgo.local', 'WEB',         'TARJETA',            7948.64, 'APLICADO',  '3 days'),
-    (3, 'cliente2@sgo.local', 'MOVIL',       'BILLETERA_DIGITAL',  5150.88, 'APLICADO',  '2 days'),
-    (4, 'cliente2@sgo.local', 'WEB',         'TARJETA',           18478.88, 'APLICADO',  '1 day'),
-    (5, 'cliente3@sgo.local', 'CALL_CENTER', 'TRANSFERENCIA',      8846.88, 'APLICADO',  '6 hours'),
-    (6, 'cliente3@sgo.local', 'WEB',         'TARJETA',            4366.88, 'PENDIENTE', '2 hours'),
-    (7, 'cliente1@sgo.local', 'WEB',         'TARJETA',           16798.88, 'RECHAZADO', '10 days'),
-    (8, 'cliente2@sgo.local', 'TIENDA',      'TARJETA',            2126.88, 'APLICADO',  '15 days'),
-    (9, 'cliente3@sgo.local', 'WEB',         'TARJETA',            9853.76, 'APLICADO',  '4 days');
+    (1, 'cliente1@sgo.local', 'WEB',         'TARJETA',             5499.00, 'APLICADO',  '20 days'),
+    (2, 'cliente1@sgo.local', 'WEB',         'TARJETA',             7097.00, 'APLICADO',  '3 days'),
+    (3, 'cliente2@sgo.local', 'MOVIL',       'BILLETERA_DIGITAL',   4599.00, 'APLICADO',  '2 days'),
+    (4, 'cliente2@sgo.local', 'WEB',         'TARJETA',           16499.00, 'APLICADO',  '1 day'),
+    (5, 'cliente3@sgo.local', 'CALL_CENTER', 'TRANSFERENCIA',       7899.00, 'APLICADO',  '6 hours'),
+    (6, 'cliente3@sgo.local', 'WEB',         'TARJETA',             3899.00, 'PENDIENTE', '2 hours'),
+    (7, 'cliente1@sgo.local', 'WEB',         'TARJETA',           14999.00, 'RECHAZADO', '10 days'),
+    (8, 'cliente2@sgo.local', 'TIENDA',      'TARJETA',             1899.00, 'APLICADO',  '15 days'),
+    (9, 'cliente3@sgo.local', 'WEB',         'TARJETA',             8798.00, 'APLICADO',  '4 days');
 
 INSERT INTO pagos.pago (id, orden_id, cliente_id, canal, medio_pago, moneda, monto, estado, secuencia, creado_en, actualizado_en)
 SELECT

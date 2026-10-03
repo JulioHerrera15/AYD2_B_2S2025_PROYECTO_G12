@@ -54,4 +54,19 @@ public sealed class CreditoInternoController : ControllerBase
     [ProducesResponseType<ResultadoReinicioDemo>(StatusCodes.Status200OK)]
     public async Task<IActionResult> ReiniciarDemo(CancellationToken cancelacion) =>
         Ok(await _demo.ReiniciarAsync(cancelacion));
+
+    /// <summary>Fija VenceEn = ahora + diasDesdeHoy de la cuenta de la orden y limpia el recordatorio. 404 si no hay cuenta.</summary>
+    [HttpPost("demo/cuentas/{ordenId}/vencimiento")]
+    public async Task<IActionResult> FijarVencimiento(string ordenId, [FromBody] FijarVencimientoRequest? solicitud, CancellationToken cancelacion) =>
+        await _demo.FijarVencimientoAsync(ordenId, solicitud?.DiasDesdeHoy ?? 0, cancelacion)
+            ? Ok(new { ordenId, diasDesdeHoy = solicitud?.DiasDesdeHoy ?? 0 })
+            : NotFound(new ProblemDetails { Title = "Cuenta no encontrada", Detail = $"La orden {ordenId} no tiene cuenta por cobrar.", Status = 404 });
+
+    /// <summary>Ejecuta recordatorios y vencimientos de inmediato; devuelve cuantas cuentas recordo y cuantas vencio.</summary>
+    [HttpPost("demo/procesar-vencimientos")]
+    [ProducesResponseType<ResultadoVencimientos>(StatusCodes.Status200OK)]
+    public async Task<IActionResult> ProcesarVencimientos(CancellationToken cancelacion) =>
+        Ok(await _demo.ProcesarVencimientosAsync(cancelacion));
 }
+
+public sealed record FijarVencimientoRequest(int DiasDesdeHoy);

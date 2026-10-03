@@ -2,14 +2,15 @@ namespace SgoLogic.Credito.Api.Domain;
 
 /// <summary>
 /// Parametros de la politica de credito (seccion Credito:Politica). Los valores por
-/// defecto son los de la version 2026.10-v1; cambiar cualquiera de ellos es una
-/// politica nueva y deberia ir con otra VersionPolitica.
+/// defecto son los de la version 2026.10-v2 (los mismos numeros de la v1 mas el
+/// comportamiento propio); cambiar cualquiera de ellos es una politica nueva y
+/// deberia ir con otra VersionPolitica.
 /// </summary>
 public sealed class PoliticaCreditoOptions
 {
     public const string Seccion = "Credito:Politica";
 
-    public string VersionPolitica { get; set; } = "2026.10-v1";
+    public string VersionPolitica { get; set; } = "2026.10-v2";
     public string Moneda { get; set; } = "GTQ";
     public int PlazoDias { get; set; } = 30;
 

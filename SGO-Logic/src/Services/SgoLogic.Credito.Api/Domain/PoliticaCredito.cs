@@ -16,6 +16,15 @@ public sealed record PuntosFactores(
     public decimal Total => Puntualidad + Monto + Antiguedad + Frecuencia + Devoluciones + Incidentes;
 }
 
+/// <summary>
+/// Comportamiento de pago del cliente con su propio credito (no el del ERP): cuentas
+/// pagadas a tiempo, pagadas tarde y vencidas sin pagar. Entra a la politica v2.
+/// </summary>
+public sealed record ComportamientoPropio(int PagadasATiempo, int PagadasTarde, int VencidasSinPagar)
+{
+    public static readonly ComportamientoPropio Ninguno = new(0, 0, 0);
+}
+
 /// <summary>Resultado de aplicar la politica a un historial.</summary>
 public sealed record EvaluacionCredito(
     int Puntaje,
@@ -33,9 +42,14 @@ public sealed record EvaluacionCredito(
 ///
 /// El puntaje se calcula siempre, aunque haya descarte. Los descartes se evaluan en
 /// orden fijo y el primero que aplica define el motivo: SIN_HISTORIAL,
-/// INCIDENTE_GRAVE, ANTIGUEDAD_INSUFICIENTE, DEVOLUCIONES_EXCESIVAS y
+/// DEUDA_VENCIDA, INCIDENTE_GRAVE, ANTIGUEDAD_INSUFICIENTE, DEVOLUCIONES_EXCESIVAS y
 /// PUNTAJE_INSUFICIENTE. Un cliente no elegible queda NO_CALIFICA con limite 0
 /// aunque su puntaje sea alto.
+///
+/// Version 2026.10-v2: suma el comportamiento propio. Las cuentas pagadas cuentan
+/// como pagos puntuales o tardios junto con los del ERP, y una cuenta vencida sin
+/// pagar descarta (DEUDA_VENCIDA). Con comportamiento propio en cero el resultado es
+/// identico al de la v1.
 /// </summary>
 public sealed class PoliticaCredito
 {
@@ -53,8 +67,13 @@ public sealed class PoliticaCredito
 
     public PoliticaCreditoOptions Opciones => _opciones;
 
-    public EvaluacionCredito Evaluar(HistorialCliente? historial, DateTime ahora)
+    public EvaluacionCredito Evaluar(HistorialCliente? historial, DateTime ahora) =>
+        Evaluar(historial, ComportamientoPropio.Ninguno, ahora);
+
+    public EvaluacionCredito Evaluar(HistorialCliente? historial, ComportamientoPropio comportamiento, DateTime ahora)
     {
+        ArgumentNullException.ThrowIfNull(comportamiento);
+
         if (historial is null)
         {
             return new EvaluacionCredito(
@@ -62,9 +81,11 @@ public sealed class PoliticaCredito
                 PuntosFactores.Ninguno, _opciones.VersionPolitica);
         }
 
-        var factores = CalcularFactores(historial, ahora);
+        var factores = CalcularFactores(historial, comportamiento, ahora);
         var puntaje = (int)Math.Round(factores.Total, 0, MidpointRounding.AwayFromZero);
-        var motivo = MotivoDescarte(historial, ahora, puntaje);
+        var motivo = comportamiento.VencidasSinPagar > 0
+            ? CodigosMotivoCredito.DeudaVencida
+            : MotivoDescarte(historial, ahora, puntaje);
 
         if (motivo is not null)
         {
@@ -97,12 +118,17 @@ public sealed class PoliticaCredito
         return (NivelCredito.NO_CALIFICA, 0m);
     }
 
-    public PuntosFactores CalcularFactores(HistorialCliente historial, DateTime ahora)
+    public PuntosFactores CalcularFactores(HistorialCliente historial, DateTime ahora) =>
+        CalcularFactores(historial, ComportamientoPropio.Ninguno, ahora);
+
+    public PuntosFactores CalcularFactores(HistorialCliente historial, ComportamientoPropio comportamiento, DateTime ahora)
     {
-        var pagos = historial.PagosPuntuales + historial.PagosTardios;
+        var puntuales = historial.PagosPuntuales + comportamiento.PagadasATiempo;
+        var tardios = historial.PagosTardios + comportamiento.PagadasTarde;
+        var pagos = puntuales + tardios;
         var puntualidad = pagos <= 0
             ? _opciones.PuntosPuntualidadSinPagos
-            : _opciones.PuntosPuntualidad * historial.PagosPuntuales / pagos;
+            : _opciones.PuntosPuntualidad * puntuales / pagos;
 
         var monto = _opciones.PuntosMonto * Proporcion(historial.MontoCompradoUltimos12Meses, _opciones.MontoReferencia);
         var antiguedad = _opciones.PuntosAntiguedad * Proporcion(historial.DiasComoCliente(ahora), _opciones.DiasAntiguedadReferencia);

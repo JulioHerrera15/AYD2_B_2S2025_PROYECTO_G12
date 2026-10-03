@@ -30,6 +30,10 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes;
 /// La orden lo conserva solo hasta emitir CobroSolicitado y no lo devuelve en
 /// ninguna respuesta.
 /// </param>
+/// <param name="Impuestos">
+/// Ignorado. Los precios ya incluyen IVA: Ordenes calcula total e IVA desde las
+/// lineas (Fiscal:TasaIva). Se conserva en el contrato por compatibilidad.
+/// </param>
 /// <param name="CarritoId">
 /// Opcional. Carrito del que sale la orden (el identificador que usa Auth). Si
 /// viene, Inventario adopta las retenciones de stock de ese carrito al reservar.

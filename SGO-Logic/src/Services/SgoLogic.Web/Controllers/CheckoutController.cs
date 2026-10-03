@@ -95,17 +95,12 @@ public class CheckoutController : Controller
         return OpcionCreditoCheckout.Desde(await _gateway.ConsultarOfertaCreditoAsync(total, HttpContext.RequestAborted));
     }
 
-    private static decimal ImpuestosDe(decimal subtotal) => Math.Round(subtotal * 0.12m / 1.12m, 2);
-
     /// <summary>
-    /// Total con el que Ordenes crea la orden: suma de lineas mas los impuestos que
-    /// manda Procesar. Es el monto que Credito evalua y el cargo que queda en la cuenta.
+    /// Total con el que Ordenes crea la orden: la suma de las lineas (los precios ya
+    /// incluyen IVA). Es el mismo que ve el cliente, el que Credito evalua y el cargo
+    /// que queda en la cuenta.
     /// </summary>
-    private static decimal TotalOrden(CarritoModel carrito)
-    {
-        var subtotal = carrito.Items?.Sum(i => i.Subtotal) ?? 0m;
-        return subtotal + ImpuestosDe(subtotal);
-    }
+    private static decimal TotalOrden(CarritoModel carrito) => carrito.Items?.Sum(i => i.Subtotal) ?? 0m;
 
     private const string MensajeSesionCredito = "Tu sesión expiró. Inicia sesión de nuevo para pagar con crédito.";
 
@@ -349,8 +344,6 @@ public class CheckoutController : Controller
             return View("Index", carrito);
         }
 
-        var subtotal = carrito.Items!.Sum(i => i.Subtotal);
-        var impuestos = ImpuestosDe(subtotal);
 
         var lineas = carrito.Items!.Select(i => new LineaCrearOrdenModel(
             i.Sku,
@@ -404,7 +397,8 @@ public class CheckoutController : Controller
             MetodoEntrega: metodoEntregaFinal,
             Moneda: "GTQ",
             MedioPago: medioPagoFinal,
-            Impuestos: impuestos,
+            // Ordenes calcula el IVA incluido en el servidor e ignora este campo.
+            Impuestos: 0m,
             Lineas: lineas,
             UbicacionSolicitadaId: ubicacionPreferida,
             ReceptorCui: cuiFinal,
