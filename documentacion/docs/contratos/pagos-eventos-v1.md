@@ -1,15 +1,49 @@
-# Contrato de eventos del contexto Pagos — v1.4
+# Contrato de eventos del contexto Pagos — v1.5
 
 **Proyecto:** SGO-Logic — Fase 2
 **Curso:** Análisis y Diseño de Sistemas 2, Sección B
 **Contexto emisor:** Pagos
 **Estado:** propuesto para congelamiento
-**Fecha:** 2026-09-22
+**Fecha:** 2026-10-03
 **Depende de:** `sgo-eventos-envelope-v1.md`
 
 ---
 
-## 0. Cambios de v1.4 respecto a v1.3 (crédito, bloque 3)
+## 0. Cambios de v1.5 respecto a v1.4 (reversos de dinero, crédito bloque 4)
+
+Pagos reembolsa a la tarjeta en dos casos nuevos, con reembolsos que no se
+pierden: se registran `PENDIENTE` en la tabla nueva `pagos.reembolso` (migración
+`ReembolsosPendientes`) en la misma transacción que el evento que los origina, y
+`ReembolsosPendientesWorker` los lleva a PayKlik (`POST /v1/reembolsos`).
+
+- **Cancelación de una orden pagada con tarjeta.** Pagos consume
+  `ordenes.orden.cancelada` en `pagos.ordenes`. Solo actúa con
+  `requiereReembolso = true`, `medioPago` distinto de `CREDITO` y un `Pago`
+  `APLICADO` de concepto `ORDEN`; el monto es lo cobrado. Idempotente por `ordenId`.
+  Publica los eventos 10 y 11 (`pagos.reembolso-cancelacion.*`).
+- **Reembolso de abonos a crédito.** Pagos consume
+  `credito.abono.reembolso-solicitado` en `pagos.credito`, contra el `Pago` de ese
+  abono, idempotente por `reembolsoId` y sin superar lo cobrado en el abono menos lo
+  ya reembolsado o en curso. Publica los eventos 12 y 13 (`pagos.abono-credito.*`).
+- **Devoluciones a crédito.** Un `DevolucionRegistrada` con `medioPago = CREDITO`
+  se confirma sin hacer nada: la devolución la aplica Crédito. Antes se habría creado
+  un pago ficticio y reembolsado por PayKlik.
+
+Reglas del worker (cada `Pagos:Reembolsos:IntervaloSegundos`, 5): `Idempotency-Key`
+= id del reembolso, el mismo en todos los intentos. Aprobado: `APLICADO` y evento de
+éxito. Rechazo del proveedor: `FALLIDO` y evento de fallo, sin reintento. Falla
+técnica (timeout, 5xx, red, circuito abierto): se reprograma en
+`proximo_intento_en` con backoff `BackoffBaseSegundos` (5) duplicado en cada intento
+y topado en `BackoffMaximoSegundos` (60); al llegar a `MaxIntentos` (8) queda
+`FALLIDO` con evento de fallo. Métrica `pagos_reembolsos_total{concepto,estado}`.
+
+El reembolso de devoluciones con tarjeta (`ReembolsoAplicado` / `ReembolsoFallido`,
+eventos 4 y 5) no cambia. Cambio aditivo: cuatro eventos nuevos, ninguno existente
+se toca. `pagos.reembolso-cancelacion.*` no entra por ningún binding de
+`pagos.reembolso.*` (en un topic, `*` es una sola palabra y
+`reembolso-cancelacion` es otra palabra que `reembolso`).
+
+## 0.0.0.0 Cambios de v1.4 respecto a v1.3 (crédito, bloque 3)
 
 Pagos cobra los abonos de las cuentas por cobrar de Crédito. Consume
 `CobroAbonoCreditoSolicitado` (`credito.abono.cobro-solicitado`) en la cola nueva
@@ -156,9 +190,9 @@ responda.
 
 ## 3. Catálogo de eventos
 
-Nueve eventos: cinco de resultado de órdenes, uno de auditoría y tres de
-resultado de abonos a crédito (v1.4). Ninguno más se publica bajo `pagos.*` en
-esta versión.
+Trece eventos: cinco de resultado de órdenes, uno de auditoría, tres de
+resultado de abonos a crédito (v1.4) y cuatro de reembolso por cancelación y de
+abonos (v1.5). Ninguno más se publica bajo `pagos.*` en esta versión.
 
 | # | `eventType` | Routing key | CU | Consumidores |
 |---|---|---|---|---|
@@ -171,8 +205,12 @@ esta versión.
 | 7 | `AbonoCreditoCobrado` | `pagos.abono-credito.cobrado` | Crédito bloque 3 | Crédito |
 | 8 | `AbonoCreditoRechazado` | `pagos.abono-credito.rechazado` | Crédito bloque 3 | Crédito |
 | 9 | `AbonoCreditoPendiente` | `pagos.abono-credito.pendiente` | Crédito bloque 3 | Crédito |
+| 10 | `ReembolsoCancelacionAplicado` | `pagos.reembolso-cancelacion.aplicado` | Crédito bloque 4 | Órdenes |
+| 11 | `ReembolsoCancelacionFallido` | `pagos.reembolso-cancelacion.fallido` | Crédito bloque 4 | Órdenes |
+| 12 | `AbonoCreditoReembolsado` | `pagos.abono-credito.reembolsado` | Crédito bloque 4 | Crédito |
+| 13 | `ReembolsoAbonoCreditoFallido` | `pagos.abono-credito.reembolso-fallido` | Crédito bloque 4 | Crédito |
 
-Auditoría consume los nueve por su binding `#` y no se lista fila por fila.
+Auditoría consume los trece por su binding `#` y no se lista fila por fila.
 
 ---
 
@@ -180,25 +218,27 @@ Auditoría consume los nueve por su binding `#` y no se lista fila por fila.
 
 | Cola | Dueño | Bindings |
 |---|---|---|
-| `ordenes.pagos` | Angel (Órdenes) | `pagos.pago.aplicado`, `pagos.pago.rechazado`, `pagos.pago.pendiente`, `pagos.reembolso.aplicado`, `pagos.reembolso.fallido` |
+| `ordenes.pagos` | Angel (Órdenes) | `pagos.pago.aplicado`, `pagos.pago.rechazado`, `pagos.pago.pendiente`, `pagos.reembolso.aplicado`, `pagos.reembolso.fallido`, `pagos.reembolso-cancelacion.aplicado`, `pagos.reembolso-cancelacion.fallido` |
 | `consulta-estado.pagos` | Jonathan | `pagos.pago.*` |
 | `auditoria.eventos` | Julio | `#` |
-| `credito.pagos` | Crédito | `pagos.abono-credito.cobrado`, `pagos.abono-credito.rechazado`, `pagos.abono-credito.pendiente` |
+| `credito.pagos` | Crédito | `pagos.abono-credito.cobrado`, `pagos.abono-credito.rechazado`, `pagos.abono-credito.pendiente`, `pagos.abono-credito.reembolsado`, `pagos.abono-credito.reembolso-fallido` |
 
 Ni `ordenes.pagos` ni `consulta-estado.pagos` (`pagos.pago.*`) reciben los
-eventos 7 a 9.
+eventos 7 a 9, 12 y 13. `consulta-estado.pagos` tampoco recibe los eventos 10 y 11.
 
-Pagos también consume `credito.abono.cobro-solicitado` en su cola `pagos.credito`
-(`CreditoAbonosConsumidor`, `EventConsumerBase` con un solo `data`). La fuente de
-verdad de ese evento es `credito-eventos-v1.md`, sección 2.7.
+Pagos también consume `credito.abono.cobro-solicitado` y (v1.5)
+`credito.abono.reembolso-solicitado` en su cola `pagos.credito`
+(`CreditoAbonosConsumidor`, `EventConsumerBase` sobre `JsonElement` que despacha por
+`eventType`). La fuente de verdad de esos eventos es `credito-eventos-v1.md`,
+secciones 2.7 y 2.14.
 
-Pagos, además, **consume** `ordenes.cobro.solicitado` y `ordenes.devolucion.registrada`
-en su cola `pagos.ordenes`, ambos bindings ya declarados en código
+Pagos, además, **consume** `ordenes.cobro.solicitado`, `ordenes.devolucion.registrada`
+y (v1.5) `ordenes.orden.cancelada` en su cola `pagos.ordenes`
 (`PagosEventosConsumidor`, del lado de Pagos). El contrato de Órdenes
-(`ordenes-eventos-v1.md`, sección 4) es la fuente de verdad de esos dos bindings.
+(`ordenes-eventos-v1.md`, sección 4) es la fuente de verdad de esos bindings.
 Como `EventConsumerBase` está tipado a un único `TData` por cola y esta cola
-recibe dos `data` distintos, `pagos.ordenes` no usa esa clase base: despacha por
-`eventType` a `ServicioCobro` o a `ServicioReembolso` según corresponda.
+recibe varios `data` distintos, `pagos.ordenes` no usa esa clase base: despacha por
+`eventType` a `ServicioCobro`, `ServicioReembolso` o `ServicioReembolsosPendientes`.
 
 ---
 
@@ -207,9 +247,9 @@ recibe dos `data` distintos, `pagos.ordenes` no usa esa clase base: despacha por
 | Campo | Valor en este contexto |
 |---|---|
 | `source` | `"pagos"` |
-| `aggregateType` | `"Pago"` en los eventos 1 a 5. `"IntentoPago"` en el evento 6. `"PagoAbonoCredito"` en los eventos 7 a 9. |
+| `aggregateType` | `"Pago"` en los eventos 1 a 5, 10 y 11. `"IntentoPago"` en el evento 6. `"PagoAbonoCredito"` en los eventos 7 a 9, 12 y 13. |
 | `aggregateId` | En los eventos 1 a 3, el `ordenId` de la orden que se está cobrando (formato `ORD-<año>-<correlativo de 6 dígitos>`); Pagos es un agregado por orden. En los eventos 4 y 5 (reembolso), el `devolucionId` (formato `DEV-<año>-<correlativo de 6 dígitos>`): el reembolso se identifica por la devolución que lo origina, no por la orden, porque una orden puede tener más de una devolución. |
-| `sequence` | En los eventos 1 a 3, asignado por Pagos, monotónico por `ordenId`, empieza en 1 con el primer evento de resultado de ese pago; un pago que pasa por `PENDIENTE` y luego `APLICADO` emite dos eventos con `sequence` 1 y 2. En los eventos 4 y 5, siempre `1`: cada devolución dispara un único intento de reembolso, sin reintento automático. En el evento 6, el `intentoNumero` del intento fallido; no consume la `sequence` del pago, así que los eventos 1 a 3 conservan la numeración de v1.2. El `aggregateId` del evento 6 es el `ordenId`. En los eventos 7 a 9, `aggregateId` es el `abonoId` y `sequence` la del `Pago` del abono. |
+| `sequence` | En los eventos 1 a 3, asignado por Pagos, monotónico por `ordenId`, empieza en 1 con el primer evento de resultado de ese pago; un pago que pasa por `PENDIENTE` y luego `APLICADO` emite dos eventos con `sequence` 1 y 2. En los eventos 4 y 5, siempre `1`: cada devolución dispara un único intento de reembolso, sin reintento automático. En el evento 6, el `intentoNumero` del intento fallido; no consume la `sequence` del pago, así que los eventos 1 a 3 conservan la numeración de v1.2. El `aggregateId` del evento 6 es el `ordenId`. En los eventos 7 a 9, `aggregateId` es el `abonoId` y `sequence` la del `Pago` del abono. En los eventos 10 y 11, `aggregateId` es el `ordenId`; en los 12 y 13, el `reembolsoId`. En los cuatro, `sequence` es siempre `1`: cada reembolso emite un único resultado final. |
 
 ---
 
@@ -529,16 +569,80 @@ Sin enlace de reintento.
 }
 ```
 
+### 7.8 Reembolso por cancelación (10 y 11)
+
+`ReembolsoCancelacionAplicado` (`pagos.reembolso-cancelacion.aplicado`): PayKlik
+aprobó el reembolso de lo cobrado por una orden cancelada.
+
+| Campo de `data` | Tipo | Obligatorio | Notas |
+|---|---|---|---|
+| `ordenId` | string | sí | |
+| `clienteId` | string | sí | |
+| `moneda` | string | sí | Enum `Moneda`. |
+| `monto` | string | sí | Decimal como cadena; lo cobrado por la orden. |
+| `autorizacionId` | string | sí | Autorización del reembolso en PayKlik. |
+| `ocurridoEn` | string | sí | ISO 8601 UTC. |
+
+`ReembolsoCancelacionFallido` (`pagos.reembolso-cancelacion.fallido`): mismos campos,
+con `motivoFalla` en lugar de `autorizacionId`. Se emite ante un rechazo del
+proveedor o al agotar los intentos por fallas técnicas (el texto empieza con
+`Reintentos agotados (<código>)`). La resolución es manual.
+
+```json
+{
+  "ordenId": "ORD-2026-000777",
+  "clienteId": "cliente1@sgo.local",
+  "moneda": "GTQ",
+  "monto": "300.00",
+  "autorizacionId": "PK-5D1E0A93C2B4",
+  "ocurridoEn": "2026-10-03T16:20:11.000Z"
+}
+```
+
+### 7.9 Reembolso de abonos a crédito (12 y 13)
+
+`AbonoCreditoReembolsado` (`pagos.abono-credito.reembolsado`):
+
+| Campo de `data` | Tipo | Obligatorio | Notas |
+|---|---|---|---|
+| `reembolsoId` | string | sí | El de `ReembolsoAbonoCreditoSolicitado`. |
+| `abonoId` | string | sí | |
+| `clienteId` | string | sí | |
+| `moneda` | string | sí | |
+| `monto` | string | sí | Decimal como cadena; puede ser menor que lo pedido si ya no quedaba tanto cobrado por devolver. |
+| `autorizacionId` | string | sí | Autorización del reembolso en PayKlik. |
+| `ocurridoEn` | string | sí | ISO 8601 UTC. |
+
+`ReembolsoAbonoCreditoFallido` (`pagos.abono-credito.reembolso-fallido`): mismos
+campos, con `motivoFalla` en lugar de `autorizacionId`. Además de los casos del
+evento 11, se emite sin llamar al proveedor si el abono no tiene un cobro
+`APLICADO` o si ya no queda monto cobrado por devolver.
+
+### 7.10 Tabla `pagos.reembolso` (v1.5)
+
+| Columna | Contenido |
+|---|---|
+| `id` | Id del reembolso; es la `Idempotency-Key` hacia PayKlik. |
+| `concepto` | `CANCELACION_ORDEN` o `ABONO_CREDITO`. |
+| `referencia_id` | `ordenId` o `reembolsoId` de Crédito; único por concepto. |
+| `pago_id` | `Pago` `APLICADO` cuyo cobro se devuelve. |
+| `cliente_id`, `abono_id`, `monto`, `moneda` | |
+| `estado` | `PENDIENTE`, `APLICADO` o `FALLIDO`. |
+| `intentos`, `proximo_intento_en` | Llamadas hechas y cuándo puede intentarlo el worker. |
+| `autorizacion_id`, `codigo_respuesta`, `motivo_falla` | Último resultado. |
+| `creado_en`, `resuelto_en`, `version` | `version` es el token de concurrencia optimista. |
+
 ---
 
 ## 8. Matriz de consumo
 
 | Consumidor | Dueño | HU | Eventos | Para qué |
 |---|---|---|---|---|
-| Auditoría | Julio | HU-006 | Los nueve, por binding `#` | Bitácora append-only indexada por `transactionId` (EV-30, EAC-03). Con el evento 6, cada intento de cobro fallido queda en la bitácora (EAC-01). |
+| Auditoría | Julio | HU-006 | Los trece, por binding `#` | Bitácora append-only indexada por `transactionId` (EV-30, EAC-03). Con el evento 6, cada intento de cobro fallido queda en la bitácora (EAC-01). |
 | Órdenes | Angel | CU-03, HU-014 | 1, 2, 3, 4, 5 | Avanzar la saga: `PAGO_APLICADO` con el evento 1; `PAGO_PENDIENTE` con el evento 3 (y emitir el enlace al cliente); tratar el rechazo con el evento 2. Con los eventos 4 y 5, cerrar la devolución (`MarcarReembolsoAplicado` / `MarcarReembolsoFallido`) sin cambiar el estado de la orden. |
 | Consulta de Estado | Jonathan | HU-010 | `pagos.pago.*` | Enriquecer la vista 360 con el estado del cobro. No materializa estado de Orden. |
-| Crédito | Angel | Crédito bloque 3 | 7, 8, 9 | Aplicar el abono a la cuenta por cobrar y a la línea, o dejarlo rechazado o pendiente de reintento. |
+| Órdenes | Angel | Crédito bloque 4 | 10, 11 | Estado del reembolso de la orden cancelada (`estadoReembolso` `APLICADO` o `FALLIDO`), sin transición ni eventos. |
+| Crédito | Angel | Crédito bloque 3 y 4 | 7, 8, 9, 12, 13 | Aplicar el abono a la cuenta por cobrar y a la línea, o dejarlo rechazado o pendiente de reintento. Con 12 y 13, sumar lo reembolsado al abono o marcarlo para atención manual. |
 
 ---
 

@@ -62,7 +62,113 @@ public class CuentaController : Controller
 
         ViewBag.UserEmail = userEmail;
         var historial = await _gateway.ObtenerHistorialClienteAsync(userEmail, pagina, tamano);
+        var canceladaId = TempData["OrdenCancelada"] as string;
+        await CargarReversosAsync(historial, canceladaId);
         return View(historial);
+    }
+
+    /// <summary>
+    /// Estado del reembolso por cancelacion de una orden del cliente, para el sondeo del
+    /// banner. 404 si la orden no existe o es de otro cliente; 204 si no tiene reembolso.
+    /// </summary>
+    [HttpGet]
+    public async Task<IActionResult> EstadoReembolso(string ordenId)
+    {
+        var userEmail = Request.Cookies["sgo_user_email"];
+        if (string.IsNullOrWhiteSpace(userEmail) || string.IsNullOrWhiteSpace(ordenId))
+        {
+            return Unauthorized();
+        }
+
+        var orden = await _gateway.ObtenerOrdenAsync(ordenId.Trim(), HttpContext.RequestAborted);
+        var userRole = Request.Cookies["sgo_user_role"] ?? "CLIENTE";
+        var jwt = Request.Cookies["sgo_jwt"];
+        var esDuenio = orden is not null && string.Equals(orden.ClienteId, userEmail, StringComparison.OrdinalIgnoreCase);
+        if (orden is null || (!esDuenio && !PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt)))
+        {
+            return NotFound();
+        }
+
+        var vista = ReembolsoOrden.Vista(orden);
+        if (vista is null)
+        {
+            return NoContent();
+        }
+
+        Response.Headers.CacheControl = "no-store";
+        return Json(new
+        {
+            titulo = vista.Titulo,
+            estado = vista.Estado,
+            detalle = vista.Detalle,
+            clase = vista.Clase,
+            icono = vista.Icono,
+            pendiente = vista.Pendiente
+        });
+    }
+
+    /// <summary>Estados en los que una orden puede tener reembolso por cancelacion.</summary>
+    private static readonly HashSet<string> EstadosCancelados = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CANCELADA", "CANCELADA_RESERVA_VENCIDA", "RECHAZADA"
+    };
+
+    /// <summary>Estados en los que una orden puede tener nota de credito (cancelacion o devolucion).</summary>
+    private static readonly HashSet<string> EstadosConNotaCredito = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CANCELADA", "CANCELADA_RESERVA_VENCIDA", "RECHAZADA", "ENTREGADA", "DEVOLUCION_EN_PROCESO", "DEVUELTA"
+    };
+
+    /// <summary>
+    /// Para las ordenes de la pagina: el reembolso a la tarjeta de las canceladas (desde el
+    /// OrdenDto de Ordenes) y sus notas de credito. Consultas en paralelo; si un servicio
+    /// no responde, esa orden simplemente no muestra el dato.
+    /// </summary>
+    private async Task CargarReversosAsync(HistorialClienteModel? historial, string? canceladaId = null)
+    {
+        var reembolsos = new Dictionary<string, ReembolsoOrdenVista>();
+        var notas = new Dictionary<string, List<FacturaModel>>();
+        var ordenes = historial?.Ordenes ?? new List<OrdenHistorialResumenModel>();
+
+        // Orden recien cancelada: su estado sale de Ordenes (fuente de verdad) y no de la
+        // vista de estado, que puede tardar unos segundos en reflejar la cancelacion.
+        if (!string.IsNullOrWhiteSpace(canceladaId))
+        {
+            var cancelada = await _gateway.ObtenerOrdenAsync(canceladaId);
+            ViewBag.CancelacionReciente = cancelada;
+            ViewBag.CancelacionRecienteReembolso = ReembolsoOrden.Vista(cancelada);
+        }
+
+        var tareasReembolso = ordenes
+            .Where(o => EstadosCancelados.Contains(o.Estado))
+            .Select(async o => (o.OrdenId, Vista: ReembolsoOrden.Vista(await _gateway.ObtenerOrdenAsync(o.OrdenId))));
+        var tareasNotas = ordenes
+            .Where(o => EstadosConNotaCredito.Contains(o.Estado))
+            .Select(async o => (o.OrdenId, Notas: await _gateway.ObtenerNotasCreditoAsync(o.OrdenId)));
+
+        foreach (var (ordenId, vista) in await Task.WhenAll(tareasReembolso))
+        {
+            if (vista is not null)
+            {
+                reembolsos[ordenId] = vista;
+            }
+        }
+
+        foreach (var (ordenId, lista) in await Task.WhenAll(tareasNotas))
+        {
+            if (lista.Count > 0)
+            {
+                notas[ordenId] = lista;
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(canceladaId) && ViewBag.CancelacionRecienteReembolso is ReembolsoOrdenVista recien)
+        {
+            reembolsos[canceladaId] = recien;
+        }
+
+        ViewBag.Reembolsos = reembolsos;
+        ViewBag.NotasCredito = notas;
     }
 
     /// <summary>Mis tarjetas: las tarjetas guardadas del cliente, con la opcion de eliminarlas.</summary>
@@ -239,7 +345,9 @@ public class CuentaController : Controller
 
         if (exito)
         {
-            TempData["Exito"] = "Orden cancelada. Los productos regresaron a stock; el estado puede tardar unos segundos en actualizarse.";
+            // La pagina de pedidos muestra la confirmacion (y el reembolso, si lo hay)
+            // de esta orden aunque la vista de estado aun no refleje la cancelacion.
+            TempData["OrdenCancelada"] = ordenId.Trim();
         }
         else
         {
@@ -279,6 +387,41 @@ public class CuentaController : Controller
 
         return File(System.Text.Encoding.UTF8.GetBytes(factura.Xml), "application/xml",
             $"factura-{factura.Serie}-{factura.NumeroDocumento}.xml");
+    }
+
+    /// <summary>XML de una nota de credito de la orden (la ultima si no se indica el numero).</summary>
+    [HttpGet]
+    public async Task<IActionResult> NotaCredito(string ordenId, string? numero = null)
+    {
+        var userEmail = Request.Cookies["sgo_user_email"];
+        if (string.IsNullOrWhiteSpace(userEmail))
+        {
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Cuenta/Ordenes" });
+        }
+
+        var userRole = Request.Cookies["sgo_user_role"] ?? "CLIENTE";
+        var jwt = Request.Cookies["sgo_jwt"];
+        var orden = PermisosHelper.EsPersonalAutorizado(userRole, userEmail, jwt)
+            ? null
+            : await _gateway.ObtenerEstadoOrdenAsync(ordenId);
+
+        if (!PermisosHelper.PuedeVerOrden(orden, userEmail, userRole, jwt))
+        {
+            return NotFound();
+        }
+
+        var notas = await _gateway.ObtenerNotasCreditoAsync(ordenId);
+        var nota = string.IsNullOrWhiteSpace(numero)
+            ? notas.LastOrDefault()
+            : notas.FirstOrDefault(n => n.NumeroDocumento == numero);
+        if (nota is null)
+        {
+            TempData["Error"] = "Esta orden aún no tiene nota de crédito. Intenta de nuevo en unos minutos.";
+            return RedirectToAction(nameof(Ordenes));
+        }
+
+        return File(System.Text.Encoding.UTF8.GetBytes(nota.Xml), "application/xml",
+            $"nota-credito-{nota.Serie}-{nota.NumeroDocumento}.xml");
     }
 
     [HttpGet]

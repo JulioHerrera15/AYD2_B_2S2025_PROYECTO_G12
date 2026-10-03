@@ -34,7 +34,23 @@
 #                 orden nueva a credito RECHAZADA; al pagar se reactiva y cuenta tardio.
 #                 Se usa cliente2 (BUENO): con el pago tardio sigue sobre el minimo
 #                 de 60; cliente3 (62) quedaria NO_ELEGIBLE por la politica v2.
-#   todos         reiniciar y luego todos los anteriores.
+#   cancelacion-tarjeta  cliente1 paga con tarjeta, se confirma y cancela: en Pagos hay
+#                 un reembolso APLICADO por el total, la orden muestra el reembolso
+#                 APLICADO y existe la nota de credito.
+#   reembolso-reintento  igual, pero con payklik-mock detenido al cancelar: el reembolso
+#                 queda PENDIENTE con intentos; al levantarlo queda APLICADO una sola vez
+#                 (un reembolso en Pagos y uno aprobado en PayKlik).
+#   devolucion-credito-parcial  compra a credito llevada a ENTREGADA y devolucion de una
+#                 parte: baja la deuda y sube el disponible en ese monto, la orden vuelve
+#                 a ENTREGADA y Pagos no registra pago ni reembolso para la orden.
+#   devolucion-credito-total  devolucion completa sin pagos: cuenta ANULADA, cupo
+#                 completo y orden DEVUELTA.
+#   devolucion-credito-pagada  compra a credito pagada por completo y devuelta: el abono
+#                 queda REEMBOLSADO y en Pagos hay un reembolso APLICADO.
+#   cancelacion-credito-con-abono  compra a credito con un abono parcial y cancelada:
+#                 cuenta ANULADA y abono REEMBOLSADO.
+#   todos         reiniciar y luego todos los anteriores. No reinicia al final, para
+#                 poder revisar la Web con los datos que dejo.
 #
 # Cada paso imprime lo esperado y lo obtenido; cada escenario termina con
 # APROBADO o FALLIDO.
@@ -45,7 +61,9 @@
 
 param(
     [ValidateSet('aprobado', 'cupo', 'no-elegible', 'suplantacion', 'sin-sesion', 'cancelacion', 'timeout', 'reiniciar',
-        'iva', 'abono-parcial', 'pago-total', 'pago-rechazado', 'pago-pendiente', 'recordatorio', 'vencimiento', 'todos')]
+        'iva', 'abono-parcial', 'pago-total', 'pago-rechazado', 'pago-pendiente', 'recordatorio', 'vencimiento',
+        'cancelacion-tarjeta', 'reembolso-reintento', 'devolucion-credito-parcial', 'devolucion-credito-total',
+        'devolucion-credito-pagada', 'cancelacion-credito-con-abono', 'todos')]
     [string]$Escenario = 'todos',
     [string]$BaseUrl = 'http://localhost:8083',
     [string]$GatewayUrl = 'http://localhost:8080',
@@ -54,6 +72,7 @@ param(
     [string]$AuditoriaUrl = 'http://localhost:8093',
     [string]$PagosUrl = 'http://localhost:8085',
     [string]$PayKlikUrl = 'http://localhost:8084',
+    [string]$DespachoUrl = 'http://localhost:8097',
     # cliente1..cliente3 vienen del seed SQL (1234); cliente4..cliente6 de sembrar-demo.sh (Demo1234!).
     [string[]]$Contrasenas = @('Demo1234!', '1234'),
     [int]$TimeoutSeg = 60,
@@ -748,6 +767,292 @@ function Escenario-Vencimiento {
 }
 
 # ---------------------------------------------------------------------------
+# Reversos de dinero (bloque 4): cancelacion con tarjeta, reembolso con
+# reintento, devoluciones a credito y cancelacion a credito con abono
+# ---------------------------------------------------------------------------
+
+# Orden con tarjeta del cliente de la sesion: tokeniza en la boveda de Pagos y crea y
+# confirma la orden. Devuelve la orden creada o $null.
+function Crear-OrdenTarjeta {
+    param([string]$ClienteId, [int]$Cantidad, [string]$Token)
+    $tokenPago = Tokenizar-Tarjeta $Token
+    if ([string]::IsNullOrWhiteSpace($tokenPago)) { return $null }
+    $cuerpo = Cuerpo-Orden $ClienteId $Cantidad
+    $cuerpo.medioPago = 'TARJETA'
+    $cuerpo.tokenMedioPago = $tokenPago
+    $creada = Invoke-Http -Method 'POST' -Url "$BaseUrl/api/ordenes" -Body $cuerpo -Token $Token
+    if ($creada.Status -ne 201) { return $null }
+    $confirmada = Invoke-Http -Method 'POST' -Url "$BaseUrl/api/ordenes/$($creada.Body.id)/confirmar" -Body @{ motivo = 'arnes de reversos' } -Token $Token
+    if ($confirmada.Status -ne 200) { return $null }
+    return $creada.Body
+}
+
+function Cancelar-Orden {
+    param([string]$OrdenId, [string]$ClienteId, [string]$Token)
+    return Invoke-Http -Method 'POST' -Url "$BaseUrl/api/ordenes/$OrdenId/cancelar" -Body @{ clienteId = $ClienteId; motivo = 'Arnes de reversos' } -Token $Token
+}
+
+# Como camino-feliz.ps1: espera el despacho con guia y hace de LogiExpress hasta
+# ENTREGADA. Devuelve la ultima orden vista.
+function Llevar-A-Entregada {
+    param([string]$OrdenId)
+    $orden = Esperar-Orden $OrdenId 'DESPACHO_SOLICITADO'
+    if ($null -eq $orden -or ($script:Terminales -contains $orden.estado)) { return $orden }
+    $null = Esperar-Condicion {
+        $despacho = Invoke-Http -Method 'GET' -Url "$DespachoUrl/api/despacho/$OrdenId"
+        ($despacho.Status -eq 200) -and ($despacho.Body.estado -in @('GUIA_ASIGNADA', 'GUIA_PENDIENTE'))
+    } 30
+    foreach ($estado in @('EN_PREPARACION', 'EN_TRANSITO', 'ENTREGADA')) {
+        $null = Invoke-Http -Method 'POST' -Url "$DespachoUrl/api/despacho/$OrdenId/estados" -Body @{ estado = $estado; detalle = "arnes de reversos: $estado" }
+        $orden = Esperar-Orden $OrdenId $estado
+        if ($null -eq $orden -or $orden.estado -ne $estado) { return $orden }
+    }
+    return $orden
+}
+
+function Registrar-Devolucion {
+    param([string]$OrdenId, [string]$Email, [int]$Cantidad)
+    return Invoke-Http -Method 'POST' -Url "$BaseUrl/api/ordenes/$OrdenId/devoluciones" -Body @{
+        tipo = 'DEVOLUCION'; ubicacionReingresoId = $UbicacionId; registradaPor = $Email
+        lineas = @(@{ sku = $Sku; cantidad = $Cantidad; motivo = 'Arnes de reversos' })
+    }
+}
+
+# "ESTADO MONTO INTENTOS" del reembolso por cancelacion de la orden en Pagos, o $null.
+function Reembolso-Cancelacion {
+    param([string]$OrdenId)
+    return Consultar-Sql 'db-finanzas' 'sgo_pagos' "select estado || ' ' || monto || ' ' || intentos from pagos.reembolso where concepto = 'CANCELACION_ORDEN' and referencia_id = '$OrdenId'"
+}
+
+# "ESTADO MONTO" de los reembolsos del abono (por su referencia ABO-...) en Pagos, o $null.
+function Reembolso-Abono {
+    param([string]$Referencia)
+    return Consultar-Sql 'db-finanzas' 'sgo_pagos' "select string_agg(r.estado || ' ' || r.monto, ', ') from pagos.reembolso r join pagos.pago p on p.id = r.pago_id where p.orden_id = '$Referencia' and r.concepto = 'ABONO_CREDITO'"
+}
+
+function Notas-Credito {
+    param([string]$OrdenId)
+    $res = Invoke-Http -Method 'GET' -Url "$GatewayUrl/api/facturacion/documentos/$OrdenId/notas-credito"
+    if ($res.Status -ne 200) { return @() }
+    return @($res.Body)
+}
+
+# Reembolsos que registro el mock de PayKlik para la referencia, con el resultado indicado.
+function Reembolsos-PayKlik {
+    param([string]$Referencia, [string]$Resultado = 'APROBADO')
+    $res = Invoke-Http -Method 'GET' -Url "$PayKlikUrl/admin/reembolsos"
+    if ($res.Status -ne 200) { return -1 }
+    return @(@($res.Body) | Where-Object { $_.referencia -eq $Referencia -and $_.resultado -eq $Resultado }).Count
+}
+
+function Abono-De-Compra {
+    param([string]$Token, [string]$OrdenId, [string]$AbonoId)
+    $compra = Get-Compra $Token $OrdenId
+    if ($null -eq $compra) { return $null }
+    return @($compra.abonos) | Where-Object { $_.abonoId -eq $AbonoId } | Select-Object -First 1
+}
+
+# Compra con tarjeta (3 x Q100) confirmada. Devuelve @{ Token; Orden } o $null.
+function Compra-Tarjeta-Confirmada {
+    param([string]$Email)
+    $token = Iniciar-Sesion $Email
+    if (-not $token) { return $null }
+    $orden = Crear-OrdenTarjeta $Email 3 $token
+    if ($null -eq $orden) { return $null }
+    $final = Esperar-Orden $orden.id 'CONFIRMADA'
+    if ($null -eq $final -or ($script:Terminales -contains $final.estado)) { return $null }
+    return @{ Token = $token; Orden = $final }
+}
+
+function Escenario-CancelacionTarjeta {
+    Write-Host "Escenario cancelacion-tarjeta (cliente1 paga con tarjeta y cancela)"
+    $pasos = @()
+    $compra = Compra-Tarjeta-Confirmada 'cliente1@sgo.local'
+    $pasos += Write-Paso 'Compra con tarjeta (3 x Q100) confirmada' 'CONFIRMADA o posterior' $(if ($compra) { "$($compra.Orden.id) $($compra.Orden.estado)" } else { 'sin orden' }) ($null -ne $compra)
+    if (-not $compra) { return Resultado 'cancelacion-tarjeta' $pasos }
+    $orden = $compra.Orden
+    $total = [decimal]$orden.total
+
+    $cancelar = Cancelar-Orden $orden.id 'cliente1@sgo.local' $compra.Token
+    $pasos += Write-Paso 'El cliente cancela la orden' '200' "$($cancelar.Status)" ($cancelar.Status -eq 200)
+    $tras = Get-Orden $orden.id
+    $pasos += Write-Paso 'La orden pide el reembolso al cancelar' 'CANCELADA, reembolso PENDIENTE o APLICADO' "$($tras.estado), reembolso $($tras.estadoReembolso)" `
+        (($tras.estado -eq 'CANCELADA') -and ($tras.estadoReembolso -in @('PENDIENTE', 'APLICADO')))
+
+    $aplicado = Esperar-Condicion { "$(Reembolso-Cancelacion $orden.id)" -like 'APLICADO *' } 60
+    $fila = Reembolso-Cancelacion $orden.id
+    $montoPagos = if ($fila) { [decimal](("$fila" -split ' ')[1]) } else { -1 }
+    $pasos += Write-Paso 'En Pagos hay un reembolso APLICADO por el total' "APLICADO $total" "$fila" ($aplicado -and $montoPagos -eq $total)
+    $enOrden = Esperar-Condicion { (Get-Orden $orden.id).estadoReembolso -eq 'APLICADO' } 30
+    $pasos += Write-Paso 'La orden muestra el reembolso APLICADO' 'APLICADO' "$((Get-Orden $orden.id).estadoReembolso)" $enOrden
+    $conNota = Esperar-Condicion { @(Notas-Credito $orden.id | Where-Object { [decimal]$_.total -eq $total }).Count -ge 1 } 90
+    $notas = Notas-Credito $orden.id
+    $detalleNotas = ($notas | ForEach-Object { "$($_.serie)-$($_.numeroDocumento) $($_.total) $($_.estado)" }) -join ', '
+    $pasos += Write-Paso 'Existe la nota de credito por el total' "1 nota de $total" "$($notas.Count) nota(s): $detalleNotas" $conNota
+    return Resultado 'cancelacion-tarjeta' $pasos
+}
+
+function Escenario-ReembolsoReintento {
+    Write-Host "Escenario reembolso-reintento (cliente1, payklik-mock detenido al cancelar)"
+    $pasos = @()
+    $compra = Compra-Tarjeta-Confirmada 'cliente1@sgo.local'
+    $pasos += Write-Paso 'Compra con tarjeta (3 x Q100) confirmada' 'CONFIRMADA o posterior' $(if ($compra) { "$($compra.Orden.id) $($compra.Orden.estado)" } else { 'sin orden' }) ($null -ne $compra)
+    if (-not $compra) { return Resultado 'reembolso-reintento' $pasos }
+    $orden = $compra.Orden
+
+    try {
+        $null = docker compose -f $compose stop payklik-mock 2>&1
+        $pasos += Write-Paso 'Detener payklik-mock' 'detenido' $(if ($LASTEXITCODE -eq 0) { 'detenido' } else { "codigo $LASTEXITCODE" }) ($LASTEXITCODE -eq 0)
+        $cancelar = Cancelar-Orden $orden.id 'cliente1@sgo.local' $compra.Token
+        $pasos += Write-Paso 'El cliente cancela la orden' '200' "$($cancelar.Status)" ($cancelar.Status -eq 200)
+
+        $reintentando = Esperar-Condicion {
+            $fila = "$(Reembolso-Cancelacion $orden.id)"
+            ($fila -like 'PENDIENTE *') -and ([int](($fila -split ' ')[2]) -ge 1)
+        } 60
+        $pasos += Write-Paso 'Con el proveedor caido el reembolso queda PENDIENTE con intentos' 'PENDIENTE, intentos >= 1' "$(Reembolso-Cancelacion $orden.id)" $reintentando
+        $enProceso = (Get-Orden $orden.id).estadoReembolso
+        $pasos += Write-Paso 'La orden muestra el reembolso en proceso' 'PENDIENTE' "$enProceso" ($enProceso -eq 'PENDIENTE')
+    }
+    finally {
+        $null = docker compose -f $compose start payklik-mock 2>&1
+    }
+
+    $arriba = Esperar-Condicion { (Invoke-Http -Method 'GET' -Url "$PayKlikUrl/health/live").Status -eq 200 } 90
+    $pasos += Write-Paso 'Levantar payklik-mock' 'sano' $(if ($arriba) { 'sano' } else { 'sin respuesta' }) $arriba
+
+    # Backoff de hasta 60 s mas el disyuntor: se da margen amplio.
+    $aplicado = Esperar-Condicion { "$(Reembolso-Cancelacion $orden.id)" -like 'APLICADO *' } 180
+    $pasos += Write-Paso 'Al volver el proveedor el reembolso queda APLICADO' 'APLICADO' "$(Reembolso-Cancelacion $orden.id)" $aplicado
+    $filas = Consultar-Sql 'db-finanzas' 'sgo_pagos' "select count(*) from pagos.reembolso where referencia_id = '$($orden.id)'"
+    $aprobados = Reembolsos-PayKlik $orden.id 'APROBADO'
+    $pasos += Write-Paso 'Una sola vez: un reembolso en Pagos y uno aprobado en PayKlik' 'reembolsos = 1, aprobados = 1' "reembolsos = $filas, aprobados = $aprobados" (("$filas" -eq '1') -and $aprobados -eq 1)
+    $enOrden = Esperar-Condicion { (Get-Orden $orden.id).estadoReembolso -eq 'APLICADO' } 30
+    $pasos += Write-Paso 'La orden muestra el reembolso APLICADO' 'APLICADO' "$((Get-Orden $orden.id).estadoReembolso)" $enOrden
+    return Resultado 'reembolso-reintento' $pasos
+}
+
+# Compra a credito entregada. Devuelve @{ Token; Orden; Compra; DisponibleAntes } o $null.
+function Compra-Credito-Entregada {
+    param([string]$Email, [int]$Cantidad)
+    $token = Iniciar-Sesion $Email
+    if (-not $token) { return $null }
+    $disponibleAntes = [decimal](Get-MiCredito $token).disponible
+    $compra = Compra-Confirmada $Email $Cantidad $token
+    if ($null -eq $compra -or $null -eq $compra.Compra) { return $null }
+    $entregada = Llevar-A-Entregada $compra.Orden.id
+    if ($null -eq $entregada -or $entregada.estado -ne 'ENTREGADA') { return $null }
+    return @{ Token = $token; Orden = $compra.Orden; Compra = (Get-Compra $token $compra.Orden.id); DisponibleAntes = $disponibleAntes }
+}
+
+function Escenario-DevolucionCreditoParcial {
+    Write-Host "Escenario devolucion-credito-parcial (cliente1, devuelve 1 de 4)"
+    $pasos = @()
+    $c = Compra-Credito-Entregada 'cliente1@sgo.local' 4
+    $pasos += Write-Paso 'Compra a credito (4 x Q100) entregada' 'ENTREGADA' $(if ($c) { "$($c.Orden.id) ENTREGADA" } else { 'no llego a ENTREGADA' }) ($null -ne $c)
+    if (-not $c) { return Resultado 'devolucion-credito-parcial' $pasos }
+
+    $deudaAntes = [decimal]$c.Compra.saldoPendiente
+    $disponibleAntes = [decimal](Get-MiCredito $c.Token).disponible
+    $dev = Registrar-Devolucion $c.Orden.id 'cliente1@sgo.local' 1
+    $pasos += Write-Paso 'Devolucion de 1 unidad (Q100) registrada' '201' "$($dev.Status) $($dev.Body.id)" ($dev.Status -eq 201)
+    if ($dev.Status -ne 201) { return Resultado 'devolucion-credito-parcial' $pasos }
+
+    $bajo = Esperar-Condicion { [decimal](Get-Compra $c.Token $c.Orden.id).saldoPendiente -eq ($deudaAntes - 100) } 45
+    $pasos += Write-Paso 'Baja la deuda en el monto devuelto' "$($deudaAntes - 100)" "$((Get-Compra $c.Token $c.Orden.id).saldoPendiente)" $bajo
+    $disponible = [decimal](Get-MiCredito $c.Token).disponible
+    $pasos += Write-Paso 'Sube el disponible en el mismo monto' "$($disponibleAntes + 100)" "$disponible" ($disponible -eq ($disponibleAntes + 100))
+    $compra = Get-Compra $c.Token $c.Orden.id
+    $movimientos = @($compra.movimientos)
+    $pasos += Write-Paso 'Mi credito muestra la devolucion' '1 movimiento' "$($movimientos.Count): $(($movimientos | ForEach-Object { $_.descripcion }) -join ' | ')" ($movimientos.Count -eq 1)
+    $final = Esperar-Orden $c.Orden.id 'ENTREGADA'
+    $pasos += Write-Paso 'La orden vuelve a ENTREGADA' 'ENTREGADA' "$($final.estado)" ($final.estado -eq 'ENTREGADA')
+
+    Start-Sleep -Seconds 3
+    $pagos = Consultar-Sql 'db-finanzas' 'sgo_pagos' "select count(*) from pagos.pago where orden_id = '$($c.Orden.id)'"
+    $reembolsos = Consultar-Sql 'db-finanzas' 'sgo_pagos' "select count(*) from pagos.reembolso where referencia_id = '$($c.Orden.id)'"
+    $pasos += Write-Paso 'Pagos no registra pago ni reembolso para la orden' 'pagos = 0, reembolsos = 0' "pagos = $pagos, reembolsos = $reembolsos" (("$pagos" -eq '0') -and ("$reembolsos" -eq '0'))
+    return Resultado 'devolucion-credito-parcial' $pasos
+}
+
+function Escenario-DevolucionCreditoTotal {
+    Write-Host "Escenario devolucion-credito-total (cliente1, devuelve todo sin pagos)"
+    $pasos = @()
+    $c = Compra-Credito-Entregada 'cliente1@sgo.local' 2
+    $pasos += Write-Paso 'Compra a credito (2 x Q100) entregada' 'ENTREGADA' $(if ($c) { "$($c.Orden.id) ENTREGADA" } else { 'no llego a ENTREGADA' }) ($null -ne $c)
+    if (-not $c) { return Resultado 'devolucion-credito-total' $pasos }
+
+    $dev = Registrar-Devolucion $c.Orden.id 'cliente1@sgo.local' 2
+    $pasos += Write-Paso 'Devolucion completa registrada' '201' "$($dev.Status) $($dev.Body.id)" ($dev.Status -eq 201)
+    if ($dev.Status -ne 201) { return Resultado 'devolucion-credito-total' $pasos }
+
+    $anulada = Esperar-Condicion { (Get-Compra $c.Token $c.Orden.id).estado -eq 'ANULADA' } 45
+    $compra = Get-Compra $c.Token $c.Orden.id
+    $pasos += Write-Paso 'La cuenta queda ANULADA' 'ANULADA (Devuelta)' "$($compra.estado) ($($compra.etiquetaEstado))" $anulada
+    $disponible = [decimal](Get-MiCredito $c.Token).disponible
+    $pasos += Write-Paso 'El cupo vuelve completo' "$($c.DisponibleAntes)" "$disponible" ($disponible -eq $c.DisponibleAntes)
+    $final = Esperar-Orden $c.Orden.id 'DEVUELTA'
+    $pasos += Write-Paso 'La orden queda DEVUELTA' 'DEVUELTA' "$($final.estado)" ($final.estado -eq 'DEVUELTA')
+    return Resultado 'devolucion-credito-total' $pasos
+}
+
+function Escenario-DevolucionCreditoPagada {
+    Write-Host "Escenario devolucion-credito-pagada (cliente1, paga todo y devuelve)"
+    $pasos = @()
+    $c = Compra-Credito-Entregada 'cliente1@sgo.local' 2
+    $pasos += Write-Paso 'Compra a credito (2 x Q100) entregada' 'ENTREGADA' $(if ($c) { "$($c.Orden.id) ENTREGADA" } else { 'no llego a ENTREGADA' }) ($null -ne $c)
+    if (-not $c) { return Resultado 'devolucion-credito-pagada' $pasos }
+
+    $res = Crear-Abono $c.Token $c.Compra.cuentaId ([decimal]$c.Compra.saldoPendiente) (Tokenizar-Tarjeta $c.Token)
+    $abono = $null
+    if ($res.Status -eq 202) { $abono = Esperar-Abono $c.Token $res.Body.id }
+    $estadoCuenta = (Get-Compra $c.Token $c.Orden.id).estado
+    $pasos += Write-Paso 'Paga la compra completa' 'APLICADO, cuenta PAGADA' "$($abono.estado), cuenta $estadoCuenta" `
+        (($null -ne $abono) -and ($abono.estado -eq 'APLICADO') -and ($estadoCuenta -eq 'PAGADA'))
+    if ($null -eq $abono -or $abono.estado -ne 'APLICADO') { return Resultado 'devolucion-credito-pagada' $pasos }
+
+    $dev = Registrar-Devolucion $c.Orden.id 'cliente1@sgo.local' 2
+    $pasos += Write-Paso 'Devolucion completa registrada' '201' "$($dev.Status) $($dev.Body.id)" ($dev.Status -eq 201)
+    if ($dev.Status -ne 201) { return Resultado 'devolucion-credito-pagada' $pasos }
+
+    $reembolsado = Esperar-Condicion { (Abono-De-Compra $c.Token $c.Orden.id $abono.id).estado -eq 'REEMBOLSADO' } 90
+    $visto = Abono-De-Compra $c.Token $c.Orden.id $abono.id
+    $pasos += Write-Paso 'El abono queda REEMBOLSADO' 'REEMBOLSADO, Reembolsado a tu tarjeta' "$($visto.estado), $($visto.estadoReembolso)" $reembolsado
+    $enPagos = "$(Reembolso-Abono $abono.referencia)"
+    $pasos += Write-Paso 'En Pagos hay un reembolso APLICADO del abono' "APLICADO $($abono.monto)" $enPagos (($enPagos -like 'APLICADO *') -and ($enPagos -notlike '*,*'))
+    $final = Esperar-Orden $c.Orden.id 'DEVUELTA'
+    $pasos += Write-Paso 'La orden queda DEVUELTA' 'DEVUELTA' "$($final.estado)" ($final.estado -eq 'DEVUELTA')
+    return Resultado 'devolucion-credito-pagada' $pasos
+}
+
+function Escenario-CancelacionCreditoConAbono {
+    Write-Host "Escenario cancelacion-credito-con-abono (cliente1, abona y cancela)"
+    $pasos = @()
+    $token = Iniciar-Sesion 'cliente1@sgo.local'
+    $compra = Compra-Confirmada 'cliente1@sgo.local' 5 $token
+    $pasos += Write-Paso 'Compra a credito de Q500.00 confirmada' 'cuenta' $(if ($compra) { $compra.Orden.id } else { 'sin cuenta' }) ($null -ne $compra -and $null -ne $compra.Compra)
+    if (-not $compra -or -not $compra.Compra) { return Resultado 'cancelacion-credito-con-abono' $pasos }
+
+    $res = Crear-Abono $token $compra.Compra.cuentaId 200 (Tokenizar-Tarjeta $token)
+    $abono = $null
+    if ($res.Status -eq 202) { $abono = Esperar-Abono $token $res.Body.id }
+    $pasos += Write-Paso 'Abono parcial de Q200.00' 'APLICADO' "$($abono.estado)" ($null -ne $abono -and $abono.estado -eq 'APLICADO')
+    if ($null -eq $abono -or $abono.estado -ne 'APLICADO') { return Resultado 'cancelacion-credito-con-abono' $pasos }
+
+    $cancelar = Cancelar-Orden $compra.Orden.id 'cliente1@sgo.local' $token
+    $pasos += Write-Paso 'El cliente cancela la orden' '200' "$($cancelar.Status)" ($cancelar.Status -eq 200)
+
+    $anulada = Esperar-Condicion { (Get-Compra $token $compra.Orden.id).estado -eq 'ANULADA' } 45
+    $pasos += Write-Paso 'La cuenta queda ANULADA' 'ANULADA' "$((Get-Compra $token $compra.Orden.id).estado)" $anulada
+    $reembolsado = Esperar-Condicion { (Abono-De-Compra $token $compra.Orden.id $abono.id).estado -eq 'REEMBOLSADO' } 90
+    $visto = Abono-De-Compra $token $compra.Orden.id $abono.id
+    $pasos += Write-Paso 'El abono queda REEMBOLSADO' 'REEMBOLSADO' "$($visto.estado), $($visto.estadoReembolso)" $reembolsado
+    $enPagos = "$(Reembolso-Abono $abono.referencia)"
+    $pasos += Write-Paso 'En Pagos hay un reembolso APLICADO del abono' 'APLICADO 200.00' $enPagos ($enPagos -like 'APLICADO 200*')
+    return Resultado 'cancelacion-credito-con-abono' $pasos
+}
+
+# ---------------------------------------------------------------------------
 # Ejecucion
 # ---------------------------------------------------------------------------
 
@@ -786,6 +1091,12 @@ switch ($Escenario) {
     'pago-pendiente' { $resultados['pago-pendiente'] = Escenario-PagoPendiente }
     'recordatorio' { $resultados['recordatorio'] = Escenario-Recordatorio }
     'vencimiento' { $resultados['vencimiento'] = Escenario-Vencimiento }
+    'cancelacion-tarjeta' { $resultados['cancelacion-tarjeta'] = Escenario-CancelacionTarjeta }
+    'reembolso-reintento' { $resultados['reembolso-reintento'] = Escenario-ReembolsoReintento }
+    'devolucion-credito-parcial' { $resultados['devolucion-credito-parcial'] = Escenario-DevolucionCreditoParcial }
+    'devolucion-credito-total' { $resultados['devolucion-credito-total'] = Escenario-DevolucionCreditoTotal }
+    'devolucion-credito-pagada' { $resultados['devolucion-credito-pagada'] = Escenario-DevolucionCreditoPagada }
+    'cancelacion-credito-con-abono' { $resultados['cancelacion-credito-con-abono'] = Escenario-CancelacionCreditoConAbono }
     'todos' {
         $resultados['reiniciar'] = Escenario-Reiniciar
         $resultados['aprobado'] = Escenario-Aprobado
@@ -802,12 +1113,19 @@ switch ($Escenario) {
         $resultados['pago-pendiente'] = Escenario-PagoPendiente
         $resultados['recordatorio'] = Escenario-Recordatorio
         $resultados['vencimiento'] = Escenario-Vencimiento
+        $resultados['cancelacion-tarjeta'] = Escenario-CancelacionTarjeta
+        $resultados['reembolso-reintento'] = Escenario-ReembolsoReintento
+        $resultados['devolucion-credito-parcial'] = Escenario-DevolucionCreditoParcial
+        $resultados['devolucion-credito-total'] = Escenario-DevolucionCreditoTotal
+        $resultados['devolucion-credito-pagada'] = Escenario-DevolucionCreditoPagada
+        $resultados['cancelacion-credito-con-abono'] = Escenario-CancelacionCreditoConAbono
+        # Sin reinicio al final: los datos quedan para revisar la Web.
     }
 }
 
 Write-Host "=== Resumen ==="
 foreach ($nombre in $resultados.Keys) {
-    Write-Host ("  {0,-16} {1}" -f $nombre, $(if ($resultados[$nombre]) { 'APROBADO' } else { 'FALLIDO' }))
+    Write-Host ("  {0,-30} {1}" -f $nombre, $(if ($resultados[$nombre]) { 'APROBADO' } else { 'FALLIDO' }))
 }
 
 $fallidos = @($resultados.Values | Where-Object { -not $_ }).Count

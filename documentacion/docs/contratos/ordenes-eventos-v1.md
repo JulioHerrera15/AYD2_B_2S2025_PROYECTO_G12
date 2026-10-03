@@ -1,16 +1,30 @@
-# Contrato de eventos del contexto Órdenes — v1.5
+# Contrato de eventos del contexto Órdenes — v1.6
 
 **Proyecto:** SGO-Logic — Fase 2
 **Curso:** Análisis y Diseño de Sistemas 2, Sección B
 **Contexto emisor:** Órdenes
 **Autor:** 202300410 — Angel David Martínez García
 **Estado:** listo para congelamiento
-**Fecha:** 2026-09-19
+**Fecha:** 2026-10-03
 **Depende de:** `sgo-eventos-envelope-v1.md`
 
 ---
 
-## 0. Cambios respecto a v1.4 (crédito a 30 días)
+## 0. Cambios respecto a v1.5 (reversos de dinero)
+
+Todo es aditivo: un campo opcional y nulo al final del evento 11, dos bindings nuevos en colas propias de Órdenes y dos columnas nuevas en la orden. El flujo de devolución con tarjeta (`DevolucionRegistrada` -> Pagos -> `ReembolsoAplicado` o `ReembolsoFallido`) no cambia.
+
+| # | Cambio | Detalle |
+|---|---|---|
+| 1 | `medioPago` en el evento 11 | Campo opcional y nulo al final de `data` de `DevolucionRegistrada`: el medio de pago de la orden. Con `CREDITO` la devolución la aplica Crédito y Pagos la ignora; `null` se trata como antes. Ver sección 7.11. |
+| 2 | Cierre de la devolución a crédito | Órdenes consume `DevolucionCreditoAplicada` (`credito.devolucion.aplicada`) en `ordenes.credito` y cierra la devolución igual que con `ReembolsoAplicado`: `ENTREGADA` si fue parcial, `DEVUELTA` si fue total. No espera el reembolso a tarjeta de un excedente ya pagado. |
+| 3 | Estado del reembolso por cancelación | Columnas nuevas en la orden (migración `ReembolsoCancelacionOrden`): `estado_reembolso` (`NO_APLICA`, `PENDIENTE`, `APLICADO`, `FALLIDO`; `NO_APLICA` por defecto) y `reembolso_actualizado_en`. Pasa a `PENDIENTE` al cancelar una orden con `requiereReembolso`; se actualiza al consumir `ReembolsoCancelacionAplicado` y `ReembolsoCancelacionFallido` (`pagos-eventos-v1`, eventos 10 y 11) en `ordenes.pagos`. Un `APLICADO` no se revierte. Se expone en `OrdenDto` (`estadoReembolso`, `reembolsoActualizadoEn`; el monto es `total`). No produce eventos. |
+| 4 | Nota de crédito sobre una orden cancelada | `DocumentoFiscalCertificado` con `tipoDocumento = NOTA_CREDITO` se confirma sin tocar la orden (ni su estado ni sus datos fiscales). Facturación emite esa nota al consumir `OrdenCancelada` (`facturacion-eventos-v1`). |
+| 5 | Bindings nuevos | `pagos.ordenes` y `facturacion.ordenes` agregan `ordenes.orden.cancelada`; `credito.ordenes` agrega `ordenes.devolucion.registrada`. Ver sección 4. |
+
+Eventos duplicados o sobre órdenes o devoluciones inexistentes: ack sin error (deduplicación por `eventId` en `ordenes.mensaje_procesado`).
+
+## 0.0.0 Cambios respecto a v1.4 (crédito a 30 días)
 
 Segunda ruta de pago en la saga: el cliente puede pagar con `CREDITO` ("Compra ahora, paga en 30 días"). Todo es aditivo: valores nuevos al final de las enumeraciones, un evento nuevo, un campo opcional y nulo al final de los eventos 8 y 9, y una cola nueva de consumo. La ruta de tarjeta (PayKlik) no cambia.
 
@@ -202,11 +216,11 @@ Cada consumidor declara su propia cola durable. El nombre de la cola y sus argum
 | `notificaciones.ordenes` | Jonathan | `ordenes.orden.estado-cambiado` |
 | `inventario.ordenes` | Jose | `ordenes.reserva.*`, `ordenes.devolucion.registrada` |
 | `despacho.ordenes` | Jose | `ordenes.despacho.solicitado`, `ordenes.orden.metodo-entrega-modificado`, `ordenes.orden.cancelada` |
-| `pagos.ordenes` | Angel | `ordenes.cobro.solicitado`, `ordenes.devolucion.registrada` |
-| `facturacion.ordenes` | Angel | `ordenes.fiscal.certificacion-solicitada`, `ordenes.devolucion.registrada` |
+| `pagos.ordenes` | Angel | `ordenes.cobro.solicitado`, `ordenes.devolucion.registrada`, `ordenes.orden.cancelada` (v1.6: reembolso por cancelación) |
+| `facturacion.ordenes` | Angel | `ordenes.fiscal.certificacion-solicitada`, `ordenes.devolucion.registrada`, `ordenes.orden.cancelada` (v1.6: nota de crédito por cancelación) |
 | `pos.ordenes` | Francisco | `ordenes.orden.confirmada`, `ordenes.orden.cancelada` |
 | `erp.ordenes` | Francisco | `ordenes.orden.confirmada`, `ordenes.orden.cancelada`, `ordenes.orden.certificada-fiscalmente`, `ordenes.devolucion.registrada` |
-| `credito.ordenes` | Angel | `ordenes.credito.evaluacion-solicitada`, `ordenes.orden.cancelada` |
+| `credito.ordenes` | Angel | `ordenes.credito.evaluacion-solicitada`, `ordenes.orden.cancelada`, `ordenes.devolucion.registrada` (v1.6: solo actúa con `medioPago = CREDITO`) |
 
 **`pagos.ordenes` y `facturacion.ordenes` ya escuchan `ordenes.devolucion.registrada`, en código, no solo en el papel.** `PagosEventosConsumidor` (Pagos) y `FacturacionEventosConsumidor` (Facturación) declaran ambos bindings sobre su cola y despachan el evento 11 al manejador correspondiente (reembolso contra PayKlik en Pagos, nota de crédito en Facturación). Ninguno usa `EventConsumerBase` para esto: esa clase base está tipada a un único `TData` por cola, y estas dos colas reciben dos tipos de `data` distintos sobre bindings distintos.
 
@@ -238,7 +252,9 @@ Mapeo de `estadoNuevo` de Despacho a `EstadoOrden`. No se agregó ningún estado
 
 | Cola | Dueño | Bindings | Exchange de origen |
 |---|---|---|---|
-| `ordenes.credito` | Angel (Órdenes) | `credito.evaluacion.aprobada`, `credito.evaluacion.rechazada` | `sgo.eventos` (propiedad de Crédito, ver `credito-eventos-v1.md`) |
+| `ordenes.credito` | Angel (Órdenes) | `credito.evaluacion.aprobada`, `credito.evaluacion.rechazada`, `credito.devolucion.aplicada` (v1.6) | `sgo.eventos` (propiedad de Crédito, ver `credito-eventos-v1.md`) |
+
+**v1.6.** `ordenes.pagos` agrega `pagos.reembolso-cancelacion.aplicado` y `pagos.reembolso-cancelacion.fallido` (`pagos-eventos-v1`, eventos 10 y 11): solo actualizan `estadoReembolso` de la orden cancelada, sin transición ni eventos. Ninguna cola existente los captura por comodín: `pagos.reembolso.*` no los alcanza porque `reembolso-cancelacion` es otra palabra de la routing key, y `consulta-estado.pagos` solo liga `pagos.pago.*`.
 
 Un evento sobre un estado que la orden ya superó se ignora. Si llega un estado posterior saltándose uno intermedio, se aplican las transiciones intermedias en la misma transacción (a domicilio pasa por `EN_TRANSITO`, en recogida por `LISTA_PARA_RECOGER`). Cada transición emite `OrdenEstadoCambiado` como cualquier otra.
 
@@ -660,7 +676,7 @@ Prohibido como fuente de estado. Ver sección 6.
 | `estabaConfirmada` | boolean | sí | `true` si ya se había emitido `OrdenConfirmada`. Permite al ERP excluir la venta del lote sin consultar su propio histórico. |
 | `motivo` | string | sí | Enum `MotivoCancelacion`. |
 | `detalle` | string \| null | sí | Texto libre corto. |
-| `requiereReembolso` | boolean | sí | `true` si ya se había aplicado un cobro. |
+| `requiereReembolso` | boolean | sí | `true` si ya se había aplicado un cobro. Desde v1.6 Pagos reembolsa ese cobro (`pagos-eventos-v1`, eventos 10 y 11), Facturación emite la nota de crédito si había factura y la orden muestra `estadoReembolso`. |
 | `pagoId` | string \| null | sí | `null` si nunca hubo cobro aplicado. |
 | `documentoFiscalId` | string \| null | sí | `null` si nunca se certificó. |
 | `moneda` | string \| null | sí | `null` si `requiereReembolso` es `false`. |
@@ -743,6 +759,9 @@ Dispara tres reacciones en paralelo: reingreso de inventario, nota de crédito y
 | `documentoFiscalOriginalId` | string | sí | Factura que la nota de crédito reversa. |
 | `registradaPor` | string | sí | Identificador del agente. |
 | `registradaEn` | string | sí | ISO 8601 UTC. |
+| `medioPago` | string \| null | no | Desde v1.6. Enum `MedioPago`, el de la orden original. Con `CREDITO` la devolución la aplica Crédito (baja la deuda y, si sobra, reembolsa los abonos) y responde `DevolucionCreditoAplicada`; Pagos la ignora. Con otro medio o `null`, el reembolso lo hace Pagos como siempre. |
+
+Cierre de la devolución: con tarjeta, `ReembolsoAplicado` (parcial vuelve a `ENTREGADA`, total a `DEVUELTA`) o `ReembolsoFallido` (se queda en `DEVOLUCION_EN_PROCESO`); a crédito, `DevolucionCreditoAplicada` con la misma regla que `ReembolsoAplicado`.
 
 ```json
 {
@@ -850,11 +869,11 @@ Routing key `ordenes.credito.evaluacion-solicitada`. Órdenes pide a Crédito ev
 | Notificaciones | Jonathan | HU-015 | 2 | Aviso al cliente por cambio de estado (EV-34, RES-06). Fuente única. |
 | Inventario | Jose | HU-001, HU-002, HU-014 | 3, 4, 11 | Reservar, liberar por compensación y reingresar por devolución. |
 | Despacho | Jose | HU-011, HU-012, HU-020 | 7, 9, 10 | Origen, guía, reasignación, recogida en tienda y cancelación de despacho. |
-| Pagos | Angel | HU-004, HU-014 | 5, 11 | Intento de cobro y reembolso. |
-| Facturación | Angel | HU-005, HU-014 | 6, 11 | Certificación SAT y nota de crédito. |
+| Pagos | Angel | HU-004, HU-014 | 5, 9, 11 | Intento de cobro y reembolso. Con 9 (v1.6), reembolso de una orden pagada con tarjeta y cancelada. Ignora 11 con `medioPago = CREDITO`. |
+| Facturación | Angel | HU-005, HU-014 | 6, 9, 11 | Certificación SAT y nota de crédito. Con 9 (v1.6), nota de crédito por el total si había factura. |
 | Integración POS | Francisco | HU-009 | 8, 9 | Propagación idempotente a la instancia de tienda (EV-16, ADR-012). |
 | Integración ERP | Francisco | HU-013, HU-022 | 8, 9, 11, 12 | Consolidación del lote de 30 minutos, exclusión de ventas canceladas, folio fiscal y conciliación (EV-15, ADR-008). |
-| Crédito | Angel | Crédito a 30 días | 9, 13 | Evaluar la compra (13) y anular el cargo de una orden a crédito cancelada (9 con `medioPago = CREDITO`). |
+| Crédito | Angel | Crédito a 30 días | 9, 11, 13 | Evaluar la compra (13), anular el cargo de una orden a crédito cancelada (9 con `medioPago = CREDITO`) y aplicar la devolución de una compra a crédito (11 con `medioPago = CREDITO`). |
 
 **Qué no está aquí y por qué.** Auth no consume eventos de Órdenes. El carrito unificado (HU-007) vive en Redis y no genera eventos de este contrato.
 

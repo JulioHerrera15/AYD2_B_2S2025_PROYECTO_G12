@@ -8,6 +8,7 @@
     var certificada = Model?.EstaCertificada ?? false;
     var moneda = string.IsNullOrWhiteSpace(Model?.Moneda) ? "Q" : (Model!.Moneda == "GTQ" ? "Q" : Model.Moneda + " ");
     var urlFactura = $"/Estado/Factura?ordenId={Uri.EscapeDataString(ordenId)}";
+    var notasCredito = ViewBag.NotasCredito as List<SgoLogic.Web.Services.FacturaModel> ?? new List<SgoLogic.Web.Services.FacturaModel>();
     ViewData["Title"] = Model != null ? $"Factura {Model.Serie}-{Model.NumeroDocumento}" : "Factura";
 }
 
@@ -177,6 +178,44 @@
                     <span class="material-symbols-outlined text-[18px]">download</span>
                     Descargar XML
                 </a>
+            </div>
+        </div>
+    }
+
+    @if (vistaCompleta && notasCredito.Count > 0)
+    {
+        <!-- Notas de credito de la orden (devolucion o cancelacion) -->
+        <div class="mt-6 bg-surface-white rounded-3xl border border-border-subtle/80 ambient-shadow overflow-hidden">
+            <div class="p-6 sm:p-8 border-b border-border-subtle/70">
+                <div class="text-[11px] font-semibold text-secondary uppercase tracking-wider mb-1">Nota de crédito</div>
+                <p class="text-xs text-text-muted">
+                    Anula total o parcialmente esta factura por la devolución o cancelación de tu compra.
+                </p>
+            </div>
+            <div class="divide-y divide-border-subtle/60">
+                @foreach (var nota in notasCredito)
+                {
+                    var notaCertificada = nota.EstaCertificada;
+                    <div class="p-6 sm:px-8 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+                        <div class="space-y-0.5">
+                            <div><span class="text-text-muted">Serie y número:</span> <strong class="font-mono text-primary">@nota.Serie-@nota.NumeroDocumento</strong></div>
+                            <div><span class="text-text-muted">Monto:</span> <strong class="text-primary">@moneda @nota.Total.ToString("N2")</strong></div>
+                            <div>
+                                <span class="text-text-muted">Estado:</span>
+                                <strong class="@(notaCertificada ? "text-emerald-700" : "text-amber-700")">@(notaCertificada ? "Certificada" : "Pendiente de certificación")</strong>
+                                @if (notaCertificada && nota.CertificadoEn is not null)
+                                {
+                                    <span class="text-text-muted">(@FechaHelper.Formatear(nota.CertificadoEn))</span>
+                                }
+                            </div>
+                        </div>
+                        <a href="/Cuenta/NotaCredito?ordenId=@Uri.EscapeDataString(ordenId)&numero=@Uri.EscapeDataString(nota.NumeroDocumento)"
+                           class="no-print inline-flex items-center justify-center gap-1.5 bg-surface-container-low hover:bg-surface-variant text-primary py-2 px-3 rounded-xl text-xs font-bold transition-all border border-border-subtle">
+                            <span class="material-symbols-outlined text-[18px]">download</span>
+                            Descargar XML
+                        </a>
+                    </div>
+                }
             </div>
         </div>
     }
