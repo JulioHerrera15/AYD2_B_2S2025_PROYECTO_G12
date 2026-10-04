@@ -122,7 +122,10 @@ public sealed class PerfilCrediticioPersistenciaTests
     {
         await using var proveedor = CreditoServicios.CrearProveedor(_fixture.CadenaConexion);
         var clienteId = ClienteNuevo();
-        var datos = Excelente(clienteId, DateTime.UtcNow);
+        // Fraccion menor a un microsegundo distinta de cero: PostgreSQL la trunca al
+        // guardar, asi que el segundo intento compara contra un valor releido menor.
+        var corte = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc).AddTicks(7);
+        var datos = Excelente(clienteId, corte);
 
         await AplicarAsync(proveedor, datos);
         var segundo = await AplicarAsync(proveedor, datos);

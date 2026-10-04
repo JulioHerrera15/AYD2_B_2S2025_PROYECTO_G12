@@ -63,9 +63,12 @@ public sealed class ServicioPerfilCrediticio
 
         var clienteId = NormalizarCliente(datos.ClienteId);
         var ahora = _reloj();
+        var fechaCorte = FechasCredito.Normalizar(datos.FechaCorte);
+        var clienteDesde = FechasCredito.Normalizar(datos.ClienteDesde);
+        var recibidoEn = FechasCredito.Normalizar(ahora);
 
         var historial = await _repositorio.ObtenerHistorialAsync(clienteId, cancelacion);
-        if (historial is not null && historial.FechaCorte >= Utc(datos.FechaCorte))
+        if (historial is not null && historial.FechaCorte >= fechaCorte)
         {
             _logger.LogInformation(
                 "Historial de {ClienteId} ignorado: fecha de corte {FechaCorte} no es posterior a la aplicada {FechaCorteAplicada}.",
@@ -81,19 +84,19 @@ public sealed class ServicioPerfilCrediticio
         if (historial is null)
         {
             historial = new HistorialCliente(
-                clienteId, datos.CodigoClienteErp?.Trim() ?? string.Empty, Utc(datos.ClienteDesde),
+                clienteId, datos.CodigoClienteErp?.Trim() ?? string.Empty, clienteDesde,
                 datos.ComprasUltimos12Meses, datos.MontoCompradoUltimos12Meses, moneda,
                 datos.PagosPuntuales, datos.PagosTardios, datos.MaxDiasAtraso, datos.Devoluciones,
-                datos.IncidentesGraves, datos.OtrosIncidentes, Utc(datos.FechaCorte), datos.LoteOrigen, ahora);
+                datos.IncidentesGraves, datos.OtrosIncidentes, fechaCorte, datos.LoteOrigen, recibidoEn);
             _repositorio.AgregarHistorial(historial);
         }
         else
         {
             historial.Actualizar(
-                datos.CodigoClienteErp?.Trim() ?? string.Empty, Utc(datos.ClienteDesde),
+                datos.CodigoClienteErp?.Trim() ?? string.Empty, clienteDesde,
                 datos.ComprasUltimos12Meses, datos.MontoCompradoUltimos12Meses, moneda,
                 datos.PagosPuntuales, datos.PagosTardios, datos.MaxDiasAtraso, datos.Devoluciones,
-                datos.IncidentesGraves, datos.OtrosIncidentes, Utc(datos.FechaCorte), datos.LoteOrigen, ahora);
+                datos.IncidentesGraves, datos.OtrosIncidentes, fechaCorte, datos.LoteOrigen, recibidoEn);
         }
 
         var (perfil, huboCambios) = await EvaluarYAplicarAsync(clienteId, historial, ahora, cancelacion);
@@ -284,11 +287,4 @@ public sealed class ServicioPerfilCrediticio
             throw new ArgumentException("El historial debe traer fecha de corte y fecha de alta del cliente.", nameof(datos));
         }
     }
-
-    private static DateTime Utc(DateTime fecha) => fecha.Kind switch
-    {
-        DateTimeKind.Utc => fecha,
-        DateTimeKind.Local => fecha.ToUniversalTime(),
-        _ => DateTime.SpecifyKind(fecha, DateTimeKind.Utc)
-    };
 }
