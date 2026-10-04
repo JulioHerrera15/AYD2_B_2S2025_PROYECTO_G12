@@ -81,6 +81,50 @@ public sealed class ServicioPerfilCrediticioTests
     }
 
     [Fact]
+    public async Task Un_corte_que_solo_difiere_por_debajo_del_microsegundo_se_ignora_y_no_emite_evento()
+    {
+        var servicio = DatosPrueba.ServicioPerfil(_almacen, _outbox);
+        await servicio.AplicarHistorialAsync(
+            DatosPrueba.Cliente1() with { FechaCorte = DatosPrueba.Ahora.AddTicks(2) }, CancellationToken.None);
+
+        // PostgreSQL guardaria ambos cortes como el mismo microsegundo.
+        var mismoMicrosegundo = DatosPrueba.Cliente4() with
+        {
+            ClienteId = "cliente1@sgo.local",
+            FechaCorte = DatosPrueba.Ahora.AddTicks(9)
+        };
+        var resultado = await servicio.AplicarHistorialAsync(mismoMicrosegundo, CancellationToken.None);
+
+        Assert.False(resultado.Aplicado);
+        Assert.False(resultado.HuboCambios);
+        Assert.Equal(18, Assert.Single(_almacen.Historiales).ComprasUltimos12Meses);
+        Assert.Single(_outbox.Eventos);
+        Assert.Equal(1, _almacen.Guardados);
+    }
+
+    [Fact]
+    public async Task Un_corte_un_microsegundo_posterior_si_se_aplica()
+    {
+        var servicio = DatosPrueba.ServicioPerfil(_almacen, _outbox);
+        var primerCorte = DatosPrueba.Ahora.AddTicks(3);
+        await servicio.AplicarHistorialAsync(
+            DatosPrueba.Cliente1() with { FechaCorte = primerCorte }, CancellationToken.None);
+
+        var siguiente = DatosPrueba.Cliente4() with
+        {
+            ClienteId = "cliente1@sgo.local",
+            FechaCorte = primerCorte.AddTicks(TimeSpan.TicksPerMicrosecond)
+        };
+        var resultado = await servicio.AplicarHistorialAsync(siguiente, CancellationToken.None);
+
+        Assert.True(resultado.Aplicado);
+        Assert.True(resultado.HuboCambios);
+        Assert.Equal(DatosPrueba.Ahora.AddTicks(TimeSpan.TicksPerMicrosecond), Assert.Single(_almacen.Historiales).FechaCorte);
+        Assert.Equal(2, _outbox.Eventos.Count);
+        Assert.Equal(2, _almacen.Guardados);
+    }
+
+    [Fact]
     public async Task Un_historial_con_fecha_de_corte_vieja_se_ignora()
     {
         var servicio = DatosPrueba.ServicioPerfil(_almacen, _outbox);
