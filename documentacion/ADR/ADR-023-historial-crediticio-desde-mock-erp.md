@@ -52,7 +52,6 @@ El mock debe soportar, como mínimo, los siguientes escenarios reproducibles: hi
 - El mock requiere mantener fixtures, validaciones y documentación de un contrato adicional.
 - La prueba completa requiere levantar RabbitMQ, Integración ERP, Crédito y el mock, además de sus bases.
 - El snapshot actual de Crédito conserva la versión vigente; si Finanzas necesita reconstruir cada cambio histórico, debe agregarse una tabla de versiones o apoyarse en Auditoría y Outbox.
-- Los datos del mock no prueban las particularidades no documentadas del AS/400 real; antes de producción debe validarse el formato de exportación con Finanzas y el responsable del ERP.
 
 ## Reglas de datos y seguridad
 
