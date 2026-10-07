@@ -33,6 +33,22 @@ public sealed class ClienteErpHttpTests
         Assert.True(respuesta.Duplicado);
     }
 
+    [Fact]
+    public async Task Obtiene_historial_de_clientes_desde_erp()
+    {
+        var json = "{\"fechaCorte\":\"2026-10-02T06:00:00.000Z\",\"total\":1,\"clientes\":[{\"codigoCliente\":\"ERP-CLI-0001\",\"email\":\"cliente1@sgo.local\",\"clienteDesde\":\"2023-09-28T00:00:00.000Z\",\"comprasUltimos12Meses\":18,\"montoCompradoUltimos12Meses\":14500.00,\"moneda\":\"GTQ\",\"pagosPuntuales\":18,\"pagosTardios\":0,\"maxDiasAtraso\":0,\"devoluciones\":1,\"incidentesGraves\":0,\"otrosIncidentes\":0,\"actualizadoEn\":\"2026-10-02T06:00:00.000Z\"}]}";
+        var handler = new FijoHandler(HttpStatusCode.OK, json);
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://erp.test") };
+        var cliente = new ClienteErpHttp(http, Options.Create(new ErpOptions { MaxReintentos = 0 }));
+
+        var historial = await cliente.ObtenerHistorialClientesAsync(modificadosDesde: null);
+
+        Assert.Single(historial);
+        Assert.Equal("cliente1@sgo.local", historial[0].Email);
+        Assert.Equal("ERP-CLI-0001", historial[0].CodigoCliente);
+        Assert.Equal(18, historial[0].ComprasUltimos12Meses);
+    }
+
     private sealed class FijoHandler : HttpMessageHandler
     {
         private readonly HttpStatusCode _status;

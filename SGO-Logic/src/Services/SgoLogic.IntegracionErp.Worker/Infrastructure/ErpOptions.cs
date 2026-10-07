@@ -9,6 +9,8 @@ public sealed class ErpOptions
     public int MaxReintentos { get; set; } = 3;
     public int MaxIntentosLote { get; set; } = 5;
     public int IntervaloConsolidacionMinutos { get; set; } = 30;
+    public int IntervaloHistorialMinutos { get; set; } = 30;
     public bool EjecutarAlArrancar { get; set; } = true;
+    public bool EjecutarHistorialAlArrancar { get; set; } = true;
     public int IntervaloConciliacionHoras { get; set; } = 24;
 }
