@@ -20,7 +20,7 @@ Cada sistema externo se representa con un mock que corre como contenedor propio 
 | `sat-mock` | 8086 | .NET | Modos `NORMAL`, `LENTO`, `CAIDO` (503) y `RECHAZO`, más una probabilidad de falla 503 aplicable en cualquier modo. Idempotencia en la certificación. |
 | `logiexpress-mock` | 8098 | .NET | Modos `NORMAL`, `LENTO` y `CAIDO`, más un timeout determinístico: una de cada 50 solicitudes de guía no responde. Rastreo y anulación de guías, y cambio manual del estado de rastreo. |
 | `mock-mensajeria` | 8089 | .NET | Falla forzada (respuesta 500) en el envío de SMS, correo y notificaciones push, activable por configuración o en caliente. |
-| `mock-erp` | 4000 | Node | Recepción de lotes en CSV, XML y JSON con cuadre de totales (rechazo 422), duplicados (409) y secuencia retrocedida (409). Caída provocada: 503, 500 o timeout de 8 segundos con respuesta 504. |
+| `mock-erp` | 4000 | Node | Recepción de lotes de ventas en CSV, XML y JSON con cuadre de totales (rechazo 422), duplicados (409) y secuencia retrocedida (409); exportación de snapshots de historial crediticio por lote con cortes, duplicados y datos inválidos controlables. Caída provocada: 503, 500 o timeout de 8 segundos con respuesta 504. |
 | `mock-pos` | 4001 | Node | 32 tiendas (`T01` a `T32`) con idempotencia por tienda y `eventoId`. Caída por tienda o masiva: 503, 500 o timeout. |
 
 Las reglas comunes son cuatro:
@@ -32,7 +32,7 @@ Las reglas comunes son cuatro:
 
 ## Alternativas consideradas
 
-Se evaluaron cinco opciones: (1) mocks propios en contenedor con API de administración de fallas (elegida); (2) usar los servicios reales o sus ambientes de prueba, descartada porque la falla de un tercero no se puede provocar ni repetir a voluntad, y EAC-01 requiere sostener una caída durante minutos bajo carga; (3) dobles en memoria dentro de las pruebas unitarias, que se mantienen para ese nivel de prueba pero no sirven para las pruebas de carga ni para demostrar el sistema completo; (4) una herramienta genérica de simulación de servicios de terceros, descartada por incorporar una tecnología más al entorno para reproducir seis contratos pequeños; y (5) reescribir en .NET los dos mocks de Node, descartada porque no forman parte del producto, ya cubren el contrato completo de cada sistema y no justifican el costo de reescribirlos.
+Se evaluaron cinco opciones: (1) mocks propios en contenedor con API de administración de fallas (elegida); (2) usar los servicios reales o sus ambientes de prueba, descartada porque la falla de un tercero no se puede provocar ni repetir a voluntad, y EAC-01/EAC-06 requieren escenarios controlados; (3) dobles en memoria dentro de las pruebas unitarias, que se mantienen para ese nivel de prueba pero no sirven para pruebas de integración ni para demostrar el sistema completo; (4) una herramienta genérica de simulación, descartada por incorporar otra tecnología para reproducir contratos pequeños; y (5) reescribir en .NET los mocks Node, descartada porque no forman parte del producto. La ampliación de `mock-erp` con fixtures de historial es una extensión de la opción elegida, no una nueva fuente productiva.
 
 ## Consecuencias
 
@@ -46,6 +46,7 @@ Se evaluaron cinco opciones: (1) mocks propios en contenedor con API de administ
 - El entorno del MVP incluye un runtime adicional (Node) que el equipo no domina por completo (RES-12, EV-46). El riesgo queda acotado porque el código de los mocks es pequeño y no forma parte del producto.
 - Los mocks guardan su estado en memoria: reiniciar el contenedor lo reinicia. Los mocks de PayKlik, SAT y LogiExpress no usan las bibliotecas comunes y no exponen métricas; su efecto se observa a través de las métricas de los servicios que los consumen.
 - Los mocks de LogiExpress no propagan por sí solos los cambios de estado de entrega a Despacho: quien ejecuta la demostración debe informarlos al webhook de Despacho, como haría el transportista real.
+- `mock-erp` también conserva sus fixtures de historial en memoria y los entrega solo para pruebas del flujo batch; un reinicio restaura el conjunto inicial. Los snapshots no representan una base histórica real ni deben ser consultados desde Checkout.
 
 ## Preocupaciones y evidencia que atiende
 

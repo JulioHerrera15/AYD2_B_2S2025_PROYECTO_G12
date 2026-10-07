@@ -142,6 +142,11 @@ Esta sección extrae y numera la evidencia del caso de negocio, y fija la conven
 | EV-50 | Se emplea UML 2.5.1 cuando corresponde, declarando explícitamente cualquier notación complementaria. | Convención de notación. |
 | EV-51 | La priorización de trabajo antepone los componentes base de la arquitectura a los cosméticos. | El backlog se ordena por backbone. |
 | EV-53 | Las decisiones se registran mediante ADR como registro vivo, y los diagramas son vistas del documento. | Relación entre artefactos. |
+| EV-54 | La fase incorpora crédito comercial de "Compra ahora, paga en 30 días" para clientes elegibles. | Se requiere un contexto de Crédito con línea, cuentas por cobrar, elegibilidad y cobranza propia. |
+| EV-55 | La elegibilidad depende del historial real de compras, pagos, devoluciones e incidentes que reside en el ERP. | El historial debe importarse y transformarse sin consultar el ERP durante checkout. |
+| EV-56 | El checkout debe decidir rápidamente si muestra crédito; si la evaluación no responde a tiempo, debe ofrecer PayKlik. | Crédito mantiene un perfil precalculado local y una ruta de fallback. |
+| EV-57 | El ERP legado no se modifica y su integración se realiza por lotes; el MVP necesita datos reproducibles para demostrar el flujo. | `mock-erp` se amplía con snapshots de historial por lote, sin convertirlo en una base de dominio. |
+| EV-58 | Una compra a crédito debe terminar en orden confirmada o rechazada, con el cliente notificado igual que en la ruta de PayKlik. | Órdenes conserva la saga centralizada y agrega la bifurcación de evaluación de Crédito. |
 
 ---
 
@@ -186,6 +191,8 @@ Esta sección extrae y numera la evidencia del caso de negocio, y fija la conven
 | STK-16 | LogiExpress | Mantener el contrato y su integración REST. | Alta dependencia técnica por su tasa de timeout. |
 | STK-17 | Proveedor de notificaciones | Prestar el servicio bajo sus propias condiciones. | Baja; disponibilidad fuera de control. |
 | STK-18 | Reguladores de protección de datos | Cumplimiento de la normativa en los tres países. | Alto, no negociable. |
+| STK-19 | Finanzas / Crédito | Determinar elegibilidad con historial comercial verificable, administrar cuentas por cobrar y bloquear mora. | Alto. |
+| STK-20 | Equipo de Integración ERP | Traducir datos del AS/400 y entregar lotes confiables sin contaminar los dominios nuevos. | Medio-alto. |
 
 ## 3.2 Preocupaciones arquitectónicas
 
@@ -223,6 +230,8 @@ Esta sección extrae y numera la evidencia del caso de negocio, y fija la conven
 - **PRE-18** — La inversión inicial y el costo operativo mensual se mantienen dentro de los límites aprobados. (STK-02, STK-01)
 - **PRE-19** — La solución se despliega on-premises y permite una migración planificada a la nube sin rediseño. (STK-01, STK-03, STK-02)
 - **PRE-20** — Existe una ruta viable de pagos y facturación para el primer mes, antes del Black Friday. (STK-02, STK-07, STK-03)
+- **PRE-21** — La elegibilidad de crédito usa un historial comercial verificable y actualizado por lotes, sin depender del ERP en la ruta crítica. (STK-04, STK-19, STK-20)
+- **PRE-22** — Una decisión de crédito rápida, sus compensaciones y su resultado son trazables y no cambian el final común de la orden. (STK-03, STK-04, STK-13, STK-19)
 
 ## 3.3 Conflictos entre preocupaciones
 
@@ -234,6 +243,7 @@ Esta sección extrae y numera la evidencia del caso de negocio, y fija la conven
 | CON-04 | Resiliencia y elasticidad frente al techo presupuestario | PRE-01, PRE-19 vs. PRE-18 | Stack open source on-premises con escalado bajo demanda (ADR-001, RES-04). |
 | CON-05 | No modificar el legacy frente a consistencia contable oportuna | PRE-16, PRE-12 vs. PRE-07 | Consistencia eventual con ventana de 30 minutos y reconciliación (ADR-008). |
 | CON-06 | Mantenibilidad con competencias actuales frente a sofisticación técnica | PRE-17 vs. PRE-01, PRE-02 | Número acotado de tecnologías, con capacitación presupuestada (RES-06). |
+| CON-07 | Frescura del historial frente a disponibilidad y latencia del ERP | PRE-21, PRE-22 vs. PRE-01, PRE-14, PRE-16 | Snapshot batch en Integración ERP, perfil precalculado en Crédito y fallback a PayKlik si la consulta local no responde (ADR-023). |
 
 ---
 
@@ -274,6 +284,7 @@ Se emplea UML 2.5.1 con extensiones de modelado de negocio: actor de negocio (ex
 | CUN-07 | Conciliar y cerrar contablemente | Ventas conciliadas, sincronizadas con el ERP y con evidencia recuperable. |
 | CUN-08 | Administrar catálogo, precios y promociones | Catálogo consistente en todos los canales. Gestionado por el Catálogo Comercial, dependencia externa al sistema. |
 | CUN-09 | Comunicar al cliente el estado de su orden | El cliente informado sobre confirmación, preparación, tránsito, entrega o incidencias. |
+| CUN-10 | Administrar crédito comercial | Clientes elegibles pueden comprar a 30 días; Finanzas mantiene la línea y cobra las cuentas por cobrar. |
 
 El diagrama de casos de uso de negocio de alto nivel se presenta en la sección 11.
 
@@ -295,6 +306,8 @@ El diagrama de casos de uso de negocio de alto nivel se presenta en la sección 
 
 **CUN-09 Comunicar al cliente:** emitir notificaciones del ciclo de vida (CUN-09.1); atender la consulta de estado bajo demanda (CUN-09.2).
 
+**CUN-10 Administrar crédito comercial:** importar el historial comercial (CUN-10.1); precalcular el perfil y la línea (CUN-10.2); ofrecer u ocultar crédito en checkout (CUN-10.3); evaluar una orden y emitir una cuenta por cobrar (CUN-10.4); consultar saldo y vencimiento (CUN-10.5); registrar abonos, vencimientos y bloqueos por mora (CUN-10.6).
+
 ## 4.5 Delimitación del sistema
 
 | Caso de negocio | Alcance en SGO-Logic |
@@ -308,6 +321,7 @@ El diagrama de casos de uso de negocio de alto nivel se presenta en la sección 
 | CUN-07 Conciliar y cerrar contablemente | Consolidación, transferencia y conciliación; el cierre contable permanece en el ERP. |
 | CUN-08 Administrar catálogo | Fuera del alcance. El Catálogo Comercial es una dependencia externa que el sistema consulta para resolver precios. |
 | CUN-09 Comunicar al cliente | Orquestación propia; la entrega efectiva depende del proveedor de notificaciones. |
+| CUN-10 Administrar crédito comercial | Perfil, línea, evaluación, cuentas por cobrar, abonos y bloqueos son propios de SGO-Logic. El historial base permanece autoritativo en el ERP y se recibe por Integración ERP. |
 
 ---
 
@@ -335,6 +349,7 @@ Cada característica se evalúa en cuatro criterios con escala Alto (3), Medio (
 | CAR-13 | Postventa | ADR-002 | 7 | Medio |
 | CAR-11 | Catálogo, precios y promociones (externo) | Dependencia externa | 7 | Medio |
 | CAR-14 | Notificaciones al cliente | Coreografía por eventos | 5 | Bajo |
+| CAR-15 | Crédito comercial con perfil precalculado | ADR-023 | 11 | Alto |
 
 ## 5.3 Secuencia del backbone
 
@@ -344,7 +359,7 @@ Cada característica se evalúa en cuatro criterios con escala Alto (3), Medio (
 
 **Ola 3 — Operación extendida y visibilidad:** CAR-08, CAR-12, CAR-09.
 
-**Ola 4 — Complementarias:** CAR-13, CAR-11, CAR-14.
+**Ola 4 — Crédito y complementarias:** CAR-15, CAR-13, CAR-11, CAR-14.
 
 ## 5.4 Justificación de prioridades no evidentes
 
@@ -370,6 +385,7 @@ Cada contexto es dueño exclusivo de sus datos; ningún contexto accede a la bas
 | Consulta de Estado | Modelo de lectura consolidado. | Vista materializada de órdenes. |
 | Despacho | Origen del despacho y seguimiento. | Instrucción de despacho, estado de entrega. |
 | Integración ERP | Consolidación y envío batch al AS/400. | Lotes de resúmenes de venta. |
+| Crédito | Historial comercial precalculado, elegibilidad, línea y cuentas por cobrar a 30 días. | Perfil crediticio, historial importado, línea, cargos, abonos y estados de mora. |
 | Integración POS | Envío confiable de eventos a las 32 instancias de POS. | Cola de eventos hacia POS. |
 | Notificaciones | Envío de avisos al cliente. | Solicitudes de notificación. |
 
@@ -394,6 +410,10 @@ El **Catálogo Comercial** (productos, precios, promociones, combos y financiami
 | CU-13 | Consolidar y transferir ventas al ERP | Integración ERP | Temporizador (sistema) |
 | CU-14 | Registrar devolución o cambio | Órdenes | Agente |
 | CU-15 | Notificar cambio de estado de orden | Notificaciones | Órdenes (sistema) |
+| CU-16 | Importar historial comercial del ERP | Integración ERP | Temporizador / Operador de Finanzas |
+| CU-17 | Determinar elegibilidad y ofrecer crédito | Crédito / Web | Cliente |
+| CU-18 | Evaluar crédito dentro de la saga | Crédito | Órdenes (sistema) |
+| CU-19 | Consultar y pagar cuenta a 30 días | Crédito / Pagos | Cliente |
 
 ## 6.3 Descripción textual de los casos del núcleo
 
@@ -454,7 +474,48 @@ El **Catálogo Comercial** (productos, precios, promociones, combos y financiami
 - **Poscondición:** el inventario refleja la disponibilidad real sin retener unidades de compras abandonadas.
 - **Interacciones:** notifica a Órdenes que la reserva expiró; registra en Auditoría.
 
-Los casos CU-07 a CU-15 se documentan con la misma estructura y se representan en los diagramas de la sección 11.
+### CU-16 Importar historial comercial del ERP
+
+- **Objetivo:** alimentar el perfil de Crédito con el historial comercial autoritativo del ERP sin consultar el AS/400 durante una compra.
+- **Precondición:** existe un lote de snapshots disponible en el mock ERP o en el canal batch equivalente del ERP real.
+- **Flujo principal:** el temporizador activa Integración ERP; el worker obtiene el lote; la capa anticorrupción valida y traduce cada registro; normaliza el email y conserva código ERP, fecha de corte y lote de origen; persiste la operación y publica `HistorialClienteErpActualizado` mediante Outbox; Crédito consume el evento, guarda el snapshot, recalcula el perfil y publica `PerfilCrediticioActualizado` si cambió el resultado.
+- **Flujo alternativo — lote duplicado o corte anterior:** Integración ERP o Crédito ignora el registro sin retroceder el perfil vigente y deja evidencia de la deduplicación.
+- **Flujo alternativo — formato inválido o ERP no disponible:** el lote queda pendiente o en dead letter según el contrato de mensajería; no se modifica el perfil anterior ni se bloquea el checkout.
+- **Poscondición:** Crédito tiene el último historial válido aplicado o conserva el perfil anterior con una alerta operativa.
+- **Interacciones:** mock ERP o ERP real, Integración ERP, Outbox, Crédito y Auditoría.
+
+### CU-17 Determinar elegibilidad y ofrecer crédito
+
+- **Objetivo:** mostrar crédito solo a clientes elegibles, sin recalcular ni llamar al ERP durante checkout.
+- **Precondición:** el cliente está autenticado y Crédito tiene un perfil precalculado, o puede determinar que no existe historial.
+- **Flujo principal:** Checkout solicita la elegibilidad con el email del claim; Crédito lee el perfil local, valida el monto contra el disponible y devuelve si se ofrece crédito, el límite disponible, el vencimiento estimado y el mensaje para el cliente; Web muestra la opción junto con PayKlik.
+- **Flujo alternativo — sin historial, perfil no elegible o cupo insuficiente:** Crédito devuelve una respuesta negativa; Web oculta la opción y mantiene PayKlik.
+- **Flujo alternativo — timeout o indisponibilidad de Crédito:** Web aplica el límite de consulta y muestra únicamente PayKlik; la orden no queda bloqueada.
+- **Poscondición:** el cliente ve una oferta consistente con el último perfil aplicado, o una ruta de pago alternativa.
+- **Interacciones:** Cliente, Web, API Gateway y Crédito. No hay llamada a ERP.
+
+### CU-18 Evaluar crédito dentro de la saga
+
+- **Objetivo:** aprobar o rechazar una orden a crédito después de reservar inventario y emitir una cuenta por cobrar si procede.
+- **Precondición:** Órdenes tiene una reserva confirmada, el cliente está autenticado y seleccionó `CREDITO`.
+- **Flujo principal:** Órdenes publica `EvaluacionCreditoSolicitada`; Crédito verifica elegibilidad y cupo con bloqueo optimista; si aprueba, aparta el monto de la línea, crea el cargo con vencimiento a 30 días y publica `CreditoAprobado`; Órdenes pasa a `CONFIRMADA_PENDIENTE_FISCAL`, continúa la saga y notifica al cliente.
+- **Flujo alternativo — rechazo:** Crédito publica `CreditoRechazado`; Órdenes rechaza la orden, solicita liberar la reserva y notifica el motivo en lenguaje de cliente.
+- **Flujo alternativo — timeout:** el worker de Órdenes rechaza la evaluación, libera la reserva y ofrece reintentar con PayKlik; una aprobación tardía se ignora o anula el cargo según la regla de idempotencia.
+- **Flujo alternativo — conflicto de cupo:** Crédito relee la línea y reintenta; si el cupo ya no alcanza, rechaza sin crear una cuenta por cobrar.
+- **Poscondición:** orden confirmada con cargo pendiente, o orden rechazada con reserva liberada; ambos resultados son auditables y notificables.
+- **Interacciones:** Órdenes, Crédito, Inventario, Facturación, Notificaciones y Auditoría.
+
+### CU-19 Consultar y pagar cuenta a 30 días
+
+- **Objetivo:** permitir que el cliente consulte su deuda, vencimiento y disponible, y realice abonos sin almacenar datos sensibles de tarjeta.
+- **Precondición:** existe una cuenta por cobrar activa asociada al cliente.
+- **Flujo principal:** Cliente abre Mi crédito; Crédito devuelve saldo, vencimiento, línea disponible y cuentas; el cliente solicita un abono con un token de medio de pago; Crédito registra el abono y publica `CobroAbonoCreditoSolicitado`; Pagos responde por evento; Crédito aplica el abono, libera cupo y marca la cuenta pagada cuando corresponde.
+- **Flujo alternativo — vencimiento:** un worker marca la cuenta vencida y bloquea la línea hasta ponerse al día.
+- **Flujo alternativo — devolución:** Crédito reduce la deuda y libera cupo; si existe excedente ya abonado, solicita el reembolso a Pagos.
+- **Poscondición:** saldo y línea reflejan el resultado final o el abono queda pendiente/rechazado para reintento.
+- **Interacciones:** Cliente, Crédito, Pagos, PayKlik y Notificaciones.
+
+Los casos CU-07 a CU-19 se documentan con la misma estructura y se representan en los diagramas de la sección 11. Los casos CU-16 a CU-19 son la extensión de Fase 3 para Crédito; sus diagramas UML quedan como pendiente de elaboración si se exige una vista por caso.
 
 ---
 
@@ -469,6 +530,7 @@ Cada escenario se expresa en formato de seis partes: fuente del estímulo, estí
 | EAC-03 | Rendimiento (auditoría) | Recuperar la evidencia completa de una transacción toma menos de 1 segundo. | Alta |
 | EAC-04 | Escalabilidad | El sistema escala ante el crecimiento sostenido del canal digital y ante picos estacionales, sin rediseño. | Alta |
 | EAC-05 | Consistencia de inventario | Ninguna unidad se compromete a más de un cliente, incluso con reservas concurrentes. | Alta |
+| EAC-06 | Rendimiento y resiliencia de crédito | La elegibilidad se consulta desde el perfil local sin llamar al ERP; una falla o timeout de Crédito no bloquea el checkout. | Alta |
 
 **EAC-01 — Disponibilidad ante falla del proveedor de pago.** Fuente: PayKlik. Estímulo: indisponibilidad o falla al procesar un cobro. Ambiente: producción durante Black Friday con demanda de hasta ocho veces la normal. Artefacto: servicio de Pagos y su ruta de reintento. Respuesta: la orden no se pierde; el intento se registra antes de invocar a PayKlik; si falla, el evento se reintenta de forma asíncrona sin bloquear el flujo; cada intento se audita. Medida: cero órdenes perdidas por indisponibilidad del proveedor; 100% de intentos fallidos auditados; disponibilidad del servicio de Pagos igual o superior a 99.9% durante el evento.
 
@@ -479,6 +541,8 @@ Cada escenario se expresa en formato de seis partes: fuente del estímulo, estí
 **EAC-04 — Escalabilidad.** Fuente: volumen de usuarios y transacciones del canal digital. Estímulo: crecimiento sostenido cercano al 15% anual y pico estacional de hasta ocho veces. Ambiente: producción en condiciones normales con tendencia de crecimiento y en la ventana de alta demanda. Artefacto: servicios del backbone en el clúster de contenedores. Respuesta: los servicios escalan horizontalmente de forma independiente según su propio patrón de carga, sin rediseño ni migración forzada. Medida: sostiene una demanda de ocho veces sin degradar EAC-01, EAC-02 ni EAC-03; la capacidad base se incrementa año a año dentro del techo operativo sin cambios arquitectónicos.
 
 **EAC-05 — Consistencia de inventario.** Fuente: múltiples clientes sobre el mismo producto. Estímulo: dos o más reservas concurrentes sobre la misma unidad. Ambiente: operación normal y en pico. Artefacto: servicio de Inventario con bloqueo optimista y expiración. Respuesta: detecta el conflicto de versión al escribir y rechaza la segunda reserva; libera automáticamente las reservas no concluidas al expirar. Medida: cero unidades comprometidas a más de un cliente; reservas no concluidas liberadas dentro del tiempo de expiración definido.
+
+**EAC-06 — Decisión rápida y resiliente de crédito.** Fuente: cliente en checkout. Estímulo: consulta de elegibilidad para un monto de compra. Ambiente: operación normal, con el ERP fuera de línea o con un perfil cuya antigüedad alcanza la ventana batch. Artefacto: endpoint de elegibilidad de Crédito y perfil precalculado. Respuesta: devuelve la oferta leyendo solo la base local; si no responde dentro del límite configurado, Web oculta crédito y conserva PayKlik. Medida: la consulta local responde en milisegundos en condiciones normales, nunca llama al ERP, y ningún timeout de Crédito impide crear una orden por PayKlik.
 
 ---
 
@@ -503,6 +567,8 @@ A diferencia de un escenario de calidad, una restricción elimina alternativas d
 | RES-13 | Minimizar el consumo energético; facturación totalmente electrónica. | Sostenibilidad | Escalado bajo demanda en vez de capacidad fija. |
 | RES-14 | Despliegue inicial on-premises. | Infraestructura | Kubernetes y almacenes de datos on-premises. |
 | RES-15 | Migración a la nube posible sin rediseño. | Infraestructura | Empaquetado en contenedores portable. |
+| RES-16 | El perfil de Crédito debe actualizarse desde el historial comercial del ERP, no desde una consulta síncrona en checkout. | Funcional / técnica | Snapshot batch, ACL y evento `HistorialClienteErpActualizado` (ADR-023). |
+| RES-17 | La alternativa demostrable debe ejecutarse sin acceso al AS/400 real y permitir fallas reproducibles. | Operativa / pruebas | `mock-erp` ampliado en contenedor con fixtures y administración de lotes (ADR-019, ADR-023). |
 
 **Nota sobre RES-11.** El monto operativo mensual exacto depende del dimensionamiento del hardware para el pico de Black Friday. Si el escalamiento superara USD 1,200 mensuales de forma sostenida, requiere aprobación adicional.
 
@@ -622,7 +688,7 @@ Cada decisión se documenta con su contexto, la decisión adoptada, las alternat
 
 **Contexto.** El ERP es la plataforma contable-financiera sobre AS/400 (EV-13), no se reemplaza ni modifica (EV-14, EV-40), y el Gerente de TI tiene poder de rechazo sobre cualquier propuesta que lo module (EV-37). Su modelo de datos y semántica no deben contaminar el dominio nuevo.
 
-**Decisión.** Se introduce una capa anticorrupción dedicada a la integración con el ERP, que traduce el modelo de eventos de venta al formato que el ERP admite, sin que el ERP conozca ni participe del modelo de dominio nuevo.
+**Decisión.** Se introduce una capa anticorrupción dedicada a la integración con el ERP, que traduce los lotes de ventas y los snapshots de historial comercial entre el modelo legado y los contratos de SGO-Logic, sin que el ERP conozca ni participe del modelo de dominio nuevo.
 
 **Alternativas consideradas.** Cuatro opciones: (1) capa anticorrupción dedicada; (2) que cada contexto genere directamente el formato del ERP, descartada porque esparce la lógica del legacy y acopla el sistema al AS/400; (3) modificar el ERP, descartada por la restricción de la Junta; (4) una base intermedia compartida, descartada por crear acoplamiento de datos y violar la propiedad exclusiva de datos por contexto. Se eligió la capa anticorrupción dedicada porque concentra la traducción hacia el legacy en un único punto y absorbe cambios futuros del ERP sin propagarlos.
 
@@ -632,13 +698,13 @@ Cada decisión se documenta con su contexto, la decisión adoptada, las alternat
 
 **Estado:** Aceptada.
 
-**Contexto.** El ERP solo recibe resúmenes por archivo CSV o XML cada 30 minutos (EV-15), sin vía síncrona, y no se modifica (RES-01, ADR-007). Hoy Finanzas concilia manualmente con hojas de cálculo (EV-10).
+**Contexto.** El ERP se integra por archivos CSV o XML cada 30 minutos (EV-15), sin vía síncrona, y no se modifica (RES-01, ADR-007). El mismo mecanismo batch alimenta los resúmenes de ventas y el snapshot de historial comercial de Crédito. Hoy Finanzas concilia manualmente con hojas de cálculo (EV-10).
 
-**Decisión.** Un worker del contexto de Integración ERP consolida los eventos de venta confirmados y genera el lote CSV/XML cada 30 minutos, transfiriéndolo al ERP. Además del control por lote —número de secuencia y totales de control por archivo—, un proceso de reconciliación diario compara el total de ventas registradas en SGO-Logic contra el total efectivamente cargado en el ERP y genera un reporte de diferencias para Finanzas.
+**Decisión.** Un worker del contexto de Integración ERP consolida los eventos de venta confirmados y procesa snapshots de historial cada 30 minutos, usando lotes CSV/XML y la ACL. Publica `HistorialClienteErpActualizado` por Outbox para Crédito. Además del control por lote —número de secuencia, fecha de corte y totales de control—, un proceso de reconciliación diario compara ventas, historiales y perfiles aplicados contra los lotes aceptados y genera un reporte de diferencias para Finanzas.
 
-**Alternativas consideradas.** Tres opciones: (1) lotes CSV/XML cada 30 minutos por un worker dedicado; (2) integración en tiempo real vía API, descartada porque el ERP no expone interfaz síncrona y no se modifica; (3) exportación manual como hoy, descartada por ser el problema que el proyecto elimina. Se eligió el lote automático cada 30 minutos por ser el único mecanismo compatible con el ERP, y por automatizar la consolidación manual actual.
+**Alternativas consideradas.** Tres opciones: (1) lotes CSV/XML cada 30 minutos por un worker dedicado para ventas e historial; (2) integración en tiempo real vía API, descartada porque el ERP no expone interfaz síncrona y no se modifica; (3) exportación manual como hoy, descartada por ser el problema que el proyecto elimina. Se eligió el lote automático por ser el único mecanismo compatible con el ERP y por automatizar la consolidación y la alimentación del perfil de Crédito.
 
-**Consecuencias.** Positivas: respeta el único mecanismo disponible sin modificar el ERP; automatiza la consolidación manual. Negativas: la consistencia contable es eventual, con ventana de hasta 30 minutos; el reporte de reconciliación diario añade un proceso adicional que operar y revisar, a cambio de dar a Finanzas visibilidad verificable de que ninguna venta quedó fuera del ERP.
+**Consecuencias.** Positivas: respeta el único mecanismo disponible sin modificar el ERP; automatiza la consolidación manual y permite responder elegibilidad localmente. Negativas: la consistencia contable y la frescura del historial son eventuales, con ventana de hasta 30 minutos; el reporte de reconciliación diario añade un proceso adicional que operar y revisar.
 
 ## ADR-009 — Circuit breaker y reintentos para PayKlik y LogiExpress
 
@@ -708,6 +774,7 @@ Las decisiones tomadas durante la Fase 2 se registran en archivos independientes
 | ADR-020 | La autenticación se valida en el borde, en el API Gateway, con el JWT emitido por Auth | Concreta la responsabilidad de autenticación del Borde de la sección 6.1 | `documentacion/ADR/ADR-020-autenticacion-en-el-borde.md` | Aceptada |
 | ADR-021 | En el MVP la compensación de stock ocurre por expiración del TTL de la reserva | Acota la compensación de ADR-002 y se apoya en la expiración de ADR-005 | `documentacion/ADR/ADR-021-compensacion-de-stock-por-ttl-en-el-mvp.md` | Reemplazada por ADR-022 |
 | ADR-022 | La compensación de stock es explícita: Inventario libera la reserva por evento y reingresa las devoluciones | Completa la compensación de ADR-002 y conserva la expiración de ADR-005 como red de seguridad | `documentacion/ADR/ADR-022-compensacion-explicita-de-stock.md` | Aceptada |
+| ADR-023 | Historial crediticio por lotes desde el mock ERP y perfil precalculado en Crédito | Completa ADR-007, ADR-008 y ADR-019 para el producto "Compra ahora, paga en 30 días" | `documentacion/ADR/ADR-023-historial-crediticio-desde-mock-erp.md` | Aceptada |
 
 ---
 
@@ -751,7 +818,7 @@ El diagrama de casos de uso de negocio de alto nivel presenta los procesos de ne
 
 ![Diagrama de Casos de Uso de Negocio de Alto Nivel](../img/Diagrama%20de%20Casos%20de%20Uso%20de%20Negocio%20de%20Alto%20Nivel.png)
 
-Los casos de uso expandidos CU-01 a CU-15 se representan a continuación. Corresponden uno a uno con las fichas de la sección 6.
+Los casos de uso expandidos CU-01 a CU-19 se representan a continuación. CU-01 a CU-15 corresponden a los diagramas existentes; CU-16 a CU-19 son los casos de Crédito documentados textualmente en la sección 6 y quedan pendientes de diagrama UML editable.
 
 **CU-01**
 ![CU-01](../diagramas_CDU/CU-01.svg)
@@ -890,6 +957,8 @@ Las matrices demuestran que cada decisión responde a una preocupación real del
 | PRE-18 | RES-10, RES-11 |
 | PRE-19 | RES-14, RES-15 |
 | PRE-20 | CAR-03, CAR-04, CAR-05 |
+| PRE-21 | CU-16, CU-17, RES-16, CAR-15 |
+| PRE-22 | CU-18, CU-19, EAC-06, CAR-15 |
 
 ## 12.2 Driver → Decisión
 
@@ -905,6 +974,8 @@ Las matrices demuestran que cada decisión responde a una preocupación real del
 | CU-09 / CAR-10 | ADR-012 |
 | CU-10 / CAR-07 | ADR-004 |
 | CU-13 / CAR-09 | ADR-008 |
+| CU-16 / RES-16 | ADR-007, ADR-008, ADR-019, ADR-023 |
+| CU-17 / CU-18 / CU-19 / CAR-15 | ADR-001, ADR-002, ADR-003, ADR-010, ADR-016, ADR-023 |
 | Integración ERP legacy | ADR-007 |
 | EAC-01 / PRE-01 | ADR-001 |
 | EAC-02 / PRE-14 | ADR-004 |
@@ -925,6 +996,7 @@ Las matrices demuestran que cada decisión responde a una preocupación real del
 | ADR-010 | — | Sí | — | — |
 | ADR-011 | Sí | Sí | Sí | — |
 | ADR-012 | Sí | Sí | Sí | Sí |
+| ADR-023 | Sí | Sí | Sí | Sí |
 
 ## 12.4 Escenario de calidad → Mecanismo y vista
 
@@ -935,6 +1007,7 @@ Las matrices demuestran que cada decisión responde a una preocupación real del
 | EAC-03 | Bitácora append-only en base propia indexada | Despliegue |
 | EAC-04 | Escalado horizontal independiente por servicio | Despliegue, Componentes |
 | EAC-05 | Bloqueo optimista con versión y expiración | Despliegue, Componentes |
+| EAC-06 | Perfil local precalculado, timeout corto y fallback a PayKlik | Contexto, Componentes, Despliegue |
 
 ## 12.5 Cobertura de partes interesadas
 
@@ -949,6 +1022,8 @@ Las matrices demuestran que cada decisión responde a una preocupación real del
 | STK-07 Jefatura de Operaciones | No repetir la pérdida por indisponibilidad | ADR-009, ADR-002; EAC-01 |
 | STK-14 SAT | Documentación fiscal válida y auditable | ADR-011, ADR-006 |
 | STK-18 Reguladores de datos | Cumplimiento en tratamiento de datos | ADR-010; RES-09 |
+| STK-19 Finanzas / Crédito | Historial verificable, línea y cobranza | ADR-006, ADR-008, ADR-023; CU-16, CU-19 |
+| STK-20 Integración ERP | Traducción aislada y lotes confiables | ADR-007, ADR-008, ADR-019, ADR-023; CU-16 |
 
 ---
 
@@ -975,6 +1050,7 @@ Esta sección documenta cómo se materializó la arquitectura definida en la Fas
 | 2.1 (2026-09-21) | Agrega ADR-020, autenticación en el borde, al índice de la sección 10 y a las secciones 14.5 a 14.7. Corrige la sección 14.1 (28 contenedores), la sección 14.2 (agrega `integracion-erp-worker` en el puerto 8096 y corrige `logiexpress-mock` al puerto 8098), la sección 14.6 (agrega la base `sgo_integracion_erp` a la instancia operacional) y las secciones 14.8 y 14.9 (ruta real del compose de escalado, `SGO-Logic/scripts/escalabilidad/docker-compose.scale.yml`). Corrige los enlaces de los diagramas CU-11 a CU-15 de la sección 11.5, cuyos archivos son `.drawio.svg`. |
 | 2.2 (2026-09-22) | Cierre de la Fase 2. ADR-020 queda Aceptada con fecha 2026-09-22 y describe su implementación real (bandera `Gateway:ExigirJwt`, protección también de `/api/erp/*` y el límite de que el compose no pasa la bandera ni el secreto al gateway, agregado a 14.9). Agrega ADR-021, compensación de stock por expiración del TTL, al índice de la sección 10 y a las secciones 14.5, 14.7 y 14.9. Agrega a 14.6 la auditoría de cada intento de cobro fallido con el evento `IntentoPagoFallido` (`pagos-eventos-v1` v1.3, reflejado en 14.4 y 14.7), las migraciones al arranque de Integración POS e Integración ERP con su procedimiento de línea base, y la nota de que Prometheus no raspa los mocks externos. Actualiza 14.8 con la evidencia vigente de EAC-01 y del camino feliz del 2026-09-22, que reemplaza a la del 2026-09-19: 0 órdenes perdidas de 379 y 100% de intentos fallidos auditados (130 de 130). Reemplaza el enlace roto al diagrama de componentes de la sección 11.3 por una nota, porque el archivo no está en el repositorio, y corrige las rutas de `PLANTILLA-SERVICIO.md` y `despacho-eventos-v1.md`. Contrastados contra el código: 28 contenedores, puertos, bases por instancia, colas citadas y ADR-001 a ADR-021. |
 | 2.3 (23/09/2026) | Refleja la integración de HU-003 y HU-014 en Inventario (merge `fa9b8e8`). Agrega ADR-022, compensación explícita de stock, que reemplaza a ADR-021: Inventario consume `ordenes.reserva.liberacion-solicitada` y `ordenes.devolucion.registrada` en la cola `inventario.ordenes`, libera la reserva en el momento y reingresa las unidades devueltas. Actualiza el índice de la sección 10 (ADR-021 queda Reemplazada por ADR-022) y las secciones 14.5, 14.7 y 14.9, que repetían la afirmación obsoleta de ADR-021; `inventario-eventos-v1` pasa a v1.1. Corrige en 14.5 y 14.9 la afirmación de que el compose no pasa la bandera al gateway: el servicio `api-gateway` recibe `Gateway__ExigirJwt` con `false` por defecto y `Auth__JwtSecret`. Agrega a 14.9 dos límites de Notificaciones: los avisos no se reintentan si el proveedor de mensajería falla, y el correo con el enlace de reintento de pago no se envía porque Notificaciones no consume `pagos.pago.pendiente`. |
+| 2.4 (06/10/2026) | Agrega la Fase 3 de Crédito: EV-54 a EV-58, CUN-10, CAR-15, PRE-21 y PRE-22, CU-16 a CU-19, EAC-06, RES-16 y RES-17. Incorpora el contexto `credito-api`, el contrato `credito-eventos-v1`, la ampliación de `mock-erp` con snapshots de historial, y ADR-023 como decisión aceptada. Actualiza las matrices de trazabilidad, el mapa de servicios, los límites del MVP y la evidencia pendiente del recorrido `mock-erp -> Integración ERP -> Crédito -> checkout`. |
 
 Las rutas de archivos de esta sección se expresan desde la raíz del repositorio.
 
@@ -1012,7 +1088,8 @@ Los puertos corresponden a los publicados en el host por `SGO-Logic/docker-compo
 | `consulta-estado-api` | Modelo de lectura del estado de las órdenes. | 8091 | `sgo_consulta_estado` (operacional) y Redis |
 | `notificaciones-api` | Notificaciones al cliente, aisladas del flujo principal. | 8090 | `sgo_notificaciones` (operacional) |
 | `integracion-pos-worker` | Propagación de eventos de venta hacia las instancias de POS. | 8095 | `sgo_integracion_pos` (operacional) |
-| `integracion-erp-worker` | Consolidación de ventas y envío batch al ERP-Core, con conciliación. | 8096 | `sgo_integracion_erp` (operacional) |
+| `integracion-erp-worker` | Consolidación de ventas, procesamiento batch del historial y envío de eventos al ERP-Core, con conciliación. | 8096 | `sgo_integracion_erp` (operacional) |
+| `credito-api` | Perfil crediticio, elegibilidad, línea, cuentas por cobrar y abonos a 30 días. | 8099 | `sgo_credito` (finanzas) |
 | `auditoria-worker` | Bitácora append-only de eventos. | 8093 | `sgo_auditoria` (instancia de auditoría) |
 | `sample-api` y `sample-worker` | Plantillas de servicio para crear contextos nuevos (`documentacion/docs/contratos/PLANTILLA-SERVICIO.md`). | 8081 y 8082 | `sgo_sample_api` y `sgo_sample_worker` (operacional) |
 
@@ -1047,7 +1124,7 @@ Los sistemas externos se simulan con mocks en contenedor que exponen el contrato
 | `sat-mock` | Latencia, caída (503), rechazo de la certificación y una probabilidad de falla 503 aplicable en cualquier modo. | `PUT /admin/modo` con `NORMAL`, `LENTO`, `CAIDO` o `RECHAZO` |
 | `logiexpress-mock` | Latencia, caída y un timeout determinístico: una de cada 50 solicitudes de guía no responde. | `PUT /admin/modo`; el cambio del estado de rastreo de una guía se hace con `POST /admin/guias/{guiaId}/estado` |
 | `mock-mensajeria` | Falla del proveedor (respuesta 500) en SMS, correo y push. | Variable de configuración `MockMensajeria__ForzarFalla` o `POST /api/mensajes/config/falla?activa=true` |
-| `mock-erp` | Rechazo de lotes con totales que no cuadran (422), lotes duplicados (409), secuencia retrocedida (409) y caída con respuesta 503, 500 o timeout de 8 segundos. | `POST /erp/admin/caida` |
+| `mock-erp` | Rechazo de lotes con totales que no cuadran (422), lotes duplicados (409), secuencia retrocedida (409), exportación de snapshots de historial elegibles/no elegibles y caída con respuesta 503, 500 o timeout de 8 segundos. | `POST /erp/admin/caida`; administración de fixtures y lotes de historial según README del mock |
 | `mock-pos` | Tienda fuera de línea con respuesta 503, 500 o timeout, por tienda o de forma masiva. Idempotencia por tienda y `eventoId`. | `POST /pos/admin/{tiendaId}/caida` y `POST /pos/admin/caida-masiva` |
 
 El cambio de estado de rastreo que se aplica en `logiexpress-mock` no se propaga por sí solo a Despacho. En una demostración, los avances de entrega se informan al webhook de Despacho (`POST /api/despacho/{ordenId}/estados`), que es lo que haría el transportista real.
@@ -1079,6 +1156,7 @@ Todos los contratos comparten el envelope de `sgo-eventos-envelope-v1.md` (ADR-0
 | `contratos/pagos-eventos-v1.md` | v1.3 | v1.1: agrega los eventos `ReembolsoAplicado` y `ReembolsoFallido`. v1.2: `PagoRechazado.codigoRespuesta` admite los códigos internos `TOKEN_REQUERIDO`, `TOKEN_INVALIDO`, `TOKEN_VENCIDO` y `TOKEN_YA_USADO`, por el flujo de tokenización de la sección 14.3.1. v1.3: agrega el evento 6, `IntentoPagoFallido` (`pagos.intento.fallido`), solo de auditoría, uno por cada intento de cobro fallido (sección 14.6). Cambios aditivos. |
 | `contratos/inventario-eventos-v1.md` | v1 | Agrega el evento 3, `ReservaInventarioExpirada`, el 2026-09-12. Cambio aditivo. |
 | `contratos/facturacion-eventos-v1.md` | v1 | Sin cambio de versión: `DocumentoFiscalCertificado` y `CertificacionSatFallida`. |
+| `contratos/credito-eventos-v1.md` | v1 | Contrato de Fase 3: `HistorialClienteErpActualizado`, `PerfilCrediticioActualizado`, evaluación de crédito, cuentas por cobrar, abonos, vencimientos y reversos. La fuente del historial y el recorrido ejecutable se concretan en ADR-023. |
 | `documentacion/docs/despacho-eventos-v1.md` | v1 | Contrato nuevo de la Fase 2: `OrigenDespachoDeterminado`, `GuiaAsignada`, `GuiaPendiente`, `PreparacionSolicitada`, `DespachoEstadoActualizado` y `PedidoListoParaRecoger`. |
 
 ## 14.5 Resumen de ADR-013 en adelante
@@ -1105,6 +1183,8 @@ Los archivos se encuentran en `documentacion/ADR/`. Todos tienen estado Aceptada
 
 **ADR-022, La compensación de stock es explícita.** Inventario consume en su cola `inventario.ordenes`, además de `ordenes.reserva.solicitada`, los eventos `ordenes.reserva.liberacion-solicitada` y `ordenes.devolucion.registrada` con un único consumidor multi-evento (`OrdenesEventosConsumidor`). Ante una solicitud de liberación, libera en el momento la reserva `ACTIVA` de la orden, la pasa a `LIBERADA` y publica `ReservaInventarioLiberada` (`inventario.reserva.liberada`, HU-003). Ante una devolución, suma las unidades a la cantidad física de la ubicación de origen de cada línea, deja asiento en el ledger con motivo `REINGRESO_DEVOLUCION` y publica `StockReingresado` (`inventario.stock.reingresado`, HU-014). La expiración por TTL se mantiene como red de seguridad para las reservas que Órdenes no llega a conocer. Es un cambio aditivo: `inventario-eventos-v1` pasa a v1.1 y `ordenes-eventos-v1` no cambia. El riesgo que queda: la reserva de una orden pagada sigue venciendo por TTL, el reingreso no tiene idempotencia de negocio por `devolucionId` y ningún contexto de la saga consume todavía los dos eventos nuevos.
 
+**ADR-023, Historial crediticio por lotes desde el mock ERP y perfil precalculado en Crédito.** `mock-erp` mantiene fixtures de historial y los entrega agrupados en snapshots por lote. Integración ERP usa una ACL para traducirlos al evento `HistorialClienteErpActualizado`, que publica por Outbox y consume Crédito. Crédito conserva el último corte válido, recalcula el perfil y atiende la elegibilidad localmente. El checkout nunca llama al ERP: si Crédito no responde dentro del límite, Web ofrece solo PayKlik. La saga de Órdenes solicita evaluación después de reservar inventario y conserva el final común de orden confirmada o rechazada. Se descartan derivar todo desde eventos internos, consultar el ERP en vivo, usar la siembra demo como flujo principal y contratar un score externo. El costo aceptado es consistencia eventual del historial y mantenimiento de fixtures; el recorrido y sus fallas son reproducibles en el MVP.
+
 ## 14.6 Decisiones de implementación registradas en este documento
 
 Las siguientes decisiones no cambian un contrato entre contextos ni el entorno de despliegue: son detalles de implementación de un contexto o concretan una decisión de la Fase 1. Por eso se documentan aquí y no como ADR independientes.
@@ -1118,6 +1198,8 @@ Las siguientes decisiones no cambian un contrato entre contextos ni el entorno d
 **Borde, identidad y aplicación web.** El `api-gateway` usa YARP para enrutar por prefijo hacia los contextos. `auth-api` emite JWT y administra el carrito unificado en Redis. La validación del JWT en el gateway se decide en ADR-020. `web` es una aplicación ASP.NET Core MVC que consume el gateway.
 
 **Auditoría de intentos de cobro.** Pagos registra cada intento de cobro en `pagos.intento_pago` antes de invocar a PayKlik (HU-004) y reintenta una vez con backoff ante timeout, 5xx o error de red (`PayKlik:MaxReintentos` = 1, ADR-009), de modo que un cobro puede producir dos intentos fallidos. Para cumplir la medida de EAC-01 (100% de intentos fallidos auditados), cada intento que termina `FALLIDO`, intermedio o final, publica por el Outbox, en la misma transacción que el intento, el evento `IntentoPagoFallido` (`pagos.intento.fallido`, evento 6 de `pagos-eventos-v1` v1.3), que Auditoría recibe por su binding `#`. Es un evento solo de auditoría: cada cobro sigue emitiendo un único evento de resultado (`PagoAplicado`, `PagoRechazado` o `PagoPendiente`) con la misma `sequence`, y ninguna cola de la saga está ligada a `pagos.intento.fallido`, así que Órdenes, Inventario y Despacho no cambian su comportamiento. Antes de este cambio, del 2026-09-22, solo el último intento fallido llegaba a Auditoría, dentro de `PagoPendiente`.
+
+**Crédito y perfil precalculado.** Crédito es dueño de `sgo_credito`, del snapshot vigente de `historial_cliente`, `perfil_crediticio`, líneas, cargos, abonos y mensajes procesados. No lee ERP, Órdenes ni Consulta de Estado. Integración ERP procesa el lote de historial desde `mock-erp` o el adaptador del ERP real, normaliza el email, valida fecha de corte y publica `HistorialClienteErpActualizado` por Outbox. El consumidor de Crédito guarda historial, perfil, línea y evento de salida en una sola transacción; un corte igual o anterior no retrocede el perfil. `GET /api/credito/elegibilidad` solo consulta esta proyección y tiene un límite corto configurado en Web. `SembrarDemo` y `/interno/credito/historiales` quedan para desarrollo aislado, no para demostrar el recorrido batch.
 
 **Parámetros del Outbox.** El publicador consulta la tabla de Outbox cada 2 segundos (`OUTBOX_POLLING_MS`), procesa lotes de 20 filas (`OUTBOX_BATCH_SIZE`) y reintenta hasta 5 veces (`OUTBOX_MAX_REINTENTOS`) antes de enviar el mensaje a la dead letter. El intervalo de polling determina la latencia mínima de cada salto entre contextos (ADR-014).
 
@@ -1138,6 +1220,7 @@ Las rutas de código se expresan desde la raíz del repositorio.
 | Contrato común de mensajería | ADR-018 | `SGO-Logic/src/BuildingBlocks/SgoLogic.Contracts/IntegrationEvent.cs`, `SGO-Logic/src/BuildingBlocks/SgoLogic.BuildingBlocks/Messaging/`, `SGO-Logic/src/BuildingBlocks/SgoLogic.BuildingBlocks/Idempotencia/EventConsumerBase.cs`, `SGO-Logic/src/BuildingBlocks/SgoLogic.BuildingBlocks/Correlation/EventContext.cs` |
 | Compensación explícita de stock: liberación por evento y reingreso por devolución, con el TTL como red de seguridad | ADR-022, que reemplaza a ADR-021 (con ADR-005) | `SGO-Logic/src/Services/SgoLogic.Inventario.Api/Consumers/OrdenesEventosConsumidor.cs`, `SGO-Logic/src/Services/SgoLogic.Inventario.Api/Application/Inventario/ServicioLiberacionReservas.cs`, `SGO-Logic/src/Services/SgoLogic.Inventario.Api/Application/Inventario/ServicioReingresoStock.cs`, `SGO-Logic/src/Services/SgoLogic.Inventario.Api/Workers/ExpiracionReservasWorker.cs`, `SGO-Logic/src/Services/SgoLogic.Inventario.Api/Application/Inventario/ServicioExpiracionReservas.cs`, `SGO-Logic/src/BuildingBlocks/SgoLogic.Contracts/Eventos/Inventario/ReservaInventarioLiberada.cs`, `SGO-Logic/src/BuildingBlocks/SgoLogic.Contracts/Eventos/Inventario/StockReingresado.cs`, `SGO-Logic/src/Services/SgoLogic.Ordenes.Api/Application/Ordenes/Eventos/MapaEventosSagaOrden.cs`, `SGO-Logic/src/Services/SgoLogic.Ordenes.Api/Application/Ordenes/ServicioDevolucion.cs` |
 | Mocks de sistemas externos | ADR-019 | `SGO-Logic/src/Services/SgoLogic.Mocks.PayKlik/`, `SGO-Logic/src/Services/SgoLogic.Mocks.SAT/`, `SGO-Logic/src/Services/SgoLogic.Mocks.LogiExpress/`, `SGO-Logic/src/Services/SgoLogic.MockMensajeria/`, `Mocks/mock-erp/`, `Mocks/mock-pos/` |
+| Historial ERP y perfil precalculado de Crédito | ADR-023, con ADR-007, ADR-008 y ADR-019 | `Mocks/mock-erp/server.js`, `Mocks/mock-erp/README.md`, `SGO-Logic/src/Services/SgoLogic.IntegracionErp.Worker/`, `SGO-Logic/src/BuildingBlocks/SgoLogic.Contracts/Eventos/IntegracionErp/HistorialClienteErpActualizado.cs`, `SGO-Logic/src/Services/SgoLogic.Credito.Api/Consumers/HistorialClienteErpConsumidor.cs`, `SGO-Logic/src/Services/SgoLogic.Credito.Api/Application/ServicioPerfilCrediticio.cs` |
 | Persistencia con PostgreSQL, base por contexto y migraciones al arranque | ADR-001, ADR-005 (sin ADR propio, ver 14.6) | `SGO-Logic/scripts/postgres/crear-bases-adicionales.sh`, carpeta `Infrastructure/Persistencia/` de cada servicio |
 | Consulta de Estado con Redis y respaldo en PostgreSQL | ADR-004 (sin ADR propio, ver 14.6) | `SGO-Logic/src/Services/SgoLogic.ConsultaEstado.Api/Application/ConsultaEstadoService.cs`, `SGO-Logic/src/Services/SgoLogic.ConsultaEstado.Api/Consumers/ConsultaEstadoOrdenesConsumidor.cs`, `SGO-Logic/src/Services/SgoLogic.ConsultaEstado.Api/Infrastructure/ConsultaEstadoDbContext.cs` |
 | Observabilidad con Prometheus y Grafana | CAR-12 (sección 5.2, ver 14.6) | `SGO-Logic/observabilidad/prometheus.yml`, `SGO-Logic/observabilidad/grafana/provisioning/`, `SGO-Logic/src/BuildingBlocks/SgoLogic.BuildingBlocks/Metricas/MetricasSgo.cs` |
@@ -1155,6 +1238,7 @@ Los umbrales son los de los escenarios de atributos de calidad de la sección 7.
 | Rendimiento (auditoría) | EAC-03 | Recuperación en menos de 1 segundo; cero transacciones sin respaldo. | `SGO-Logic/tests/SgoLogic.Auditoria.Tests/CargaTransaccionTests.cs`, `SGO-Logic/tests/SgoLogic.Auditoria.Tests/InsercionYRecuperacionTests.cs`, `documentacion/docs/AUDITORIA.md` |
 | Escalabilidad | EAC-04 | Sostiene una demanda de ocho veces sin degradar EAC-01, EAC-02 ni EAC-03; la capacidad base se incrementa año a año dentro del techo operativo sin cambios arquitectónicos. | `deploy/k8s/consulta-estado-hpa.yaml`, `SGO-Logic/scripts/pruebas-carga/eac02-hu024-escalar.sh`, `SGO-Logic/scripts/escalabilidad/docker-compose.scale.yml`, `documentacion/docs/PRUEBA-CARGA-EAC02.md` |
 | Consistencia de inventario | EAC-05 | Cero unidades comprometidas a más de un cliente; reservas no concluidas liberadas dentro del tiempo de expiración definido. | `SGO-Logic/tests/SgoLogic.Inventario.IntegrationTests/ReservaConcurrenteTests.cs`, `SGO-Logic/tests/SgoLogic.Inventario.Tests/Application/ServicioExpiracionReservasTests.cs`, `documentacion/docs/CONCURRENCIA-EAC05.md` |
+| Crédito | EAC-06 | Consulta local en milisegundos, sin llamada al ERP; ante timeout se conserva PayKlik. | Pruebas de integración del lote ERP -> Crédito y evidencia de Checkout; PENDIENTE DE EVIDENCIA |
 
 La evidencia del flujo completo de la saga, desde la creación de la orden hasta la entrega, se genera con `SGO-Logic/scripts/pruebas/camino-feliz.ps1` y se guarda en `SGO-Logic/scripts/pruebas/evidencia/camino-feliz-2026-09-22.txt`. No corresponde a un escenario de calidad, pero verifica que el ciclo de la orden avanza sin transiciones manuales (ADR-016).
 
@@ -1171,6 +1255,7 @@ Los siguientes límites son alcance deliberado del MVP. Cada uno indica qué exi
 | Autoescalado en Kubernetes | `deploy/k8s/consulta-estado-hpa.yaml` define el Deployment, el Service y el HPA de Consulta de Estado (2 a 10 réplicas, umbrales de 70% de CPU y 80% de memoria) como evidencia documental de la plataforma de producción. El MVP demuestra réplicas manuales de `consulta-estado-api` balanceadas por el gateway, con `scripts/escalabilidad/docker-compose.scale.yml` y `scripts/pruebas-carga/eac02-hu024-escalar.sh`. | El autoescalado en ejecución y los manifiestos de los demás servicios. El manifiesto existente usa una imagen con etiqueta `latest`, y los secretos (`sgo-secrets`) y el namespace (`sgo-logic`) que referencia no están definidos en el repositorio. | ADR-013 y ADR-001 |
 | Notificaciones sin reintento | Notificaciones consume `ordenes.orden.estado-cambiado` (cola `notificaciones.ordenes`) y `despacho.pedido.listo-para-recoger` (cola `notificaciones.despacho`) y envía el aviso al proveedor de mensajería (`mock-mensajeria`, `POST /api/mensajes/email`). Si el proveedor falla, el consumidor registra una advertencia y confirma el mensaje igual: la falla no llega a la saga y la confirmación de la orden no se bloquea, lo que respeta PRE-03. | Un reintento del aviso fallido: el aviso se pierde y solo queda el registro en el log. La base `sgo_notificaciones` solo guarda la tabla de mensajes procesados, así que tampoco queda constancia de la solicitud; esto se aparta de la sección 6.1, que asigna a Notificaciones la propiedad de las solicitudes de notificación. | Sin ADR: aislamiento de fallos de PRE-03 y RES-06 (CU-15, CAR-14) |
 | Correo con el enlace de reintento de pago | Cuando el cobro no obtiene respuesta del proveedor, Pagos publica `PagoPendiente` (`pagos.pago.pendiente`) con el enlace de reintento, y Órdenes lo consume para pasar la orden a `PAGO_PENDIENTE`. Al cambiar de estado, Notificaciones envía el aviso genérico de cambio de estado de la orden. | El correo con el enlace de reintento que describe el flujo alternativo de la sección 6.3 (Pagos): Notificaciones no tiene ninguna cola ligada a `pagos.pago.pendiente`, y el aviso genérico que sí envía no incluye el enlace. | Sin ADR: alcance funcional de CU-15 y del flujo alternativo de Pagos (`contratos/pagos-eventos-v1.md`, `PagoPendiente`) |
+| Crédito comercial a 30 días | Crédito importa snapshots de historial desde Integración ERP, precalcula la elegibilidad, bifurca la saga después de la reserva y permite consultar/abonar cuentas por cobrar. | No se incluyen cuotas de 3, 6 o 12 meses, intereses, score externo, consulta síncrona al ERP ni crédito en POS salvo que se amplíe el contrato de canales. La evidencia del recorrido productivo mock ERP -> Integración ERP -> Crédito queda pendiente de ejecución. | ADR-023; contrato `documentacion/docs/contratos/credito-eventos-v1.md` |
 
 ---
 

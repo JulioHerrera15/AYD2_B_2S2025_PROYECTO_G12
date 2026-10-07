@@ -14,7 +14,7 @@ El repositorio se organiza en dos partes:
 ## Índice
 
 ### Documentación de arquitectura
-- [docs/DDA_SGOLogic.md](documentacion/docs/DDA_SGOLogic.md) — Documento de Definición de Arquitectura, **versión 2.0**: catálogo de evidencia, stakeholders y preocupaciones, casos de uso de negocio, características priorizadas, drivers funcionales y casos de uso expandidos (CU-01 a CU-15), drivers de calidad, drivers de restricción, restricciones de infraestructura, ADR, vistas arquitectónicas y matrices de trazabilidad de la Fase 1, más la sección 14 (Cambios de la Fase 2), que documenta cómo se materializó esa arquitectura en el MVP.
+- [docs/DDA_SGOLogic.md](documentacion/docs/DDA_SGOLogic.md) — Documento de Definición de Arquitectura, **versión 2.4**: catálogo de evidencia, stakeholders y preocupaciones, casos de uso de negocio, características priorizadas, drivers funcionales y casos de uso expandidos (CU-01 a CU-19), drivers de calidad, drivers de restricción, restricciones de infraestructura, ADR, vistas arquitectónicas y matrices de trazabilidad de las Fases 1 a 3.
 - [docs/contratos/](documentacion/docs/contratos/) — Contratos de eventos publicados entre contextos (p. ej. [ordenes-eventos-v1.md](documentacion/docs/contratos/ordenes-eventos-v1.md)).
 
 #### ADR — Architecture Decision Records
@@ -37,6 +37,7 @@ El repositorio se organiza en dos partes:
 - [ADR-017 Despacho consulta a Inventario por HTTP síncrono y trata la guía de LogiExpress como degradación, sin circuit breaker](documentacion/ADR/ADR-017-despacho-consulta-inventario-http-y-guia-pendiente-sin-disyuntor.md)
 - [ADR-018 Contrato común de mensajería: envelope único, topología pub/sub con colas quorum y bibliotecas compartidas](documentacion/ADR/ADR-018-contrato-comun-de-mensajeria.md)
 - [ADR-019 Los sistemas externos se simulan con mocks en contenedor y fallas configurables](documentacion/ADR/ADR-019-mocks-de-sistemas-externos-con-fallas-configurables.md)
+- [ADR-023 Historial crediticio por lotes desde el mock ERP y perfil precalculado en Crédito](documentacion/ADR/ADR-023-historial-crediticio-desde-mock-erp.md)
 
 #### Diagramas
 - [diagramas_CDU/](documentacion/diagramas_CDU/) — Diagramas de los casos de uso expandidos CU-01 a CU-15 (formatos editable `.drawio` y de imagen).

@@ -97,6 +97,9 @@ public sealed class ConsolidacionErpServiceTests
 
         public Task<ResumenErp?> ObtenerResumenAsync(CancellationToken cancelacion = default)
             => Task.FromResult<ResumenErp?>(null);
+
+        public Task<IReadOnlyList<ClienteHistorialErp>> ObtenerHistorialClientesAsync(DateTime? modificadosDesde = null, CancellationToken cancelacion = default)
+            => Task.FromResult<IReadOnlyList<ClienteHistorialErp>>([]);
     }
 
     private sealed class ClienteConResumen : IClienteErp
@@ -113,6 +116,9 @@ public sealed class ConsolidacionErpServiceTests
 
         public Task<ResumenErp?> ObtenerResumenAsync(CancellationToken cancelacion = default)
             => Task.FromResult<ResumenErp?>(_resumen);
+
+        public Task<IReadOnlyList<ClienteHistorialErp>> ObtenerHistorialClientesAsync(DateTime? modificadosDesde = null, CancellationToken cancelacion = default)
+            => Task.FromResult<IReadOnlyList<ClienteHistorialErp>>([]);
     }
 
     private sealed class OutboxNulo : IOutboxWriter
