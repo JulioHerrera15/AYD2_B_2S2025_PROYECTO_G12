@@ -34,6 +34,7 @@ public sealed class VentaErp
     public string EventoId { get; set; } = string.Empty;
     public string OrdenId { get; set; } = string.Empty;
     public string NumeroOrden { get; set; } = string.Empty;
+    public string? ClienteId { get; set; }
     public string Canal { get; set; } = string.Empty;
     public string Tienda { get; set; } = string.Empty;
     public decimal Monto { get; set; }
@@ -100,6 +101,7 @@ public sealed class VentaErpConfiguration : IEntityTypeConfiguration<VentaErp>
         b.Property(x => x.EventoId).HasMaxLength(200).IsRequired();
         b.Property(x => x.OrdenId).HasMaxLength(200).IsRequired();
         b.Property(x => x.NumeroOrden).HasMaxLength(200).IsRequired();
+        b.Property(x => x.ClienteId).HasMaxLength(254);
         b.Property(x => x.Canal).HasMaxLength(40).IsRequired();
         b.Property(x => x.Tienda).HasMaxLength(80).IsRequired();
         b.Property(x => x.Monto).HasPrecision(18, 2);

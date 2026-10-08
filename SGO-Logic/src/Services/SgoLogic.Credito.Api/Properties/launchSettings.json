@@ -10,7 +10,9 @@
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development",
         "Credito__SembrarDemo": "true",
-        "Credito__EndpointsInternos": "true"
+        "Credito__EndpointsInternos": "true",
+        "Credito__Politica__PuntajeMinimo": "50",
+        "Credito__Politica__AntiguedadMinimaDias": "0"
       }
     }
   }

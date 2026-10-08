@@ -52,6 +52,7 @@ public sealed class ErpHistorialClientesWorker : BackgroundService
             using var scope = _scopeFactory.CreateScope();
             var cliente = scope.ServiceProvider.GetRequiredService<IClienteErp>();
             var outbox = scope.ServiceProvider.GetRequiredService<IOutboxWriter>();
+            var contexto = scope.ServiceProvider.GetRequiredService<IntegracionErpDbContext>();
             var clientes = await cliente.ObtenerHistorialClientesAsync(cancelacion: cancellationToken);
 
             var contador = 0;
@@ -85,7 +86,10 @@ public sealed class ErpHistorialClientesWorker : BackgroundService
                 contador++;
             }
 
-            _logger.LogInformation("Se publicaron {Cantidad} historiales crediticios del ERP", contador);
+            if (contador > 0)
+                await contexto.SaveChangesAsync(cancellationToken);
+
+            _logger.LogInformation("Se encolaron {Cantidad} historiales crediticios del ERP", contador);
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

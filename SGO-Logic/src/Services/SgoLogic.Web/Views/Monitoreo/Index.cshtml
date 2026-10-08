@@ -10,6 +10,10 @@
     var totalServicios = ViewBag.TotalServicios as int? ?? servicios.Count;
     var latenciaPromedio = ViewBag.LatenciaPromedio != null ? Convert.ToDouble(ViewBag.LatenciaPromedio).ToString("F1") : "0.0";
     var ultimaActualizacion = ViewBag.UltimaActualizacion as DateTime? ?? DateTime.UtcNow;
+    var esAdministrador = (bool)(ViewBag.EsAdministrador ?? false);
+    var emailHistorialBuscado = ViewBag.EmailHistorialBuscado as string ?? "";
+    var snapshotHistorial = ViewBag.SnapshotHistorial as SgoLogic.Web.Controllers.SnapshotHistorialClienteModel;
+    var errorSnapshotHistorial = ViewBag.ErrorSnapshotHistorial as string;
 }
 
 <div class="w-full max-w-container-max mx-auto flex flex-col gap-8">
@@ -113,6 +117,50 @@
             </div>
         </div>
     </div>
+
+    @if (esAdministrador)
+    {
+        <section class="bg-surface-white rounded-3xl p-6 border border-border-subtle/70 ambient-shadow">
+            <div class="flex flex-col md:flex-row md:items-end md:justify-between gap-4 pb-4 border-b border-border-subtle/60">
+                <div>
+                    <h2 class="text-base font-bold text-primary">Snapshot de historial del ERP</h2>
+                    <p class="text-xs text-text-muted">Consulta los datos crediticios que el mock ERP entrega para un cliente.</p>
+                </div>
+                <form method="get" action="/Monitoreo" class="flex flex-col sm:flex-row gap-2 w-full md:w-auto">
+                    <label for="clienteHistorial" class="sr-only">Correo del cliente</label>
+                    <input id="clienteHistorial" name="clienteHistorial" type="email" required value="@emailHistorialBuscado"
+                           placeholder="cliente@correo.com" autocomplete="off"
+                           class="min-w-0 sm:w-72 px-3 py-2 rounded-lg border border-border-subtle bg-surface-container-low text-sm text-primary focus:outline-none focus:border-secondary" />
+                    <button type="submit" class="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-white text-sm font-semibold hover:opacity-90">
+                        <span class="material-symbols-outlined text-[18px]">search</span>
+                        Consultar
+                    </button>
+                </form>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(errorSnapshotHistorial))
+            {
+                <p class="mt-4 text-sm text-error" role="status">@errorSnapshotHistorial</p>
+            }
+            else if (snapshotHistorial is not null)
+            {
+                <dl class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-x-6 gap-y-4 mt-5 text-sm">
+                    <div><dt class="text-xs text-text-muted">Cliente</dt><dd class="font-semibold text-primary">@snapshotHistorial.Email</dd></div>
+                    <div><dt class="text-xs text-text-muted">Código ERP</dt><dd class="font-semibold text-primary">@snapshotHistorial.CodigoCliente</dd></div>
+                    <div><dt class="text-xs text-text-muted">Cliente desde</dt><dd class="font-semibold text-primary">@snapshotHistorial.ClienteDesde.ToString("dd/MM/yyyy")</dd></div>
+                    <div><dt class="text-xs text-text-muted">Corte del historial</dt><dd class="font-semibold text-primary">@snapshotHistorial.FechaCorte.ToString("dd/MM/yyyy HH:mm 'UTC'")</dd></div>
+                    <div><dt class="text-xs text-text-muted">Compras últimos 12 meses</dt><dd class="font-semibold text-primary">@snapshotHistorial.ComprasUltimos12Meses</dd></div>
+                    <div><dt class="text-xs text-text-muted">Monto comprado</dt><dd class="font-semibold text-primary">@snapshotHistorial.Moneda @snapshotHistorial.MontoCompradoUltimos12Meses.ToString("N2")</dd></div>
+                    <div><dt class="text-xs text-text-muted">Pagos puntuales / tardíos</dt><dd class="font-semibold text-primary">@snapshotHistorial.PagosPuntuales / @snapshotHistorial.PagosTardios</dd></div>
+                    <div><dt class="text-xs text-text-muted">Atraso máximo</dt><dd class="font-semibold text-primary">@snapshotHistorial.MaxDiasAtraso días</dd></div>
+                    <div><dt class="text-xs text-text-muted">Devoluciones</dt><dd class="font-semibold text-primary">@snapshotHistorial.Devoluciones</dd></div>
+                    <div><dt class="text-xs text-text-muted">Incidentes graves / otros</dt><dd class="font-semibold text-primary">@snapshotHistorial.IncidentesGraves / @snapshotHistorial.OtrosIncidentes</dd></div>
+                    <div><dt class="text-xs text-text-muted">Lote de origen</dt><dd class="font-semibold text-primary">@(snapshotHistorial.LoteOrigen ?? "Sin lote")</dd></div>
+                    <div><dt class="text-xs text-text-muted">Actualizado en ERP</dt><dd class="font-semibold text-primary">@snapshotHistorial.ActualizadoEn.ToString("dd/MM/yyyy HH:mm 'UTC'")</dd></div>
+                </dl>
+            }
+        </section>
+    }
 
     <!-- Live Microservices Topology Grid -->
     <div>
