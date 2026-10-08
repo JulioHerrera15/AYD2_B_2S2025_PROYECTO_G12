@@ -231,6 +231,7 @@ services:
       Erp__MaxReintentos: ${ERP_MAX_REINTENTOS:-3}
       Erp__MaxIntentosLote: ${ERP_MAX_INTENTOS_LOTE:-5}
       Erp__IntervaloConsolidacionMinutos: ${ERP_INTERVALO_MINUTOS:-30}
+      Erp__IntervaloHistorialMinutos: ${ERP_INTERVALO_HISTORIAL_MINUTOS:-${ERP_INTERVALO_MINUTOS:-30}}
       Erp__IntervaloConciliacionHoras: ${ERP_INTERVALO_CONCILIACION_HORAS:-24}
       Outbox__Source: integracion-erp
       Outbox__PollingIntervalMs: ${OUTBOX_POLLING_MS}
@@ -359,6 +360,9 @@ services:
       # POST /interno/credito/historiales (no enrutado por el gateway).
       Credito__SembrarDemo: "true"
       Credito__EndpointsInternos: "true"
+      # Umbrales bajos del entorno demo; cliente5 puede probar elegibilidad con compras pequenas.
+      Credito__Politica__PuntajeMinimo: ${CREDITO_PUNTAJE_MINIMO:-50}
+      Credito__Politica__AntiguedadMinimaDias: ${CREDITO_ANTIGUEDAD_MINIMA_DIAS:-0}
     ports:
       - "8099:8080"
     depends_on:
@@ -572,10 +576,13 @@ services:
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
       ASPNETCORE_URLS: http://+:8080
       ApiGateway__BaseUrl: http://api-gateway:8080
+      MockErp__BaseUrl: http://mock-erp:4000
     ports:
       - "8092:8080"
     depends_on:
       api-gateway:
+        condition: service_healthy
+      mock-erp:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health/live || exit 1"]

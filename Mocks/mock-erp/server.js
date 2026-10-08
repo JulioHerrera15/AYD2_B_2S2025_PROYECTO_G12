@@ -164,7 +164,7 @@ app.use(express.text({ type: ["text/csv", "application/xml", "text/xml"], limit:
  *
  * LOTE,SECUENCIA,FECHA,CANTIDAD_REGISTROS,MONTO_TOTAL
  * LOTE-2026-09-10-001,42,2026-09-10T14:00:00Z,3,960.00
- * ORDEN,CANAL,TIENDA,MONTO,FECHA
+ * ORDEN,CANAL,TIENDA,MONTO,FECHA,CLIENTE_ID
  * ORD-1001,web,T01,320.00,2026-09-10T13:45:00Z
  * ORD-1002,tienda,T02,320.00,2026-09-10T13:50:00Z
  */
@@ -183,8 +183,8 @@ function parseCSV(texto) {
 
   // lineas[1] es el encabezado de columnas de registros y se omite su contenido literal
   const registros = lineas.slice(2).map((linea) => {
-    const [ordenId, canal, tienda, monto, fecha] = linea.split(",").map((v) => v.trim());
-    return { ordenId, canal, tienda, monto: Number(monto), fecha };
+    const [ordenId, canal, tienda, monto, fecha, clienteId] = linea.split(",").map((v) => v.trim());
+    return { ordenId, canal, tienda, monto: Number(monto), fecha, clienteId: clienteId || null };
   });
 
   return {
@@ -226,6 +226,7 @@ function parseXML(texto) {
     tienda: o.tienda,
     monto: Number(o.monto),
     fecha: o.fecha,
+    clienteId: o.clienteId || null,
   }));
 
   return {
@@ -248,6 +249,36 @@ function interpretarCuerpo(req) {
   // Por defecto, intenta JSON (útil si el cliente no manda content-type explícito)
   if (typeof req.body === "object") return req.body;
   throw new Error(`Content-Type no soportado: ${contentType || "(vacío)"}. Use application/json, text/csv o application/xml.`);
+}
+
+function aplicarVentasAlHistorial(registros, loteId) {
+  const ventasPorCliente = new Map();
+  for (const registro of registros) {
+    const email = String(registro.clienteId || "").trim().toLowerCase();
+    const monto = Number(registro.monto || 0);
+    if (!email || monto <= 0) continue;
+
+    const venta = ventasPorCliente.get(email) || { cantidad: 0, monto: 0 };
+    venta.cantidad += 1;
+    venta.monto += monto;
+    ventasPorCliente.set(email, venta);
+  }
+
+  const actualizadoEn = new Date().toISOString();
+  for (const [email, ventas] of ventasPorCliente) {
+    const historial = estadoERP.clientesHistorial.find(
+      (cliente) => cliente.email.trim().toLowerCase() === email
+    );
+    if (!historial) continue;
+
+    historial.comprasUltimos12Meses += ventas.cantidad;
+    historial.montoCompradoUltimos12Meses = round2(
+      historial.montoCompradoUltimos12Meses + ventas.monto
+    );
+    historial.actualizadoEn = actualizadoEn;
+    historial.fechaCorte = actualizadoEn;
+    historial.loteOrigen = loteId;
+  }
 }
 
 // POST /erp/lotes  — Recepción de lote (equivalente a la transferencia CSV/XML)
@@ -350,6 +381,7 @@ app.post("/erp/lotes", (req, res) => {
     procesadoEn: new Date().toISOString(),
   };
   estadoERP.lotesProcesados[lote.loteId] = confirmacion;
+  aplicarVentasAlHistorial(lote.registros, lote.loteId);
   registrarBitacora({ evento: "LOTE_ACEPTADO", loteId: lote.loteId, secuencia: lote.secuencia, montoCalculado });
 
   return res.status(200).json(confirmacion);

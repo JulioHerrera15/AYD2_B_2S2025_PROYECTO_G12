@@ -9,8 +9,8 @@ public sealed class FormatoLoteErpTests
         7,
         new DateTime(2026, 9, 20, 12, 0, 0, DateTimeKind.Utc),
         [
-            new RegistroVentaErp("ORD-1", "WEB", "T01", 100.50m, new DateTime(2026, 9, 20, 11, 0, 0, DateTimeKind.Utc)),
-            new RegistroVentaErp("ORD-2", "TIENDA", "T02", 25.25m, new DateTime(2026, 9, 20, 11, 5, 0, DateTimeKind.Utc))
+            new RegistroVentaErp("ORD-1", "WEB", "T01", 100.50m, new DateTime(2026, 9, 20, 11, 0, 0, DateTimeKind.Utc), "cliente1@sgo.local"),
+            new RegistroVentaErp("ORD-2", "TIENDA", "T02", 25.25m, new DateTime(2026, 9, 20, 11, 5, 0, DateTimeKind.Utc), "cliente2@sgo.local")
         ]);
 
     [Fact]
@@ -22,7 +22,9 @@ public sealed class FormatoLoteErpTests
         Assert.Contains("LOTE-TEST-001,7,", csv);
         Assert.Contains(",2,125.75", csv);
         Assert.Contains("ORDEN,CANAL,TIENDA,MONTO,FECHA", csv);
+        Assert.Contains("ORDEN,CANAL,TIENDA,MONTO,FECHA,CLIENTE_ID", csv);
         Assert.Contains("ORD-1,WEB,T01,100.50", csv);
+        Assert.Contains("cliente1@sgo.local", csv);
     }
 
     [Fact]
@@ -34,5 +36,6 @@ public sealed class FormatoLoteErpTests
         Assert.Contains("<Lote id=\"LOTE-TEST-001\" secuencia=\"7\"", xml);
         Assert.Contains("<TotalesControl cantidadRegistros=\"2\" montoTotal=\"125.75\"", xml);
         Assert.Contains("<Orden id=\"ORD-1\" canal=\"WEB\" tienda=\"T01\"", xml);
+        Assert.Contains("clienteId=\"cliente1@sgo.local\"", xml);
     }
 }
