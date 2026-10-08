@@ -19,10 +19,116 @@ const app = express();
 const PORT = process.env.PORT || 4000;
 
 // Estado interno del mock (equivalente, para pruebas, a "lo que el AS/400 ya cargó")
+const clientesHistorialBase = [
+  {
+    codigoCliente: "ERP-CLI-0001",
+    email: "cliente1@sgo.local",
+    clienteDesde: "2023-09-28T00:00:00.000Z",
+    comprasUltimos12Meses: 18,
+    montoCompradoUltimos12Meses: 14500,
+    moneda: "GTQ",
+    pagosPuntuales: 18,
+    pagosTardios: 0,
+    maxDiasAtraso: 0,
+    devoluciones: 1,
+    incidentesGraves: 0,
+    otrosIncidentes: 0,
+    fechaCorte: "2026-10-02T06:00:00.000Z",
+    actualizadoEn: "2026-10-02T06:00:00.000Z",
+    loteOrigen: "LOTE-HIST-CLI-0001"
+  },
+  {
+    codigoCliente: "ERP-CLI-0002",
+    email: "cliente2@sgo.local",
+    clienteDesde: "2024-09-20T00:00:00.000Z",
+    comprasUltimos12Meses: 9,
+    montoCompradoUltimos12Meses: 8400,
+    moneda: "GTQ",
+    pagosPuntuales: 8,
+    pagosTardios: 1,
+    maxDiasAtraso: 6,
+    devoluciones: 1,
+    incidentesGraves: 0,
+    otrosIncidentes: 0,
+    fechaCorte: "2026-10-02T06:00:00.000Z",
+    actualizadoEn: "2026-10-02T06:00:00.000Z",
+    loteOrigen: "LOTE-HIST-CLI-0002"
+  },
+  {
+    codigoCliente: "ERP-CLI-0003",
+    email: "cliente3@sgo.local",
+    clienteDesde: "2025-01-10T00:00:00.000Z",
+    comprasUltimos12Meses: 5,
+    montoCompradoUltimos12Meses: 6000,
+    moneda: "GTQ",
+    pagosPuntuales: 4,
+    pagosTardios: 1,
+    maxDiasAtraso: 12,
+    devoluciones: 1,
+    incidentesGraves: 0,
+    otrosIncidentes: 0,
+    fechaCorte: "2026-10-02T06:00:00.000Z",
+    actualizadoEn: "2026-10-02T06:00:00.000Z",
+    loteOrigen: "LOTE-HIST-CLI-0003"
+  },
+  {
+    codigoCliente: "ERP-CLI-0004",
+    email: "cliente4@sgo.local",
+    clienteDesde: "2023-12-15T00:00:00.000Z",
+    comprasUltimos12Meses: 10,
+    montoCompradoUltimos12Meses: 9000,
+    moneda: "GTQ",
+    pagosPuntuales: 3,
+    pagosTardios: 7,
+    maxDiasAtraso: 45,
+    devoluciones: 2,
+    incidentesGraves: 0,
+    otrosIncidentes: 1,
+    fechaCorte: "2026-10-02T06:00:00.000Z",
+    actualizadoEn: "2026-10-02T06:00:00.000Z",
+    loteOrigen: "LOTE-HIST-CLI-0004"
+  },
+  {
+    codigoCliente: "ERP-CLI-0005",
+    email: "cliente5@sgo.local",
+    clienteDesde: "2026-09-19T00:00:00.000Z",
+    comprasUltimos12Meses: 2,
+    montoCompradoUltimos12Meses: 900,
+    moneda: "GTQ",
+    pagosPuntuales: 2,
+    pagosTardios: 0,
+    maxDiasAtraso: 0,
+    devoluciones: 0,
+    incidentesGraves: 0,
+    otrosIncidentes: 0,
+    fechaCorte: "2026-10-02T06:00:00.000Z",
+    actualizadoEn: "2026-10-02T06:00:00.000Z",
+    loteOrigen: "LOTE-HIST-CLI-0005"
+  },
+  {
+    codigoCliente: "ERP-CLI-0006",
+    email: "cliente6@sgo.local",
+    clienteDesde: "2023-10-10T00:00:00.000Z",
+    comprasUltimos12Meses: 14,
+    montoCompradoUltimos12Meses: 11000,
+    moneda: "GTQ",
+    pagosPuntuales: 14,
+    pagosTardios: 0,
+    maxDiasAtraso: 0,
+    devoluciones: 1,
+    incidentesGraves: 1,
+    otrosIncidentes: 0,
+    fechaCorte: "2026-10-02T06:00:00.000Z",
+    actualizadoEn: "2026-10-02T06:00:00.000Z",
+    loteOrigen: "LOTE-HIST-CLI-0006"
+  }
+];
+
 let estadoERP = {
   ultimaSecuenciaAceptada: 0,
   lotesProcesados: {}, // loteId -> confirmación (ACEPTADO o RECHAZADO_CUADRE)
   bitacora: [],        // historial simple de todas las solicitudes recibidas
+  clientesHistorial: clientesHistorialBase.map((c) => ({ ...c })),
   modoCaida: {
     activo: false,
     tipo: null,       // 'timeout' | 'error500' | 'no_disponible'
@@ -58,7 +164,7 @@ app.use(express.text({ type: ["text/csv", "application/xml", "text/xml"], limit:
  *
  * LOTE,SECUENCIA,FECHA,CANTIDAD_REGISTROS,MONTO_TOTAL
  * LOTE-2026-09-10-001,42,2026-09-10T14:00:00Z,3,960.00
- * ORDEN,CANAL,TIENDA,MONTO,FECHA
+ * ORDEN,CANAL,TIENDA,MONTO,FECHA,CLIENTE_ID
  * ORD-1001,web,T01,320.00,2026-09-10T13:45:00Z
  * ORD-1002,tienda,T02,320.00,2026-09-10T13:50:00Z
  */
@@ -77,8 +183,8 @@ function parseCSV(texto) {
 
   // lineas[1] es el encabezado de columnas de registros y se omite su contenido literal
   const registros = lineas.slice(2).map((linea) => {
-    const [ordenId, canal, tienda, monto, fecha] = linea.split(",").map((v) => v.trim());
-    return { ordenId, canal, tienda, monto: Number(monto), fecha };
+    const [ordenId, canal, tienda, monto, fecha, clienteId] = linea.split(",").map((v) => v.trim());
+    return { ordenId, canal, tienda, monto: Number(monto), fecha, clienteId: clienteId || null };
   });
 
   return {
@@ -120,6 +226,7 @@ function parseXML(texto) {
     tienda: o.tienda,
     monto: Number(o.monto),
     fecha: o.fecha,
+    clienteId: o.clienteId || null,
   }));
 
   return {
@@ -142,6 +249,36 @@ function interpretarCuerpo(req) {
   // Por defecto, intenta JSON (útil si el cliente no manda content-type explícito)
   if (typeof req.body === "object") return req.body;
   throw new Error(`Content-Type no soportado: ${contentType || "(vacío)"}. Use application/json, text/csv o application/xml.`);
+}
+
+function aplicarVentasAlHistorial(registros, loteId) {
+  const ventasPorCliente = new Map();
+  for (const registro of registros) {
+    const email = String(registro.clienteId || "").trim().toLowerCase();
+    const monto = Number(registro.monto || 0);
+    if (!email || monto <= 0) continue;
+
+    const venta = ventasPorCliente.get(email) || { cantidad: 0, monto: 0 };
+    venta.cantidad += 1;
+    venta.monto += monto;
+    ventasPorCliente.set(email, venta);
+  }
+
+  const actualizadoEn = new Date().toISOString();
+  for (const [email, ventas] of ventasPorCliente) {
+    const historial = estadoERP.clientesHistorial.find(
+      (cliente) => cliente.email.trim().toLowerCase() === email
+    );
+    if (!historial) continue;
+
+    historial.comprasUltimos12Meses += ventas.cantidad;
+    historial.montoCompradoUltimos12Meses = round2(
+      historial.montoCompradoUltimos12Meses + ventas.monto
+    );
+    historial.actualizadoEn = actualizadoEn;
+    historial.fechaCorte = actualizadoEn;
+    historial.loteOrigen = loteId;
+  }
 }
 
 // POST /erp/lotes  — Recepción de lote (equivalente a la transferencia CSV/XML)
@@ -244,6 +381,7 @@ app.post("/erp/lotes", (req, res) => {
     procesadoEn: new Date().toISOString(),
   };
   estadoERP.lotesProcesados[lote.loteId] = confirmacion;
+  aplicarVentasAlHistorial(lote.registros, lote.loteId);
   registrarBitacora({ evento: "LOTE_ACEPTADO", loteId: lote.loteId, secuencia: lote.secuencia, montoCalculado });
 
   return res.status(200).json(confirmacion);
@@ -263,6 +401,48 @@ app.get("/erp/lotes", (_req, res) => {
     ultimaSecuenciaAceptada: estadoERP.ultimaSecuenciaAceptada,
     totalLotesAceptados: Object.values(estadoERP.lotesProcesados).filter((l) => l.estado === "ACEPTADO").length,
     lotes: Object.values(estadoERP.lotesProcesados),
+  });
+});
+
+app.get("/erp/clientes/historial", (req, res) => {
+  const { modificadosDesde } = req.query;
+
+  if (caidaActiva()) {
+    const tipo = estadoERP.modoCaida.tipo;
+    registrarBitacora({ evento: "HISTORIAL_CAIDA_SIMULADA", tipo, modificadosDesde });
+
+    if (tipo === "timeout") return setTimeout(() => res.status(504).json({ estado: "TIMEOUT", mensaje: "ERP no respondió historial a tiempo." }), 8000);
+    if (tipo === "error500") return res.status(500).json({ estado: "ERROR_INTERNO", mensaje: "Falla interna al consultar historial crediticio." });
+    return res.status(503).json({ estado: "NO_DISPONIBLE", mensaje: "ERP no disponible para historial crediticio." });
+  }
+
+  const fechaDesde = modificadosDesde ? new Date(modificadosDesde) : null;
+  const clientes = estadoERP.clientesHistorial.filter((cliente) => {
+    if (!fechaDesde) return true;
+    const fechaActualizado = new Date(cliente.actualizadoEn);
+    return fechaActualizado >= fechaDesde;
+  });
+
+  res.json({
+    fechaCorte: clientes[0]?.fechaCorte || new Date().toISOString(),
+    total: clientes.length,
+    clientes: clientes.map((cliente) => ({
+      codigoCliente: cliente.codigoCliente,
+      email: cliente.email,
+      clienteDesde: cliente.clienteDesde,
+      comprasUltimos12Meses: cliente.comprasUltimos12Meses,
+      montoCompradoUltimos12Meses: cliente.montoCompradoUltimos12Meses,
+      moneda: cliente.moneda,
+      pagosPuntuales: cliente.pagosPuntuales,
+      pagosTardios: cliente.pagosTardios,
+      maxDiasAtraso: cliente.maxDiasAtraso,
+      devoluciones: cliente.devoluciones,
+      incidentesGraves: cliente.incidentesGraves,
+      otrosIncidentes: cliente.otrosIncidentes,
+      actualizadoEn: cliente.actualizadoEn,
+      fechaCorte: cliente.fechaCorte,
+      loteOrigen: cliente.loteOrigen,
+    }))
   });
 });
 
@@ -290,11 +470,46 @@ app.post("/erp/admin/caida", express.json(), (req, res) => {
   res.json({ mensaje: "Estado de caída actualizado.", modoCaida: estadoERP.modoCaida });
 });
 
+app.put("/erp/admin/clientes/:email/historial", express.json(), (req, res) => {
+  const { email } = req.params;
+  const payload = req.body || {};
+  if (!payload || typeof payload !== "object") {
+    return res.status(400).json({ estado: "FORMATO_INVALIDO", mensaje: "Se esperaba un JSON con el historial del cliente." });
+  }
+
+  const clave = (email || "").trim().toLowerCase();
+  const registro = {
+    codigoCliente: payload.codigoCliente || `ERP-CLI-${Date.now()}`,
+    email: clave,
+    clienteDesde: payload.clienteDesde || new Date().toISOString(),
+    comprasUltimos12Meses: Number(payload.comprasUltimos12Meses || 0),
+    montoCompradoUltimos12Meses: Number(payload.montoCompradoUltimos12Meses || 0),
+    moneda: payload.moneda || "GTQ",
+    pagosPuntuales: Number(payload.pagosPuntuales || 0),
+    pagosTardios: Number(payload.pagosTardios || 0),
+    maxDiasAtraso: Number(payload.maxDiasAtraso || 0),
+    devoluciones: Number(payload.devoluciones || 0),
+    incidentesGraves: Number(payload.incidentesGraves || 0),
+    otrosIncidentes: Number(payload.otrosIncidentes || 0),
+    fechaCorte: payload.fechaCorte || new Date().toISOString(),
+    actualizadoEn: new Date().toISOString(),
+    loteOrigen: payload.loteOrigen || "ADMIN-HISTORIAL"
+  };
+
+  const indice = estadoERP.clientesHistorial.findIndex((cliente) => cliente.email.toLowerCase() === clave);
+  if (indice >= 0) estadoERP.clientesHistorial[indice] = registro;
+  else estadoERP.clientesHistorial.push(registro);
+
+  registrarBitacora({ evento: "HISTORIAL_CLIENTE_ACTUALIZADO", email: clave, loteOrigen: registro.loteOrigen });
+  res.status(200).json({ estado: "ACTUALIZADO", email: clave, cliente: registro });
+});
+
 app.post("/erp/admin/reset", (_req, res) => {
   estadoERP = {
     ultimaSecuenciaAceptada: 0,
     lotesProcesados: {},
     bitacora: [],
+    clientesHistorial: clientesHistorialBase.map((c) => ({ ...c })),
     modoCaida: { activo: false, tipo: null, expiraEn: null },
   };
   res.json({ mensaje: "Estado del mock ERP reiniciado." });
@@ -308,8 +523,10 @@ app.get("/", (_req, res) => {
       "POST /erp/lotes": "Recibir lote (JSON, text/csv o application/xml)",
       "GET /erp/lotes/:loteId": "Confirmación de un lote ya procesado",
       "GET /erp/lotes": "Listado de lotes procesados y última secuencia",
+      "GET /erp/clientes/historial": "Snapshot de historial crediticio por cliente, listo para Crédito",
       "GET /erp/admin/estado": "Estado interno del mock (para depuración)",
       "POST /erp/admin/caida": "{ activar, tipo: 'timeout'|'error500'|'no_disponible', duracionMs? }",
+      "PUT /erp/admin/clientes/:email/historial": "Actualizar el snapshot de historial para un cliente de prueba",
       "POST /erp/admin/reset": "Reiniciar el estado del mock",
     },
   });

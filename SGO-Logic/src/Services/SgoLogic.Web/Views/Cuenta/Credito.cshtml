@@ -1,0 +1,618 @@
+@model SgoLogic.Web.Services.ResultadoMiCreditoModel
+@using SgoLogic.Web.Services
+@{
+    ViewData["Title"] = "Mi Crédito - MegaStore";
+    var credito = Model.Estado == EstadoConsultaCredito.Ok ? Model.Credito : null;
+    var factores = credito?.Factores ?? new List<FactorCreditoModel>();
+    var compras = credito?.Compras ?? new List<CompraCreditoModel>();
+    var avisos = credito?.Avisos ?? new List<AvisoCreditoModel>();
+    var tarjetas = (ViewBag.Tarjetas as IReadOnlyList<TarjetaGuardadaModel> ?? Array.Empty<TarjetaGuardadaModel>())
+        .Where(t => !t.Vencida)
+        .ToList();
+    var mostrarResumen = credito is not null && (credito.TieneCredito || credito.EnPausa || credito.TotalPorPagar > 0m);
+    string Monto(decimal valor) => "Q" + valor.ToString("N2", System.Globalization.CultureInfo.InvariantCulture);
+    string ClaseValoracion(string valoracion) => valoracion switch
+    {
+        "FAVORABLE" => "text-emerald-800 bg-emerald-100",
+        "ACEPTABLE" => "text-amber-800 bg-amber-100",
+        _ => "text-rose-700 bg-rose-100"
+    };
+    string IconoValoracion(string valoracion) => valoracion switch
+    {
+        "FAVORABLE" => "check_circle",
+        "ACEPTABLE" => "radio_button_partial",
+        _ => "trending_up"
+    };
+    string ClaseAviso(string tipo) => tipo switch
+    {
+        "VENCIDA" or "LINEA_EN_PAUSA" => "bg-red-50 border-red-200 text-red-950",
+        _ => "bg-amber-50 border-amber-200 text-amber-950"
+    };
+    string ClaseEstadoCompra(CompraCreditoModel compra) => compra.Estado switch
+    {
+        "VENCIDA" => "text-rose-700 bg-rose-100",
+        "VIGENTE" => compra.EtiquetaEstado == "Vence pronto" ? "text-amber-800 bg-amber-100" : "text-sky-800 bg-sky-100",
+        "PAGADA" => "text-emerald-800 bg-emerald-100",
+        _ => compra.EtiquetaEstado == "Devuelta" ? "text-indigo-800 bg-indigo-100" : "text-text-muted bg-surface-container-low"
+    };
+    string ClaseEstadoAbono(string estado) => estado switch
+    {
+        "APLICADO" or "REEMBOLSADO" => "text-emerald-800",
+        "RECHAZADO" => "text-rose-700",
+        _ => "text-amber-800"
+    };
+    string ClaseReembolso(AbonoHistorialModel abono) => abono.ReembolsoFallido
+        ? "text-rose-700"
+        : abono.EstadoReembolso == "Reembolsado a tu tarjeta" ? "text-emerald-800" : "text-amber-800";
+}
+
+<div class="w-full max-w-container-max mx-auto flex flex-col gap-8">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-border-subtle">
+        <div>
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold mb-2">
+                <span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">account_balance_wallet</span>
+                Compra ahora &bull; Paga en 30 días
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight">Mi Crédito</h1>
+            <p class="text-xs sm:text-sm text-text-muted">Tu crédito para comprar ahora y pagar después, sin recargo.</p>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <a href="/Cuenta/Ordenes" class="bg-surface-white text-primary border border-border-subtle px-4 py-2 rounded-xl text-xs font-semibold hover:bg-surface-container-low transition-colors flex items-center gap-1.5 shadow-sm">
+                <span class="material-symbols-outlined text-[16px]">receipt_long</span>
+                Mis Pedidos
+            </a>
+            <a href="/Catalogo" class="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-semibold hover:opacity-90 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm">
+                <span class="material-symbols-outlined text-[16px]">storefront</span>
+                Seguir Comprando
+            </a>
+        </div>
+    </div>
+
+    @if (credito is null)
+    {
+        <!-- C) Servicio no disponible -->
+        <div class="bg-surface-white rounded-3xl border border-border-subtle/60 overflow-hidden ambient-shadow">
+            <div class="py-16 px-6 text-center">
+                <div class="w-16 h-16 rounded-full bg-surface-container-low text-text-muted flex items-center justify-center mx-auto mb-4">
+                    <span class="material-symbols-outlined text-[32px]">cloud_off</span>
+                </div>
+                <h3 class="text-base font-semibold text-primary mb-1">No pudimos cargar tu crédito</h3>
+                <p class="text-sm text-text-muted max-w-md mx-auto mb-6">
+                    En este momento no podemos mostrar la información de tu crédito. Inténtalo de nuevo en unos minutos. Tus compras con tarjeta funcionan con normalidad.
+                </p>
+                <a href="/Cuenta/Credito" class="inline-flex items-center gap-1.5 bg-primary text-on-primary px-5 py-2 rounded-xl text-xs font-semibold hover:opacity-90 active:scale-95 transition-all shadow-sm">
+                    <span class="material-symbols-outlined text-[16px]">refresh</span>
+                    Reintentar
+                </a>
+            </div>
+        </div>
+    }
+    else
+    {
+        @Html.AntiForgeryToken()
+
+        @if (avisos.Count > 0)
+        {
+            <!-- Avisos destacados: vencidas, por vencer y credito en pausa -->
+            <div class="flex flex-col gap-3">
+                @foreach (var aviso in avisos)
+                {
+                    <div class="p-4 rounded-2xl border flex items-start gap-3 @ClaseAviso(aviso.Tipo)">
+                        <span class="material-symbols-outlined text-[22px] flex-shrink-0">@(aviso.Tipo == "POR_VENCER" ? "schedule" : "error")</span>
+                        <div class="flex-1">
+                            <div class="font-bold text-sm">@aviso.Titulo</div>
+                            <p class="text-xs mt-0.5">@aviso.Mensaje</p>
+                            <p class="text-xs mt-1 font-semibold">@aviso.Recomendacion</p>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (mostrarResumen)
+        {
+            <!-- A) Resumen del credito -->
+            <div class="bg-surface-white rounded-3xl border border-border-subtle/60 overflow-hidden ambient-shadow p-6 sm:p-8 flex flex-col gap-6">
+                <div class="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                    <div>
+                        <h2 class="text-lg font-bold text-primary">@credito.Titulo</h2>
+                        <p class="text-sm text-text-muted max-w-xl">@credito.Mensaje</p>
+                    </div>
+                    @if (credito.TieneCredito)
+                    {
+                        <span class="self-start inline-flex items-center gap-1 text-xs font-semibold text-emerald-800 bg-emerald-100 px-3 py-1 rounded-full">
+                            <span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">verified</span>
+                            Nivel @credito.EtiquetaNivel
+                        </span>
+                    }
+                    else if (credito.EnPausa)
+                    {
+                        <span class="self-start inline-flex items-center gap-1 text-xs font-semibold text-rose-700 bg-rose-100 px-3 py-1 rounded-full">
+                            <span class="material-symbols-outlined text-[15px]">pause_circle</span>
+                            Crédito en pausa
+                        </span>
+                    }
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div class="rounded-2xl bg-surface-container-low px-5 py-4">
+                        <div class="text-[11px] uppercase tracking-wide text-text-muted font-semibold">Total por pagar</div>
+                        <div class="text-2xl font-bold text-primary">@Monto(credito.TotalPorPagar)</div>
+                    </div>
+                    <div class="rounded-2xl bg-surface-container-low px-5 py-4">
+                        <div class="text-[11px] uppercase tracking-wide text-text-muted font-semibold">Próximo vencimiento</div>
+                        <div class="text-lg font-bold text-primary">@(credito.ProximoVencimiento is DateTime proximo ? proximo.ToString("dd/MM/yyyy") : "Sin pagos pendientes")</div>
+                    </div>
+                    <div class="rounded-2xl bg-surface-container-low px-5 py-4">
+                        <div class="text-[11px] uppercase tracking-wide text-text-muted font-semibold">Disponible</div>
+                        <div class="text-2xl font-bold text-primary">@Monto(credito.Disponible)</div>
+                    </div>
+                    <div class="rounded-2xl bg-surface-container-low px-5 py-4">
+                        <div class="text-[11px] uppercase tracking-wide text-text-muted font-semibold">Límite</div>
+                        <div class="text-2xl font-bold text-primary">@Monto(credito.LimiteAprobado)</div>
+                    </div>
+                </div>
+
+                @if (credito.TieneCredito)
+                {
+                    <div>
+                        <div class="flex justify-between text-[11px] text-text-muted mb-1">
+                            <span>Utilizado: @Monto(credito.SaldoUtilizado) (@credito.PorcentajeUtilizado%)</span>
+                            <span>Plazo de pago: @credito.PlazoDias días</span>
+                        </div>
+                        <div class="w-full h-3 rounded-full bg-surface-container-low overflow-hidden"
+                             role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@credito.PorcentajeUtilizado"
+                             aria-label="Porcentaje del límite utilizado">
+                            <div class="h-full rounded-full bg-primary" style="width: @(credito.PorcentajeUtilizado)%"></div>
+                        </div>
+                    </div>
+                }
+
+                @if (!string.IsNullOrWhiteSpace(credito.Recomendacion))
+                {
+                    <p class="text-xs text-text-muted">@credito.Recomendacion</p>
+                }
+            </div>
+
+            @if (credito.TieneCredito)
+            {
+                <!-- Como funciona -->
+                <div class="bg-surface-white rounded-3xl border border-border-subtle/60 overflow-hidden ambient-shadow p-6 sm:p-8">
+                    <h2 class="text-base font-bold text-primary mb-4">Cómo funciona</h2>
+                    <ol class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <li class="flex gap-3">
+                            <span class="w-8 h-8 shrink-0 rounded-full bg-primary text-on-primary text-sm font-bold flex items-center justify-center">1</span>
+                            <div>
+                                <div class="text-sm font-semibold text-primary">Eliges crédito al pagar</div>
+                                <p class="text-xs text-text-muted">En el pago de tu compra selecciona crédito a @credito.PlazoDias días.</p>
+                            </div>
+                        </li>
+                        <li class="flex gap-3">
+                            <span class="w-8 h-8 shrink-0 rounded-full bg-primary text-on-primary text-sm font-bold flex items-center justify-center">2</span>
+                            <div>
+                                <div class="text-sm font-semibold text-primary">Recibes tu pedido</div>
+                                <p class="text-xs text-text-muted">Preparamos y entregamos tu pedido igual que con cualquier otro pago.</p>
+                            </div>
+                        </li>
+                        <li class="flex gap-3">
+                            <span class="w-8 h-8 shrink-0 rounded-full bg-primary text-on-primary text-sm font-bold flex items-center justify-center">3</span>
+                            <div>
+                                <div class="text-sm font-semibold text-primary">Pagas dentro de @credito.PlazoDias días</div>
+                                <p class="text-xs text-text-muted">Pagas el total o por partes desde aquí con tu tarjeta, sin recargo.</p>
+                            </div>
+                        </li>
+                    </ol>
+                </div>
+            }
+        }
+        else
+        {
+            <!-- B) Sin credito -->
+            <div class="bg-surface-white rounded-3xl border border-border-subtle/60 overflow-hidden ambient-shadow">
+                <div class="py-12 px-6 text-center">
+                    <div class="w-16 h-16 rounded-full bg-surface-container-low text-text-muted flex items-center justify-center mx-auto mb-4">
+                        <span class="material-symbols-outlined text-[32px]">hourglass_empty</span>
+                    </div>
+                    <h3 class="text-base font-semibold text-primary mb-1">@credito.Titulo</h3>
+                    <p class="text-sm text-text-muted max-w-md mx-auto">@credito.Mensaje</p>
+                    @if (!string.IsNullOrWhiteSpace(credito.Recomendacion))
+                    {
+                        <p class="text-sm text-primary max-w-md mx-auto mt-3">@credito.Recomendacion</p>
+                    }
+                </div>
+            </div>
+        }
+
+        <!-- Resultado del ultimo pago (lo llena el script) -->
+        <div id="resultado-pago" class="hidden p-4 rounded-2xl border flex items-start gap-3">
+            <span id="resultado-pago-icono" class="material-symbols-outlined text-[22px] flex-shrink-0">info</span>
+            <div class="flex-1">
+                <div id="resultado-pago-titulo" class="font-bold text-sm"></div>
+                <p id="resultado-pago-mensaje" class="text-xs mt-0.5"></p>
+                <p id="resultado-pago-recomendacion" class="text-xs mt-1 font-semibold"></p>
+            </div>
+            <button type="button" id="btn-reintentar-resultado" class="hidden self-center bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-semibold">Reintentar pago</button>
+        </div>
+
+        @if (credito.TieneCredito || compras.Count > 0)
+        {
+            <!-- Compras a credito -->
+            <div class="bg-surface-white rounded-3xl border border-border-subtle/60 overflow-hidden ambient-shadow">
+                <div class="px-6 pt-6">
+                    <h2 class="text-base font-bold text-primary">Tus compras a crédito</h2>
+                    <p class="text-xs text-text-muted">Primero las que tienes por pagar, de la más próxima a vencer. Puedes pagar el total o una parte.</p>
+                </div>
+                @if (compras.Count == 0)
+                {
+                    <p class="px-6 py-6 text-sm text-text-muted">Aún no tienes compras a crédito.</p>
+                }
+                else
+                {
+                    <div class="overflow-x-auto mt-4">
+                        <table class="w-full text-left text-xs">
+                            <thead class="bg-surface-container-low/50 text-text-muted uppercase tracking-wider text-[11px]">
+                                <tr>
+                                    <th class="py-3 px-6">Pedido</th>
+                                    <th class="py-3 px-6">Monto</th>
+                                    <th class="py-3 px-6">Saldo</th>
+                                    <th class="py-3 px-6">Fecha límite</th>
+                                    <th class="py-3 px-6">Días restantes</th>
+                                    <th class="py-3 px-6">Estado</th>
+                                    <th class="py-3 px-6 text-right"></th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-border-subtle/50">
+                                @foreach (var compra in compras)
+                                {
+                                    var abonos = compra.Abonos ?? new List<AbonoHistorialModel>();
+                                    var movimientos = compra.Movimientos ?? new List<MovimientoCreditoModel>();
+                                    <tr>
+                                        <td class="py-3 px-6 font-bold text-primary">
+                                            <a href="/Estado?ordenId=@Uri.EscapeDataString(compra.OrdenId)" class="hover:underline">@compra.NumeroOrden</a>
+                                        </td>
+                                        <td class="py-3 px-6 text-primary">@Monto(compra.Monto)</td>
+                                        <td class="py-3 px-6 font-semibold text-primary">@Monto(compra.SaldoPendiente)</td>
+                                        <td class="py-3 px-6 text-text-muted">@compra.VenceEn.ToString("dd/MM/yyyy")</td>
+                                        <td class="py-3 px-6 text-text-muted">
+                                            @if (compra.DiasRestantes is int dias)
+                                            {
+                                                @(dias == 1 ? "1 día" : dias <= 0 ? "Vence hoy" : $"{dias} días")
+                                            }
+                                            else
+                                            {
+                                                <span>&mdash;</span>
+                                            }
+                                        </td>
+                                        <td class="py-3 px-6">
+                                            <span class="inline-flex px-2.5 py-1 rounded-full text-[11px] font-bold @ClaseEstadoCompra(compra)">@compra.EtiquetaEstado</span>
+                                        </td>
+                                        <td class="py-3 px-6 text-right whitespace-nowrap">
+                                            @if (compra.PuedePagar && !string.IsNullOrWhiteSpace(compra.CuentaId))
+                                            {
+                                                <button type="button"
+                                                        class="btn-pagar bg-primary text-on-primary px-4 py-1.5 rounded-xl text-xs font-semibold hover:opacity-90"
+                                                        data-cuenta="@compra.CuentaId" data-saldo="@compra.SaldoPendiente.ToString("0.00", System.Globalization.CultureInfo.InvariantCulture)"
+                                                        data-pedido="@compra.NumeroOrden">
+                                                    Pagar
+                                                </button>
+                                            }
+                                            else if (compra.AbonoEnCursoPuedeReintentar && !string.IsNullOrWhiteSpace(compra.AbonoEnCursoId))
+                                            {
+                                                <button type="button"
+                                                        class="btn-reintentar bg-amber-100 text-amber-900 px-4 py-1.5 rounded-xl text-xs font-semibold"
+                                                        data-abono="@compra.AbonoEnCursoId" data-pedido="@compra.NumeroOrden">
+                                                    Reintentar pago
+                                                </button>
+                                            }
+                                            else if (!string.IsNullOrWhiteSpace(compra.AbonoEnCursoId))
+                                            {
+                                                <span class="text-[11px] text-amber-800 font-semibold">Pago en proceso</span>
+                                            }
+                                        </td>
+                                    </tr>
+                                    @if (movimientos.Count > 0)
+                                    {
+                                        <tr class="bg-indigo-50/40">
+                                            <td colspan="7" class="px-6 py-3">
+                                                <div class="text-[11px] font-semibold text-text-muted mb-1">Devoluciones de esta compra</div>
+                                                <ul class="space-y-1">
+                                                    @foreach (var movimiento in movimientos)
+                                                    {
+                                                        <li class="flex flex-wrap gap-x-4 text-[11px]">
+                                                            <span class="text-text-muted">@FechaHelper.Formatear(movimiento.Fecha)</span>
+                                                            <span class="font-semibold text-primary">-@Monto(movimiento.Monto)</span>
+                                                            <span class="text-primary">@movimiento.Descripcion</span>
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            </td>
+                                        </tr>
+                                    }
+                                    @if (abonos.Count > 0)
+                                    {
+                                        <tr class="bg-surface-container-low/30">
+                                            <td colspan="7" class="px-6 py-3">
+                                                <div class="text-[11px] font-semibold text-text-muted mb-1">Pagos de esta compra</div>
+                                                <ul class="space-y-1">
+                                                    @foreach (var abono in abonos)
+                                                    {
+                                                        <li class="flex flex-wrap gap-x-4 text-[11px]">
+                                                            <span class="text-text-muted">@FechaHelper.Formatear(abono.Fecha)</span>
+                                                            <span class="font-semibold text-primary">@Monto(abono.Monto)</span>
+                                                            <span class="text-text-muted">@(abono.Tarjeta ?? "Tarjeta")</span>
+                                                            <span class="font-semibold @ClaseEstadoAbono(abono.Estado)">@abono.EtiquetaEstado</span>
+                                                            @if (!string.IsNullOrWhiteSpace(abono.EstadoReembolso))
+                                                            {
+                                                                <span class="font-semibold @ClaseReembolso(abono)">
+                                                                    @abono.EstadoReembolso @(abono.MontoReembolsoSolicitado > 0m && abono.MontoReembolsoSolicitado < abono.Monto ? $"({Monto(abono.MontoReembolsoSolicitado)})" : "")
+                                                                </span>
+                                                            }
+                                                        </li>
+                                                    }
+                                                </ul>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        }
+
+        @if (factores.Count > 0)
+        {
+            <!-- Factores del perfil -->
+            <div class="bg-surface-white rounded-3xl border border-border-subtle/60 overflow-hidden ambient-shadow">
+                <div class="px-6 pt-6">
+                    <h2 class="text-base font-bold text-primary">Qué tomamos en cuenta</h2>
+                    <p class="text-xs text-text-muted">Tu historial de compras con nosotros y cómo pagas tu crédito, revisado periódicamente.</p>
+                </div>
+                <ul class="divide-y divide-border-subtle/50 mt-4">
+                    @foreach (var factor in factores)
+                    {
+                        <li class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-6 py-4">
+                            <div>
+                                <div class="text-sm font-semibold text-primary">@factor.Nombre</div>
+                                <div class="text-xs text-text-muted">@factor.Descripcion</div>
+                            </div>
+                            <span class="self-start sm:self-center inline-flex items-center gap-1 text-[11px] font-bold px-2.5 py-1 rounded-full @ClaseValoracion(factor.Valoracion)">
+                                <span class="material-symbols-outlined text-[14px]">@IconoValoracion(factor.Valoracion)</span>
+                                @factor.ValoracionTexto
+                            </span>
+                        </li>
+                    }
+                </ul>
+            </div>
+        }
+
+        <!-- Formulario de pago (se abre con "Pagar" o "Reintentar pago") -->
+        <div id="panel-pago" class="hidden fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" role="dialog" aria-modal="true" aria-labelledby="panel-pago-titulo">
+            <div class="bg-surface-white rounded-3xl w-full max-w-md p-6 flex flex-col gap-4 ambient-shadow max-h-[90vh] overflow-y-auto">
+                <div class="flex items-center justify-between">
+                    <h2 id="panel-pago-titulo" class="text-base font-bold text-primary">Pagar compra</h2>
+                    <button type="button" id="btn-cerrar-pago" class="text-text-muted" aria-label="Cerrar">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+
+                <div id="bloque-monto" class="flex flex-col gap-1">
+                    <label for="monto-pago" class="text-xs font-semibold text-primary">Monto a pagar</label>
+                    <input id="monto-pago" type="number" min="0.01" step="0.01" inputmode="decimal"
+                           class="rounded-xl border border-border-subtle px-3 py-2 text-sm" />
+                    <p id="ayuda-monto" class="text-[11px] text-text-muted"></p>
+                </div>
+
+                <div class="flex flex-col gap-2">
+                    <span class="text-xs font-semibold text-primary">Tarjeta</span>
+                    @foreach (var tarjeta in tarjetas)
+                    {
+                        <label class="flex items-center gap-2 text-xs p-2 rounded-xl border border-border-subtle cursor-pointer">
+                            <input type="radio" name="tarjeta-pago" value="@tarjeta.Id" class="h-4 w-4" />
+                            <span>@tarjeta.Enmascarado &bull; Vence @tarjeta.VenceTexto</span>
+                        </label>
+                    }
+                    <label class="flex items-center gap-2 text-xs p-2 rounded-xl border border-border-subtle cursor-pointer">
+                        <input type="radio" name="tarjeta-pago" value="nueva" class="h-4 w-4" @(tarjetas.Count == 0 ? "checked" : "") />
+                        <span>Usar una tarjeta nueva</span>
+                    </label>
+                </div>
+
+                <div id="bloque-cvv-guardada" class="hidden flex flex-col gap-1">
+                    <label for="cvv-guardada" class="text-xs font-semibold text-primary">Código de seguridad</label>
+                    <input id="cvv-guardada" type="password" inputmode="numeric" maxlength="4" autocomplete="off"
+                           class="rounded-xl border border-border-subtle px-3 py-2 text-sm" />
+                </div>
+
+                <div id="bloque-tarjeta-nueva" class="@(tarjetas.Count == 0 ? "" : "hidden") grid grid-cols-2 gap-2">
+                    <input id="tn-numero" class="col-span-2 rounded-xl border border-border-subtle px-3 py-2 text-sm" placeholder="Número de tarjeta" inputmode="numeric" autocomplete="cc-number" />
+                    <input id="tn-titular" class="col-span-2 rounded-xl border border-border-subtle px-3 py-2 text-sm" placeholder="Nombre como aparece en la tarjeta" autocomplete="cc-name" />
+                    <input id="tn-mes" class="rounded-xl border border-border-subtle px-3 py-2 text-sm" placeholder="Mes (MM)" inputmode="numeric" maxlength="2" autocomplete="cc-exp-month" />
+                    <input id="tn-anio" class="rounded-xl border border-border-subtle px-3 py-2 text-sm" placeholder="Año (AAAA)" inputmode="numeric" maxlength="4" autocomplete="cc-exp-year" />
+                    <input id="tn-cvv" type="password" class="rounded-xl border border-border-subtle px-3 py-2 text-sm" placeholder="Código de seguridad" inputmode="numeric" maxlength="4" autocomplete="off" />
+                </div>
+
+                <p id="estado-pago" class="hidden text-xs"></p>
+
+                <button type="button" id="btn-confirmar-pago"
+                        class="bg-primary text-on-primary py-3 rounded-xl text-sm font-semibold hover:opacity-90 disabled:opacity-40">
+                    Confirmar pago
+                </button>
+            </div>
+        </div>
+    }
+</div>
+
+@if (credito is not null)
+{
+    <script>
+        (function () {
+            const INTERVALO_MS = 2000;
+            const ESPERA_MAXIMA_MS = 60000;
+            const panel = document.getElementById('panel-pago');
+            const estadoPago = document.getElementById('estado-pago');
+            const btnConfirmar = document.getElementById('btn-confirmar-pago');
+            let modo = null; // { tipo: 'pago', cuenta, saldo } | { tipo: 'reintento', abono }
+
+            const antiforgery = () => document.querySelector('input[name="__RequestVerificationToken"]')?.value ?? '';
+
+            function mostrarEstado(texto, error) {
+                estadoPago.textContent = texto;
+                estadoPago.className = 'text-xs ' + (error ? 'text-rose-700' : 'text-text-muted');
+                estadoPago.classList.remove('hidden');
+            }
+
+            function tarjetaElegida() {
+                return document.querySelector('input[name="tarjeta-pago"]:checked')?.value ?? null;
+            }
+
+            function actualizarBloquesTarjeta() {
+                const elegida = tarjetaElegida();
+                document.getElementById('bloque-cvv-guardada').classList.toggle('hidden', !elegida || elegida === 'nueva');
+                document.getElementById('bloque-tarjeta-nueva').classList.toggle('hidden', elegida !== 'nueva');
+            }
+
+            document.querySelectorAll('input[name="tarjeta-pago"]').forEach(r => r.addEventListener('change', actualizarBloquesTarjeta));
+
+            function abrir(nuevoModo, titulo) {
+                modo = nuevoModo;
+                document.getElementById('panel-pago-titulo').textContent = titulo;
+                const conMonto = modo.tipo === 'pago';
+                document.getElementById('bloque-monto').classList.toggle('hidden', !conMonto);
+                if (conMonto) {
+                    document.getElementById('monto-pago').value = modo.saldo;
+                    document.getElementById('ayuda-monto').textContent =
+                        'Saldo de esta compra: Q' + Number(modo.saldo).toLocaleString('en-US', { minimumFractionDigits: 2 }) +
+                        '. Puedes pagar el total o una parte.';
+                }
+                estadoPago.classList.add('hidden');
+                btnConfirmar.disabled = false;
+                actualizarBloquesTarjeta();
+                panel.classList.remove('hidden');
+            }
+
+            function cerrar() {
+                panel.classList.add('hidden');
+                ['tn-numero', 'tn-cvv', 'cvv-guardada'].forEach(id => { const el = document.getElementById(id); if (el) el.value = ''; });
+            }
+
+            document.getElementById('btn-cerrar-pago').addEventListener('click', cerrar);
+
+            document.querySelectorAll('.btn-pagar').forEach(btn => btn.addEventListener('click', () =>
+                abrir({ tipo: 'pago', cuenta: btn.dataset.cuenta, saldo: btn.dataset.saldo }, 'Pagar compra ' + btn.dataset.pedido)));
+
+            document.querySelectorAll('.btn-reintentar').forEach(btn => btn.addEventListener('click', () =>
+                abrir({ tipo: 'reintento', abono: btn.dataset.abono }, 'Reintentar pago de la compra ' + btn.dataset.pedido)));
+
+            // Tokeniza con los mismos endpoints del checkout; el numero y el CVV solo
+            // viajan a la Web y de ahi a la boveda de Pagos.
+            async function obtenerToken() {
+                const elegida = tarjetaElegida();
+                if (!elegida) { mostrarEstado('Elige una tarjeta.', true); return null; }
+
+                let url, datos;
+                if (elegida === 'nueva') {
+                    url = '/Checkout/Tokenizar';
+                    datos = new URLSearchParams({
+                        numero: document.getElementById('tn-numero').value.replace(/\D/g, ''),
+                        mesExp: document.getElementById('tn-mes').value,
+                        anioExp: document.getElementById('tn-anio').value,
+                        cvv: document.getElementById('tn-cvv').value,
+                        titular: document.getElementById('tn-titular').value,
+                        guardar: 'false'
+                    });
+                } else {
+                    url = '/Checkout/TokenTarjetaGuardada';
+                    datos = new URLSearchParams({ id: elegida, cvv: document.getElementById('cvv-guardada').value });
+                }
+
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'RequestVerificationToken': antiforgery(), 'Accept': 'application/json' },
+                    body: datos
+                }).catch(() => null);
+                if (!res) { mostrarEstado('No pudimos validar tu tarjeta en este momento. Intenta de nuevo en unos momentos.', true); return null; }
+
+                const cuerpo = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    const errores = cuerpo.errores ? Object.values(cuerpo.errores).join(' ') : null;
+                    mostrarEstado(errores || cuerpo.mensaje || 'Revisa los datos de tu tarjeta.', true);
+                    return null;
+                }
+                return cuerpo.token;
+            }
+
+            btnConfirmar.addEventListener('click', async () => {
+                btnConfirmar.disabled = true;
+                mostrarEstado('Validando tu tarjeta…', false);
+
+                const token = await obtenerToken();
+                if (!token) { btnConfirmar.disabled = false; return; }
+
+                mostrarEstado('Enviando tu pago…', false);
+                const datos = modo.tipo === 'pago'
+                    ? new URLSearchParams({ cuentaId: modo.cuenta, monto: document.getElementById('monto-pago').value, tokenMedioPago: token })
+                    : new URLSearchParams({ id: modo.abono, tokenMedioPago: token });
+                const url = modo.tipo === 'pago' ? '/Cuenta/PagarCredito' : '/Cuenta/ReintentarAbonoCredito';
+
+                const res = await fetch(url, {
+                    method: 'POST',
+                    headers: { 'RequestVerificationToken': antiforgery(), 'Accept': 'application/json' },
+                    body: datos
+                }).catch(() => null);
+                const cuerpo = res ? await res.json().catch(() => ({})) : {};
+
+                if (!res || !res.ok) {
+                    mostrarEstado(cuerpo.mensaje || 'En este momento no podemos procesar tu pago. Inténtalo de nuevo en unos minutos.', true);
+                    btnConfirmar.disabled = false;
+                    return;
+                }
+
+                cerrar();
+                mostrarResultado(cuerpo);
+                seguir(cuerpo.id);
+            });
+
+            function mostrarResultado(abono) {
+                const caja = document.getElementById('resultado-pago');
+                const exito = abono.estado === 'APLICADO';
+                const error = abono.estado === 'RECHAZADO';
+                caja.className = 'p-4 rounded-2xl border flex items-start gap-3 ' +
+                    (exito ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
+                        : error ? 'bg-red-50 border-red-200 text-red-950'
+                        : 'bg-amber-50 border-amber-200 text-amber-950');
+                document.getElementById('resultado-pago-icono').textContent = exito ? 'check_circle' : error ? 'error' : 'hourglass_top';
+                document.getElementById('resultado-pago-titulo').textContent = abono.titulo;
+                document.getElementById('resultado-pago-mensaje').textContent = abono.mensaje;
+                document.getElementById('resultado-pago-recomendacion').textContent = abono.recomendacion || '';
+                const btnReintentar = document.getElementById('btn-reintentar-resultado');
+                btnReintentar.classList.toggle('hidden', !abono.puedeReintentar);
+                btnReintentar.onclick = () => abrir({ tipo: 'reintento', abono: abono.id }, 'Reintentar pago');
+                caja.classList.remove('hidden');
+                caja.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            // Consulta el pago hasta que termina. PENDIENTE tambien es un final para la
+            // pagina: se muestra el aviso y, cuando aplique, el boton de reintento.
+            function seguir(abonoId) {
+                const inicio = Date.now();
+                const consultar = async () => {
+                    const res = await fetch('/Cuenta/AbonoCredito?id=' + encodeURIComponent(abonoId), { headers: { 'Accept': 'application/json' } }).catch(() => null);
+                    const abono = res && res.ok ? await res.json().catch(() => null) : null;
+                    if (abono) {
+                        mostrarResultado(abono);
+                        if (abono.estado !== 'SOLICITADO') {
+                            if (abono.estado === 'APLICADO') setTimeout(() => window.location.reload(), 2500);
+                            return;
+                        }
+                    }
+                    if (Date.now() - inicio < ESPERA_MAXIMA_MS) setTimeout(consultar, INTERVALO_MS);
+                };
+                setTimeout(consultar, 1000);
+            }
+        })();
+    </script>
+}

@@ -71,6 +71,7 @@ public sealed class ErpOrdenesConsumidor : BackgroundService
         }
         venta.EventoId = e.EventId;
         venta.NumeroOrden = d.NumeroOrden;
+        venta.ClienteId = d.ClienteId.Trim().ToLowerInvariant();
         venta.Canal = d.Canal.ToString();
         venta.Tienda = d.TiendaDestinoId ?? venta.Tienda;
         venta.Monto = d.Total;

@@ -32,13 +32,22 @@ public static class MapaEventosSagaOrden
 {
     private const int TtlReservaSegundosPorDefecto = 900;
 
-    private delegate void EmisorEvento(Orden orden, TransicionOrden transicion, IOutboxWriter outbox);
+    private delegate void EmisorEvento(
+        Orden orden,
+        TransicionOrden transicion,
+        IOutboxWriter outbox,
+        MotivoLiberacionReserva? motivoLiberacion);
 
     private static readonly IReadOnlyDictionary<EstadoOrden, EmisorEvento> PorEstadoDestino =
         new Dictionary<EstadoOrden, EmisorEvento>
         {
             [EstadoOrden.RESERVA_SOLICITADA] = EmitirReservaInventarioSolicitada,
             [EstadoOrden.COBRO_SOLICITADO] = EmitirCobroSolicitado,
+            // Ruta de credito: en lugar de CobroSolicitado se pide la evaluacion a
+            // Credito. CREDITO_APROBADO no tiene evento de saga propio (solo
+            // OrdenEstadoCambiado): se encadena de inmediato a
+            // CONFIRMADA_PENDIENTE_FISCAL, que emite la confirmacion y la factura.
+            [EstadoOrden.EVALUACION_CREDITO_SOLICITADA] = EmitirEvaluacionCreditoSolicitada,
             [EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL] = EmitirConfirmacionYCertificacion,
             [EstadoOrden.CONFIRMADA] = EmitirOrdenCertificadaFiscalmente,
             [EstadoOrden.DESPACHO_SOLICITADO] = EmitirDespachoSolicitado,
@@ -64,7 +73,7 @@ public static class MapaEventosSagaOrden
     {
         if (PorEstadoDestino.TryGetValue(transicion.EstadoNuevo, out var emisor))
         {
-            emisor(orden, transicion, outbox);
+            emisor(orden, transicion, outbox, motivoLiberacion);
         }
 
         if (transicion.EsCompensacion)
@@ -73,7 +82,8 @@ public static class MapaEventosSagaOrden
         }
     }
 
-    private static void EmitirReservaInventarioSolicitada(Orden orden, TransicionOrden transicion, IOutboxWriter outbox) =>
+    private static void EmitirReservaInventarioSolicitada(
+        Orden orden, TransicionOrden transicion, IOutboxWriter outbox, MotivoLiberacionReserva? _) =>
         Encolar(
             outbox,
             orden,
@@ -90,7 +100,8 @@ public static class MapaEventosSagaOrden
                 SolicitadaEn: transicion.CambiadoEn,
                 CarritoId: orden.CarritoId));
 
-    private static void EmitirCobroSolicitado(Orden orden, TransicionOrden transicion, IOutboxWriter outbox) =>
+    private static void EmitirCobroSolicitado(
+        Orden orden, TransicionOrden transicion, IOutboxWriter outbox, MotivoLiberacionReserva? _) =>
         Encolar(
             outbox,
             orden,
@@ -111,7 +122,29 @@ public static class MapaEventosSagaOrden
                 IntentoNumero: orden.Transiciones.Count(t => t.EstadoNuevo == EstadoOrden.COBRO_SOLICITADO),
                 SolicitadoEn: transicion.CambiadoEn));
 
-    private static void EmitirConfirmacionYCertificacion(Orden orden, TransicionOrden transicion, IOutboxWriter outbox)
+    /// <summary>
+    /// Pide a Credito evaluar la compra. Una orden a credito nunca emite
+    /// CobroSolicitado: el monto es el total de la orden y el cliente es el email que
+    /// Ordenes ya comparo con el del JWT al crearla.
+    /// </summary>
+    private static void EmitirEvaluacionCreditoSolicitada(
+        Orden orden, TransicionOrden transicion, IOutboxWriter outbox, MotivoLiberacionReserva? _) =>
+        Encolar(
+            outbox,
+            orden,
+            EvaluacionCreditoSolicitada.EventType,
+            EvaluacionCreditoSolicitada.RoutingKey,
+            new EvaluacionCreditoSolicitadaData(
+                OrdenId: orden.Id,
+                NumeroOrden: orden.NumeroOrden,
+                ClienteId: orden.ClienteId,
+                Canal: orden.Canal,
+                Moneda: orden.Moneda,
+                Monto: orden.Total,
+                SolicitadaEn: transicion.CambiadoEn));
+
+    private static void EmitirConfirmacionYCertificacion(
+        Orden orden, TransicionOrden transicion, IOutboxWriter outbox, MotivoLiberacionReserva? _)
     {
         Encolar(
             outbox,
@@ -134,7 +167,8 @@ public static class MapaEventosSagaOrden
                     .Select(linea => new OrdenConfirmadaLineaData(
                         linea.Sku, linea.Descripcion, linea.Cantidad, linea.PrecioUnitario, linea.Subtotal))
                     .ToList(),
-                ConfirmadaEn: transicion.CambiadoEn));
+                ConfirmadaEn: transicion.CambiadoEn,
+                MedioPago: orden.MedioPago));
 
         Encolar(
             outbox,
@@ -153,11 +187,22 @@ public static class MapaEventosSagaOrden
                 Subtotal: orden.Subtotal,
                 Impuestos: orden.Impuestos,
                 Total: orden.Total,
-                Lineas: orden.Lineas
-                    .Select(linea => new CertificacionFiscalLineaData(
-                        linea.Sku, linea.Descripcion, linea.Cantidad, linea.PrecioUnitario, 0m))
-                    .ToList(),
+                Lineas: LineasFiscales(orden),
                 SolicitadaEn: transicion.CambiadoEn));
+    }
+
+    /// <summary>
+    /// Lineas de la factura con el IVA incluido desglosado por linea; la suma es
+    /// exactamente <see cref="Orden.Impuestos" />.
+    /// </summary>
+    public static IReadOnlyList<CertificacionFiscalLineaData> LineasFiscales(Orden orden)
+    {
+        var lineas = orden.Lineas.ToList();
+        var ivaPorLinea = CalculadoraIva.IvaPorLinea(lineas.Select(linea => linea.Subtotal).ToList(), orden.Impuestos);
+        return lineas
+            .Select((linea, indice) => new CertificacionFiscalLineaData(
+                linea.Sku, linea.Descripcion, linea.Cantidad, linea.PrecioUnitario, ivaPorLinea[indice]))
+            .ToList();
     }
 
     /// <summary>
@@ -167,7 +212,8 @@ public static class MapaEventosSagaOrden
     /// asi que los datos fiscales ya estan en la orden). Portador unico del folio
     /// fiscal; prohibido como fuente de estado (seccion 6 del contrato).
     /// </summary>
-    private static void EmitirOrdenCertificadaFiscalmente(Orden orden, TransicionOrden transicion, IOutboxWriter outbox) =>
+    private static void EmitirOrdenCertificadaFiscalmente(
+        Orden orden, TransicionOrden transicion, IOutboxWriter outbox, MotivoLiberacionReserva? _) =>
         Encolar(
             outbox,
             orden,
@@ -186,7 +232,8 @@ public static class MapaEventosSagaOrden
                 Total: orden.Total,
                 CertificadaEn: orden.DocumentoFiscalCertificadoEn ?? transicion.CambiadoEn));
 
-    private static void EmitirDespachoSolicitado(Orden orden, TransicionOrden transicion, IOutboxWriter outbox) =>
+    private static void EmitirDespachoSolicitado(
+        Orden orden, TransicionOrden transicion, IOutboxWriter outbox, MotivoLiberacionReserva? _) =>
         Encolar(
             outbox,
             orden,
@@ -212,11 +259,15 @@ public static class MapaEventosSagaOrden
                 SolicitadoEn: transicion.CambiadoEn,
                 ClienteId: orden.ClienteId));
 
-    private static void EmitirOrdenCancelada(Orden orden, TransicionOrden transicion, IOutboxWriter outbox)
+    private static void EmitirOrdenCancelada(
+        Orden orden, TransicionOrden transicion, IOutboxWriter outbox, MotivoLiberacionReserva? motivoLiberacion)
     {
         var estabaConfirmada = orden.Transiciones.Any(t =>
             t.EstadoNuevo is EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL or EstadoOrden.CONFIRMADA);
-        var requiereReembolso = orden.Transiciones.Any(t => t.EstadoNuevo == EstadoOrden.PAGO_APLICADO);
+
+        // Una orden a credito nunca cobra: no hay reembolso. Si llego a tener cargo,
+        // lo anula Credito al consumir este mismo evento (medioPago = CREDITO).
+        var requiereReembolso = orden.RequiereReembolsoPorCancelacion;
 
         Encolar(
             outbox,
@@ -229,20 +280,35 @@ public static class MapaEventosSagaOrden
                 ClienteId: orden.ClienteId,
                 TiendaDestinoId: orden.UbicacionSolicitadaId,
                 EstabaConfirmada: estabaConfirmada,
-                Motivo: transicion.EstadoNuevo switch
-                {
-                    EstadoOrden.CANCELADA_RESERVA_VENCIDA => MotivoCancelacion.RESERVA_VENCIDA,
-                    EstadoOrden.RECHAZADA => MotivoCancelacion.STOCK_INSUFICIENTE,
-                    _ => MotivoCancelacion.CLIENTE
-                },
+                Motivo: MotivoCancelacionPara(transicion, motivoLiberacion),
                 Detalle: transicion.Motivo,
                 RequiereReembolso: requiereReembolso,
                 PagoId: requiereReembolso ? ResolverPagoId(orden) : null,
                 DocumentoFiscalId: null,
                 Moneda: requiereReembolso ? orden.Moneda : null,
                 MontoReembolso: requiereReembolso ? orden.Total : null,
-                CanceladaEn: transicion.CambiadoEn));
+                CanceladaEn: transicion.CambiadoEn,
+                MedioPago: orden.MedioPago));
     }
+
+    /// <summary>
+    /// RECHAZADA desde EVALUACION_CREDITO_SOLICITADA es un rechazo de credito: por
+    /// respuesta de Credito (CREDITO_RECHAZADO) o por timeout de la saga, que se marca
+    /// con TIMEOUT_SAGA como motivo de liberacion (CREDITO_SIN_RESPUESTA). Cualquier
+    /// otra RECHAZADA sigue siendo falta de existencias, como antes.
+    /// </summary>
+    private static MotivoCancelacion MotivoCancelacionPara(
+        TransicionOrden transicion,
+        MotivoLiberacionReserva? motivoLiberacion) => transicion.EstadoNuevo switch
+    {
+        EstadoOrden.CANCELADA_RESERVA_VENCIDA => MotivoCancelacion.RESERVA_VENCIDA,
+        EstadoOrden.RECHAZADA when transicion.EstadoAnterior == EstadoOrden.EVALUACION_CREDITO_SOLICITADA =>
+            motivoLiberacion == MotivoLiberacionReserva.TIMEOUT_SAGA
+                ? MotivoCancelacion.CREDITO_SIN_RESPUESTA
+                : MotivoCancelacion.CREDITO_RECHAZADO,
+        EstadoOrden.RECHAZADA => MotivoCancelacion.STOCK_INSUFICIENTE,
+        _ => MotivoCancelacion.CLIENTE
+    };
 
     private static void EmitirLiberacionReservaSolicitada(
         Orden orden,

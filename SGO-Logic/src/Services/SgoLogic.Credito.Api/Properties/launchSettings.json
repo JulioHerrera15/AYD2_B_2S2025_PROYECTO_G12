@@ -1,0 +1,19 @@
+{
+  "$schema": "http://json.schemastore.org/launchsettings.json",
+  "profiles": {
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
+      "launchBrowser": true,
+      "launchUrl": "swagger",
+      "applicationUrl": "http://localhost:5299",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "Credito__SembrarDemo": "true",
+        "Credito__EndpointsInternos": "true",
+        "Credito__Politica__PuntajeMinimo": "50",
+        "Credito__Politica__AntiguedadMinimaDias": "0"
+      }
+    }
+  }
+}

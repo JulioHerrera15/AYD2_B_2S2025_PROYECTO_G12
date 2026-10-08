@@ -15,8 +15,9 @@ namespace SgoLogic.Ordenes.Api.Consumers;
 /// <summary>
 /// Consume la cola <c>ordenes.pagos</c> (bindings a <c>pagos.pago.aplicado</c>,
 /// <c>pagos.pago.pendiente</c>, <c>pagos.pago.rechazado</c>,
-/// <c>pagos.reembolso.aplicado</c> y <c>pagos.reembolso.fallido</c>) y avanza la
-/// saga de la orden con <see cref="ManejadorEventosPagos" />.
+/// <c>pagos.reembolso.aplicado</c>, <c>pagos.reembolso.fallido</c>,
+/// <c>pagos.reembolso-cancelacion.aplicado</c> y <c>pagos.reembolso-cancelacion.fallido</c>)
+/// y avanza la saga de la orden con <see cref="ManejadorEventosPagos" />.
 ///
 /// No usa <c>EventConsumerBase</c> porque esta cola recibe multiples <c>data</c>
 /// distintos sobre un solo binding-set y la clase base esta tipada a un unico
@@ -44,7 +45,9 @@ public sealed class PagosEventosConsumidor : BackgroundService
         new BindingCola(TopologiaMensajeria.ExchangeEventos, PagoPendiente.RoutingKey),
         new BindingCola(TopologiaMensajeria.ExchangeEventos, PagoRechazado.RoutingKey),
         new BindingCola(TopologiaMensajeria.ExchangeEventos, ReembolsoAplicado.RoutingKey),
-        new BindingCola(TopologiaMensajeria.ExchangeEventos, ReembolsoFallido.RoutingKey)
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, ReembolsoFallido.RoutingKey),
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, ReembolsoCancelacionAplicado.RoutingKey),
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, ReembolsoCancelacionFallido.RoutingKey)
     };
 
     private readonly IServiceScopeFactory _scopeFactory;
@@ -160,6 +163,12 @@ public sealed class PagosEventosConsumidor : BackgroundService
 
             ReembolsoFallido.EventType => CrearReembolsoFallido(sobre, Leer<ReembolsoFallidoData>(sobre.Data)),
 
+            ReembolsoCancelacionAplicado.EventType =>
+                Crear(sobre, Leer<ReembolsoCancelacionAplicadoData>(sobre.Data).OrdenId, motivo: null),
+
+            ReembolsoCancelacionFallido.EventType => CrearReembolsoCancelacionFallido(
+                sobre, Leer<ReembolsoCancelacionFallidoData>(sobre.Data)),
+
             // Tipo no esperado en esta cola: se arma igual para que el manejador lo
             // registre como desconocido y se haga ack.
             _ => Crear(sobre, sobre.AggregateId, motivo: null)
@@ -188,6 +197,10 @@ public sealed class PagosEventosConsumidor : BackgroundService
 
     private static EventoPagoRecibido CrearReembolsoFallido(IntegrationEvent<JsonElement> sobre, ReembolsoFallidoData datos) =>
         Crear(sobre, datos.OrdenOriginalId, datos.MotivoFalla, devolucionId: datos.DevolucionId);
+
+    private static EventoPagoRecibido CrearReembolsoCancelacionFallido(
+        IntegrationEvent<JsonElement> sobre, ReembolsoCancelacionFallidoData datos) =>
+        Crear(sobre, datos.OrdenId, datos.MotivoFalla);
 
     private static EventoPagoRecibido Crear(
         IntegrationEvent<JsonElement> sobre, string ordenId, string? motivo, string? autorizacionId = null, string? devolucionId = null) =>

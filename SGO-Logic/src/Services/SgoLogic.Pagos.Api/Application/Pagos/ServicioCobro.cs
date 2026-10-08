@@ -50,7 +50,7 @@ namespace SgoLogic.Pagos.Api.Application.Pagos;
 /// datos otra vez. Los datos descifrados nunca se escriben en logs, excepciones ni
 /// eventos.
 /// </summary>
-public sealed class ServicioCobro
+public sealed partial class ServicioCobro
 {
     private readonly PagosDbContext _contexto;
     private readonly IClientePayKlik _payklik;
@@ -78,11 +78,30 @@ public sealed class ServicioCobro
         _logger = logger;
     }
 
+    /// <summary>
+    /// Entrada del consumidor. Defensa en profundidad para la ruta de credito: una
+    /// orden a CREDITO nunca deberia emitir CobroSolicitado (Ordenes la manda a
+    /// Credito), pero si llegara uno, no se cobra ni se llama a PayKlik: warning y
+    /// null. Cualquier otro medio de pago sigue exactamente como antes.
+    /// </summary>
+    public async Task<Pago?> ProcesarSolicitudAsync(SolicitudCobro solicitud, CancellationToken cancelacion)
+    {
+        if (solicitud.MedioPago == MedioPago.CREDITO)
+        {
+            _logger.LogWarning(
+                "CobroSolicitado con medio de pago CREDITO para la orden {OrdenId}; se ignora sin invocar a PayKlik.",
+                solicitud.OrdenId);
+            return null;
+        }
+
+        return await ProcesarCobroAsync(solicitud, cancelacion);
+    }
+
     public async Task<Pago> ProcesarCobroAsync(SolicitudCobro solicitud, CancellationToken cancelacion)
     {
         var pago = await _contexto.Pagos
             .Include(p => p.Intentos)
-            .FirstOrDefaultAsync(p => p.OrdenId == solicitud.OrdenId, cancelacion);
+            .FirstOrDefaultAsync(p => p.OrdenId == solicitud.OrdenId && p.Concepto == ConceptoPago.ORDEN, cancelacion);
 
         if (pago is null)
         {

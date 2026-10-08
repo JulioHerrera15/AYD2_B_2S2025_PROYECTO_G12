@@ -298,6 +298,10 @@ namespace SgoLogic.IntegracionErp.Worker.Infrastructure.Migraciones
                         .HasMaxLength(40)
                         .HasColumnType("character varying(40)");
 
+                    b.Property<string>("ClienteId")
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)");
+
                     b.Property<string>("DevolucionId")
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");

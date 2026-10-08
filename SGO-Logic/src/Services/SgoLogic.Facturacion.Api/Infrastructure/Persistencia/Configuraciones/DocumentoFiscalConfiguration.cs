@@ -159,6 +159,17 @@ public sealed class DocumentoFiscalConfiguration : IEntityTypeConfiguration<Docu
             .HasColumnName("certificado_en")
             .HasColumnType("timestamp with time zone");
 
+        // Cancelacion de la orden: marca en la FACTURA para generar su nota de credito
+        // (en el momento si ya esta certificada, o al certificarse).
+        builder.Property(documento => documento.CancelacionOrdenEn)
+            .HasColumnName("cancelacion_orden_en")
+            .HasColumnType("timestamp with time zone");
+
+        builder.Property(documento => documento.NotaCreditoCancelacionId)
+            .HasColumnName("nota_credito_cancelacion_id");
+
+        builder.Ignore(documento => documento.RequiereNotaCreditoCancelacion);
+
         builder.HasMany(documento => documento.Lineas)
             .WithOne()
             .HasForeignKey("DocumentoFiscalId")

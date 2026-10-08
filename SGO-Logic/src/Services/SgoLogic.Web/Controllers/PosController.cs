@@ -251,7 +251,7 @@ public class PosController : Controller
             MetodoEntrega: "RECOGIDA_TIENDA",
             Moneda: "GTQ",
             MedioPago: medioPagoNormalizado,
-            Impuestos: Math.Round(total * 0.12m / 1.12m, 2),
+            Impuestos: 0m, // Ordenes calcula el IVA incluido en el servidor
             Lineas: lineas,
             UbicacionSolicitadaId: tiendaSeleccionada,
             ReceptorCui: "CF",
@@ -354,7 +354,7 @@ public class PosController : Controller
             MetodoEntrega: "RECOGIDA_TIENDA",
             Moneda: "GTQ",
             MedioPago: medioPagoNormalizado,
-            Impuestos: Math.Round(total * 0.12m / 1.12m, 2),
+            Impuestos: 0m, // Ordenes calcula el IVA incluido en el servidor
             Lineas: lineas,
             UbicacionSolicitadaId: tiendaSeleccionada,
             ReceptorCui: "CF",

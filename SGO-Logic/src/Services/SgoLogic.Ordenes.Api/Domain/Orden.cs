@@ -80,6 +80,11 @@ public sealed partial class Orden
             throw new ArgumentOutOfRangeException(nameof(impuestos), "Los impuestos no pueden ser negativos.");
         }
 
+        if (impuestos > lineasMaterializadas.Sum(linea => linea.Subtotal))
+        {
+            throw new ArgumentOutOfRangeException(nameof(impuestos), "El IVA incluido no puede superar el total de la orden.");
+        }
+
         if (metodoEntrega == MetodoEntrega.RECOGIDA_TIENDA && string.IsNullOrWhiteSpace(ubicacionSolicitadaId))
         {
             throw new ArgumentException(
@@ -268,13 +273,35 @@ public sealed partial class Orden
     /// <summary>Momento en que se levanto la alerta fiscal.</summary>
     public DateTime? AlertaFiscalEn { get; private set; }
 
+    /// <summary>
+    /// Reembolso a la tarjeta por cancelacion (NO_APLICA salvo una orden pagada con
+    /// tarjeta que se cancela). Pasa a PENDIENTE al cancelar y se actualiza con el
+    /// resultado que publica Pagos.
+    /// </summary>
+    public EstadoReembolsoOrden EstadoReembolso { get; private set; } = EstadoReembolsoOrden.NO_APLICA;
+
+    /// <summary>Ultimo cambio de <see cref="EstadoReembolso" />. Null si nunca aplico.</summary>
+    public DateTime? ReembolsoActualizadoEn { get; private set; }
+
+    /// <summary>
+    /// Una cancelacion de esta orden exige devolver lo cobrado: ya hubo PAGO_APLICADO y no
+    /// es a credito (una orden a credito nunca cobra; su cargo lo anula Credito).
+    /// </summary>
+    public bool RequiereReembolsoPorCancelacion =>
+        MedioPago != MedioPago.CREDITO && _transiciones.Any(t => t.EstadoNuevo == EstadoOrden.PAGO_APLICADO);
+
     public IReadOnlyList<LineaOrden> Lineas => _lineas.AsReadOnly();
 
     public IReadOnlyList<TransicionOrden> Transiciones => _transiciones.AsReadOnly();
 
-    public decimal Subtotal => _lineas.Sum(linea => linea.Subtotal);
+    /// <summary>
+    /// Lo que paga el cliente: suma de cantidad por precio de las lineas. Los precios
+    /// del catalogo ya incluyen IVA, asi que el impuesto no se suma encima.
+    /// </summary>
+    public decimal Total => _lineas.Sum(linea => linea.Subtotal);
 
-    public decimal Total => Subtotal + Impuestos;
+    /// <summary>Base sin IVA: el total menos el IVA incluido (<see cref="Impuestos" />).</summary>
+    public decimal Subtotal => Total - Impuestos;
 
     public bool EsTerminal => MaquinaEstadosOrden.EsTerminal(Estado);
 
@@ -317,6 +344,14 @@ public sealed partial class Orden
             cambiadoEn ?? DateTime.UtcNow);
 
         _transiciones.Add(transicion);
+
+        if (estadoNuevo is EstadoOrden.CANCELADA or EstadoOrden.CANCELADA_RESERVA_VENCIDA or EstadoOrden.RECHAZADA
+            && RequiereReembolsoPorCancelacion)
+        {
+            EstadoReembolso = EstadoReembolsoOrden.PENDIENTE;
+            ReembolsoActualizadoEn = transicion.CambiadoEn;
+        }
+
         return transicion;
     }
 
@@ -444,6 +479,24 @@ public sealed partial class Orden
         AlertaFiscal = true;
         AlertaFiscalMotivo = motivo;
         AlertaFiscalEn = en;
+    }
+
+    /// <summary>
+    /// Resultado del reembolso por cancelacion que informa Pagos. Un reembolso ya
+    /// APLICADO no cambia (un resultado repetido o tardio no lo revierte). Devuelve false
+    /// si no hubo cambio. No toca <see cref="Secuencia" />: no es un hecho de la saga.
+    /// </summary>
+    public bool RegistrarResultadoReembolso(bool aplicado, DateTime en)
+    {
+        var nuevo = aplicado ? EstadoReembolsoOrden.APLICADO : EstadoReembolsoOrden.FALLIDO;
+        if (EstadoReembolso == EstadoReembolsoOrden.APLICADO || EstadoReembolso == nuevo)
+        {
+            return false;
+        }
+
+        EstadoReembolso = nuevo;
+        ReembolsoActualizadoEn = en;
+        return true;
     }
 
     /// <summary>

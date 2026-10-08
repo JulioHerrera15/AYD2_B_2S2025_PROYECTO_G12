@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using SgoLogic.Contracts.Enumeraciones;
 using SgoLogic.Ordenes.Api.Application.Ordenes;
 using SgoLogic.Ordenes.Api.Domain;
 
@@ -61,4 +62,18 @@ public sealed class RepositorioOrdenes : IRepositorioOrdenes
     {
         await _contexto.Devoluciones.AddAsync(devolucion, cancelacion);
     }
+
+    public async Task<IReadOnlyList<string>> ListarEvaluacionesCreditoVencidasAsync(
+        DateTime limite,
+        int maximo,
+        CancellationToken cancelacion) =>
+        await _contexto.Ordenes
+            .AsNoTracking()
+            .Where(orden => orden.Estado == EstadoOrden.EVALUACION_CREDITO_SOLICITADA)
+            .Select(orden => new { orden.Id, UltimoCambio = orden.Transiciones.Max(t => t.CambiadoEn) })
+            .Where(fila => fila.UltimoCambio <= limite)
+            .OrderBy(fila => fila.UltimoCambio)
+            .Select(fila => fila.Id)
+            .Take(maximo)
+            .ToListAsync(cancelacion);
 }

@@ -98,6 +98,7 @@ diferencias de Finanzas.
 Consultas de apoyo:
 - `GET /erp/lotes/:loteId` → confirmación puntual de un lote.
 - `GET /erp/lotes` → listado completo + última secuencia aceptada (para reconciliación masiva).
+- `GET /erp/clientes/historial` → snapshot por cliente. Al aceptar un lote, las ventas con `clienteId` incrementan compras y monto del cliente; un lote duplicado no vuelve a sumarlas.
 
 ## 4) Caída provocada
 

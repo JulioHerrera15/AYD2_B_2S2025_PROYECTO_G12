@@ -129,7 +129,8 @@ public sealed class ServicioConfirmacionOrdenTests
         var data = Assert.IsType<OrdenCreadaData>(evento.Data);
         Assert.Equal(dto.Id, data.OrdenId);
         Assert.Equal(EstadoOrden.CREADA, data.Estado);
-        Assert.Equal(1400.00m, data.Total);
+        // Precios con IVA incluido: el total es la suma de las lineas (1 x 1250.00).
+        Assert.Equal(1250.00m, data.Total);
         Assert.Equal(1, unidad.Confirmaciones);
     }
 

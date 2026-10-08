@@ -25,7 +25,8 @@ public sealed class MaquinaEstadosOrdenTests
         Assert.Equal(EstadoOrden.CREADA, orden.Estado);
         Assert.Equal(1, orden.Secuencia);
         Assert.Empty(orden.Transiciones);
-        Assert.Equal(1400.00m, orden.Total);
+        // Precios con IVA incluido: el total es la suma de las lineas (1 x 1250.00).
+        Assert.Equal(1250.00m, orden.Total);
     }
 
     [Theory]

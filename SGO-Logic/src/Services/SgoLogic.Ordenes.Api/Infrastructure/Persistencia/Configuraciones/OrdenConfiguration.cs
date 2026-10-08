@@ -199,7 +199,23 @@ public sealed class OrdenConfiguration : IEntityTypeConfiguration<Orden>
             .HasColumnType("timestamp with time zone")
             .HasConversion<ConvertidorFechaUtc>();
 
+        // Reembolso a la tarjeta por cancelacion: NO_APLICA salvo ordenes pagadas con
+        // tarjeta que se cancelan. Las filas existentes quedan en NO_APLICA.
+        builder.Property(orden => orden.EstadoReembolso)
+            .HasColumnName("estado_reembolso")
+            .HasConversion<string>()
+            .HasMaxLength(20)
+            .IsRequired()
+            .HasDefaultValue(EstadoReembolsoOrden.NO_APLICA)
+            .HasSentinel(EstadoReembolsoOrden.NO_APLICA);
+
+        builder.Property(orden => orden.ReembolsoActualizadoEn)
+            .HasColumnName("reembolso_actualizado_en")
+            .HasColumnType("timestamp with time zone")
+            .HasConversion<ConvertidorFechaUtc>();
+
         builder.Ignore(orden => orden.Subtotal);
+        builder.Ignore(orden => orden.RequiereReembolsoPorCancelacion);
         builder.Ignore(orden => orden.Total);
         builder.Ignore(orden => orden.EsTerminal);
     }

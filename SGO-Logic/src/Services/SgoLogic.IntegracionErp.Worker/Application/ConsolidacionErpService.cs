@@ -50,10 +50,13 @@ public sealed class ConsolidacionErpService
             MontoTotal = ventas.Sum(x => x.Monto)
         };
 
+        var registros = new List<RegistroVentaErp>(ventas.Count);
         foreach (var venta in ventas)
+        {
             lote.Registros.Add(new RegistroLoteErp { Lote = lote, OrdenId = venta.OrdenId, Canal = venta.Canal, Tienda = venta.Tienda, Monto = venta.Monto, Fecha = venta.FechaVenta });
+            registros.Add(new RegistroVentaErp(venta.OrdenId, venta.Canal, venta.Tienda, venta.Monto, venta.FechaVenta, venta.ClienteId));
+        }
 
-        var registros = lote.Registros.Select(x => new RegistroVentaErp(x.OrdenId, x.Canal, x.Tienda, x.Monto, x.Fecha)).ToList();
         lote.Contenido = _generador.Generar(new LoteParaEnviar(lote.LoteId, lote.Secuencia, lote.FechaGeneracion, registros), lote.Formato);
         lote.Estado = "ENVIANDO";
         lote.Intentos = 0;

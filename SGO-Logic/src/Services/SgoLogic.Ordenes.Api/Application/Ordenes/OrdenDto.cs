@@ -6,6 +6,8 @@ namespace SgoLogic.Ordenes.Api.Application.Ordenes;
 /// <summary>
 /// Proyeccion de salida de una orden. Se construye desde el agregado con
 /// <see cref="Desde" />; las entidades del dominio no cruzan el borde HTTP.
+/// EstadoReembolso es el reembolso a la tarjeta de una orden cancelada despues de
+/// pagarse (NO_APLICA en el resto); el monto es <see cref="Total" />.
 /// </summary>
 public sealed record OrdenDto(
     string Id,
@@ -27,7 +29,9 @@ public sealed record OrdenDto(
     DatosFiscalesDto? DatosFiscales,
     AlertaFiscalDto? AlertaFiscal,
     IReadOnlyList<LineaOrdenDto> Lineas,
-    IReadOnlyList<TransicionOrdenDto> Transiciones)
+    IReadOnlyList<TransicionOrdenDto> Transiciones,
+    EstadoReembolsoOrden EstadoReembolso = EstadoReembolsoOrden.NO_APLICA,
+    DateTime? ReembolsoActualizadoEn = null)
 {
     public static OrdenDto Desde(Orden orden) => new(
         orden.Id,
@@ -65,7 +69,9 @@ public sealed record OrdenDto(
         orden.Transiciones
             .OrderBy(transicion => transicion.Secuencia)
             .Select(TransicionOrdenDto.Desde)
-            .ToList());
+            .ToList(),
+        orden.EstadoReembolso,
+        orden.ReembolsoActualizadoEn);
 }
 
 public sealed record LineaOrdenDto(

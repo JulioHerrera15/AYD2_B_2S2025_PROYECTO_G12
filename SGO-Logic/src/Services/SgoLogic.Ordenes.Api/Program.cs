@@ -1,4 +1,8 @@
+using System.Security.Cryptography;
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using SgoLogic.BuildingBlocks.Extensions;
 using SgoLogic.BuildingBlocks.Messaging;
 using SgoLogic.BuildingBlocks.Outbox;
@@ -9,6 +13,7 @@ using SgoLogic.Ordenes.Api.Domain;
 using SgoLogic.Ordenes.Api.Infrastructure.Carrito;
 using SgoLogic.Ordenes.Api.Infrastructure.Inventario;
 using SgoLogic.Ordenes.Api.Infrastructure.Persistencia;
+using SgoLogic.Ordenes.Api.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -26,6 +31,9 @@ builder.Services.AddOutbox<OrdenesDbContext>(builder.Configuration);
 builder.Services.Configure<MediosPagoPorCanalOptions>(
     builder.Configuration.GetSection(MediosPagoPorCanalOptions.Seccion));
 builder.Services.AddSingleton<PoliticaMediosPago>();
+
+// Tasa del IVA incluido en los precios: Ordenes calcula total e impuestos en el servidor.
+builder.Services.Configure<FiscalOptions>(builder.Configuration.GetSection(FiscalOptions.Seccion));
 
 builder.Services.AddScoped<IRepositorioOrdenes, RepositorioOrdenes>();
 builder.Services.AddScoped<IUnidadDeTrabajo, UnidadDeTrabajo>();
@@ -54,6 +62,30 @@ builder.Services.AddHttpClient<ICatalogoProductos, CatalogoProductosHttp>(http =
     http.Timeout = TimeSpan.FromSeconds(3);
 });
 
+// Identidad para compras a credito: misma validacion de JWT que Pagos, sin exigirla
+// globalmente. Solo POST /api/ordenes con medioPago CREDITO la usa (ver
+// ReglaIdentidadCredito); el resto de endpoints y ordenes se comportan igual que antes.
+// Sin secreto configurado ningun token valida y toda orden a credito responde 401.
+var jwtSecret = builder.Configuration["Auth:JwtSecret"];
+var claveJwt = string.IsNullOrWhiteSpace(jwtSecret)
+    ? RandomNumberGenerator.GetBytes(32)
+    : Encoding.UTF8.GetBytes(jwtSecret);
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(opciones =>
+    {
+        opciones.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuerSigningKey = true,
+            IssuerSigningKey = new SymmetricSecurityKey(claveJwt),
+            ValidateIssuer = false,
+            ValidateAudience = false,
+            ClockSkew = TimeSpan.FromSeconds(30)
+        };
+    });
+builder.Services.AddAuthorization();
+
 // Consumo de los resultados de Pagos: avance de la saga y compensacion (HU-003).
 builder.Services.AddScoped<IRegistroMensajesProcesados, RegistroMensajesProcesados>();
 builder.Services.AddScoped<ManejadorEventosPagos>();
@@ -73,6 +105,13 @@ builder.Services.AddScoped<ManejadorDocumentoFiscalCertificado>();
 builder.Services.AddScoped<ManejadorCertificacionSatFallida>();
 builder.Services.AddHostedService<DocumentoFiscalCertificadoConsumidor>();
 
+// Ruta de credito: respuesta de Credito (aprobado/rechazado) y timeout de la evaluacion.
+builder.Services.Configure<CreditoSagaOptions>(builder.Configuration.GetSection(CreditoSagaOptions.Seccion));
+builder.Services.AddScoped<ManejadorEventosCredito>();
+builder.Services.AddHostedService<CreditoEventosConsumidor>();
+builder.Services.AddScoped<ServicioTimeoutCredito>();
+builder.Services.AddHostedService<TimeoutEvaluacionCreditoWorker>();
+
 var app = builder.Build();
 
 app.UseSgoDefaults();
@@ -83,13 +122,36 @@ if (app.Environment.IsDevelopment())
     app.UseSwaggerUI();
 }
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 var ordenes = app.MapGroup("/api/ordenes");
 
 ordenes.MapPost("/", async (
     CrearOrdenRequest solicitud,
+    HttpContext http,
     ServicioConfirmacionOrden servicio,
     CancellationToken cancelacion) =>
 {
+    // Solo para CREDITO: la linea es del cliente, asi que la orden la crea el propio
+    // cliente con sesion. Cualquier otro medio de pago sigue igual que antes.
+    switch (ReglaIdentidadCredito.Verificar(solicitud.MedioPago, http.User, solicitud.ClienteId))
+    {
+        case ResultadoIdentidadCredito.RequiereSesion:
+            return Results.Problem(
+                title: "Sesion requerida",
+                detail: "Para pagar con credito debes iniciar sesion.",
+                statusCode: StatusCodes.Status401Unauthorized,
+                extensions: new Dictionary<string, object?> { ["codigo"] = "credito_requiere_sesion" });
+
+        case ResultadoIdentidadCredito.ClienteNoCoincide:
+            return Results.Problem(
+                title: "Cliente no coincide",
+                detail: "El cliente de la orden no coincide con la sesion.",
+                statusCode: StatusCodes.Status403Forbidden,
+                extensions: new Dictionary<string, object?> { ["codigo"] = "cliente_no_coincide" });
+    }
+
     try
     {
         var creada = await servicio.CrearOrdenAsync(solicitud, cancelacion);

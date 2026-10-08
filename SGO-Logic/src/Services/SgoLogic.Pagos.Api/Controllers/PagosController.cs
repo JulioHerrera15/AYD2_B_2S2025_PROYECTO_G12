@@ -5,6 +5,7 @@ using SgoLogic.Contracts.Enumeraciones;
 using SgoLogic.Contracts.Eventos.Pagos;
 using SgoLogic.Pagos.Api.Application.Pagos;
 using SgoLogic.Pagos.Api.Application.Tokens;
+using SgoLogic.Pagos.Api.Domain;
 using SgoLogic.Pagos.Api.Infrastructure.PayKlik;
 using SgoLogic.Pagos.Api.Infrastructure.Persistencia;
 
@@ -46,7 +47,7 @@ public sealed class PagosController : ControllerBase
         var pago = await _contexto.Pagos
             .AsNoTracking()
             .Include(p => p.Intentos)
-            .FirstOrDefaultAsync(p => p.OrdenId == ordenId, cancelacion);
+            .FirstOrDefaultAsync(p => p.OrdenId == ordenId && p.Concepto == ConceptoPago.ORDEN, cancelacion);
 
         return pago is null
             ? Problema(StatusCodes.Status404NotFound, "Pago no encontrado",
@@ -63,7 +64,7 @@ public sealed class PagosController : ControllerBase
         var pago = await _contexto.Pagos
             .AsNoTracking()
             .Include(p => p.Intentos)
-            .FirstOrDefaultAsync(p => p.OrdenId == ordenId, cancelacion);
+            .FirstOrDefaultAsync(p => p.OrdenId == ordenId && p.Concepto == ConceptoPago.ORDEN, cancelacion);
 
         return pago is null
             ? Problema(StatusCodes.Status404NotFound, "Pago no encontrado",
@@ -95,7 +96,7 @@ public sealed class PagosController : ControllerBase
         var pago = await _contexto.Pagos
             .AsNoTracking()
             .Include(p => p.Intentos)
-            .FirstOrDefaultAsync(p => p.OrdenId == enlace.OrdenId, cancelacion);
+            .FirstOrDefaultAsync(p => p.OrdenId == enlace.OrdenId && p.Concepto == ConceptoPago.ORDEN, cancelacion);
 
         var ultimoIntento = pago?.Intentos.OrderByDescending(i => i.IntentoNumero).FirstOrDefault();
 
@@ -161,7 +162,7 @@ public sealed class PagosController : ControllerBase
 
         var pago = await _contexto.Pagos
             .Include(p => p.Intentos)
-            .FirstOrDefaultAsync(p => p.OrdenId == enlace.OrdenId, cancelacion);
+            .FirstOrDefaultAsync(p => p.OrdenId == enlace.OrdenId && p.Concepto == ConceptoPago.ORDEN, cancelacion);
 
         if (pago is null)
         {

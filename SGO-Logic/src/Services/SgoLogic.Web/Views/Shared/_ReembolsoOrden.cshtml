@@ -1,0 +1,86 @@
+@model SgoLogic.Web.Services.ReembolsoBannerModel
+@{
+    // Banner del reembolso a la tarjeta de una orden cancelada. Mientras el reembolso
+    // esta en proceso, el script de abajo consulta /Cuenta/EstadoReembolso cada 4 s y
+    // actualiza el banner en sitio cuando queda aplicado (o no se pudo completar).
+    var vista = Model.Vista;
+    var baseClase = Model.Compacto
+        ? "mt-2 max-w-xs p-2 rounded-xl border text-[11px] leading-snug"
+        : "mb-6 p-4 rounded-2xl border flex items-start gap-3";
+}
+
+<div class="@baseClase @vista.Clase"
+     data-reembolso-orden="@Model.OrdenId"
+     data-reembolso-pendiente="@(vista.Pendiente ? "true" : "false")"
+     data-base-clase="@baseClase">
+    @if (Model.Compacto)
+    {
+        <div class="flex items-center gap-1 font-bold">
+            <span class="material-symbols-outlined text-[14px]" data-rol="icono">@vista.Icono</span>
+            <span data-rol="titulo">@vista.Titulo</span>: <span data-rol="estado">@vista.Estado</span>
+        </div>
+        <div class="mt-0.5" data-rol="detalle">@vista.Detalle</div>
+    }
+    else
+    {
+        <span class="material-symbols-outlined text-[26px] flex-shrink-0" data-rol="icono">@vista.Icono</span>
+        <div class="flex-1">
+            <div class="flex flex-wrap items-center gap-2">
+                <h3 class="font-bold text-base" data-rol="titulo">@vista.Titulo</h3>
+                <span class="px-2.5 py-0.5 rounded-full text-[11px] font-bold border border-current" data-rol="estado">@vista.Estado</span>
+            </div>
+            <p class="text-xs mt-1 leading-relaxed" data-rol="detalle">@vista.Detalle</p>
+        </div>
+    }
+</div>
+
+<script>
+    (function () {
+        if (window.sgoSondeoReembolso) {
+            return;
+        }
+        window.sgoSondeoReembolso = true;
+
+        const intervaloMs = 4000;
+        const limiteMs = 15 * 60 * 1000;
+        const inicio = Date.now();
+
+        async function consultar() {
+            const pendientes = document.querySelectorAll('[data-reembolso-pendiente="true"]');
+            if (pendientes.length === 0 || Date.now() - inicio > limiteMs) {
+                return;
+            }
+
+            for (const banner of pendientes) {
+                const ordenId = banner.getAttribute('data-reembolso-orden');
+                try {
+                    const res = await fetch('/Cuenta/EstadoReembolso?ordenId=' + encodeURIComponent(ordenId), {
+                        headers: { 'Accept': 'application/json' },
+                        cache: 'no-store'
+                    });
+                    if (!res.ok) {
+                        continue;
+                    }
+
+                    const datos = await res.json();
+                    if (!datos || !datos.titulo) {
+                        continue;
+                    }
+
+                    banner.className = banner.getAttribute('data-base-clase') + ' ' + datos.clase;
+                    banner.querySelector('[data-rol="icono"]').textContent = datos.icono;
+                    banner.querySelector('[data-rol="titulo"]').textContent = datos.titulo;
+                    banner.querySelector('[data-rol="estado"]').textContent = datos.estado;
+                    banner.querySelector('[data-rol="detalle"]').textContent = datos.detalle;
+                    banner.setAttribute('data-reembolso-pendiente', datos.pendiente ? 'true' : 'false');
+                } catch (err) {
+                    // Sin conexion momentanea: se reintenta en la siguiente vuelta.
+                }
+            }
+
+            setTimeout(consultar, intervaloMs);
+        }
+
+        setTimeout(consultar, intervaloMs);
+    })();
+</script>

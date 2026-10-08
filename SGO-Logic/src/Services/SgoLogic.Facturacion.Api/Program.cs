@@ -73,6 +73,23 @@ facturacion.MapGet("/documentos/{ordenId}", async (
         : Results.Ok(DocumentoFiscalDto.Desde(documento));
 });
 
+// Notas de credito de la orden (por devolucion o por cancelacion), de la mas antigua a
+// la mas reciente. Lista vacia si no hay ninguna.
+facturacion.MapGet("/documentos/{ordenId}/notas-credito", async (
+    string ordenId,
+    FacturacionDbContext contexto,
+    CancellationToken cancelacion) =>
+{
+    var notas = await contexto.DocumentosFiscales
+        .AsNoTracking()
+        .Include(d => d.Lineas)
+        .Where(d => d.OrdenId == ordenId && d.TipoDocumento == TipoDocumentoFiscal.NOTA_CREDITO)
+        .OrderBy(d => d.CreadoEn)
+        .ToListAsync(cancelacion);
+
+    return Results.Ok(notas.Select(DocumentoFiscalDto.Desde).ToList());
+});
+
 using (var scope = app.Services.CreateScope())
 {
     var contexto = scope.ServiceProvider.GetRequiredService<FacturacionDbContext>();

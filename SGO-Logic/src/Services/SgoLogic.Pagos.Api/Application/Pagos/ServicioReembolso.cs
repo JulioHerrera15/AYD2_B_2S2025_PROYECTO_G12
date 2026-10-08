@@ -50,9 +50,20 @@ public sealed class ServicioReembolso
 
     public async Task ProcesarReembolsoAsync(DevolucionRegistradaData datos, CancellationToken cancelacion)
     {
+        // Una compra a credito nunca paso por PayKlik: su devolucion la aplica Credito
+        // (baja la deuda y, si sobra, pide el reembolso de los abonos). Aqui solo se
+        // descarta; sin esto se crearia un pago ficticio y se reembolsaria por PayKlik.
+        if (datos.MedioPago == MedioPago.CREDITO)
+        {
+            _logger.LogInformation(
+                "Devolucion {DevolucionId} de una compra a credito; la aplica Credito y Pagos no reembolsa.",
+                datos.DevolucionId);
+            return;
+        }
+
         var pago = await _contexto.Pagos
             .Include(p => p.Intentos)
-            .FirstOrDefaultAsync(p => p.OrdenId == datos.OrdenOriginalId, cancelacion);
+            .FirstOrDefaultAsync(p => p.OrdenId == datos.OrdenOriginalId && p.Concepto == ConceptoPago.ORDEN, cancelacion);
 
         if (pago is null)
         {

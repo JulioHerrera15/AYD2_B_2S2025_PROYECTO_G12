@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using SgoLogic.Web.Services;
@@ -25,6 +26,25 @@ public sealed record ServicioHealthStatus(
     string Descripcion,
     DateTime VerificadoEn);
 
+public sealed record SnapshotHistorialClienteModel(
+    string CodigoCliente,
+    string Email,
+    DateTime ClienteDesde,
+    int ComprasUltimos12Meses,
+    decimal MontoCompradoUltimos12Meses,
+    string Moneda,
+    int PagosPuntuales,
+    int PagosTardios,
+    int MaxDiasAtraso,
+    int Devoluciones,
+    int IncidentesGraves,
+    int OtrosIncidentes,
+    DateTime FechaCorte,
+    DateTime ActualizadoEn,
+    string? LoteOrigen);
+
+public sealed record RespuestaHistorialErpModel(IReadOnlyList<SnapshotHistorialClienteModel>? Clientes);
+
 public class MonitoreoController : Controller
 {
     private readonly GatewayClient _gateway;
@@ -38,6 +58,7 @@ public class MonitoreoController : Controller
         new("ordenes-api", "http://ordenes-api:8080/health/live", "8083", "Negocio Central", "Orquestador de Pedidos y Sagas", "Maquina de estados de compras omnicanal y coordinacion asincrona de pagos, existencias y facturacion."),
         new("inventario-api", "http://inventario-api:8080/health/live", "8094", "Negocio Central", "Existencias y Reservas", "Control de inventario unificado en centros de distribucion y las 32 tiendas fisicas con bloqueo optimista."),
         new("pagos-api", "http://pagos-api:8080/health/live", "8085", "Transacciones", "Pasarela de Cobros", "Procesamiento de pagos con tarjeta de credito y billetera digital con idempotencia garantizada."),
+        new("credito-api", "http://credito-api:8080/health/live", "8099", "Transacciones", "Credito a 30 Dias", "Perfil crediticio precalculado a partir del historial del cliente y oferta de compra ahora, paga en 30 dias."),
         new("facturacion-api", "http://facturacion-api:8080/health/live", "8087", "Fiscal & Legal", "Facturacion SAT FEL", "Emision de documentos tributarios electronicos y contingencia ante indisponibilidad del certificador."),
         new("despacho-api", "http://despacho-api:8080/health/live", "8097", "Logistica", "Logistica y Despacho", "Gestion de guias de entrega a domicilio con LogiExpress y preparacion para recogida en tienda."),
         new("consulta-estado-api", "http://consulta-estado-api:8080/health/live", "8091", "Lectura & Trazabilidad", "Modelo de Lectura CQRS", "Consultas de estados de pedidos en tiempo real con proyecciones sincronizadas mediante colas de eventos."),
@@ -58,7 +79,7 @@ public class MonitoreoController : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(string? clienteHistorial, CancellationToken ct)
     {
         var jwtToken = Request.Cookies["sgo_jwt"];
         if (string.IsNullOrWhiteSpace(jwtToken))
@@ -112,6 +133,8 @@ public class MonitoreoController : Controller
 
         ViewBag.UserEmail = userEmail;
         ViewBag.UserRole = userRole ?? "OPERADOR";
+        var esAdministrador = PermisosHelper.EsAdministrador(jwtToken, userRole, userEmail);
+        ViewBag.EsAdministrador = esAdministrador;
         ViewBag.JwtExp = jwtExp;
         ViewBag.TokenValido = tokenValido;
         ViewBag.ExigirJwt = exigirJwtActivo ? "Activo (Estricto)" : "Modo Permisivo (Desarrollo)";
@@ -132,7 +155,56 @@ public class MonitoreoController : Controller
         ViewBag.LatenciaPromedio = Math.Round(resultados.Where(r => r.EstaEnLinea).DefaultIfEmpty().Average(r => r?.LatenciaMs ?? 0), 1);
         ViewBag.UltimaActualizacion = DateTime.UtcNow;
 
+        if (esAdministrador && !string.IsNullOrWhiteSpace(clienteHistorial))
+        {
+            ViewBag.EmailHistorialBuscado = clienteHistorial.Trim();
+            await CargarSnapshotHistorialAsync(clienteHistorial.Trim(), ct);
+        }
+
         return View();
+    }
+
+    private async Task CargarSnapshotHistorialAsync(string email, CancellationToken ct)
+    {
+        var baseUrl = _config["MockErp:BaseUrl"] ?? "http://mock-erp:4000";
+        using var client = _httpClientFactory.CreateClient();
+        client.Timeout = TimeSpan.FromSeconds(4);
+
+        try
+        {
+            using var response = await client.GetAsync(
+                $"{baseUrl.TrimEnd('/')}/erp/clientes/historial",
+                ct);
+            if (!response.IsSuccessStatusCode)
+            {
+                ViewBag.ErrorSnapshotHistorial = $"El mock ERP respondio HTTP {(int)response.StatusCode}.";
+                return;
+            }
+
+            var historial = await response.Content.ReadFromJsonAsync<RespuestaHistorialErpModel>(cancellationToken: ct);
+            var snapshot = historial?.Clientes?.FirstOrDefault(cliente =>
+                string.Equals(cliente.Email, email, StringComparison.OrdinalIgnoreCase));
+
+            if (snapshot is null)
+            {
+                ViewBag.ErrorSnapshotHistorial = "No se encontro un snapshot para ese correo en el ERP.";
+                return;
+            }
+
+            ViewBag.SnapshotHistorial = snapshot;
+        }
+        catch (HttpRequestException)
+        {
+            ViewBag.ErrorSnapshotHistorial = "No fue posible comunicarse con el mock ERP.";
+        }
+        catch (JsonException)
+        {
+            ViewBag.ErrorSnapshotHistorial = "El mock ERP devolvio un snapshot con formato invalido.";
+        }
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+        {
+            ViewBag.ErrorSnapshotHistorial = "El mock ERP no respondio dentro del tiempo esperado.";
+        }
     }
 
     [HttpGet("api/monitoreo/estado")]

@@ -4,8 +4,15 @@
     var userEmail = ViewBag.UserEmail as string ?? "usuario@megastore.com";
     var totalRegistros = Model?.TotalRegistros ?? Model?.Ordenes?.Count ?? 0;
     var paginaActual = Model?.Pagina ?? 1;
+    var reembolsos = ViewBag.Reembolsos as Dictionary<string, SgoLogic.Web.Services.ReembolsoOrdenVista>
+        ?? new Dictionary<string, SgoLogic.Web.Services.ReembolsoOrdenVista>();
+    var notasCredito = ViewBag.NotasCredito as Dictionary<string, List<SgoLogic.Web.Services.FacturaModel>>
+        ?? new Dictionary<string, List<SgoLogic.Web.Services.FacturaModel>>();
+    var cancelacionReciente = ViewBag.CancelacionReciente as SgoLogic.Web.Services.OrdenDetalleModel;
+    var reembolsoReciente = ViewBag.CancelacionRecienteReembolso as SgoLogic.Web.Services.ReembolsoOrdenVista;
     // Estados previos a la salida a ruta desde los que Ordenes admite la cancelacion
-    // del cliente (COBRO_SOLICITADO y PAGO_APLICADO quedan fuera: cobro en curso).
+    // del cliente (COBRO_SOLICITADO y PAGO_APLICADO quedan fuera: cobro en curso; igual
+    // EVALUACION_CREDITO_SOLICITADA y CREDITO_APROBADO en la ruta de credito).
     var estadosCancelables = new HashSet<string>
     {
         "CREADA", "RESERVA_SOLICITADA", "INVENTARIO_RESERVADO", "PAGO_PENDIENTE",
@@ -32,6 +39,28 @@
             </a>
         </div>
     </div>
+
+    @if (cancelacionReciente is not null)
+    {
+        var numeroCancelada = string.IsNullOrWhiteSpace(cancelacionReciente.NumeroOrden) ? cancelacionReciente.Id : cancelacionReciente.NumeroOrden;
+        <!-- Confirmacion de la cancelacion recien hecha -->
+        <div class="flex flex-col gap-3">
+            <div class="p-4 rounded-2xl border border-border-subtle bg-surface-white flex items-start gap-3 ambient-shadow">
+                <span class="material-symbols-outlined text-primary text-[24px] flex-shrink-0">task_alt</span>
+                <div>
+                    <h3 class="font-bold text-sm text-primary">Tu orden @numeroCancelada fue cancelada</h3>
+                    @if (reembolsoReciente is null)
+                    {
+                        <p class="text-xs text-text-muted mt-1">La cancelación quedó registrada. No necesitas hacer nada más.</p>
+                    }
+                </div>
+            </div>
+            @if (reembolsoReciente is not null)
+            {
+                <partial name="_ReembolsoOrden" model="new SgoLogic.Web.Services.ReembolsoBannerModel(cancelacionReciente.Id, reembolsoReciente)" />
+            }
+        </div>
+    }
 
     <!-- Stats Bar -->
     <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
@@ -72,7 +101,12 @@
                     <tbody class="divide-y divide-border-subtle/50">
                         @foreach (var orden in Model.Ordenes)
                         {
-                            var badgeClass = orden.Estado switch
+                            // La orden recien cancelada toma su estado de Ordenes: la vista de
+                            // estado puede tardar unos segundos en reflejar la cancelacion.
+                            var estadoOrden = cancelacionReciente is not null && cancelacionReciente.Id == orden.OrdenId
+                                ? cancelacionReciente.Estado
+                                : orden.Estado;
+                            var badgeClass = estadoOrden switch
                             {
                                 "CREACION_SOLICITADA" => "bg-blue-100 text-blue-800 border-blue-300",
                                 "RESERVADA" => "bg-amber-100 text-amber-800 border-amber-300",
@@ -83,6 +117,8 @@
                                 "LISTA_PARA_RECOGER" => "bg-sky-100 text-sky-800 border-sky-300",
                                 "ENTREGADA" => "bg-green-100 text-green-800 border-green-300",
                                 "CANCELADA" => "bg-rose-100 text-rose-800 border-rose-300",
+                                "EVALUACION_CREDITO_SOLICITADA" => "bg-amber-100 text-amber-800 border-amber-300",
+                                "CREDITO_APROBADO" => "bg-emerald-100 text-emerald-800 border-emerald-300",
                                 _ => "bg-surface-container-low text-text-muted border-border-subtle"
                             };
 
@@ -99,8 +135,12 @@
                                 <td class="py-4 px-6">
                                     <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold border @badgeClass">
                                         <span class="w-1.5 h-1.5 rounded-full bg-current"></span>
-                                        @orden.Estado
+                                        @SgoLogic.Web.Services.EtiquetasEstadoOrden.Etiqueta(estadoOrden)
                                     </span>
+                                    @if (reembolsos.TryGetValue(orden.OrdenId, out var reembolso))
+                                    {
+                                        <partial name="_ReembolsoOrden" model="new SgoLogic.Web.Services.ReembolsoBannerModel(orden.OrdenId, reembolso, true)" />
+                                    }
                                 </td>
                                 <td class="py-4 px-6 font-bold text-primary text-sm">
                                     Q @orden.Total.ToString("N2")
@@ -118,12 +158,21 @@
                                             <span class="material-symbols-outlined text-[15px]">download</span>
                                             Factura
                                         </a>
+                                        @if (notasCredito.ContainsKey(orden.OrdenId))
+                                        {
+                                            <a href="/Cuenta/NotaCredito?ordenId=@orden.OrdenId"
+                                               title="Guardar nota de crédito"
+                                               class="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-surface-container-low hover:bg-surface-variant text-primary text-xs font-semibold border border-border-subtle/60 transition-all">
+                                                <span class="material-symbols-outlined text-[15px]">receipt</span>
+                                                Nota de crédito
+                                            </a>
+                                        }
                                         <a href="/Incidencias/Crear?ordenId=@orden.OrdenId"
                                            title="Reportar problema"
                                            class="p-1.5 rounded-xl text-text-muted hover:text-error hover:bg-error-container/20 transition-all">
                                             <span class="material-symbols-outlined text-[18px]">report_problem</span>
                                         </a>
-                                        @if (estadosCancelables.Contains(orden.Estado))
+                                        @if (estadosCancelables.Contains(estadoOrden))
                                         {
                                             <form method="post" action="/Cuenta/Cancelar" class="inline"
                                                   onsubmit="return confirm('Seguro que deseas cancelar esta orden?');">

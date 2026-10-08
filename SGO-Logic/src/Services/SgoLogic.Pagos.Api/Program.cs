@@ -86,7 +86,16 @@ builder.Services.AddHostedService<ExpiracionTokensWorker>();
 
 builder.Services.AddScoped<ServicioCobro>();
 builder.Services.AddScoped<ServicioReembolso>();
+
+// Reembolsos por cancelacion de orden y de abonos a credito: se registran PENDIENTE al
+// consumir el evento y el worker los envia a PayKlik con reintentos y backoff.
+builder.Services.Configure<ReembolsosOptions>(builder.Configuration.GetSection(ReembolsosOptions.Seccion));
+builder.Services.AddScoped<ServicioReembolsosPendientes>();
+builder.Services.AddHostedService<ReembolsosPendientesWorker>();
 builder.Services.AddHostedService<PagosEventosConsumidor>();
+
+// Cobro de abonos a credito (cola pagos.credito): mismo ServicioCobro, otro flujo.
+builder.Services.AddHostedService<CreditoAbonosConsumidor>();
 
 var app = builder.Build();
 
