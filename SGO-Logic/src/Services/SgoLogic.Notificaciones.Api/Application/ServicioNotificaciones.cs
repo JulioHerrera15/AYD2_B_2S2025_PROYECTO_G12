@@ -3,11 +3,14 @@ using SgoLogic.Contracts.Eventos.Despacho;
 using SgoLogic.Contracts.Eventos.Ordenes;
 using SgoLogic.Contracts.Eventos.Pagos;
 using SgoLogic.Notificaciones.Api.Domain;
+using SgoLogic.Notificaciones.Api.Kernel.Abstractions;
+using SgoLogic.Notificaciones.Api.Kernel.Core;
+using SgoLogic.Notificaciones.Api.Kernel.Plugins;
 
 namespace SgoLogic.Notificaciones.Api.Application;
 
-/// <summary>Un correo listo para el proveedor de mensajeria.</summary>
-public sealed record NotificacionSaliente(string Destinatario, string Asunto, string Cuerpo);
+/// <summary>Un mensaje listo para los adaptadores del Microkernel.</summary>
+public sealed record NotificacionSaliente(string Destinatario, string Asunto, string Cuerpo, string Canal = "EMAIL");
 
 /// <summary>Puerto de persistencia de <see cref="NotificacionPendiente" />.</summary>
 public interface IRepositorioNotificacionesPendientes
@@ -22,27 +25,54 @@ public interface IRepositorioNotificacionesPendientes
 }
 
 /// <summary>
-/// Envio de notificaciones al cliente (B3). Arma cada correo a partir del evento y lo
-/// manda al proveedor. Si el proveedor falla, la notificacion no se pierde ni rompe el
-/// flujo de quien publico el evento: se guarda como pendiente (en la misma transaccion
-/// que la marca de mensaje procesado) y <see cref="ReintentarPendientesAsync" /> la
-/// reintenta con backoff.
+/// Fachada de alto nivel para notificación al cliente.
+/// En la Fase 3, orquesta el despacho a través del Microkernel (<see cref="INotificacionesKernel"/>)
+/// permitiendo el envío multicanal desacoplado (Email, SMS, Push, Webhooks) con aislamiento de fallas.
 /// </summary>
 public sealed class ServicioNotificaciones
 {
     public const string CanalEmail = "EMAIL";
+    public const string CanalSms = "SMS";
+    public const string CanalPush = "PUSH";
+    public const string CanalWebhook = "WEBHOOK";
+
     private const int LoteReintentos = 50;
 
     private readonly IMockMensajeriaClient _mensajeria;
     private readonly IRepositorioNotificacionesPendientes _pendientes;
     private readonly ILogger<ServicioNotificaciones> _logger;
+    private readonly INotificacionesKernel _kernel;
     private readonly Func<DateTime> _reloj;
 
     public ServicioNotificaciones(
         IMockMensajeriaClient mensajeria,
         IRepositorioNotificacionesPendientes pendientes,
+        ILogger<ServicioNotificaciones> logger,
+        INotificacionesKernel kernel)
+        : this(mensajeria, pendientes, logger, kernel, () => DateTime.UtcNow)
+    {
+    }
+
+    public ServicioNotificaciones(
+        IMockMensajeriaClient mensajeria,
+        IRepositorioNotificacionesPendientes pendientes,
+        ILogger<ServicioNotificaciones> logger,
+        INotificacionesKernel kernel,
+        Func<DateTime> reloj)
+    {
+        _mensajeria = mensajeria;
+        _pendientes = pendientes;
+        _logger = logger;
+        _kernel = kernel;
+        _reloj = reloj;
+    }
+
+    /// <summary>Constructor para compatibilidad con suites de pruebas unitarias existentes.</summary>
+    public ServicioNotificaciones(
+        IMockMensajeriaClient mensajeria,
+        IRepositorioNotificacionesPendientes pendientes,
         ILogger<ServicioNotificaciones> logger)
-        : this(mensajeria, pendientes, logger, () => DateTime.UtcNow)
+        : this(mensajeria, pendientes, logger, CrearKernelPorDefecto(mensajeria, pendientes, () => DateTime.UtcNow), () => DateTime.UtcNow)
     {
     }
 
@@ -51,11 +81,8 @@ public sealed class ServicioNotificaciones
         IRepositorioNotificacionesPendientes pendientes,
         ILogger<ServicioNotificaciones> logger,
         Func<DateTime> reloj)
+        : this(mensajeria, pendientes, logger, CrearKernelPorDefecto(mensajeria, pendientes, reloj), reloj)
     {
-        _mensajeria = mensajeria;
-        _pendientes = pendientes;
-        _logger = logger;
-        _reloj = reloj;
     }
 
     public Task NotificarEstadoOrdenAsync(OrdenEstadoCambiadoData data, string eventId, CancellationToken cancelacion) =>
@@ -67,12 +94,6 @@ public sealed class ServicioNotificaciones
             eventId,
             cancelacion);
 
-    /// <summary>
-    /// Aviso de pedido listo para recoger al email del cliente (ClienteId del evento,
-    /// que Despacho trae desde DespachoSolicitado). Un evento sin ClienteId (despachos
-    /// creados antes de que el contrato lo llevara) no tiene a quien avisar: se registra
-    /// y no se envia nada. Nunca se usa el OrdenId como destinatario.
-    /// </summary>
     public Task NotificarListoParaRecogerAsync(PedidoListoParaRecogerData data, string eventId, CancellationToken cancelacion)
     {
         if (string.IsNullOrWhiteSpace(data.ClienteId))
@@ -92,11 +113,6 @@ public sealed class ServicioNotificaciones
             cancelacion);
     }
 
-    /// <summary>
-    /// Correo con el enlace de reintento de un pago pendiente. El motivo tecnico
-    /// (data.MotivoFalla) NO va al cliente: puede traer nombres de host, del proveedor o
-    /// errores de red. Queda en el intento de pago, en el log de Pagos y en Auditoria.
-    /// </summary>
     public Task NotificarPagoPendienteAsync(
         PagoPendienteData data,
         string basePortal,
@@ -118,38 +134,24 @@ public sealed class ServicioNotificaciones
     }
 
     /// <summary>
-    /// Intenta el envio. Si el proveedor falla agrega una <see cref="NotificacionPendiente" />
-    /// sin guardar (lo guarda la transaccion del consumidor) y no relanza: el evento se
-    /// marca procesado igual y el flujo de origen no se afecta.
+    /// Despacha la notificación a través del Microkernel.
+    /// Si un plugin falla, el Kernel aísla el error y persiste la notificación como pendiente.
     /// </summary>
     public async Task EnviarOGuardarAsync(NotificacionSaliente notificacion, string eventId, CancellationToken cancelacion)
     {
-        try
-        {
-            await _mensajeria.EnviarEmailAsync(notificacion.Destinatario, notificacion.Asunto, notificacion.Cuerpo, cancelacion);
-        }
-        catch (Exception ex) when (ex is not OperationCanceledException || !cancelacion.IsCancellationRequested)
-        {
-            _pendientes.Agregar(new NotificacionPendiente(
-                eventId,
-                CanalEmail,
-                notificacion.Destinatario,
-                notificacion.Asunto,
-                notificacion.Cuerpo,
-                ex.Message,
-                _reloj()));
+        var solicitud = new SolicitudNotificacion(
+            EventId: eventId,
+            Canal: notificacion.Canal,
+            Destinatario: notificacion.Destinatario,
+            Asunto: notificacion.Asunto,
+            Cuerpo: notificacion.Cuerpo
+        );
 
-            _logger.LogWarning(
-                ex,
-                "Fallo el envio de la notificacion del evento {EventId} a {Destinatario}; queda pendiente de reintento.",
-                eventId,
-                notificacion.Destinatario);
-        }
+        await _kernel.DespacharAsync(solicitud, cancelacion);
     }
 
     /// <summary>
-    /// Reintenta las pendientes cuyo turno llego: las entregadas pasan a ENVIADA y las
-    /// que fallan agendan su siguiente intento o quedan FALLIDA. Devuelve cuantas trato.
+    /// Reintenta las pendientes cuyo turno llego invocando el plugin correspondiente en el Microkernel.
     /// </summary>
     public async Task<int> ReintentarPendientesAsync(CancellationToken cancelacion)
     {
@@ -159,11 +161,30 @@ public sealed class ServicioNotificaciones
         {
             try
             {
-                await _mensajeria.EnviarEmailAsync(pendiente.Destinatario, pendiente.Asunto, pendiente.Cuerpo, cancelacion);
-                pendiente.MarcarEnviada(_reloj());
-                _logger.LogInformation(
-                    "Notificacion pendiente {Id} (evento {EventId}) entregada en el reintento {Intento}.",
-                    pendiente.Id, pendiente.EventId, pendiente.Intentos);
+                var resultado = await _kernel.DespacharReintentoAsync(
+                    pendiente.Canal,
+                    pendiente.Destinatario,
+                    pendiente.Asunto,
+                    pendiente.Cuerpo,
+                    cancelacion);
+
+                if (resultado.Exitoso)
+                {
+                    pendiente.MarcarEnviada(_reloj());
+                    _logger.LogInformation(
+                        "Notificacion pendiente {Id} (canal {Canal}, evento {EventId}) entregada en reintento {Intento}.",
+                        pendiente.Id, pendiente.Canal, pendiente.EventId, pendiente.Intentos);
+                }
+                else
+                {
+                    pendiente.RegistrarFallo(resultado.Error, _reloj());
+                    if (pendiente.Estado == EstadoNotificacionPendiente.FALLIDA)
+                    {
+                        _logger.LogError(
+                            "Notificacion pendiente {Id} (canal {Canal}, evento {EventId}) FALLIDA tras {Intentos} reintentos.",
+                            pendiente.Id, pendiente.Canal, pendiente.EventId, pendiente.Intentos);
+                    }
+                }
             }
             catch (Exception ex) when (ex is not OperationCanceledException || !cancelacion.IsCancellationRequested)
             {
@@ -171,8 +192,8 @@ public sealed class ServicioNotificaciones
                 if (pendiente.Estado == EstadoNotificacionPendiente.FALLIDA)
                 {
                     _logger.LogError(
-                        "Notificacion pendiente {Id} (evento {EventId}) FALLIDA tras {Intentos} reintentos.",
-                        pendiente.Id, pendiente.EventId, pendiente.Intentos);
+                        "Notificacion pendiente {Id} (evento {EventId}) FALLIDA tras excepcion: {Error}",
+                        pendiente.Id, pendiente.EventId, ex.Message);
                 }
             }
         }
@@ -183,6 +204,24 @@ public sealed class ServicioNotificaciones
         }
 
         return pendientes.Count;
+    }
+
+    private static INotificacionesKernel CrearKernelPorDefecto(
+        IMockMensajeriaClient mensajeria,
+        IRepositorioNotificacionesPendientes pendientes,
+        Func<DateTime>? reloj = null)
+    {
+        var registry = new PluginRegistry();
+        registry.Registrar(new EmailNotificacionPlugin(mensajeria, Microsoft.Extensions.Logging.Abstractions.NullLogger<EmailNotificacionPlugin>.Instance));
+        registry.Registrar(new SmsNotificacionPlugin(mensajeria, Microsoft.Extensions.Logging.Abstractions.NullLogger<SmsNotificacionPlugin>.Instance));
+        registry.Registrar(new PushNotificacionPlugin(mensajeria, Microsoft.Extensions.Logging.Abstractions.NullLogger<PushNotificacionPlugin>.Instance));
+        registry.Registrar(new WebhookNotificacionPlugin(mensajeria, Microsoft.Extensions.Logging.Abstractions.NullLogger<WebhookNotificacionPlugin>.Instance));
+
+        return new NotificacionesKernel(
+            registry,
+            pendientes,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<NotificacionesKernel>.Instance,
+            reloj ?? (() => DateTime.UtcNow));
     }
 
     private static string ResolverUrlReintento(EnlaceReintentoData? enlace, string basePortal)
