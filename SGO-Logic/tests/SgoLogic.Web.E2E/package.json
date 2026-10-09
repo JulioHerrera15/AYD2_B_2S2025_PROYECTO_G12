@@ -1,0 +1,24 @@
+{
+  "name": "sgologic-web-e2e",
+  "version": "1.0.0",
+  "description": "Suite de Pruebas End-to-End (E2E) para la Interfaz Web de MegaStore (SGO-Logic) con Playwright",
+  "main": "playwright.config.js",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "report": "playwright show-report"
+  },
+  "keywords": [
+    "e2e",
+    "playwright",
+    "sgologic",
+    "megastore"
+  ],
+  "author": "Jonathan (202300353)",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.48.0"
+  }
+}
