@@ -4,6 +4,9 @@ using SgoLogic.BuildingBlocks.Messaging;
 using SgoLogic.Notificaciones.Api.Application;
 using SgoLogic.Notificaciones.Api.Consumers;
 using SgoLogic.Notificaciones.Api.Infrastructure;
+using SgoLogic.Notificaciones.Api.Kernel.Abstractions;
+using SgoLogic.Notificaciones.Api.Kernel.Core;
+using SgoLogic.Notificaciones.Api.Kernel.Plugins;
 using SgoLogic.Notificaciones.Api.Workers;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -30,17 +33,37 @@ builder.Services.AddHttpClient<IMockMensajeriaClient, MockMensajeriaClient>(http
     http.Timeout = TimeSpan.FromSeconds(10);
 });
 
-// ── Envio con reintentos (B3) ─────────────────────────────────────────────────
-// Un envio fallido queda en notificacion_pendiente y el worker lo reintenta con
-// backoff exponencial (10 s, 20 s, ... hasta 6 reintentos; luego FALLIDA).
+// ── Repositorio de Notificaciones Pendientes ──────────────────────────────────
 builder.Services.AddScoped<IRepositorioNotificacionesPendientes, RepositorioNotificacionesPendientes>();
+
+// ── Estilo Arquitectónico: Microkernel (Plugin-based Architecture) ────────────
+builder.Services.AddSingleton<IPluginRegistry>(sp =>
+{
+    var registry = new PluginRegistry();
+
+    // Inyección de plugins desacoplados
+    var emailPlugin = ActivatorUtilities.CreateInstance<EmailNotificacionPlugin>(sp);
+    var smsPlugin = ActivatorUtilities.CreateInstance<SmsNotificacionPlugin>(sp);
+    var pushPlugin = ActivatorUtilities.CreateInstance<PushNotificacionPlugin>(sp);
+    var webhookPlugin = ActivatorUtilities.CreateInstance<WebhookNotificacionPlugin>(sp);
+
+    registry.Registrar(emailPlugin);
+    registry.Registrar(smsPlugin);
+    registry.Registrar(pushPlugin);
+    registry.Registrar(webhookPlugin);
+
+    return registry;
+});
+
+builder.Services.AddScoped<INotificacionesKernel, NotificacionesKernel>();
+
+// ── Fachada de Servicio de Notificaciones y Worker de Reintentos ──────────────
 builder.Services.AddScoped<ServicioNotificaciones>();
 builder.Services.AddHostedService<ReintentoNotificacionesWorker>();
 
 // ── Consumidores de eventos ───────────────────────────────────────────────────
 builder.Services.AddHostedService<NotificacionesOrdenesConsumidor>();
 // Consumidor separado para eventos de Despacho (HU-020 — listo-para-recoger)
-// Cola independiente para respetar la topologia cerrada de notificaciones.ordenes
 builder.Services.AddHostedService<NotificacionesDespachoConsumidor>();
 // Consumidor separado para eventos de Pagos pendientes (enlace de reintento de cobro)
 builder.Services.AddHostedService<NotificacionesPagosConsumidor>();
