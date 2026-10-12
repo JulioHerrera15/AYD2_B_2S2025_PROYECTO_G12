@@ -1,0 +1,56 @@
+time="2026-10-12T04:05:14Z" level=info msg="[c3-1011220513] SKU SKU-CCI-C3-1011220513: 1200 unidades en CD-01 a Q100" source=console
+time="2026-10-12T04:05:14Z" level=info msg="[c3-1011220513] 60 clientes b: elegibilidad de cci-c3-1011220513-b0@carga.sgo.local -> 200 {\"estado\":\"DISPONIBLE\",\"ofrecer\":true,\"codigoMotivo\":null,\"titulo\":\"Tienes crédito disponible\",\"mensaje\":\"Tienes Q7,500.00 disponibles de un límite de Q7,500.00. Puedes comprar ahora y pagar en 30 días, sin recargo. Si pagas esta compra de Q100.00 con crédito, la fecha límite de pago será el 11 de noviembre de 2026.\",\"recomendacion\":\"Elige crédito al pagar y cancela el total desde Mi crédito dentro de los 30 días.\",\"limiteAprobado\":\"7500.00\",\"disponible\":\"7500.00\",\"montoSolicitado\":\"100.00\",\"moneda\":\"GTQ\",\"plazoDias\":30,\"fechaPagoEstimada\":\"2026-11-11T00:00:00.000Z\",\"calculadoEn\":\"2026-10-12T04:05:14.357Z\"}" source=console
+time="2026-10-12T04:05:14Z" level=info msg="[c3-1011220513] 60 clientes x: elegibilidad de cci-c3-1011220513-x0@carga.sgo.local -> 200 {\"estado\":\"NO_ELEGIBLE\",\"ofrecer\":false,\"codigoMotivo\":\"INCIDENTE_GRAVE\",\"titulo\":\"Necesitamos revisar tu cuenta\",\"mensaje\":\"Hay un caso pendiente asociado a tu cuenta que debe resolverse antes de habilitar el crédito.\",\"recomendacion\":\"Comunícate con atención al cliente para resolverlo. Tus compras con tarjeta funcionan con normalidad.\",\"limiteAprobado\":\"0.00\",\"disponible\":\"0.00\",\"montoSolicitado\":\"100.00\",\"moneda\":\"GTQ\",\"plazoDias\":30,\"fechaPagoEstimada\":null,\"calculadoEn\":\"2026-10-12T04:05:14.536Z\"}" source=console
+time="2026-10-12T04:10:14Z" level=info msg="[c3-1011220513] C3: fin de la generacion de carga. La saga sigue en curso: espera el drenado y corre verificar.sh con RUN_ID=c3-1011220513 (ejecutar.sh lo hace solo). " source=console
+
+
+  █ THRESHOLDS 
+
+    http_req_failed{paso:crear}
+    ✓ 'rate<0.01' rate=0.00%
+
+    sgo_exito_checkout{ruta:credito}
+    ✓ 'rate>0.99' rate=100.00%
+
+    sgo_latencia_checkout_ms{ruta:credito}
+    ✓ 'p(95)<1000' p(95)=38.59ms
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 758     2.52305/s
+    checks_succeeded...: 100.00% 758 out of 758
+    checks_failed......: 0.00%   0 out of 758
+
+    ✓ orden credito creada (201)
+    ✓ orden credito confirmada (200)
+
+    CUSTOM
+    sgo_exito_checkout.............: 100.00% 379 out of 379
+      { ruta:credito }.............: 100.00% 379 out of 379
+    sgo_latencia_checkout_ms.......: avg=22.98ms min=12.18ms med=21.36ms max=70.93ms p(90)=31.5ms  p(95)=38.59ms p(99)=53.16ms
+      { ruta:credito }.............: avg=22.98ms min=12.18ms med=21.36ms max=70.93ms p(90)=31.5ms  p(95)=38.59ms p(99)=53.16ms
+    sgo_latencia_confirmar_ms......: avg=13.62ms min=7.16ms  med=12.54ms max=60.57ms p(90)=19.67ms p(95)=22.99ms p(99)=28.44ms
+    sgo_latencia_crear_ms..........: avg=9.36ms  min=4.86ms  med=8.42ms  max=31.55ms p(90)=13.69ms p(95)=16.59ms p(99)=22.94ms
+    sgo_ordenes_confirmadas........: 379     1.261525/s
+    sgo_ordenes_enviadas...........: 379     1.261525/s
+
+    HTTP
+    http_req_duration..............: avg=12.23ms min=4.86ms  med=11.09ms max=60.57ms p(90)=18.48ms p(95)=23.29ms p(99)=29.59ms
+      { expected_response:true }...: avg=12.23ms min=4.86ms  med=11.09ms max=60.57ms p(90)=18.48ms p(95)=23.29ms p(99)=29.59ms
+    http_req_failed................: 0.00%   0 out of 882
+      { paso:crear }...............: 0.00%   0 out of 379
+    http_reqs......................: 882     2.935791/s
+
+    EXECUTION
+    iteration_duration.............: avg=23.95ms min=12.89ms med=22.18ms max=72.15ms p(90)=32.63ms p(95)=40.03ms p(99)=54.62ms
+    iterations.....................: 379     1.261525/s
+    vus............................: 0       min=0          max=1 
+    vus_max........................: 10      min=10         max=10
+
+    NETWORK
+    data_received..................: 872 kB  2.9 kB/s
+    data_sent......................: 760 kB  2.5 kB/s
+
+
+

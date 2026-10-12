@@ -1,0 +1,80 @@
+Esperando el drenado de cci-c2-1011215848 (maximo 600s)...
+  t=2s ordenes_en_transito=0 mensajes_en_colas=0
+=== Credito + Inventario — prueba c2 — RUN_ID=c2-1011215848 (prefijo cci-c2-1011215848-, SKU SKU-CCI-C2-1011215848) ===
+ordenes_total=380
+ordenes_credito=190
+ordenes_tarjeta=190
+ordenes_en_transito=0
+ordenes_sin_confirmar=0
+estado.CREDITO.DESPACHO_SOLICITADO=190
+estado.TARJETA.DESPACHO_SOLICITADO=190
+decision_credito_p50_s=0.73
+decision_credito_p95_s=1.08
+decision_credito_max_s=1.23
+decision_tarjeta_p50_s=0.77
+decision_tarjeta_p95_s=1.19
+decision_tarjeta_max_s=1.33
+retencion_credito_max_s=1.23
+creacion_a_resultado_credito_p95_s=1.88
+creacion_a_resultado_tarjeta_p95_s=2.02
+recuperacion_decision_credito_p95_s=1.08
+rechazos_stock_tarjeta=0
+rechazos_stock_credito=0
+rechazos_credito=0
+timeouts_credito=0
+rechazos_cobro_tarjeta=0
+canceladas_reserva_vencida=0
+rechazadas_grupo_b=0
+rechazadas_grupo_t=0
+no_rechazadas_grupo_x=0
+stock_fisico=1200
+stock_reservado=380
+stock_disponible_final=820
+sobreventa=0
+inventario_dif_existencia_vs_reservas=0
+inventario_dif_existencia_vs_ordenes=0
+fugas_stock=0
+huecos_stock=0
+unidades_vendidas_tarjeta=190
+unidades_vendidas_credito=190
+credito_negativas_con_reserva=0
+rechazos_sin_evento_liberacion=0
+liberacion_tras_rechazo_p50_s=
+liberacion_tras_rechazo_p95_s=
+liberacion_tras_rechazo_max_s=
+retencion_esteril_p50_s=
+retencion_esteril_p95_s=
+retencion_esteril_max_s=
+retencion_esteril_unidades=0
+retencion_esteril_unidad_segundos=0
+tarjetas_rechazadas_mientras_credito_retenia=0
+ventas_tarjeta_perdidas_por_retencion=0
+credito_decision.APROBADA=190
+credito_cuentas.VIGENTE=190
+lineas_sobre_limite=0
+lineas_incoherentes=0
+cargos_huerfanos=0
+max_aprobadas_por_cliente=2
+max_uso_linea_pct=2.7
+primer_minuto_degradado=ninguno
+ordenes_en_primer_minuto_degradado=ninguno
+pico_unidades_esperando_credito=0
+--- por minuto desde la primera orden ---
+minuto | ordenes | credito | decision_credito_p95_s | decision_credito_max_s | timeouts | rechazos_stock | unidades_esperando_credito_al_cierre
+1 | 72 | 36 | 1.06 | 1.09 | 0 | 0 | 0
+2 | 80 | 40 | 1.00 | 1.13 | 0 | 0 | 0
+3 | 80 | 40 | 1.11 | 1.23 | 0 | 0 | 0
+4 | 80 | 40 | 1.05 | 1.17 | 0 | 0 | 0
+5 | 68 | 34 | 1.00 | 1.19 | 0 | 0 | 0
+===
+RESULTADO=APROBADO (c2, 380 ordenes)
+--- recursos (maximos durante la corrida, muestreo cada 10 s) ---
+contenedor                                     cpu_max_%  mem_max_MiB
+sgo-logic-inventario-api-1                          11.6        313.5
+sgo-logic-db-finanzas-1                              6.9         70.2
+sgo-logic-db-operacional-1                          21.6        112.2
+sgo-logic-pagos-api-1                                5.7        296.6
+sgo-logic-rabbitmq-1                               353.9        232.5
+sgo-logic-ordenes-api-1                             17.5        344.5
+sgo-logic-credito-api-1                              7.6        283.7
+max_mensajes_en_colas_credito_inventario_ordenes=2

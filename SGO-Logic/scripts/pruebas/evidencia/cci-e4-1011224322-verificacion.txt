@@ -1,0 +1,79 @@
+Esperando el drenado de cci-e4-1011224322 (maximo 600s)...
+  t=2s ordenes_en_transito=0 mensajes_en_colas=0
+=== Credito + Inventario — prueba e4 — RUN_ID=e4-1011224322 (prefijo cci-e4-1011224322-, SKU SKU-CCI-E4-1011224322) ===
+ordenes_total=122
+ordenes_credito=61
+ordenes_tarjeta=61
+ordenes_en_transito=0
+ordenes_sin_confirmar=0
+estado.CREDITO.RECHAZADA=61
+estado.TARJETA.DESPACHO_SOLICITADO=40
+estado.TARJETA.RECHAZADA=21
+decision_credito_p50_s=1.29
+decision_credito_p95_s=1.76
+decision_credito_max_s=1.91
+decision_tarjeta_p50_s=1.33
+decision_tarjeta_p95_s=1.80
+decision_tarjeta_max_s=2.00
+retencion_credito_max_s=1.91
+creacion_a_resultado_credito_p95_s=3.60
+creacion_a_resultado_tarjeta_p95_s=3.59
+recuperacion_decision_credito_p95_s=1.76
+rechazos_stock_tarjeta=21
+rechazos_stock_credito=7
+rechazos_credito=54
+timeouts_credito=0
+rechazos_cobro_tarjeta=0
+canceladas_reserva_vencida=0
+rechazadas_grupo_b=0
+rechazadas_grupo_t=21
+no_rechazadas_grupo_x=0
+stock_fisico=40
+stock_reservado=40
+stock_disponible_final=0
+sobreventa=0
+inventario_dif_existencia_vs_reservas=0
+inventario_dif_existencia_vs_ordenes=0
+fugas_stock=0
+huecos_stock=0
+unidades_vendidas_tarjeta=40
+unidades_vendidas_credito=0
+credito_negativas_con_reserva=54
+rechazos_sin_evento_liberacion=0
+liberacion_tras_rechazo_p50_s=0.95
+liberacion_tras_rechazo_p95_s=1.38
+liberacion_tras_rechazo_max_s=1.67
+retencion_esteril_p50_s=2.55
+retencion_esteril_p95_s=3.48
+retencion_esteril_max_s=3.82
+retencion_esteril_unidades=54
+retencion_esteril_unidad_segundos=137.6
+tarjetas_rechazadas_mientras_credito_retenia=20
+ventas_tarjeta_perdidas_por_retencion=0
+credito_decision.ANULADA_SIN_CARGO=7
+credito_decision.RECHAZADA=54
+credito_motivo.INCIDENTE_GRAVE=54
+credito_motivo.ORDEN_CANCELADA=7
+lineas_sobre_limite=0
+lineas_incoherentes=0
+cargos_huerfanos=0
+max_aprobadas_por_cliente=0
+max_uso_linea_pct=
+primer_minuto_degradado=ninguno
+ordenes_en_primer_minuto_degradado=ninguno
+pico_unidades_esperando_credito=0
+--- por minuto desde la primera orden ---
+minuto | ordenes | credito | decision_credito_p95_s | decision_credito_max_s | timeouts | rechazos_stock | unidades_esperando_credito_al_cierre
+1 | 122 | 61 | 1.76 | 1.91 | 0 | 28 | 0
+===
+RESULTADO=APROBADO (e4, 122 ordenes)
+--- recursos (maximos durante la corrida, muestreo cada 10 s) ---
+contenedor                                     cpu_max_%  mem_max_MiB
+sgo-logic-inventario-api-1                          14.0        335.4
+sgo-logic-db-finanzas-1                              8.4         83.8
+sgo-logic-db-operacional-1                          42.4        301.1
+sgo-logic-pagos-api-1                                9.6        308.7
+sgo-logic-rabbitmq-1                               140.8        385.9
+sgo-logic-ordenes-api-1                             33.2        385.9
+sgo-logic-credito-api-1                              8.1        306.5
+max_mensajes_en_colas_credito_inventario_ordenes=0

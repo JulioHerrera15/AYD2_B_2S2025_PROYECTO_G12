@@ -1,0 +1,51 @@
+time="2026-10-12T04:46:30Z" level=info msg="[e4-1011224629] PayKlik -> NORMAL (200)" source=console
+time="2026-10-12T04:46:30Z" level=info msg="[e4-1011224629] SKU SKU-CCI-E4-1011224629: 40 unidades en CD-01 a Q100" source=console
+time="2026-10-12T04:47:00Z" level=info msg="[e4-1011224629] E4: fin de la generacion de carga. La saga sigue en curso: espera el drenado y corre verificar.sh con RUN_ID=e4-1011224629 (ejecutar.sh lo hace solo). Stock inicial 40. Modo CONTROL (solo tarjeta)." source=console
+
+
+  █ THRESHOLDS 
+
+    sgo_exito_checkout{ruta:tarjeta}
+    ✓ 'rate>0.99' rate=100.00%
+
+    sgo_latencia_checkout_ms{ruta:tarjeta}
+    ✓ 'p(95)<1000' p(95)=51.68ms
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 120     3.996749/s
+    checks_succeeded...: 100.00% 120 out of 120
+    checks_failed......: 0.00%   0 out of 120
+
+    ✓ orden tarjeta creada (201)
+    ✓ orden tarjeta confirmada (200)
+
+    CUSTOM
+    sgo_exito_checkout.............: 100.00% 60 out of 60
+      { ruta:tarjeta }.............: 100.00% 60 out of 60
+    sgo_latencia_checkout_ms.......: avg=27.96ms min=14.53ms med=24.26ms max=113.75ms p(90)=36.69ms p(95)=51.68ms p(99)=82.25ms
+      { ruta:tarjeta }.............: avg=27.96ms min=14.53ms med=24.26ms max=113.75ms p(90)=36.69ms p(95)=51.68ms p(99)=82.25ms
+    sgo_latencia_confirmar_ms......: avg=16.38ms min=8.44ms  med=13.81ms max=73.52ms  p(90)=20.46ms p(95)=36.82ms p(99)=56.61ms
+    sgo_latencia_crear_ms..........: avg=11.57ms min=5.36ms  med=10.05ms max=40.23ms  p(90)=18.52ms p(95)=23.52ms p(99)=30.96ms
+    sgo_ordenes_confirmadas........: 60      1.998375/s
+    sgo_ordenes_enviadas...........: 60      1.998375/s
+
+    HTTP
+    http_req_duration..............: avg=11.87ms min=3.16ms  med=10.56ms max=73.52ms  p(90)=18.74ms p(95)=23.51ms p(99)=41.06ms
+      { expected_response:true }...: avg=11.87ms min=3.16ms  med=10.56ms max=73.52ms  p(90)=18.74ms p(95)=23.51ms p(99)=41.06ms
+    http_req_failed................: 0.00%   0 out of 183
+    http_reqs......................: 183     6.095043/s
+
+    EXECUTION
+    iteration_duration.............: avg=37.8ms  min=19.39ms med=33.71ms max=128.5ms  p(90)=62ms    p(95)=66.46ms p(99)=97.8ms 
+    iterations.....................: 60      1.998375/s
+    vus............................: 0       min=0        max=0 
+    vus_max........................: 20      min=20       max=20
+
+    NETWORK
+    data_received..................: 149 kB  5.0 kB/s
+    data_sent......................: 65 kB   2.2 kB/s
+
+
+
