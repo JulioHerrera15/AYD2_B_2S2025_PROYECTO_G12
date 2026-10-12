@@ -5,14 +5,15 @@ async function iniciarSesion(page, email = 'cliente1@sgo.local', password = '123
   await page.goto('/Auth/Login');
   await page.waitForLoadState('domcontentloaded');
 
-  // Llenar formulario de credenciales
+  // Llenar formulario de credenciales. AuthController.Login espera "contrasena",
+  // no "password": es el nombre real del input en Views/Auth/Login.cshtml.
   await page.locator('input[name="email"], input#email').fill(email);
-  await page.locator('input[name="password"], input#password').fill(password);
+  await page.locator('input[name="contrasena"], input#contrasena').fill(password);
 
   // Enviar formulario
   await page.locator('button[type="submit"]').click();
 
-  // Esperar redirección fuera de login
+  // Login correcto responde 302; uno fallido se queda en la misma vista con el error.
   await page.waitForURL(url => !url.pathname.includes('/Auth/Login'), { timeout: 15000 });
 }
 
