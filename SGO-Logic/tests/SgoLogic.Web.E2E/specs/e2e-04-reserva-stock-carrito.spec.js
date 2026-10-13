@@ -20,7 +20,7 @@ test.describe('E2E-04: Reserva de stock en carrito y validación de existencias'
     await page.waitForLoadState('domcontentloaded');
 
     // Validar que el producto figura en el carrito
-    await expect(page.locator('h1, h2')).toContainText(/carrito/i);
+    await expect(page.locator('h1, h2').first()).toContainText(/carrito/i);
     const itemCarrito = page.locator('.item-carrito, tr:has-text("PROD-002"), div:has-text("PROD-002")').first();
     await expect(itemCarrito).toBeVisible({ timeout: 10000 });
 

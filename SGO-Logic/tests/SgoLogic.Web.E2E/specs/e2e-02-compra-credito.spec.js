@@ -39,7 +39,7 @@ test.describe('E2E-02: Compra completa con Crédito Propio ("Compra ahora, paga 
       }
 
       // 6. Confirmar pedido por la ruta de crédito
-      const btnConfirmar = page.locator('#btn-confirmar-pedido');
+      const btnConfirmar = page.locator('#btn-confirmar');
       await expect(btnConfirmar).toBeEnabled();
       await btnConfirmar.click();
 
@@ -54,7 +54,7 @@ test.describe('E2E-02: Compra completa con Crédito Propio ("Compra ahora, paga 
       // 8. Consultar el estado de la línea de crédito en Mi Cuenta
       await page.goto('/Cuenta/Credito');
       await page.waitForLoadState('domcontentloaded');
-      await expect(page.locator('h1, h2')).toContainText(/crédito/i);
+      await expect(page.locator('h1, h2').first()).toContainText(/crédito/i);
     } else {
       // Si el entorno local no tiene aún el snapshot de crédito sembrado para este usuario,
       // verificar que al menos el componente de crédito renderiza la advertencia correspondiente
