@@ -1,0 +1,112 @@
+# Override de produccion (EC2). Se usa junto al compose base:
+#   docker compose --env-file .env --env-file .env.deploy \
+#     -f docker-compose.yml -f docker-compose.prod.yml up -d --no-build
+#
+# Las imagenes de los servicios las construye y publica el pipeline (cd.yml) en
+# GHCR; aqui solo se indica de donde bajarlas. IMAGE_PREFIX e IMAGE_TAG vienen de
+# .env.deploy, que escribe el pipeline en cada despliegue.
+# Los puertos de infraestructura (RabbitMQ, Redis, Prometheus, mocks) siguen
+# publicados por el compose base: en la EC2 los cierra el Security Group.
+
+services:
+  auth-api:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-auth-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  ordenes-api:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-ordenes-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  inventario-api:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-inventario-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  integracion-pos-worker:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-integracion-pos-worker:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  integracion-erp-worker:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-integracion-erp-worker:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  despacho-api:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-despacho-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  payklik-mock:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-payklik-mock:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  pagos-api:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-pagos-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  credito-api:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-credito-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  logiexpress-mock:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-logiexpress-mock:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  sat-mock:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-sat-mock:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  facturacion-api:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-facturacion-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  mock-mensajeria:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-mock-mensajeria:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  notificaciones-api:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-notificaciones-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  consulta-estado-api:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-consulta-estado-api:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  api-gateway:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-api-gateway:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  web:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-web:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  auditoria-worker:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-auditoria-worker:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  mock-erp:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-mock-erp:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  mock-pos:
+    image: ${IMAGE_PREFIX:?IMAGE_PREFIX requerido}/sgo-mock-pos:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+
+  db-operacional:
+    restart: unless-stopped
+
+  db-finanzas:
+    restart: unless-stopped
+
+  db-auditoria:
+    restart: unless-stopped
+
+  rabbitmq:
+    restart: unless-stopped
+
+  redis:
+    restart: unless-stopped
+
+  prometheus:
+    restart: unless-stopped
+
+  grafana:
+    restart: unless-stopped
+

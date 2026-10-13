@@ -1,0 +1,120 @@
+name: CI
+
+# Build + Test. Se ejecuta en cada PR hacia develop/main y en pushes a develop,
+# release/* y hotfix/*. Tambien lo invoca cd.yml (workflow_call) antes de desplegar.
+on:
+  pull_request:
+    branches: [develop, main]
+  push:
+    branches: [develop, "release/**", "hotfix/**"]
+  workflow_call:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: "true"
+  DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+  SOLUTION: SGO-Logic/SgoLogic.sln
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Cache de paquetes NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('SGO-Logic/**/*.csproj', 'SGO-Logic/Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Restaurar dependencias
+        run: dotnet restore "$SOLUTION"
+
+      - name: Compilar (Release, advertencias como error)
+        run: dotnet build "$SOLUTION" -c Release --no-restore
+
+  test-unitarias:
+    name: Test - unitarias
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Cache de paquetes NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('SGO-Logic/**/*.csproj', 'SGO-Logic/Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Ejecutar pruebas unitarias
+        run: |
+          rc=0
+          for proyecto in $(find SGO-Logic/tests -name '*.csproj' ! -name '*IntegrationTests*' | sort); do
+            nombre=$(basename "$proyecto" .csproj)
+            echo "::group::$nombre"
+            dotnet test "$proyecto" -c Release \
+              --logger "trx;LogFileName=$nombre.trx" \
+              --results-directory test-results/unitarias || rc=1
+            echo "::endgroup::"
+          done
+          exit $rc
+
+      - name: Publicar resultados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados-unitarias
+          path: test-results/unitarias
+          if-no-files-found: ignore
+
+  test-integracion:
+    name: Test - integracion (Testcontainers)
+    needs: build
+    runs-on: ubuntu-latest   # trae Docker, requerido por Testcontainers
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Cache de paquetes NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('SGO-Logic/**/*.csproj', 'SGO-Logic/Directory.Build.props') }}
+          restore-keys: nuget-${{ runner.os }}-
+
+      - name: Ejecutar pruebas de integracion
+        run: |
+          rc=0
+          for proyecto in $(find SGO-Logic/tests -name '*IntegrationTests.csproj' | sort); do
+            nombre=$(basename "$proyecto" .csproj)
+            echo "::group::$nombre"
+            dotnet test "$proyecto" -c Release \
+              --logger "trx;LogFileName=$nombre.trx" \
+              --results-directory test-results/integracion || rc=1
+            echo "::endgroup::"
+          done
+          exit $rc
+
+      - name: Publicar resultados
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: resultados-integracion
+          path: test-results/integracion
+          if-no-files-found: ignore
