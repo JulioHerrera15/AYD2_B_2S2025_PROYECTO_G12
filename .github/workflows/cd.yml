@@ -1,0 +1,157 @@
+name: CD
+
+# Build -> Test -> Deploy. El despliegue solo ocurre si el CI (build + unitarias +
+# integracion) pasa: "deploy" depende de "images", que depende de "ci".
+# Se dispara con el merge a main (release de git-flow) y a mano (workflow_dispatch).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: cd-deploy
+  cancel-in-progress: false
+
+env:
+  EC2_USER: ubuntu
+
+jobs:
+  ci:
+    name: CI (build + test)
+    uses: ./.github/workflows/ci.yml
+
+  images:
+    name: Imagen ${{ matrix.service }}
+    needs: ci
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - { service: auth-api, context: SGO-Logic, file: SGO-Logic/src/Services/SgoLogic.Auth.Api/Dockerfile }
+          - { service: ordenes-api, context: SGO-Logic, file: SGO-Logic/src/Services/SgoLogic.Ordenes.Api/Dockerfile }
+          - { service: inventario-api, context: SGO-Logic, file: SGO-Logic/src/Services/SgoLogic.Inventario.Api/Dockerfile }
+          - { service: integracion-pos-worker, context: SGO-Logic, file: SGO-Logic/src/Services/SgoLogic.IntegracionPos.Worker/Dockerfile }
+          - { service: integracion-erp-worker, context: SGO-Logic, file: SGO-Logic/src/Services/SgoLogic.IntegracionErp.Worker/Dockerfile }
+          - { service: despacho-api, context: SGO-Logic, file: SGO-Logic/src/Services/SgoLogic.Despacho.Api/Dockerfile }
+          - { service: payklik-mock, context: SGO-Logic, file: SGO-Logic/src/Services/SgoLogic.Mocks.PayKlik/Dockerfile }
+          - { service: pagos-api, context: SGO-Logic, file: SGO-Logic/src/Services/SgoLogic.Pagos.Api/Dockerfile }
+          - { service: credito-api, context: SGO-Logic, file: SGO-Logic/src/Services/SgoLogic.Credito.Api/Dockerfile }
+          - { service: logiexpress-mock, context: SGO-Logic, file: SGO-Logic/src/Services/SgoLogic.Mocks.LogiExpress/Dockerfile }
+          - { service: sat-mock, context: SGO-Logic, file: SGO-Logic/src/Services/SgoLogic.Mocks.SAT/Dockerfile }
+          - { service: facturacion-api, context: SGO-Logic, file: SGO-Logic/src/Services/SgoLogic.Facturacion.Api/Dockerfile }
+          - { service: mock-mensajeria, context: SGO-Logic, file: SGO-Logic/src/Services/SgoLogic.MockMensajeria/Dockerfile }
+          - { service: notificaciones-api, context: SGO-Logic, file: SGO-Logic/src/Services/SgoLogic.Notificaciones.Api/Dockerfile }
+          - { service: consulta-estado-api, context: SGO-Logic, file: SGO-Logic/src/Services/SgoLogic.ConsultaEstado.Api/Dockerfile }
+          - { service: api-gateway, context: SGO-Logic, file: SGO-Logic/src/Services/SgoLogic.ApiGateway/Dockerfile }
+          - { service: web, context: SGO-Logic, file: SGO-Logic/src/Services/SgoLogic.Web/Dockerfile }
+          - { service: auditoria-worker, context: SGO-Logic, file: SGO-Logic/src/Services/SgoLogic.Auditoria.Worker/Dockerfile }
+          - { service: mock-erp, context: Mocks/mock-erp, file: Mocks/mock-erp/Dockerfile }
+          - { service: mock-pos, context: Mocks/mock-pos, file: Mocks/mock-pos/Dockerfile }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Nombre y tag de la imagen
+        id: meta
+        run: |
+          echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/sgo-${{ matrix.service }}" >> "$GITHUB_OUTPUT"
+          echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build y push
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          file: ${{ matrix.file }}
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.image }}:latest
+          labels: org.opencontainers.image.source=https://github.com/${{ github.repository }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+  deploy:
+    name: Deploy a EC2
+    needs: images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar SSH
+        env:
+          EC2_HOST: ${{ secrets.EC2_HOST }}
+          EC2_SSH_KEY: ${{ secrets.EC2_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$EC2_SSH_KEY" | tr -d '\r' > ~/.ssh/ec2.pem
+          chmod 600 ~/.ssh/ec2.pem
+          cat > ~/.ssh/config <<CFG
+          Host ec2
+            HostName $EC2_HOST
+            User $EC2_USER
+            IdentityFile ~/.ssh/ec2.pem
+            StrictHostKeyChecking accept-new
+            ServerAliveInterval 30
+          CFG
+          ssh ec2 'echo "Conexion SSH OK: $(hostname)"'
+
+      - name: Subir codigo y configuracion
+        env:
+          ENV_FILE: ${{ secrets.ENV_FILE }}
+        run: |
+          IMAGE_PREFIX="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}"
+          git archive --format=tar.gz HEAD SGO-Logic Mocks | ssh ec2 \
+            'mkdir -p ~/sgo-logic && rm -rf ~/sgo-logic/SGO-Logic ~/sgo-logic/Mocks && tar xz -C ~/sgo-logic'
+          printf '%s\n' "$ENV_FILE" | tr -d '\r' | ssh ec2 \
+            'umask 077 && cat > ~/sgo-logic/SGO-Logic/.env'
+          printf 'IMAGE_PREFIX=%s\nIMAGE_TAG=%s\n' "$IMAGE_PREFIX" "${GITHUB_SHA::7}" | ssh ec2 \
+            'umask 077 && cat > ~/sgo-logic/SGO-Logic/.env.deploy'
+
+      - name: Desplegar con docker compose
+        run: |
+          ssh ec2 "GHCR_USER='${{ github.actor }}' GHCR_TOKEN='${{ secrets.GITHUB_TOKEN }}' bash -s" < deploy/aws/deploy.sh
+
+  e2e:
+    name: E2E contra el despliegue
+    needs: deploy
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: SGO-Logic/tests/SgoLogic.Web.E2E
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: SGO-Logic/tests/SgoLogic.Web.E2E/package-lock.json
+
+      - run: npm ci
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: Ejecutar E2E (specs 01 a 05)
+        env:
+          WEB_BASE_URL: http://${{ secrets.EC2_HOST }}:8092
+        run: npx playwright test 'e2e-0[1-5]'
+
+      - name: Publicar reporte
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-e2e
+          path: SGO-Logic/tests/SgoLogic.Web.E2E/playwright-report
+          if-no-files-found: ignore
