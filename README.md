@@ -40,7 +40,7 @@ El repositorio se organiza en dos partes:
 - [ADR-023 Historial crediticio por lotes desde el mock ERP y perfil precalculado en Crédito](documentacion/ADR/ADR-023-historial-crediticio-desde-mock-erp.md)
 
 #### Diagramas
-- [diagramas_CDU/](documentacion/diagramas_CDU/) — Diagramas de los casos de uso expandidos CU-01 a CU-15 (formatos editable `.drawio` y de imagen).
+- [diagramas_CDU/](documentacion/diagramas_CDU/) — Diagramas de los casos de uso expandidos CU-01 a CU-19 y el fuente editable del Diagrama de Componentes. Cada CU tiene su `.drawio` editable junto al `.svg` de imagen, salvo CU-01 a CU-10, que solo conservan el SVG exportado desde Lucidchart.
 - [img/](documentacion/img/) — Diagrama de Contexto, Diagrama de Bloques, Diagrama de Casos de Uso de Negocio de Alto Nivel, Diagrama de Despliegue Lógico, Diagrama de Despliegue Físico, Flujo Principal del Sistema, mockups de UI.
 
 #### Gestión de Proyecto
