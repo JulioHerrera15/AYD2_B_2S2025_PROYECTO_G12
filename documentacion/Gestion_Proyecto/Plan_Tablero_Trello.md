@@ -64,4 +64,6 @@ Nota para esta fase (documentación, sin código funcional): "Test/QA" significa
 
 ## 5. Tablero actual
 
-![Tablero Kanban en Trello](../img/Trello.png)
+![Tablero Kanban al inicio de la implementacion](../img/TrelloInicial.png)
+
+![Tablero Kanban al cierre de la Fase 2](../img/TrelloFinal.png)

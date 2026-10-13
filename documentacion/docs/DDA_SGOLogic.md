@@ -2,7 +2,7 @@
 # SGO-Logic — Sistema de Gestión de Órdenes y Logística Omnicanal
 
 **Cliente:** MegaStore
-**Versión:** 2.1
+**Versión:** 2.5
 **Naturaleza del documento:** Definición de arquitectura de la Fase 1. Comprende la delimitación del problema, la identificación de partes interesadas y drivers, las decisiones de arquitectura y las vistas que las sustentan. La versión 2.0 agrega la sección 14, Cambios de la Fase 2, que documenta cómo se materializó esa arquitectura en el MVP; las secciones 1 a 13 conservan el contenido de la Fase 1 y solo incorporan notas que remiten a los ADR posteriores.
 
 ---
@@ -798,6 +798,10 @@ Vista de alto nivel de la arquitectura completa. **Notación:** no es UML; es un
 
 ![Diagrama de Componentes](../img/Diagrama%20de%20Componentes.png)
 
+**Fuente editable:** `documentacion/diagramas_CDU/Diagrama de Componentes.drawio` (draw.io). La imagen anterior es la exportación de ese archivo; tras modificar el `.drawio` hay que volver a exportar el PNG para que ambos coincidan.
+
+Desde la Fase 3 el diagrama incluye los subsistemas `Crédito` y `Web y Canales`. `Crédito` se dibuja con sus tres consumidores de eventos (Órdenes, Pagos e Integración ERP), los dos workers de cobranza y reembolso, y su persistencia en `sgo_credito` sobre la instancia de finanzas. `Web y Canales` es la aplicación ASP.NET Core MVC que consume el `api-gateway` por HTTP y no publica ni consume eventos.
+
 ## 11.4 Diagramas de despliegue
 
 Muestran los artefactos físicos del sistema y su integración con los componentes de software. La vista lógica presenta la distribución de servicios, mensajería y almacenes de datos; la vista física presenta el clúster de contenedores, los servidores de base de datos y el punto de entrada. Ambas reflejan los escenarios de calidad: escalado horizontal independiente por servicio (EAC-01, EAC-04), el modelo de lectura en Redis (EAC-02), la base de auditoría separada de solo inserción (EAC-03) y el bloqueo optimista con expiración en Inventario (EAC-05).
@@ -818,7 +822,7 @@ El diagrama de casos de uso de negocio de alto nivel presenta los procesos de ne
 
 ![Diagrama de Casos de Uso de Negocio de Alto Nivel](../img/Diagrama%20de%20Casos%20de%20Uso%20de%20Negocio%20de%20Alto%20Nivel.png)
 
-Los casos de uso expandidos CU-01 a CU-19 se representan a continuación. CU-01 a CU-15 corresponden a los diagramas existentes; CU-16 a CU-19 son los casos de Crédito documentados textualmente en la sección 6 y quedan pendientes de diagrama UML editable.
+Los casos de uso expandidos CU-01 a CU-19 se representan a continuación. CU-01 a CU-15 corresponden a los diagramas existentes; CU-16 a CU-19 son los casos de Crédito de la Fase 3 y cuentan con su fuente editable en `documentacion/diagramas_CDU/CU-16.drawio` a `CU-19.drawio`.
 
 **CU-01**
 ![CU-01](../diagramas_CDU/CU-01.svg)
@@ -864,6 +868,19 @@ Los casos de uso expandidos CU-01 a CU-19 se representan a continuación. CU-01 
 
 **CU-15**
 ![CU-15](../diagramas_CDU/CU-15.drawio.svg)
+
+**CU-16**
+![CU-16](../diagramas_CDU/CU-16.drawio.svg)
+
+**CU-17**
+![CU-17](../diagramas_CDU/CU-17.drawio.svg)
+
+**CU-18**
+![CU-18](../diagramas_CDU/CU-18.drawio.svg)
+
+**CU-19**
+![CU-19](../diagramas_CDU/CU-19.drawio.svg)
+
 El siguiente diagrama presenta el flujo principal del sistema: el recorrido de punta a punta de una compra omnicanal, desde el reconocimiento del cliente hasta la confirmación de la orden.
 
 ![Flujo Principal del Sistema](../img/DDA_05%20-%20Flujo%20Principal%20del%20Sistema_%20Experiencia%20del%20Carrito%20Omnicanal%20(Preliminar%20v0.1).svg)
@@ -1051,6 +1068,7 @@ Esta sección documenta cómo se materializó la arquitectura definida en la Fas
 | 2.2 (2026-09-22) | Cierre de la Fase 2. ADR-020 queda Aceptada con fecha 2026-09-22 y describe su implementación real (bandera `Gateway:ExigirJwt`, protección también de `/api/erp/*` y el límite de que el compose no pasa la bandera ni el secreto al gateway, agregado a 14.9). Agrega ADR-021, compensación de stock por expiración del TTL, al índice de la sección 10 y a las secciones 14.5, 14.7 y 14.9. Agrega a 14.6 la auditoría de cada intento de cobro fallido con el evento `IntentoPagoFallido` (`pagos-eventos-v1` v1.3, reflejado en 14.4 y 14.7), las migraciones al arranque de Integración POS e Integración ERP con su procedimiento de línea base, y la nota de que Prometheus no raspa los mocks externos. Actualiza 14.8 con la evidencia vigente de EAC-01 y del camino feliz del 2026-09-22, que reemplaza a la del 2026-09-19: 0 órdenes perdidas de 379 y 100% de intentos fallidos auditados (130 de 130). Reemplaza el enlace roto al diagrama de componentes de la sección 11.3 por una nota, porque el archivo no está en el repositorio, y corrige las rutas de `PLANTILLA-SERVICIO.md` y `despacho-eventos-v1.md`. Contrastados contra el código: 28 contenedores, puertos, bases por instancia, colas citadas y ADR-001 a ADR-021. |
 | 2.3 (23/09/2026) | Refleja la integración de HU-003 y HU-014 en Inventario (merge `fa9b8e8`). Agrega ADR-022, compensación explícita de stock, que reemplaza a ADR-021: Inventario consume `ordenes.reserva.liberacion-solicitada` y `ordenes.devolucion.registrada` en la cola `inventario.ordenes`, libera la reserva en el momento y reingresa las unidades devueltas. Actualiza el índice de la sección 10 (ADR-021 queda Reemplazada por ADR-022) y las secciones 14.5, 14.7 y 14.9, que repetían la afirmación obsoleta de ADR-021; `inventario-eventos-v1` pasa a v1.1. Corrige en 14.5 y 14.9 la afirmación de que el compose no pasa la bandera al gateway: el servicio `api-gateway` recibe `Gateway__ExigirJwt` con `false` por defecto y `Auth__JwtSecret`. Agrega a 14.9 dos límites de Notificaciones: los avisos no se reintentan si el proveedor de mensajería falla, y el correo con el enlace de reintento de pago no se envía porque Notificaciones no consume `pagos.pago.pendiente`. |
 | 2.4 (06/10/2026) | Agrega la Fase 3 de Crédito: EV-54 a EV-58, CUN-10, CAR-15, PRE-21 y PRE-22, CU-16 a CU-19, EAC-06, RES-16 y RES-17. Incorpora el contexto `credito-api`, el contrato `credito-eventos-v1`, la ampliación de `mock-erp` con snapshots de historial, y ADR-023 como decisión aceptada. Actualiza las matrices de trazabilidad, el mapa de servicios, los límites del MVP y la evidencia pendiente del recorrido `mock-erp -> Integración ERP -> Crédito -> checkout`. |
+| 2.5 (13/10/2026) | Cierra la documentación gráfica de la Fase 3. Actualiza el diagrama de componentes de la sección 11.3 con los subsistemas `Crédito` (`credito-api`, puerto 8099, base `sgo_credito` en la instancia de finanzas) y `Web y Canales` (`web`, puerto 8092), incluido su enlace al `api-gateway` y al broker, y con el Growth del contenedor del sistema. Recupera las fuentes editables `CU-16.drawio` a `CU-19.drawio`, que solo existían como SVG exportado, y separa una página por archivo para no duplicar el modelo multipágina. Agrega el `Diagrama de Componentes.drawio` como fuente editable del diagrama de la sección 11.3. Corrige la nota obsoleta del historial 2.2 que decía que ese diagrama no estaba en el repositorio, y el enlace roto a `img/Trello.png` en `Gestion_Proyecto/Plan_Tablero_Trello.md`. |
 
 Las rutas de archivos de esta sección se expresan desde la raíz del repositorio.
 
