@@ -23,6 +23,13 @@ public sealed record SucursalCercana(Sucursal Sucursal, int Disponible, double? 
 ///
 /// Solo considera tiendas: los centros de distribucion no atienden publico, asi que
 /// no tiene sentido sugerirlos como "cambia a esta sucursal".
+///
+/// Regla de pais: si el origen es una sucursal conocida, solo se consideran tiendas
+/// del mismo <see cref="Sucursal.Pais" />. MegaStore opera en Guatemala, El Salvador
+/// y Costa Rica; un cliente que compra en una sede de Guatemala no puede recoger en
+/// Costa Rica, y la distancia sola no lo evita cuando el stock esta agotado en todo
+/// su pais. Si el origen es desconocido no hay pais de referencia y se consideran
+/// todas las tiendas.
 /// </summary>
 public static class SelectorSucursalCercana
 {
@@ -65,7 +72,8 @@ public static class SelectorSucursalCercana
             if (grupo.Key == ubicacionOrigenId
                 || !sucursalesPorId.TryGetValue(grupo.Key, out var sucursal)
                 || !sucursal.Activa
-                || sucursal.TipoUbicacion != TipoUbicacion.TIENDA)
+                || sucursal.TipoUbicacion != TipoUbicacion.TIENDA
+                || (origen is not null && !origen.MismoPaisQue(sucursal)))
             {
                 continue;
             }

@@ -106,7 +106,7 @@ Para salir, abre el menú de tu nombre (arriba a la derecha) y elige **Cerrar Se
 ### 3.1 Ver el catálogo
 
 1. Pulsa **Catálogo** en el menú.
-2. Arriba eliges tu **Sucursal Seleccionada**. Cada producto muestra cuántas unidades hay en esa sucursal ("Stock en Sucursal").
+2. Arriba eliges tu **Sucursal Seleccionada**. La lista está agrupada en **Centros de Distribución**, **Guatemala**, **El Salvador** y **Costa Rica**, y dentro de cada grupo las sedes van por nombre. Cada producto muestra cuántas unidades hay en esa sucursal ("Stock en Sucursal"). El sistema recuerda la sede elegida para tus próximas visitas.
 3. Usa las categorías o el buscador para filtrar.
 4. Elige la cantidad y pulsa el botón para agregar al carrito. Verás una confirmación y el número del carrito aumenta.
 
@@ -114,7 +114,9 @@ Para salir, abre el menú de tu nombre (arriba a la derecha) y elige **Cerrar Se
 
 ### 3.2 Aviso de sucursal más cercana con existencias
 
-Si un producto se agotó en tu sucursal pero hay en otra tienda, el recuadro de stock lo dice, por ejemplo: "Agotado aquí - disponible en (nombre de la tienda) a (distancia) km". Debajo aparece el botón **Cambiar a esa sucursal**: al pulsarlo, el catálogo pasa a mostrar esa tienda. También puedes agregar el producto sin cambiar de sucursal; se apartará en la tienda que sí tiene.
+Si un producto se agotó en tu sucursal pero hay en otra tienda del mismo país, el recuadro de stock lo dice, por ejemplo: "Agotado aquí - disponible en (nombre de la tienda) a (distancia) km". Debajo aparece el botón **Cambiar a esa sucursal**: al pulsarlo, el catálogo pasa a mostrar esa tienda. También puedes agregar el producto sin cambiar de sucursal; se apartará en la tienda que sí tiene.
+
+Solo se sugieren tiendas del país de tu sucursal: si compras en una sede de Guatemala, nunca se te propondrá recoger en El Salvador o Costa Rica.
 
 Otros avisos del recuadro:
 

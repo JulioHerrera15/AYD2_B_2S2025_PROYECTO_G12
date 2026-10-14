@@ -19,9 +19,9 @@ public sealed class ServicioReservasCarritoTests
     private const string Sku = "PROD-101";
     private const string OtroSku = "PROD-105";
 
-    private static readonly Sucursal Central = new("TIENDA-01-CENTRAL", "MegaStore Central", TipoUbicacion.TIENDA, "Guatemala", "Guatemala", 14.6010, -90.5130);
-    private static readonly Sucursal Oakland = new("TIENDA-05-OAKLAND", "MegaStore Oakland Mall", TipoUbicacion.TIENDA, "Guatemala", "Guatemala", 14.5985, -90.5075);
-    private static readonly Sucursal Xela = new("TIENDA-17-XELA", "MegaStore Utz Ulew", TipoUbicacion.TIENDA, "Quetzaltenango", "Quetzaltenango", 14.8460, -91.5300);
+    private static readonly Sucursal Central = new("TIENDA-01-CENTRAL", "MegaStore Central", TipoUbicacion.TIENDA, "Guatemala", "Guatemala", "Guatemala", 14.6010, -90.5130);
+    private static readonly Sucursal Oakland = new("TIENDA-05-OAKLAND", "MegaStore Oakland Mall", TipoUbicacion.TIENDA, "Guatemala", "Guatemala", "Guatemala", 14.5985, -90.5075);
+    private static readonly Sucursal Xela = new("TIENDA-17-XELA", "MegaStore Multiplaza", TipoUbicacion.TIENDA, "El Salvador", "La Libertad", "Antiguo Cuscatlán", 13.6785, -89.2520);
 
     private static Existencia En(Sucursal sucursal, int fisica, string sku = Sku) =>
         new(sku, sucursal.Id, sucursal.TipoUbicacion, fisica);

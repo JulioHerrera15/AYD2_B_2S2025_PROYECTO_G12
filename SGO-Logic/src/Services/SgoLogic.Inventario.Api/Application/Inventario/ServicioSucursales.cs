@@ -26,7 +26,8 @@ public sealed class ServicioSucursales
     /// <summary>
     /// Tienda activa mas cercana a <paramref name="desde" /> con al menos
     /// <paramref name="cantidad" /> unidades disponibles del SKU, excluyendo la propia
-    /// <paramref name="desde" />. Null si ninguna tienda tiene.
+    /// <paramref name="desde" />. Si <paramref name="desde" /> es una sucursal conocida,
+    /// solo busca en su mismo pais. Null si ninguna tienda tiene.
     /// </summary>
     public async Task<SucursalCercanaDto?> BuscarCercanaAsync(
         string sku,

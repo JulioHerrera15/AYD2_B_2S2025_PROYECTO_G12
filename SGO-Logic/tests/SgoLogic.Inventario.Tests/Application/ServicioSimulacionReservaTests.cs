@@ -12,9 +12,9 @@ public sealed class ServicioSimulacionReservaTests
     private const string Sku = "PROD-105";
     private const string Carrito = "cart:6f1c2a7e-0000-4000-8000-000000000003";
 
-    private static readonly Sucursal CentroDistribucion = new("CD-CENTRAL", "Centro de Distribución Central", TipoUbicacion.CENTRO_DISTRIBUCION, "Guatemala", "Guatemala", 14.5860, -90.5420);
-    private static readonly Sucursal Central = new("TIENDA-01-CENTRAL", "MegaStore Central", TipoUbicacion.TIENDA, "Guatemala", "Guatemala", 14.6010, -90.5130);
-    private static readonly Sucursal Americas = new("TIENDA-12-AMERICAS", "MegaStore Plaza Las Américas", TipoUbicacion.TIENDA, "Guatemala", "Guatemala", 14.5880, -90.5250);
+    private static readonly Sucursal CentroDistribucion = new("CD-CENTRAL", "Centro de Distribución Central", TipoUbicacion.CENTRO_DISTRIBUCION, "Guatemala", "Guatemala", "Guatemala", 14.5860, -90.5420);
+    private static readonly Sucursal Central = new("TIENDA-01-CENTRAL", "MegaStore Central", TipoUbicacion.TIENDA, "Guatemala", "Guatemala", "Guatemala", 14.6010, -90.5130);
+    private static readonly Sucursal Americas = new("TIENDA-12-AMERICAS", "MegaStore Plaza Las Américas", TipoUbicacion.TIENDA, "Guatemala", "Guatemala", "Guatemala", 14.5880, -90.5250);
 
     private static Existencia En(Sucursal sucursal, int fisica) => new(Sku, sucursal.Id, sucursal.TipoUbicacion, fisica);
 
