@@ -328,4 +328,112 @@ public sealed class ServicioDespachoTests
         Assert.Single(enCd07);
         Assert.Empty(enOtra);
     }
+
+    /// <summary>
+    /// Precarga un despacho ya con origen resuelto. Con fecha explicita para que el
+    /// orden del listado no dependa del reloj.
+    /// </summary>
+    private static Despacho.Api.Domain.Despacho Despachado(
+        RepositorioDespachosFalso despachos,
+        string ordenId,
+        string ubicacionOrigenId,
+        DateTime creadoEn,
+        MetodoEntrega metodo = MetodoEntrega.DOMICILIO)
+    {
+        var despacho = Despacho.Api.Domain.Despacho.Crear(
+            $"DES-2026-{despachos.Todos.Count + 1:D6}",
+            ordenId,
+            ReservaId,
+            metodo,
+            metodo == MetodoEntrega.RECOGIDA_TIENDA ? ubicacionOrigenId : null,
+            metodo == MetodoEntrega.DOMICILIO ? "zona 10" : null,
+            new[] { ("SKU-A", "lampara", 2) },
+            creadoEn);
+        despacho.DeterminarOrigen(
+            ubicacionOrigenId,
+            metodo == MetodoEntrega.RECOGIDA_TIENDA ? TipoUbicacion.TIENDA : TipoUbicacion.CENTRO_DISTRIBUCION);
+        despachos.Precargar(despacho);
+        return despacho;
+    }
+
+    [Fact]
+    public async Task El_panel_sin_ubicacion_lista_despachos_de_todas_las_ubicaciones()
+    {
+        // El origen lo decide Inventario: puede ser cualquier sede, no solo CD-01 o
+        // la tienda central. El panel no debe perder ninguno.
+        var (servicio, despachos, _, _, _) = Construir();
+        var t0 = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+        Despachado(despachos, "ORD-2026-000001", "CD-01", t0);
+        Despachado(despachos, "ORD-2026-000002", "CD-CENTRAL", t0.AddMinutes(1));
+        Despachado(despachos, "ORD-2026-000003", "TIENDA-02-MIRAFLORES", t0.AddMinutes(2), MetodoEntrega.RECOGIDA_TIENDA);
+
+        var todos = await servicio.ListarAsync(null, null, CancellationToken.None);
+
+        Assert.Equal(3, todos.Count);
+        Assert.Equal(
+            new[] { "TIENDA-02-MIRAFLORES", "CD-CENTRAL", "CD-01" },
+            todos.Select(d => d.UbicacionOrigenId));
+        Assert.All(todos, d => Assert.NotEmpty(d.Lineas));
+    }
+
+    [Fact]
+    public async Task El_panel_con_ubicacion_solo_lista_esa_ubicacion()
+    {
+        var (servicio, despachos, _, _, _) = Construir();
+        var t0 = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+        Despachado(despachos, "ORD-2026-000001", "CD-01", t0);
+        Despachado(despachos, "ORD-2026-000002", "CD-CENTRAL", t0.AddMinutes(1));
+        Despachado(despachos, "ORD-2026-000003", "CD-CENTRAL", t0.AddMinutes(2));
+
+        var enCentral = await servicio.ListarAsync("CD-CENTRAL", null, CancellationToken.None);
+        var enBlanco = await servicio.ListarAsync("  ", null, CancellationToken.None);
+
+        Assert.Equal(new[] { "ORD-2026-000003", "ORD-2026-000002" }, enCentral.Select(d => d.OrdenId));
+        Assert.Equal(3, enBlanco.Count);
+    }
+
+    [Fact]
+    public async Task El_panel_filtra_por_estado()
+    {
+        var (servicio, despachos, _, _, _) = Construir();
+        var t0 = new DateTime(2026, 10, 1, 12, 0, 0, DateTimeKind.Utc);
+        Despachado(despachos, "ORD-2026-000001", "CD-01", t0)
+            .AsignarGuia("LE-1", "https://rastreo/1", "LogiExpress");
+        Despachado(despachos, "ORD-2026-000002", "CD-CENTRAL", t0.AddMinutes(1))
+            .AsignarGuia("LE-2", "https://rastreo/2", "LogiExpress");
+        Despachado(despachos, "ORD-2026-000003", "CD-CENTRAL", t0.AddMinutes(2))
+            .MarcarGuiaPendiente();
+
+        var conGuia = await servicio.ListarAsync(null, EstadoDespacho.GUIA_ASIGNADA, CancellationToken.None);
+        var conGuiaEnCentral = await servicio.ListarAsync("CD-CENTRAL", EstadoDespacho.GUIA_ASIGNADA, CancellationToken.None);
+
+        Assert.Equal(new[] { "ORD-2026-000002", "ORD-2026-000001" }, conGuia.Select(d => d.OrdenId));
+        Assert.Equal("ORD-2026-000002", Assert.Single(conGuiaEnCentral).OrdenId);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Sin_estado_no_se_filtra(string? texto)
+    {
+        Assert.True(FiltroEstadoDespacho.IntentarParsear(texto, out var estado));
+        Assert.Null(estado);
+    }
+
+    [Theory]
+    [InlineData("GUIA_ASIGNADA", EstadoDespacho.GUIA_ASIGNADA)]
+    [InlineData("en_preparacion", EstadoDespacho.EN_PREPARACION)]
+    public void Un_estado_reconocido_se_acepta_sin_importar_mayusculas(string texto, EstadoDespacho esperado)
+    {
+        Assert.True(FiltroEstadoDespacho.IntentarParsear(texto, out var estado));
+        Assert.Equal(esperado, estado);
+    }
+
+    [Fact]
+    public void Un_estado_desconocido_se_rechaza_para_responder_400()
+    {
+        Assert.False(FiltroEstadoDespacho.IntentarParsear("VOLANDO", out var estado));
+        Assert.Null(estado);
+    }
 }

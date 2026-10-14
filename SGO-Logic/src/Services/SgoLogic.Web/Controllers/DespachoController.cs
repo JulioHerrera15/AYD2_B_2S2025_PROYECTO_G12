@@ -26,7 +26,10 @@ public sealed record DespachoViewModel(
     int ConteoDomicilio,
     int ConteoTienda,
     List<DespachoItemModel> Items,
-    List<DespachoPreparacionDto>? ColaPreparacion = null);
+    List<DespachoPreparacionDto>? ColaPreparacion = null,
+    string UbicacionId = PanelDespacho.TodasLasUbicaciones,
+    List<string>? Sedes = null,
+    string? Error = null);
 
 public class DespachoController : Controller
 {
@@ -58,65 +61,18 @@ public class DespachoController : Controller
         var filtroNormalizado = string.IsNullOrWhiteSpace(filtro) ? "TODOS" : filtro.Trim().ToUpperInvariant();
         ViewBag.Filtro = filtroNormalizado;
 
-        var ubicacionFiltro = string.IsNullOrWhiteSpace(ubicacionId) ? "TODAS" : ubicacionId.Trim();
+        var ubicacionFiltro = string.IsNullOrWhiteSpace(ubicacionId) ||
+                              ubicacionId.Trim().Equals(PanelDespacho.TodasLasUbicaciones, StringComparison.OrdinalIgnoreCase)
+            ? PanelDespacho.TodasLasUbicaciones
+            : ubicacionId.Trim();
         ViewBag.UbicacionId = ubicacionFiltro;
 
-        // Consultar cola de preparación real del servicio de Despacho (HU-019)
-        var ubicaciones = ubicacionFiltro == "TODAS"
-            ? new[] { "CD-01", "TIENDA-01-CENTRAL" }
-            : new[] { ubicacionFiltro };
-
-        var itemsAcumulados = new List<DespachoPreparacionDto>();
-        foreach (var u in ubicaciones)
-        {
-            var res = await _gateway.ObtenerColaPreparacionAsync(u);
-            if (res != null && res.Count > 0)
-            {
-                itemsAcumulados.AddRange(res);
-            }
-        }
-
-        var colaReal = itemsAcumulados
-            .GroupBy(x => !string.IsNullOrWhiteSpace(x.DespachoId) ? x.DespachoId : (!string.IsNullOrWhiteSpace(x.Id) ? x.Id : x.OrdenId))
-            .Select(g => g.First())
-            .OrderByDescending(x => x.CreadoEn)
-            .ToList();
-
-        var todos = colaReal.Select(item => new DespachoItemModel(
-            IdDespacho: item.DespachoId,
-            OrdenId: item.OrdenId,
-            Destino: item.MetodoEntrega == "RECOGIDA_TIENDA" 
-                ? $"MegaStore Tienda Central" 
-                : $"Envío a Domicilio ({item.UbicacionOrigenId})",
-            Metodo: item.MetodoEntrega,
-            MetodoLabel: item.MetodoEntrega == "RECOGIDA_TIENDA" ? "Recogida Tienda" : "Domicilio",
-            MetodoIcon: item.MetodoEntrega == "RECOGIDA_TIENDA" ? "storefront" : "local_shipping",
-            Transportista: item.MetodoEntrega == "RECOGIDA_TIENDA" ? "Flota Interna" : "LogiExpress",
-            Guia: item.GuiaId,
-            Estado: item.Estado,
-            EstadoBadgeClass: MapearBadgeEstado(item.Estado),
-            EstadoLabel: item.Estado == EstadoAnulado ? "CANCELADO" : item.Estado,
-            PuedeEnviarARuta: PuedeEnviarARuta(item.Estado, item.MetodoEntrega)
-        )).ToList();
-
-        var filtrados = filtroNormalizado switch
-        {
-            "DOMICILIO" => todos.Where(d => d.Metodo == "DOMICILIO").ToList(),
-            "RECOGIDA_TIENDA" or "TIENDA" => todos.Where(d => d.Metodo == "RECOGIDA_TIENDA").ToList(),
-            _ => todos
-        };
-
-        var model = new DespachoViewModel(
-            Filtro: filtroNormalizado,
-            TotalDespachos: todos.Count,
-            EnPreparacion: todos.Count(d => d.Estado == "EN_PREPARACION" || d.Estado == "GUIA_ASIGNADA"),
-            EnTransito: todos.Count(d => d.Estado == "EN_TRANSITO"),
-            Entregados: todos.Count(d => d.Estado == "ENTREGADA" || d.Estado == "LISTA_PARA_RECOGER"),
-            ConteoDomicilio: todos.Count(d => d.Metodo == "DOMICILIO"),
-            ConteoTienda: todos.Count(d => d.Metodo == "RECOGIDA_TIENDA"),
-            Items: filtrados,
-            ColaPreparacion: colaReal
-        );
+        // Despachos de todas las ubicaciones de origen (HU-019). El origen lo decide
+        // Inventario al reservar, asi que no se puede asumir una lista fija de sedes:
+        // se pide la lista completa y la sede elegida se filtra en memoria, lo que
+        // tambien permite armar el selector con las sedes reales.
+        var despachos = await _gateway.ListarDespachosAsync();
+        var model = PanelDespacho.Construir(despachos, filtroNormalizado, ubicacionFiltro);
 
         return View(model);
     }
@@ -157,32 +113,4 @@ public class DespachoController : Controller
 
         return RedirectToAction("Index");
     }
-
-    /// <summary>Estado de Despacho con el que se representa un despacho cancelado.</summary>
-    private const string EstadoAnulado = "ANULADA";
-
-    /// <summary>
-    /// Estados desde los que el dominio de Despacho (TransicionesEntrega) admite el
-    /// paso a ruta: EN_TRANSITO para domicilio y LISTA_PARA_RECOGER para recogida.
-    /// Un despacho cancelado nunca muestra el boton.
-    /// </summary>
-    private static readonly HashSet<string> OrigenesHaciaEnTransito =
-        new(StringComparer.OrdinalIgnoreCase) { "EN_PREPARACION", "GUIA_ASIGNADA", "GUIA_PENDIENTE", "INCIDENCIA" };
-
-    private static readonly HashSet<string> OrigenesHaciaListaParaRecoger =
-        new(StringComparer.OrdinalIgnoreCase) { "EN_PREPARACION", "RECOGIDA_TIENDA", "INCIDENCIA" };
-
-    private static bool PuedeEnviarARuta(string estado, string metodoEntrega) =>
-        metodoEntrega == "RECOGIDA_TIENDA"
-            ? OrigenesHaciaListaParaRecoger.Contains(estado)
-            : OrigenesHaciaEnTransito.Contains(estado);
-
-    private static string MapearBadgeEstado(string estado) => estado switch
-    {
-        EstadoAnulado => "bg-gray-100 text-gray-600 border border-gray-300",
-        "ENTREGADA" or "LISTA_PARA_RECOGER" => "bg-emerald-100 text-emerald-800 border border-emerald-200",
-        "EN_TRANSITO" => "bg-purple-100 text-purple-800 border border-purple-200",
-        "EN_PREPARACION" => "bg-amber-100 text-amber-800 border border-amber-200",
-        _ => "bg-blue-100 text-blue-800 border border-blue-200"
-    };
 }

@@ -115,21 +115,29 @@ despacho.MapGet("/ubicaciones/{ubicacionId}/preparacion", async (
     ServicioDespacho servicio,
     CancellationToken cancelacion) =>
 {
-    EstadoDespacho? filtro = null;
-    if (!string.IsNullOrWhiteSpace(estado))
+    if (!FiltroEstadoDespacho.IntentarParsear(estado, out var filtro))
     {
-        if (!Enum.TryParse<EstadoDespacho>(estado, ignoreCase: true, out var parseado))
-        {
-            return Results.Problem(
-                title: "Estado invalido",
-                detail: $"Estado '{estado}' no reconocido.",
-                statusCode: StatusCodes.Status400BadRequest);
-        }
-
-        filtro = parseado;
+        return EstadoInvalido(estado);
     }
 
     return Results.Ok(await servicio.ListarPorUbicacionOrigenAsync(ubicacionId, filtro, cancelacion));
+});
+
+// Panel de despacho: todas las ubicaciones de origen, o una sola con ubicacionId.
+// El segmento literal tiene precedencia sobre /{ordenId}, asi que no choca con la
+// consulta por orden.
+despacho.MapGet("/preparacion", async (
+    string? estado,
+    string? ubicacionId,
+    ServicioDespacho servicio,
+    CancellationToken cancelacion) =>
+{
+    if (!FiltroEstadoDespacho.IntentarParsear(estado, out var filtro))
+    {
+        return EstadoInvalido(estado);
+    }
+
+    return Results.Ok(await servicio.ListarAsync(ubicacionId, filtro, cancelacion));
 });
 
 // HU-011: reasignacion del metodo de entrega. Tambien llega por el evento
@@ -198,6 +206,11 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.Run();
+
+static IResult EstadoInvalido(string? estado) => Results.Problem(
+    title: "Estado invalido",
+    detail: $"Estado '{estado}' no reconocido.",
+    statusCode: StatusCodes.Status400BadRequest);
 
 static IResult MapearError(Exception ex) => ex switch
 {
