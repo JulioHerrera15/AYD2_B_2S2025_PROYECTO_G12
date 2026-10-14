@@ -13,6 +13,7 @@ public interface IClienteErp
 {
     Task<RespuestaErp> EnviarLoteAsync(string contenido, string contentType, CancellationToken cancelacion = default);
     Task<RespuestaErp> EnviarPagosCreditoAsync(IReadOnlyList<PagoCreditoErpRequest> pagos, CancellationToken cancelacion = default);
+    Task<RespuestaErp> RegistrarClienteAsync(string email, DateTime clienteDesde, string eventId, CancellationToken cancelacion = default);
     Task<ResumenErp?> ObtenerResumenAsync(CancellationToken cancelacion = default);
     Task<IReadOnlyList<ClienteHistorialErp>> ObtenerHistorialClientesAsync(DateTime? modificadosDesde = null, CancellationToken cancelacion = default);
 }
@@ -66,6 +67,44 @@ public sealed class ClienteErpHttp : IClienteErp
                 var estado = LeerEstado(raw, respuesta.StatusCode.ToString());
                 if (respuesta.IsSuccessStatusCode)
                     return new RespuestaErp(true, estado == "DUPLICADO", estado, (int)respuesta.StatusCode, null, raw);
+                if (!EsReintentable(respuesta.StatusCode) || intento >= _opciones.MaxReintentos)
+                    return new RespuestaErp(false, false, estado, (int)respuesta.StatusCode, raw, raw);
+                await Task.Delay(Backoff(intento), cancelacion);
+            }
+            catch (OperationCanceledException) when (!cancelacion.IsCancellationRequested)
+            {
+                if (intento >= _opciones.MaxReintentos)
+                    return new RespuestaErp(false, false, "TIMEOUT", 504, "Timeout ERP", null);
+                await Task.Delay(Backoff(intento), cancelacion);
+            }
+            catch (HttpRequestException ex)
+            {
+                if (intento >= _opciones.MaxReintentos)
+                    return new RespuestaErp(false, false, "ERROR_RED", 500, ex.Message, ex.Message);
+                await Task.Delay(Backoff(intento), cancelacion);
+            }
+        }
+    }
+
+    public async Task<RespuestaErp> RegistrarClienteAsync(
+        string email,
+        DateTime clienteDesde,
+        string eventId,
+        CancellationToken cancelacion = default)
+    {
+        for (var intento = 0; ; intento++)
+        {
+            try
+            {
+                using var respuesta = await _http.PostAsJsonAsync(
+                    "/erp/clientes",
+                    new { email, clienteDesde, eventId },
+                    cancelacion);
+                var raw = await respuesta.Content.ReadAsStringAsync(cancelacion);
+                var estado = LeerEstado(raw, respuesta.StatusCode.ToString());
+                var duplicado = estado == "DUPLICADO";
+                if (respuesta.IsSuccessStatusCode || duplicado)
+                    return new RespuestaErp(true, duplicado, estado, (int)respuesta.StatusCode, null, raw);
                 if (!EsReintentable(respuesta.StatusCode) || intento >= _opciones.MaxReintentos)
                     return new RespuestaErp(false, false, estado, (int)respuesta.StatusCode, raw, raw);
                 await Task.Delay(Backoff(intento), cancelacion);

@@ -71,6 +71,23 @@ public sealed class ClienteErpHttpTests
         Assert.False(pago.GetProperty("puntual").GetBoolean());
     }
 
+    [Fact]
+    public async Task Registra_cliente_verificado_en_ERP()
+    {
+        var handler = new FijoHandler(HttpStatusCode.Created, "{\"estado\":\"CREADO\"}");
+        using var http = new HttpClient(handler) { BaseAddress = new Uri("http://erp.test") };
+        var cliente = new ClienteErpHttp(http, Options.Create(new ErpOptions { MaxReintentos = 0 }));
+
+        var respuesta = await cliente.RegistrarClienteAsync(
+            "nuevo@sgo.local", new DateTime(2026, 10, 14, 12, 0, 0, DateTimeKind.Utc), "event-verified-1");
+
+        Assert.True(respuesta.Exitoso);
+        Assert.Equal("/erp/clientes", handler.Uri?.AbsolutePath);
+        using var body = JsonDocument.Parse(handler.Cuerpo!);
+        Assert.Equal("nuevo@sgo.local", body.RootElement.GetProperty("email").GetString());
+        Assert.Equal("event-verified-1", body.RootElement.GetProperty("eventId").GetString());
+    }
+
     private sealed class FijoHandler : HttpMessageHandler
     {
         private readonly HttpStatusCode _status;

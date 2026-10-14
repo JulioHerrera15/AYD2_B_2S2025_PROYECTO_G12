@@ -6,6 +6,8 @@ using SgoLogic.Auth.Api.Application;
 using SgoLogic.Auth.Api.Infrastructure;
 using SgoLogic.Auth.Api.Infrastructure.Inventario;
 using SgoLogic.BuildingBlocks.Extensions;
+using SgoLogic.BuildingBlocks.Messaging;
+using SgoLogic.BuildingBlocks.Outbox;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -19,6 +21,8 @@ builder.Services.AddSwaggerGen();
 // ── Base de datos propia de Auth ─────────────────────────────────────────────
 builder.Services.AddDbContext<AuthDbContext>(opciones =>
     opciones.UseNpgsql(builder.Configuration.GetConnectionString("Postgres")));
+builder.Services.AddSgoMessaging();
+builder.Services.AddOutbox<AuthDbContext>(builder.Configuration);
 
 // ── Redis (carrito unificado) ─────────────────────────────────────────────────
 var redisConnection = builder.Configuration.GetConnectionString("Redis")
