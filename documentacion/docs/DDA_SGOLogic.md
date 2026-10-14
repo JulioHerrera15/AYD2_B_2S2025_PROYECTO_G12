@@ -2,8 +2,8 @@
 # SGO-Logic — Sistema de Gestión de Órdenes y Logística Omnicanal
 
 **Cliente:** MegaStore
-**Versión:** 2.5
-**Naturaleza del documento:** Definición de arquitectura de la Fase 1. Comprende la delimitación del problema, la identificación de partes interesadas y drivers, las decisiones de arquitectura y las vistas que las sustentan. La versión 2.0 agrega la sección 14, Cambios de la Fase 2, que documenta cómo se materializó esa arquitectura en el MVP; las secciones 1 a 13 conservan el contenido de la Fase 1 y solo incorporan notas que remiten a los ADR posteriores.
+**Versión:** 2.6
+**Naturaleza del documento:** Definición de arquitectura de la Fase 1. Comprende la delimitación del problema, la identificación de partes interesadas y drivers, las decisiones de arquitectura y las vistas que las sustentan. La versión 2.0 agrega la sección 14, Cambios de la Fase 2, que documenta cómo se materializó esa arquitectura en el MVP; la versión 2.6 agrega la sección 15, Cambios de la Fase 3, que resume el crédito propio, el estilo microkernel de Notificaciones, el CI/CD con despliegue en la nube y la estrategia de pruebas. Las secciones 1 a 13 conservan el contenido de la Fase 1 y solo incorporan notas que remiten a los ADR posteriores.
 
 ---
 
@@ -19,15 +19,23 @@
 8. Drivers de restricción
 9. Restricciones de infraestructura
 10. Decisiones de arquitectura (ADR)
+    - ADR-001 a ADR-012 (Fase 1)
+    - Decisiones de la Fase 2 y de la Fase 3 (ADR-013 a ADR-025), incluidas ADR-024 (microkernel de Notificaciones) y ADR-025 (CI/CD y despliegue en EC2)
 11. Vistas arquitectónicas
     - 11.1 Diagrama de contexto
     - 11.2 Diagrama de bloques
     - 11.3 Diagrama de componentes
-    - 11.4 Diagramas de despliegue (lógico y físico)
+    - 11.4 Diagramas de despliegue (lógico, físico y vista de despliegue en la nube de la Fase 3)
     - 11.5 Diagramas de casos de uso expandidos
 12. Matrices de trazabilidad
 13. Vacíos de información y supuestos
 14. Cambios de la Fase 2
+15. Cambios de la Fase 3
+    - 15.1 Nueva regla de negocio: crédito propio "Compra ahora, paga en 30 días"
+    - 15.2 Nuevo estilo arquitectónico para notificaciones (ADR-024)
+    - 15.3 CI/CD y despliegue en la nube (ADR-025)
+    - 15.4 Estrategia de pruebas
+    - 15.5 Estrategia de ramas y releases
 
 ---
 
@@ -387,9 +395,11 @@ Cada contexto es dueño exclusivo de sus datos; ningún contexto accede a la bas
 | Integración ERP | Consolidación y envío batch al AS/400. | Lotes de resúmenes de venta. |
 | Crédito | Historial comercial precalculado, elegibilidad, línea y cuentas por cobrar a 30 días. | Perfil crediticio, historial importado, línea, cargos, abonos y estados de mora. |
 | Integración POS | Envío confiable de eventos a las 32 instancias de POS. | Cola de eventos hacia POS. |
-| Notificaciones | Envío de avisos al cliente. | Solicitudes de notificación. |
+| Notificaciones | Envío de avisos al cliente; desde la Fase 3, organizado internamente como microkernel con plugins por canal (ADR-024). | Solicitudes de notificación y notificaciones pendientes de reintento por canal. |
 
 El **Catálogo Comercial** (productos, precios, promociones, combos y financiamiento) es una dependencia externa. El sistema lo consulta para resolver precios y no administra su contenido.
+
+**Estilo microkernel dentro del contexto de Notificaciones (Fase 3).** El estilo general sigue siendo de microservicios por contexto delimitado con mensajería por eventos (ADR-001, ADR-016, ADR-018). La Fase 3 incorpora un segundo estilo, acotado al interior de `notificaciones-api`: una arquitectura microkernel basada en plugins (ADR-024). El núcleo (`NotificacionesKernel`) recibe una `SolicitudNotificacion`, consulta el registro de plugins (`PluginRegistry`) y despacha a cada plugin habilitado para el canal pedido; los plugins `EMAIL`, `SMS`, `PUSH` y `WEBHOOK` implementan el contrato `INotificacionPlugin`. Los dos estilos conviven sin solaparse: los consumidores de RabbitMQ del contexto (`notificaciones.ordenes`, `notificaciones.despacho` y `notificaciones.pagos`) siguen siendo la frontera con el resto del sistema y traducen cada evento a una solicitud para el kernel; el kernel no conoce el broker y los demás contextos no conocen los plugins. Si un plugin falla, el kernel registra la notificación en `notificacion_pendiente` con el canal afectado y el worker `ReintentoNotificacionesWorker` la reintenta con backoff exponencial, sin propagar el error al consumidor ni a la saga. La vista de componentes del microkernel está en la sección 11.3.
 
 ## 6.2 Casos de uso expandidos
 
@@ -758,9 +768,9 @@ Cada decisión se documenta con su contexto, la decisión adoptada, las alternat
 
 **Consecuencias.** Positivas: ninguna venta se pierde ni se duplica en el POS aunque una tienda esté sin conexión; no exige que el POS exponga API ni consulte inventario central. Negativas: la reconciliación de una tienda fuera de línea depende de que el reintento la alcance, sin garantía de tiempo máximo declarada; el manejo de duplicados recae también del lado del POS.
 
-## Decisiones de la Fase 2 (ADR-013 en adelante)
+## Decisiones de la Fase 2 y de la Fase 3 (ADR-013 en adelante)
 
-Las decisiones tomadas durante la Fase 2 se registran en archivos independientes en `documentacion/ADR/`, con el mismo formato que las anteriores. Los ADR-001 a ADR-012 no se modifican. El resumen de cada decisión se encuentra en la sección 14.5.
+Las decisiones tomadas durante la Fase 2 y la Fase 3 se registran en archivos independientes en `documentacion/ADR/`, con el mismo formato que las anteriores. Los ADR-001 a ADR-012 no se modifican. El resumen de las decisiones de la Fase 2 se encuentra en la sección 14.5; las de la Fase 3 (ADR-023 a ADR-025) se resumen en la sección 15.
 
 | ADR | Decisión | Relación con la Fase 1 | Archivo | Estado |
 |---|---|---|---|---|
@@ -775,6 +785,8 @@ Las decisiones tomadas durante la Fase 2 se registran en archivos independientes
 | ADR-021 | En el MVP la compensación de stock ocurre por expiración del TTL de la reserva | Acota la compensación de ADR-002 y se apoya en la expiración de ADR-005 | `documentacion/ADR/ADR-021-compensacion-de-stock-por-ttl-en-el-mvp.md` | Reemplazada por ADR-022 |
 | ADR-022 | La compensación de stock es explícita: Inventario libera la reserva por evento y reingresa las devoluciones | Completa la compensación de ADR-002 y conserva la expiración de ADR-005 como red de seguridad | `documentacion/ADR/ADR-022-compensacion-explicita-de-stock.md` | Aceptada |
 | ADR-023 | Historial crediticio por lotes desde el mock ERP y perfil precalculado en Crédito | Completa ADR-007, ADR-008 y ADR-019 para el producto "Compra ahora, paga en 30 días" | `documentacion/ADR/ADR-023-historial-crediticio-desde-mock-erp.md` | Aceptada |
+| ADR-024 | Arquitectura microkernel con plugins (Email, SMS, Push y Webhook) para el servicio de Notificaciones | Agrega un estilo arquitectónico interno al contexto de Notificaciones; conserva ADR-001, ADR-016 y ADR-018 como frontera por eventos | `documentacion/ADR/ADR-024-arquitectura-microkernel-plugins-notificaciones.md` | Aceptada |
+| ADR-025 | CI/CD con GitHub Actions y despliegue en AWS EC2 con Docker Compose e imágenes en GHCR | Complementa ADR-013 como entorno desplegado en la nube y mantiene ADR-001 (Kubernetes) como plataforma objetivo | `documentacion/ADR/ADR-025-cicd-github-actions-y-despliegue-ec2-con-compose.md` | Aceptada |
 
 ---
 
@@ -802,6 +814,65 @@ Vista de alto nivel de la arquitectura completa. **Notación:** no es UML; es un
 
 Desde la Fase 3 el diagrama incluye los subsistemas `Crédito` y `Web y Canales`. `Crédito` se dibuja con sus tres consumidores de eventos (Órdenes, Pagos e Integración ERP), los dos workers de cobranza y reembolso, y su persistencia en `sgo_credito` sobre la instancia de finanzas. `Web y Canales` es la aplicación ASP.NET Core MVC que consume el `api-gateway` por HTTP y no publica ni consume eventos.
 
+### 11.3.1 Componentes del microkernel de Notificaciones (Fase 3)
+
+**Notación:** diagrama de componentes en Mermaid (notación complementaria, no UML estricto). Muestra el interior del contenedor `notificaciones-api` según ADR-024 y su convivencia con la mensajería por eventos. Las cajas del borde superior son los consumidores de RabbitMQ, que siguen siendo la única puerta de entrada de eventos al contexto; el núcleo resuelve los plugins por canal en el registro y aísla las fallas de cada uno.
+
+```mermaid
+flowchart TB
+    subgraph broker["RabbitMQ (exchange sgo.eventos)"]
+        q1["cola notificaciones.ordenes<br/>ordenes.orden.estado-cambiado"]
+        q2["cola notificaciones.despacho<br/>despacho.pedido.listo-para-recoger"]
+        q3["cola notificaciones.pagos<br/>pagos.pago.pendiente"]
+    end
+
+    subgraph notif["notificaciones-api"]
+        c1["NotificacionesOrdenesConsumidor"]
+        c2["NotificacionesDespachoConsumidor"]
+        c3["NotificacionesPagosConsumidor"]
+        svc["ServicioNotificaciones<br/>arma la SolicitudNotificacion"]
+        api["KernelPluginsController<br/>/api/kernel/plugins, toggle, despachar"]
+
+        subgraph kernel["Microkernel"]
+            k["NotificacionesKernel<br/>INotificacionesKernel"]
+            reg["PluginRegistry<br/>IPluginRegistry"]
+        end
+
+        subgraph plugins["Plugins (INotificacionPlugin)"]
+            pe["EmailNotificacionPlugin<br/>EMAIL, prioridad 100"]
+            ps["SmsNotificacionPlugin<br/>SMS, prioridad 80"]
+            pp["PushNotificacionPlugin<br/>PUSH, prioridad 70"]
+            pw["WebhookNotificacionPlugin<br/>WEBHOOK, prioridad 50"]
+        end
+
+        pend[("notificacion_pendiente<br/>sgo_notificaciones")]
+        worker["ReintentoNotificacionesWorker<br/>cada 5 s, backoff exponencial"]
+    end
+
+    mm["mock-mensajeria<br/>proveedor SMS, correo, push y webhook<br/>vía IMockMensajeriaClient"]
+
+    q1 --> c1
+    q2 --> c2
+    q3 --> c3
+    c1 --> svc
+    c2 --> svc
+    c3 --> svc
+    svc --> k
+    api --> k
+    k --> reg
+    reg --> pe
+    reg --> ps
+    reg --> pp
+    reg --> pw
+    pe --> mm
+    ps --> mm
+    pp --> mm
+    pw --> mm
+    k -- "fallo de un plugin" --> pend
+    worker --> pend
+    worker -- "reintenta solo el canal que falló" --> k
+```
+
 ## 11.4 Diagramas de despliegue
 
 Muestran los artefactos físicos del sistema y su integración con los componentes de software. La vista lógica presenta la distribución de servicios, mensajería y almacenes de datos; la vista física presenta el clúster de contenedores, los servidores de base de datos y el punto de entrada. Ambas reflejan los escenarios de calidad: escalado horizontal independiente por servicio (EAC-01, EAC-04), el modelo de lectura en Redis (EAC-02), la base de auditoría separada de solo inserción (EAC-03) y el bloqueo optimista con expiración en Inventario (EAC-05).
@@ -815,6 +886,95 @@ Muestran los artefactos físicos del sistema y su integración con los component
 ![Diagrama de Despliegue Físico](../img/Diagrama%20de%20Despliegue%20Físico.png)
 
 **Nota de la Fase 2.** Los diagramas de esta sección describen la plataforma de producción en Kubernetes. La topología del entorno de ejecución del MVP, en Docker Compose, se detalla en las secciones 14.1 y 14.2.
+
+**Vista de despliegue en la nube (Fase 3)**
+
+**Notación:** diagrama de despliegue en Mermaid (notación complementaria). Representa el entorno desplegado de la Fase 3 según ADR-025, `.github/workflows/ci.yml`, `.github/workflows/cd.yml`, `deploy/aws/deploy.sh`, `SGO-Logic/docker-compose.yml` y `SGO-Logic/docker-compose.prod.yml`. Los contenedores son los que levanta `docker compose up -d` con el override de producción, agrupados por capa; `seed-datos` y `seed-demo` vienen del compose base, corren una vez al arrancar y terminan. Los puertos del Security Group son los de `documentacion/docs/CICD-DESPLIEGUE.md`, sección 5.1.
+
+```mermaid
+flowchart LR
+    dev["Equipo<br/>git-flow: feature, develop, release, main"]
+
+    subgraph github["GitHub"]
+        repo["Repositorio del proyecto<br/>SGO-Logic, Mocks, deploy, documentacion"]
+        subgraph actions["GitHub Actions"]
+            ci["ci.yml<br/>build, test-unitarias, test-integracion"]
+            cd["cd.yml<br/>ci, images (20), deploy, e2e"]
+        end
+        secrets["Secrets<br/>EC2_HOST, EC2_SSH_KEY, ENV_FILE"]
+    end
+
+    ghcr[("GHCR<br/>ghcr.io/propietario/sgo-servicio<br/>tags: commit de 7 caracteres y latest")]
+
+    subgraph aws["AWS us-east-2"]
+        sg{{"Security Group<br/>22 SSH, 8092 Web, 8080 Gateway: 0.0.0.0/0<br/>3000 Grafana: solo Mi IP<br/>resto de puertos: cerrados"}}
+        subgraph ec2["EC2 m7i-flex.large, Ubuntu 24.04, IP elástica<br/>Docker Compose: docker-compose.yml + docker-compose.prod.yml"]
+            subgraph borde["Borde"]
+                gw["api-gateway :8080"]
+            end
+            subgraph webl["Web"]
+                web["web :8092"]
+            end
+            subgraph negocio["Servicios de negocio"]
+                auth["auth-api :8088"]
+                ord["ordenes-api :8083"]
+                inv["inventario-api :8094"]
+                pag["pagos-api :8085"]
+                cre["credito-api :8099"]
+                fac["facturacion-api :8087"]
+                des["despacho-api :8097"]
+                ce["consulta-estado-api :8091"]
+                noti["notificaciones-api :8090"]
+            end
+            subgraph workers["Workers"]
+                aud["auditoria-worker :8093"]
+                erp["integracion-erp-worker :8096"]
+                pos["integracion-pos-worker :8095"]
+                seeds["seed-datos y seed-demo<br/>una sola ejecución"]
+            end
+            subgraph mocks["Mocks de sistemas externos"]
+                pk["payklik-mock :8084"]
+                sat["sat-mock :8086"]
+                lx["logiexpress-mock :8098"]
+                mm["mock-mensajeria :8089"]
+                me["mock-erp :4000"]
+                mp["mock-pos :4001"]
+            end
+            subgraph infra["Infraestructura"]
+                dbo[("db-operacional<br/>PostgreSQL 16")]
+                dbf[("db-finanzas<br/>PostgreSQL 16")]
+                dba[("db-auditoria<br/>PostgreSQL 16")]
+                rmq["rabbitmq :5672, :15672"]
+                red["redis :6379"]
+            end
+            subgraph obs["Observabilidad"]
+                prom["prometheus :9090"]
+                graf["grafana :3000"]
+            end
+        end
+    end
+
+    usuario["Usuarios y evaluadores<br/>navegador"]
+
+    dev -- "push y pull request" --> repo
+    repo --> ci
+    repo -- "push a main o workflow_dispatch" --> cd
+    cd -- "build y push" --> ghcr
+    secrets --> cd
+    cd -- "SSH: git archive, .env, deploy.sh" --> sg
+    sg --> ec2
+    ec2 -- "docker compose pull" --> ghcr
+    usuario -- "HTTP 8092 y 8080" --> sg
+    cd -- "E2E 01 a 05 contra :8092" --> sg
+    web --> gw
+    gw --> negocio
+    negocio --> infra
+    workers --> infra
+    prom --> negocio
+    graf --> prom
+```
+
+El diagrama muestra el entorno que se despliega en esta fase, no un cambio de la plataforma objetivo. Kubernetes on-premises sigue siendo la plataforma de producción según ADR-001 (y RES-14, RES-15): los diagramas lógico y físico anteriores conservan su vigencia, y `deploy/k8s/consulta-estado-hpa.yaml` se mantiene como evidencia documental del escalado horizontal. La instancia EC2 con Docker Compose es el entorno desplegado de la Fase 3 (ADR-025): ejecuta la misma definición de servicios del MVP (ADR-013) con imágenes versionadas por commit en GHCR, en un único nodo y sin alta disponibilidad. Migrar de este entorno a Kubernetes exige escribir los manifiestos que faltan, no cambiar el código de los servicios.
 
 ## 11.5 Diagramas de casos de uso de negocio y de casos de uso expandidos
 
@@ -996,6 +1156,9 @@ Las matrices demuestran que cada decisión responde a una preocupación real del
 | Integración ERP legacy | ADR-007 |
 | EAC-01 / PRE-01 | ADR-001 |
 | EAC-02 / PRE-14 | ADR-004 |
+| EAC-06 / PRE-21 / PRE-22 | ADR-023 (perfil precalculado, límite de consulta y fallback a PayKlik), con ADR-016 para la bifurcación de la saga |
+| CU-15 / CAR-14 / PRE-03 / RES-06 | ADR-024 |
+| RES-14 / RES-15 / PRE-17 / PRE-19 | ADR-001, ADR-013, ADR-025 |
 
 ## 12.3 Decisión → Vista
 
@@ -1014,6 +1177,8 @@ Las matrices demuestran que cada decisión responde a una preocupación real del
 | ADR-011 | Sí | Sí | Sí | — |
 | ADR-012 | Sí | Sí | Sí | Sí |
 | ADR-023 | Sí | Sí | Sí | Sí |
+| ADR-024 | — | — | Sí (11.3.1) | — |
+| ADR-025 | — | — | — | Sí (11.4, vista de despliegue en la nube) |
 
 ## 12.4 Escenario de calidad → Mecanismo y vista
 
@@ -1024,7 +1189,7 @@ Las matrices demuestran que cada decisión responde a una preocupación real del
 | EAC-03 | Bitácora append-only en base propia indexada | Despliegue |
 | EAC-04 | Escalado horizontal independiente por servicio | Despliegue, Componentes |
 | EAC-05 | Bloqueo optimista con versión y expiración | Despliegue, Componentes |
-| EAC-06 | Perfil local precalculado, timeout corto y fallback a PayKlik | Contexto, Componentes, Despliegue |
+| EAC-06 | Perfil local precalculado (ADR-023), límite de 1 segundo en la consulta de la Web, timeout de 30 segundos en la saga y fallback a PayKlik | Contexto, Componentes, Despliegue; evidencia en `documentacion/docs/PRUEBAS-CARGA-ESTRES-CREDITO.md` (C4 y E3) |
 
 ## 12.5 Cobertura de partes interesadas
 
@@ -1032,7 +1197,9 @@ Las matrices demuestran que cada decisión responde a una preocupación real del
 |---|---|---|
 | STK-01 Junta Directiva | No tocar ERP ni POS | ADR-007, ADR-008, ADR-012 |
 | STK-02 Dirección / Gerencia | Omnicanal dentro de presupuesto y a tiempo | ADR-001, ADR-004; RES-10, RES-11 |
-| STK-03 Gerencia de TI | Continuidad, mantenibilidad, no tocar legacy | ADR-001, ADR-002, ADR-007; EAC-01 |
+| STK-03 Gerencia de TI | Continuidad, mantenibilidad, no tocar legacy | ADR-001, ADR-002, ADR-007, ADR-024, ADR-025; EAC-01 |
+| STK-08 Equipo interno de desarrollo | Solución construible, probada y desplegable con las competencias actuales | ADR-013, ADR-025 |
+| STK-13 Cliente final | Experiencia consistente, avisos oportunos y crédito sin bloquear la compra | ADR-023, ADR-024; EAC-06 |
 | STK-04 Dirección de Finanzas | Trazabilidad y cumplimiento fiscal | ADR-006, ADR-011; EAC-03 |
 | STK-05 Jefatura de Logística | Reducir errores de despacho, visibilidad | ADR-012; CU-11, CAR-08 |
 | STK-06 Dirección de Comercialización | Experiencia omnicanal sin silos | ADR-001, ADR-004; CU-07 |
@@ -1069,6 +1236,7 @@ Esta sección documenta cómo se materializó la arquitectura definida en la Fas
 | 2.3 (23/09/2026) | Refleja la integración de HU-003 y HU-014 en Inventario (merge `fa9b8e8`). Agrega ADR-022, compensación explícita de stock, que reemplaza a ADR-021: Inventario consume `ordenes.reserva.liberacion-solicitada` y `ordenes.devolucion.registrada` en la cola `inventario.ordenes`, libera la reserva en el momento y reingresa las unidades devueltas. Actualiza el índice de la sección 10 (ADR-021 queda Reemplazada por ADR-022) y las secciones 14.5, 14.7 y 14.9, que repetían la afirmación obsoleta de ADR-021; `inventario-eventos-v1` pasa a v1.1. Corrige en 14.5 y 14.9 la afirmación de que el compose no pasa la bandera al gateway: el servicio `api-gateway` recibe `Gateway__ExigirJwt` con `false` por defecto y `Auth__JwtSecret`. Agrega a 14.9 dos límites de Notificaciones: los avisos no se reintentan si el proveedor de mensajería falla, y el correo con el enlace de reintento de pago no se envía porque Notificaciones no consume `pagos.pago.pendiente`. |
 | 2.4 (06/10/2026) | Agrega la Fase 3 de Crédito: EV-54 a EV-58, CUN-10, CAR-15, PRE-21 y PRE-22, CU-16 a CU-19, EAC-06, RES-16 y RES-17. Incorpora el contexto `credito-api`, el contrato `credito-eventos-v1`, la ampliación de `mock-erp` con snapshots de historial, y ADR-023 como decisión aceptada. Actualiza las matrices de trazabilidad, el mapa de servicios, los límites del MVP y la evidencia pendiente del recorrido `mock-erp -> Integración ERP -> Crédito -> checkout`. |
 | 2.5 (13/10/2026) | Cierra la documentación gráfica de la Fase 3. Actualiza el diagrama de componentes de la sección 11.3 con los subsistemas `Crédito` (`credito-api`, puerto 8099, base `sgo_credito` en la instancia de finanzas) y `Web y Canales` (`web`, puerto 8092), incluido su enlace al `api-gateway` y al broker, y con el Growth del contenedor del sistema. Recupera las fuentes editables `CU-16.drawio` a `CU-19.drawio`, que solo existían como SVG exportado, y separa una página por archivo para no duplicar el modelo multipágina. Agrega el `Diagrama de Componentes.drawio` como fuente editable del diagrama de la sección 11.3. Corrige la nota obsoleta del historial 2.2 que decía que ese diagrama no estaba en el repositorio, y el enlace roto a `img/Trello.png` en `Gestion_Proyecto/Plan_Tablero_Trello.md`. |
+| 2.6 (14/10/2026) | Cierre de la Fase 3. Agrega ADR-024 (microkernel de Notificaciones) y ADR-025 (CI/CD con GitHub Actions y despliegue en EC2) a la tabla de la sección 10 y al índice. Agrega el estilo microkernel a la sección 6.1, su diagrama de componentes (11.3.1) y la vista de despliegue en la nube (11.4). Actualiza las matrices 12.2 a 12.5 con EAC-06, ADR-023, ADR-024 y ADR-025, y la evidencia de EAC-06 en 14.8. Crea la sección 15, Cambios de la Fase 3. |
 
 Las rutas de archivos de esta sección se expresan desde la raíz del repositorio.
 
@@ -1256,7 +1424,7 @@ Los umbrales son los de los escenarios de atributos de calidad de la sección 7.
 | Rendimiento (auditoría) | EAC-03 | Recuperación en menos de 1 segundo; cero transacciones sin respaldo. | `SGO-Logic/tests/SgoLogic.Auditoria.Tests/CargaTransaccionTests.cs`, `SGO-Logic/tests/SgoLogic.Auditoria.Tests/InsercionYRecuperacionTests.cs`, `documentacion/docs/AUDITORIA.md` |
 | Escalabilidad | EAC-04 | Sostiene una demanda de ocho veces sin degradar EAC-01, EAC-02 ni EAC-03; la capacidad base se incrementa año a año dentro del techo operativo sin cambios arquitectónicos. | `deploy/k8s/consulta-estado-hpa.yaml`, `SGO-Logic/scripts/pruebas-carga/eac02-hu024-escalar.sh`, `SGO-Logic/scripts/escalabilidad/docker-compose.scale.yml`, `documentacion/docs/PRUEBA-CARGA-EAC02.md` |
 | Consistencia de inventario | EAC-05 | Cero unidades comprometidas a más de un cliente; reservas no concluidas liberadas dentro del tiempo de expiración definido. | `SGO-Logic/tests/SgoLogic.Inventario.IntegrationTests/ReservaConcurrenteTests.cs`, `SGO-Logic/tests/SgoLogic.Inventario.Tests/Application/ServicioExpiracionReservasTests.cs`, `documentacion/docs/CONCURRENCIA-EAC05.md` |
-| Crédito | EAC-06 | Consulta local en milisegundos, sin llamada al ERP; ante timeout se conserva PayKlik. | Pruebas de integración del lote ERP -> Crédito y evidencia de Checkout; PENDIENTE DE EVIDENCIA |
+| Crédito | EAC-06 | Consulta local en milisegundos, sin llamada al ERP; ante timeout se conserva PayKlik. | `SGO-Logic/scripts/pruebas-carga/credito-inventario/c4-checkout-lectura.js` (elegibilidad p95 16.7 ms) y `e3-credito-caido.js` (0 rechazos de tarjeta con `credito-api` detenido), con evidencia en `SGO-Logic/scripts/pruebas/evidencia/cci-*.txt` y resumen en `documentacion/docs/PRUEBAS-CARGA-ESTRES-CREDITO.md`; pruebas de integración en `SGO-Logic/tests/SgoLogic.Credito.IntegrationTests/` |
 
 La evidencia del flujo completo de la saga, desde la creación de la orden hasta la entrega, se genera con `SGO-Logic/scripts/pruebas/camino-feliz.ps1` y se guarda en `SGO-Logic/scripts/pruebas/evidencia/camino-feliz-2026-09-22.txt`. No corresponde a un escenario de calidad, pero verifica que el ciclo de la orden avanza sin transiciones manuales (ADR-016).
 
@@ -1274,6 +1442,92 @@ Los siguientes límites son alcance deliberado del MVP. Cada uno indica qué exi
 | Notificaciones sin reintento | Notificaciones consume `ordenes.orden.estado-cambiado` (cola `notificaciones.ordenes`) y `despacho.pedido.listo-para-recoger` (cola `notificaciones.despacho`) y envía el aviso al proveedor de mensajería (`mock-mensajeria`, `POST /api/mensajes/email`). Si el proveedor falla, el consumidor registra una advertencia y confirma el mensaje igual: la falla no llega a la saga y la confirmación de la orden no se bloquea, lo que respeta PRE-03. | Un reintento del aviso fallido: el aviso se pierde y solo queda el registro en el log. La base `sgo_notificaciones` solo guarda la tabla de mensajes procesados, así que tampoco queda constancia de la solicitud; esto se aparta de la sección 6.1, que asigna a Notificaciones la propiedad de las solicitudes de notificación. | Sin ADR: aislamiento de fallos de PRE-03 y RES-06 (CU-15, CAR-14) |
 | Correo con el enlace de reintento de pago | Cuando el cobro no obtiene respuesta del proveedor, Pagos publica `PagoPendiente` (`pagos.pago.pendiente`) con el enlace de reintento, y Órdenes lo consume para pasar la orden a `PAGO_PENDIENTE`. Al cambiar de estado, Notificaciones envía el aviso genérico de cambio de estado de la orden. | El correo con el enlace de reintento que describe el flujo alternativo de la sección 6.3 (Pagos): Notificaciones no tiene ninguna cola ligada a `pagos.pago.pendiente`, y el aviso genérico que sí envía no incluye el enlace. | Sin ADR: alcance funcional de CU-15 y del flujo alternativo de Pagos (`contratos/pagos-eventos-v1.md`, `PagoPendiente`) |
 | Crédito comercial a 30 días | Crédito importa snapshots de historial desde Integración ERP, precalcula la elegibilidad, bifurca la saga después de la reserva y permite consultar/abonar cuentas por cobrar. | No se incluyen cuotas de 3, 6 o 12 meses, intereses, score externo, consulta síncrona al ERP ni crédito en POS salvo que se amplíe el contrato de canales. La evidencia del recorrido productivo mock ERP -> Integración ERP -> Crédito queda pendiente de ejecución. | ADR-023; contrato `documentacion/docs/contratos/credito-eventos-v1.md` |
+
+---
+
+# 15. Cambios de la Fase 3
+
+Esta sección resume lo que agrega la Fase 3 sin repetir el detalle que ya está en otras secciones o documentos: cada subsección enlaza a su fuente. Como en la Fase 2, los ADR-001 a ADR-012 no se modifican; las decisiones nuevas son ADR-023, ADR-024 y ADR-025. Las rutas se expresan desde la raíz del repositorio.
+
+## 15.1 Nueva regla de negocio: crédito propio "Compra ahora, paga en 30 días"
+
+MegaStore ofrece a clientes elegibles comprar ahora y pagar en 30 días, sin intereses ni recargos. La elegibilidad depende del historial comercial que reside en el ERP y la decisión no puede detener el checkout.
+
+| Elemento | Qué agrega la Fase 3 | Detalle |
+|---|---|---|
+| Evidencia | EV-54 a EV-58 | Sección 2.6 |
+| Partes interesadas | STK-19 Finanzas / Crédito y STK-20 Equipo de Integración ERP | Sección 3.1 |
+| Preocupaciones y conflicto | PRE-21, PRE-22 y CON-07 | Secciones 3.2 y 3.3 |
+| Caso de negocio | CUN-10 Administrar crédito comercial y su descomposición | Secciones 4.3 a 4.5 |
+| Característica | CAR-15, crédito comercial con perfil precalculado | Sección 5.2 |
+| Contexto delimitado | Crédito (`credito-api`, puerto 8099, base `sgo_credito` en la instancia de finanzas) | Secciones 6.1 y 14.2 |
+| Casos de uso | CU-16 Importar historial, CU-17 Ofrecer crédito, CU-18 Evaluar en la saga, CU-19 Consultar y pagar | Secciones 6.2, 6.3 y 11.5 |
+| Escenario de calidad | EAC-06, decisión rápida y resiliente de crédito | Sección 7; evidencia en 14.8 |
+| Restricciones | RES-16 y RES-17 | Sección 8 |
+| Decisión | ADR-023, historial por lotes desde el mock ERP y perfil precalculado | Sección 14.5 y `documentacion/ADR/ADR-023-historial-crediticio-desde-mock-erp.md` |
+| Contrato | `credito-eventos-v1` | `documentacion/docs/contratos/credito-eventos-v1.md` |
+
+**Actores nuevos.** En el negocio, Finanzas / Crédito administra la línea y la cobranza (STK-19); en el sistema, Integración ERP alimenta el historial y un temporizador de Crédito vence cuentas y envía recordatorios.
+
+**Bifurcación de la saga.** Órdenes mantiene la saga orquestada (ADR-002, ADR-016). Después de `INVENTARIO_RESERVADO`, una orden con `medioPago = CREDITO` publica `EvaluacionCreditoSolicitada` (`ordenes.credito.evaluacion-solicitada`) en lugar de `CobroSolicitado`. Crédito responde `CreditoAprobado` (la orden pasa a `CONFIRMADA_PENDIENTE_FISCAL` y sigue igual que la ruta de PayKlik) o `CreditoRechazado` (la orden queda `RECHAZADA` y se pide liberar la reserva). Si Crédito no responde en 30 segundos (`Credito__TimeoutEvaluacionSegundos`), `TimeoutEvaluacionCreditoWorker` rechaza la orden y libera el stock; una aprobación tardía se anula con `CargoCreditoAnulado`. La Web consulta la elegibilidad con un límite de 1 segundo y, si no hay respuesta, deshabilita la opción de crédito y mantiene la tarjeta.
+
+**Política, cobranza y reversos.** La política `2026.10-v2` (descartes, puntaje de 0 a 100, niveles Excelente, Bueno y Regular con límites de Q7,500, Q3,500 y Q1,500), los abonos con tarjeta a través de Pagos, el vencimiento que bloquea la línea, los recordatorios a 3 días, la anulación por cancelación y la devolución que reduce la deuda o reembolsa lo ya pagado están en `documentacion/docs/contratos/credito-eventos-v1.md`, secciones 4.1 a 4.10, y se explican para operación en el Manual Técnico (`documentacion/manuales/Manual_Tecnico.md`, sección 6).
+
+## 15.2 Nuevo estilo arquitectónico para notificaciones (ADR-024)
+
+El enunciado de la Fase 3 pide un estilo arquitectónico nuevo para las notificaciones que conviva con lo construido. Se adopta una arquitectura microkernel basada en plugins dentro de `notificaciones-api` (`documentacion/ADR/ADR-024-arquitectura-microkernel-plugins-notificaciones.md`):
+
+- **Núcleo:** `NotificacionesKernel` y `PluginRegistry` en `SGO-Logic/src/Services/SgoLogic.Notificaciones.Api/Kernel/Core/`.
+- **Contrato de extensión:** `INotificacionPlugin` en `Kernel/Abstractions/`.
+- **Plugins:** `EmailNotificacionPlugin`, `SmsNotificacionPlugin`, `PushNotificacionPlugin` y `WebhookNotificacionPlugin` en `Kernel/Plugins/`, registrados en `Program.cs`.
+- **Administración:** `GET /api/kernel/plugins`, `POST /api/kernel/plugins/{id}/toggle?habilitado=` y `POST /api/kernel/despachar` en el puerto 8090. Estas rutas no están publicadas en el `api-gateway`.
+- **Reintentos por canal:** tabla `notificacion_pendiente` y `ReintentoNotificacionesWorker` (ciclo de 5 segundos, primer reintento a los 10 segundos con backoff exponencial y un máximo de 6 intentos).
+
+La convivencia con la mensajería por eventos se describe en la sección 6.1 y se dibuja en la sección 11.3.1. Con este cambio, dos límites de la sección 14.9 dejan de aplicar: Notificaciones ya reintenta los avisos fallidos (fila "Notificaciones sin reintento") y consume `pagos.pago.pendiente` en la cola `notificaciones.pagos` para enviar el enlace de reintento de pago (fila "Correo con el enlace de reintento de pago"). Esas filas se conservan como registro del estado de la Fase 2.
+
+## 15.3 CI/CD y despliegue en la nube (ADR-025)
+
+El proceso de integración y despliegue continuo usa GitHub Actions y despliega en una instancia AWS EC2 con Docker Compose (`documentacion/ADR/ADR-025-cicd-github-actions-y-despliegue-ec2-con-compose.md`). El detalle operativo está en `documentacion/docs/CICD-DESPLIEGUE.md` y en el Manual Técnico, secciones 10 y 11.
+
+| Etapa | Dónde | Qué hace |
+|---|---|---|
+| Build | `.github/workflows/ci.yml`, job `build` | `dotnet restore` y `dotnet build` de `SGO-Logic/SgoLogic.sln` en Release; `TreatWarningsAsErrors` (`SGO-Logic/Directory.Build.props`) convierte cualquier advertencia en error. |
+| Test | `ci.yml`, jobs `test-unitarias` y `test-integracion` | Corren en paralelo después de `build`. El primero ejecuta todo proyecto de `SGO-Logic/tests/` que no termina en `IntegrationTests`; el segundo, los `*IntegrationTests` con Testcontainers sobre el Docker del runner. Publican los `.trx` como artefactos. |
+| Imágenes | `.github/workflows/cd.yml`, job `images` | Matriz de 20 imágenes (18 .NET, incluida la Web, y los mocks Node `mock-erp` y `mock-pos`) publicadas en GHCR con el tag del commit y `latest`. |
+| Deploy | `cd.yml`, job `deploy`, y `deploy/aws/deploy.sh` | Por SSH copia el código del commit, escribe `.env` desde el secret `ENV_FILE` y `.env.deploy` con `IMAGE_PREFIX` e `IMAGE_TAG`, descarga las imágenes y ejecuta `docker compose up -d --no-build`; espera hasta 10 minutos a que `api-gateway` y `web` estén `healthy`. |
+| Verificación posterior | `cd.yml`, job `e2e` | Corre las pruebas E2E 01 a 05 de Playwright contra la Web desplegada en el puerto 8092 y publica el reporte. Su fallo no revierte el despliegue. |
+
+**Regla de no desplegar si fallan las pruebas.** `cd.yml` invoca `ci.yml` como workflow reutilizable en el job `ci`; `images` declara `needs: ci` y `deploy` declara `needs: images`. Si el build o cualquiera de las pruebas falla, GitHub Actions no ejecuta `images` ni `deploy`, y no se publica ni se despliega nada. La regla queda en el grafo de dependencias del workflow, no en una convención del equipo.
+
+## 15.4 Estrategia de pruebas
+
+Las cantidades se contaron en el código el 14/10/2026. En las suites .NET se cuentan los métodos marcados con `[Fact]` o `[Theory]`; una `[Theory]` se ejecuta una vez por cada caso de datos, así que `dotnet test` reporta un número de casos mayor o igual. En Playwright se cuentan las llamadas `test(...)`; en carga y estrés, los escenarios k6 de la suite de crédito.
+
+| Tipo de prueba | Herramienta | Ubicación en el repositorio | Cantidad | ¿Corre en el pipeline? |
+|---|---|---|---|---|
+| Unitarias | xUnit 2.5.3 sobre .NET 8 (con EF Core InMemory y dobles de prueba) | `SGO-Logic/tests/` (13 proyectos que no terminan en `IntegrationTests`): Auditoría 10, Auth 23, BuildingBlocks 12, ConsultaEstado 24, Crédito 122, Despacho 33, Facturación 21, IntegracionErp 8, IntegracionPos 6, Inventario 110, Notificaciones 17, Órdenes 155, Pagos 156 | 697 métodos | Sí, job `test-unitarias` de `ci.yml` (también dentro de `cd.yml`) |
+| Integración | xUnit con Testcontainers 4.15.0 (PostgreSQL y RabbitMQ reales en contenedor) | `SGO-Logic/tests/SgoLogic.BuildingBlocks.IntegrationTests` (5), `SgoLogic.Credito.IntegrationTests` (22), `SgoLogic.Inventario.IntegrationTests` (10) | 37 métodos | Sí, job `test-integracion` de `ci.yml` (también dentro de `cd.yml`) |
+| End-to-end | Playwright (`@playwright/test` ^1.48.0, Chromium) | `SGO-Logic/tests/SgoLogic.Web.E2E/specs/`: E2E-01 a E2E-05 (una prueba cada uno) y E2E-06 (cinco pruebas) | 10 pruebas en 6 archivos | Parcial: el job `e2e` de `cd.yml` corre E2E-01 a E2E-05 contra la EC2; E2E-06 se ejecuta a mano en local porque usa `/interno/credito/demo/reiniciar`, que no está expuesto en la nube |
+| Carga | k6 en contenedor (`grafana/k6`) | `SGO-Logic/scripts/pruebas-carga/credito-inventario/` (C1 a C5); además `eac01-hu023-carga.js` y `eac02-hu024-carga.js` de la Fase 2 | 5 escenarios de la Fase 3 | No; se ejecutan a mano con `ejecutar.sh` contra el stack levantado |
+| Estrés | k6 en contenedor (`grafana/k6`) | `SGO-Logic/scripts/pruebas-carga/credito-inventario/` (E1 a E5) | 5 escenarios | No; se ejecutan a mano con `ejecutar.sh` |
+
+`SgoLogic.Auditoria.Tests` también usa Testcontainers, pero por su nombre corre en el job de unitarias; el runner `ubuntu-latest` trae Docker, así que funciona igual. Los resultados de carga y estrés de la corrida del 11/10/2026 están en `documentacion/docs/PRUEBAS-CARGA-ESTRES-CREDITO.md`, sección 9: nueve de las diez verificaciones aprobaron, E2 quedó rechazada por el criterio de recuperación y E5 no cumplió un umbral de k6 por dos respuestas HTTP 500 ante 100 peticiones simultáneas, sin pérdida de integridad en ninguna corrida.
+
+## 15.5 Estrategia de ramas y releases
+
+El equipo trabaja con git-flow:
+
+| Rama | Uso | Pipeline que dispara |
+|---|---|---|
+| `feature/*` | Una historia o tarea por rama, creada desde `develop`. | CI al abrir el pull request hacia `develop`. |
+| `develop` | Integración continua del trabajo terminado. | CI en cada push y en cada pull request. |
+| `release/*` | Estabilización de una entrega antes de pasar a `main`. | CI en cada push. |
+| `hotfix/*` | Corrección urgente sobre lo liberado. | CI en cada push. |
+| `main` | Código liberado. | CD en cada push (merge del release) y a mano con `workflow_dispatch`. |
+
+**Formato de commit.** Cada mensaje empieza con el carné del autor seguido de dos puntos: `carnet: mensaje`, por ejemplo `202300653: merge feature/historialParaCredito into develop`.
+
+**Releases.** Cada entrega se marca con un tag sobre `main`: `v1`, `v2` y `v3` corresponden a las entregas anteriores y `v4` es el release de cierre del proyecto. Según `documentacion/docs/CICD-DESPLIEGUE.md`, sección 2, el tag `vN` se crea después del merge del release a `main`; las imágenes de ese despliegue quedan identificadas en GHCR por los 7 primeros caracteres del commit.
 
 ---
 
