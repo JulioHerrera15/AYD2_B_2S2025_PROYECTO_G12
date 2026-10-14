@@ -1,4 +1,7 @@
 using Microsoft.EntityFrameworkCore;
+using SgoLogic.BuildingBlocks.Messaging;
+using SgoLogic.BuildingBlocks.Outbox;
+using SgoLogic.Contracts.Eventos.Auth;
 using SgoLogic.Auth.Api.Domain;
 using SgoLogic.Auth.Api.Infrastructure;
 
@@ -21,17 +24,20 @@ public sealed class AuthService : IAuthService
     private readonly IJwtService _jwt;
     private readonly ILogger<AuthService> _logger;
     private readonly IHttpClientFactory? _httpClientFactory;
+    private readonly IOutboxWriter? _outbox;
 
     public AuthService(
         AuthDbContext contexto,
         IJwtService jwt,
         ILogger<AuthService> logger,
-        IHttpClientFactory? httpClientFactory = null)
+        IHttpClientFactory? httpClientFactory = null,
+        IOutboxWriter? outbox = null)
     {
         _contexto = contexto;
         _jwt = jwt;
         _logger = logger;
         _httpClientFactory = httpClientFactory;
+        _outbox = outbox;
     }
 
     public async Task<RegistroResponse> RegistrarAsync(RegistroRequest request, CancellationToken ct = default)
@@ -153,6 +159,14 @@ public sealed class AuthService : IAuthService
 
         codigo.MarcarUsado();
         usuario.MarcarEmailVerificado();
+        _outbox?.Encolar(
+            ClienteVerificado.EventType,
+            ClienteVerificado.AggregateType,
+            usuario.Email,
+            1,
+            TopologiaMensajeria.ExchangeEventos,
+            ClienteVerificado.RoutingKey,
+            new ClienteVerificadoData(usuario.Email, usuario.CreadoEn));
         await _contexto.SaveChangesAsync(ct);
 
         return new VerificarEmailResponse("Correo verificado exitosamente. Ya puedes iniciar sesion.");

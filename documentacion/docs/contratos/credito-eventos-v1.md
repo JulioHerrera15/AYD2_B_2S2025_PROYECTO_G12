@@ -716,7 +716,15 @@ Crédito consume `HistorialClienteErpActualizado`. Integración ERP obtiene el s
 por lotes y envía también los cierres de cuentas de crédito como pagos puntuales o
 tardíos; no consulta al ERP desde el checkout.
 
+Auth emite `ClienteVerificado` (`auth.cliente.verificado`) solo después de verificar
+el correo. Lleva `clienteId` (email normalizado) y `clienteDesde` (fecha original de
+creación); se guarda en el Outbox de Auth junto con la verificación.
+
 ### 5.1 Mock ERP
+
+**`POST /erp/clientes`**: recibe `{ "email", "clienteDesde", "eventId" }`. Crea
+idempotentemente un snapshot con métricas iniciales en cero; si el email ya existe,
+responde `estado: "DUPLICADO"` sin reemplazar su historial.
 
 **`GET /erp/clientes/historial?modificadosDesde={ISO-8601 opcional}`**
 
@@ -794,6 +802,8 @@ clientes iniciales.
 
 ### 5.2 Integración ERP
 
+- `ErpOrdenesConsumidor` consume `ClienteVerificado`, registra el cliente en el mock
+  ERP y confirma el mensaje solo tras una respuesta exitosa o duplicada.
 - `ErpOrdenesConsumidor` consume `CuentaCreditoPagada` y la guarda en la tabla
   durable `pagos_credito_erp`, deduplicada por `eventId`.
 - `ErpHistorialClientesWorker` corre al arrancar y luego cada

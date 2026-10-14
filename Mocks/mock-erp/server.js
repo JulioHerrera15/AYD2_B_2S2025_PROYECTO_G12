@@ -474,6 +474,45 @@ app.get("/erp/lotes", (_req, res) => {
   });
 });
 
+app.post("/erp/clientes", (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const clienteDesde = new Date(req.body?.clienteDesde);
+  const eventId = String(req.body?.eventId || "").trim();
+  if (!email || !email.includes("@") || !eventId || Number.isNaN(clienteDesde.getTime())) {
+    return res.status(400).json({ estado: "FORMATO_INVALIDO", mensaje: "Se requiere email, clienteDesde y eventId validos." });
+  }
+
+  const existente = estadoERP.clientesHistorial.find(
+    (cliente) => cliente.email.trim().toLowerCase() === email
+  );
+  if (existente) {
+    return res.json({ estado: "DUPLICADO", email, cliente: existente });
+  }
+
+  const actualizadoEn = new Date().toISOString();
+  const cliente = {
+    codigoCliente: `ERP-CLI-${Date.now()}`,
+    email,
+    clienteDesde: clienteDesde.toISOString(),
+    comprasUltimos12Meses: 0,
+    montoCompradoUltimos12Meses: 0,
+    moneda: "GTQ",
+    pagosPuntuales: 0,
+    pagosTardios: 0,
+    maxDiasAtraso: 0,
+    devoluciones: 0,
+    incidentesGraves: 0,
+    otrosIncidentes: 0,
+    fechaCorte: actualizadoEn,
+    actualizadoEn,
+    loteOrigen: `ALTA-CLIENTE-${eventId}`,
+  };
+
+  estadoERP.clientesHistorial.push(cliente);
+  registrarBitacora({ evento: "CLIENTE_VERIFICADO_REGISTRADO", email, eventId });
+  return res.status(201).json({ estado: "CREADO", email, cliente });
+});
+
 app.get("/erp/clientes/historial", (req, res) => {
   const { modificadosDesde } = req.query;
 
@@ -594,6 +633,7 @@ app.get("/", (_req, res) => {
       "POST /erp/lotes": "Recibir lote (JSON, text/csv o application/xml)",
       "GET /erp/lotes/:loteId": "Confirmación de un lote ya procesado",
       "GET /erp/lotes": "Listado de lotes procesados y última secuencia",
+      "POST /erp/clientes": "Registrar idempotentemente un cliente con correo verificado e historial inicial vacio",
       "GET /erp/clientes/historial": "Snapshot de historial crediticio por cliente, listo para Crédito",
       "POST /erp/clientes/pagos": "Batch idempotente de cuentas de crédito pagadas; actualiza pagos puntuales/tardíos del snapshot",
       "GET /erp/admin/estado": "Estado interno del mock (para depuración)",

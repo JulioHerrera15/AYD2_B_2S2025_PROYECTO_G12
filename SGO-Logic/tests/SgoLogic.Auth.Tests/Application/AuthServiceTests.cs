@@ -4,6 +4,8 @@ using Microsoft.Extensions.Logging.Abstractions;
 using SgoLogic.Auth.Api.Application;
 using SgoLogic.Auth.Api.Domain;
 using SgoLogic.Auth.Api.Infrastructure;
+using SgoLogic.BuildingBlocks.Outbox;
+using SgoLogic.Contracts.Eventos.Auth;
 using Xunit;
 
 namespace SgoLogic.Auth.Tests.Application;
@@ -126,7 +128,8 @@ public sealed class AuthServiceTests
     public async Task VerificarEmail_con_codigo_correcto_marca_email_verificado_y_codigo_usado()
     {
         using var ctx = CrearContexto();
-        var sut = new AuthService(ctx, CrearJwtService(), NullLogger<AuthService>.Instance);
+        var outbox = new OutboxCapturador();
+        var sut = new AuthService(ctx, CrearJwtService(), NullLogger<AuthService>.Instance, outbox: outbox);
 
         await sut.RegistrarAsync(new RegistroRequest("verificar@megastore.com", "Pass123!", "Verificar Test"));
 
@@ -151,6 +154,12 @@ public sealed class AuthServiceTests
 
         Assert.True(userDb.EmailVerificado);
         Assert.True(codigoDb.Usado);
+        var evento = Assert.IsType<ClienteVerificadoData>(outbox.Data);
+        Assert.Equal("verificar@megastore.com", evento.ClienteId);
+        Assert.Equal(user.CreadoEn, evento.ClienteDesde);
+
+        await sut.VerificarEmailAsync(new VerificarEmailRequest("verificar@megastore.com", codigoPlano));
+        Assert.Equal(1, outbox.VecesEncolado);
     }
 
     [Fact]
@@ -163,5 +172,29 @@ public sealed class AuthServiceTests
 
         await Assert.ThrowsAsync<UnauthorizedAccessException>(() =>
             sut.VerificarEmailAsync(new VerificarEmailRequest("badcode@megastore.com", "000000")));
+    }
+
+    private sealed class OutboxCapturador : IOutboxWriter
+    {
+        public string? EventType { get; private set; }
+        public string? RoutingKey { get; private set; }
+        public object? Data { get; private set; }
+        public int VecesEncolado { get; private set; }
+
+        public void Encolar<TData>(
+            string eventType,
+            string aggregateType,
+            string aggregateId,
+            int sequence,
+            string exchange,
+            string routingKey,
+            TData data)
+            where TData : notnull
+        {
+            EventType = eventType;
+            RoutingKey = routingKey;
+            Data = data;
+            VecesEncolado++;
+        }
     }
 }

@@ -16,12 +16,14 @@ Se amplía `mock-erp` para simular la exportación de un historial comercial por
 
 El flujo adoptado es:
 
-1. `mock-erp` mantiene fixtures de clientes y genera un snapshot de historial con código ERP, email normalizado, antigüedad, compras y monto de los últimos 12 meses, pagos puntuales/tardíos, máximo atraso, devoluciones, incidentes, moneda, fecha de corte y lote de origen. Al aceptar un lote de ventas con `clienteId`, incrementa compras y monto. También recibe lotes idempotentes de `CuentaCreditoPagada` por `eventId` para incrementar pagos puntuales o tardíos.
-2. El worker de Integración ERP obtiene el snapshot en su proceso batch, valida el formato legado en la capa anticorrupción y lo transforma a `HistorialClienteErpActualizadoData`.
-3. Integración ERP publica `HistorialClienteErpActualizado` por Outbox, con `source=integracion-erp`, `aggregateId` igual al email normalizado, `fechaCorte` y `loteOrigen`. Un mismo lote o un corte anterior no vuelve a publicar datos efectivos.
-4. Crédito consume el evento en su cola propia y, en una sola transacción, guarda el último snapshot, recalcula `PerfilCrediticio`, actualiza la línea y publica `PerfilCrediticioActualizado` si cambió el resultado.
-5. Checkout consulta únicamente la oferta local de Crédito. Si esa lectura tarda más de su límite o Crédito no responde, oculta la opción y conserva PayKlik como alternativa.
-6. Órdenes mantiene la bifurcación existente: después de reservar inventario, `CREDITO` solicita evaluación de Crédito; PayKlik continúa por la ruta de cobro. Ambas rutas terminan en orden confirmada o rechazada y generan la notificación correspondiente.
+1. Auth emite `ClienteVerificado` por Outbox al verificar el correo, en la misma transacción que activa la cuenta. No se propagan registros sin verificar.
+2. Integración ERP consume `ClienteVerificado` y registra idempotentemente el email y la fecha original de creación del cliente en el mock ERP.
+3. `mock-erp` mantiene fixtures de clientes y genera un snapshot de historial con código ERP, email normalizado, antigüedad, compras y monto de los últimos 12 meses, pagos puntuales/tardíos, máximo atraso, devoluciones, incidentes, moneda, fecha de corte y lote de origen. Las cuentas nuevas empiezan con métricas comerciales en cero. Al aceptar un lote de ventas con `clienteId`, incrementa compras y monto. También recibe lotes idempotentes de `CuentaCreditoPagada` por `eventId` para incrementar pagos puntuales o tardíos.
+4. El worker de Integración ERP obtiene el snapshot en su proceso batch, valida el formato legado en la capa anticorrupción y lo transforma a `HistorialClienteErpActualizadoData`.
+5. Integración ERP publica `HistorialClienteErpActualizado` por Outbox, con `source=integracion-erp`, `aggregateId` igual al email normalizado, `fechaCorte` y `loteOrigen`. Un mismo lote o un corte anterior no vuelve a publicar datos efectivos.
+6. Crédito consume el evento en su cola propia y, en una sola transacción, guarda el último snapshot, recalcula `PerfilCrediticio`, actualiza la línea y publica `PerfilCrediticioActualizado` si cambió el resultado.
+7. Checkout consulta únicamente la oferta local de Crédito. Si esa lectura tarda más de su límite o Crédito no responde, oculta la opción y conserva PayKlik como alternativa.
+8. Órdenes mantiene la bifurcación existente: después de reservar inventario, `CREDITO` solicita evaluación de Crédito; PayKlik continúa por la ruta de cobro. Ambas rutas terminan en orden confirmada o rechazada y generan la notificación correspondiente.
 
 El formato externo del ERP queda encapsulado en Integración ERP. El contrato interno canónico es `HistorialClienteErpActualizado` de `documentacion/docs/contratos/credito-eventos-v1.md`; no se expone el modelo legado a Crédito.
 

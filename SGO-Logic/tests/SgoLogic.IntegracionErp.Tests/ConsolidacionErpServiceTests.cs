@@ -98,6 +98,9 @@ public sealed class ConsolidacionErpServiceTests
         public Task<RespuestaErp> EnviarPagosCreditoAsync(IReadOnlyList<PagoCreditoErpRequest> pagos, CancellationToken cancelacion = default)
             => Task.FromResult(new RespuestaErp(false, false, "NO_DISPONIBLE", 503, "caido", "caido"));
 
+        public Task<RespuestaErp> RegistrarClienteAsync(string email, DateTime clienteDesde, string eventId, CancellationToken cancelacion = default)
+            => Task.FromResult(new RespuestaErp(false, false, "NO_DISPONIBLE", 503, "caido", "caido"));
+
         public Task<ResumenErp?> ObtenerResumenAsync(CancellationToken cancelacion = default)
             => Task.FromResult<ResumenErp?>(null);
 
@@ -118,6 +121,9 @@ public sealed class ConsolidacionErpServiceTests
             => throw new NotSupportedException();
 
         public Task<RespuestaErp> EnviarPagosCreditoAsync(IReadOnlyList<PagoCreditoErpRequest> pagos, CancellationToken cancelacion = default)
+            => throw new NotSupportedException();
+
+        public Task<RespuestaErp> RegistrarClienteAsync(string email, DateTime clienteDesde, string eventId, CancellationToken cancelacion = default)
             => throw new NotSupportedException();
 
         public Task<ResumenErp?> ObtenerResumenAsync(CancellationToken cancelacion = default)
