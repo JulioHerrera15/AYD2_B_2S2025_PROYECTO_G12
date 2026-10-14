@@ -1,0 +1,22 @@
+epoch|contenedor|cpu_pct|memoria|colas_credito_inventario_ordenes
+1791780319|sgo-logic-credito-api-1|0.74%|297.2MiB / 7.674GiB|0
+1791780319|sgo-logic-db-finanzas-1|5.28%|80.31MiB / 7.674GiB|0
+1791780319|sgo-logic-db-operacional-1|36.67%|439.8MiB / 7.674GiB|0
+1791780319|sgo-logic-inventario-api-1|24.09%|328.6MiB / 7.674GiB|0
+1791780319|sgo-logic-ordenes-api-1|17.64%|391.6MiB / 7.674GiB|0
+1791780319|sgo-logic-pagos-api-1|2.06%|303MiB / 7.674GiB|0
+1791780319|sgo-logic-rabbitmq-1|30.06%|352MiB / 7.674GiB|0
+1791780333|sgo-logic-credito-api-1|1.59%|298.9MiB / 7.674GiB|0
+1791780333|sgo-logic-db-finanzas-1|5.82%|81.15MiB / 7.674GiB|0
+1791780333|sgo-logic-db-operacional-1|14.33%|446.9MiB / 7.674GiB|0
+1791780333|sgo-logic-inventario-api-1|1.32%|327.7MiB / 7.674GiB|0
+1791780333|sgo-logic-ordenes-api-1|1.39%|398.1MiB / 7.674GiB|0
+1791780333|sgo-logic-pagos-api-1|1.00%|301.7MiB / 7.674GiB|0
+1791780333|sgo-logic-rabbitmq-1|26.63%|357.5MiB / 7.674GiB|0
+1791780347|sgo-logic-credito-api-1|1.39%|298MiB / 7.674GiB|0
+1791780347|sgo-logic-db-finanzas-1|1.78%|80.84MiB / 7.674GiB|0
+1791780347|sgo-logic-db-operacional-1|9.66%|446.2MiB / 7.674GiB|0
+1791780347|sgo-logic-inventario-api-1|0.78%|328MiB / 7.674GiB|0
+1791780347|sgo-logic-ordenes-api-1|0.61%|386.7MiB / 7.674GiB|0
+1791780347|sgo-logic-pagos-api-1|0.97%|302.4MiB / 7.674GiB|0
+1791780347|sgo-logic-rabbitmq-1|78.32%|391.8MiB / 7.674GiB|0

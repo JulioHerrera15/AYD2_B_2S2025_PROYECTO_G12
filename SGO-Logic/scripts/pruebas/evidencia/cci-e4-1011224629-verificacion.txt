@@ -1,0 +1,70 @@
+Esperando el drenado de cci-e4-1011224629 (maximo 600s)...
+  t=2s ordenes_en_transito=0 mensajes_en_colas=0
+=== Credito + Inventario — prueba e4 — RUN_ID=e4-1011224629 (prefijo cci-e4-1011224629-, SKU SKU-CCI-E4-1011224629) ===
+ordenes_total=60
+ordenes_credito=0
+ordenes_tarjeta=60
+ordenes_en_transito=0
+ordenes_sin_confirmar=0
+estado.TARJETA.DESPACHO_SOLICITADO=40
+estado.TARJETA.RECHAZADA=20
+decision_tarjeta_p50_s=1.04
+decision_tarjeta_p95_s=1.12
+decision_tarjeta_max_s=1.14
+retencion_credito_max_s=
+creacion_a_resultado_tarjeta_p95_s=2.22
+recuperacion_decision_credito_p95_s=
+rechazos_stock_tarjeta=20
+rechazos_stock_credito=0
+rechazos_credito=0
+timeouts_credito=0
+rechazos_cobro_tarjeta=0
+canceladas_reserva_vencida=0
+rechazadas_grupo_b=0
+rechazadas_grupo_t=20
+no_rechazadas_grupo_x=0
+stock_fisico=40
+stock_reservado=40
+stock_disponible_final=0
+sobreventa=0
+inventario_dif_existencia_vs_reservas=0
+inventario_dif_existencia_vs_ordenes=0
+fugas_stock=0
+huecos_stock=0
+unidades_vendidas_tarjeta=40
+unidades_vendidas_credito=0
+credito_negativas_con_reserva=0
+rechazos_sin_evento_liberacion=0
+liberacion_tras_rechazo_p50_s=
+liberacion_tras_rechazo_p95_s=
+liberacion_tras_rechazo_max_s=
+retencion_esteril_p50_s=
+retencion_esteril_p95_s=
+retencion_esteril_max_s=
+retencion_esteril_unidades=0
+retencion_esteril_unidad_segundos=0
+tarjetas_rechazadas_mientras_credito_retenia=0
+ventas_tarjeta_perdidas_por_retencion=0
+lineas_sobre_limite=0
+lineas_incoherentes=0
+cargos_huerfanos=0
+max_aprobadas_por_cliente=0
+max_uso_linea_pct=
+primer_minuto_degradado=ninguno
+ordenes_en_primer_minuto_degradado=ninguno
+pico_unidades_esperando_credito=0
+--- por minuto desde la primera orden ---
+minuto | ordenes | credito | decision_credito_p95_s | decision_credito_max_s | timeouts | rechazos_stock | unidades_esperando_credito_al_cierre
+1 | 60 | 0 | - | - | 0 | 20 | 0
+===
+RESULTADO=APROBADO (e4, 60 ordenes)
+--- recursos (maximos durante la corrida, muestreo cada 10 s) ---
+contenedor                                     cpu_max_%  mem_max_MiB
+sgo-logic-inventario-api-1                           5.9        327.8
+sgo-logic-db-finanzas-1                              4.5         81.2
+sgo-logic-db-operacional-1                          22.3        459.6
+sgo-logic-pagos-api-1                               10.2        300.9
+sgo-logic-rabbitmq-1                                21.9        355.9
+sgo-logic-ordenes-api-1                             14.7        384.4
+sgo-logic-credito-api-1                              3.3        297.1
+max_mensajes_en_colas_credito_inventario_ordenes=0

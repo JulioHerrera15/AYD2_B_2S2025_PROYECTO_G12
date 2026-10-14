@@ -7,7 +7,7 @@
     var subtotalNeto = total - iva;
 
     var tiendaActiva = ViewBag.TiendaActiva as SgoLogic.Web.Controllers.TiendaPosOpcion
-        ?? new SgoLogic.Web.Controllers.TiendaPosOpcion("TIENDA-01-CENTRAL", "MegaStore Central — Zona 10, Guatemala (POS T01)", "T01", 400, "Guatemala");
+        ?? new SgoLogic.Web.Controllers.TiendaPosOpcion("TIENDA-01-CENTRAL", "MegaStore Central — Zona 10 (T01)", "T01", 400, "Guatemala");
 
     var tiendasDisponibles = ViewBag.TiendasDisponibles as List<SgoLogic.Web.Controllers.TiendaPosOpcion>
         ?? new List<SgoLogic.Web.Controllers.TiendaPosOpcion> { tiendaActiva };

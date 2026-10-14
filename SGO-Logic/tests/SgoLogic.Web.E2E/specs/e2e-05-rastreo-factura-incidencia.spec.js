@@ -12,7 +12,7 @@ test.describe('E2E-05: Rastreo de orden, factura electrónica e incidencias', ()
     await page.goto('/Estado');
     await page.waitForLoadState('domcontentloaded');
 
-    await expect(page.locator('h1, h2')).toContainText(/estado|orden|rastreo/i);
+    await expect(page.locator('h1').first()).toContainText(/pedidos|gu[ií]as|env[ií]os|[oó]rdenes|estado|rastreo/i);
 
     // 3. Verificar si existen órdenes en el historial del cliente
     const linkOrden = page.locator('a[href*="/Estado?ordenId="], a[href*="/Estado/Detalle"], tr a').first();

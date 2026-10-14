@@ -1,0 +1,11 @@
+c1|c1-1011215306|verificacion=APROBADO|umbrales_k6=cumplidos
+c2|c2-1011215848|verificacion=APROBADO|umbrales_k6=cumplidos
+c3|c3-1011220513|verificacion=APROBADO|umbrales_k6=cumplidos
+c4|c4-1011221136|verificacion=APROBADO|umbrales_k6=cumplidos
+c5|c5-1011221701|verificacion=APROBADO|umbrales_k6=cumplidos
+e1|e1-1011222224|verificacion=APROBADO|umbrales_k6=cumplidos
+e2|e2-1011223130|verificacion=RECHAZADO|umbrales_k6=cumplidos
+e3|e3-1011223657|verificacion=APROBADO|umbrales_k6=cumplidos
+e4|e4-1011224322|verificacion=APROBADO|umbrales_k6=cumplidos
+e5|e5-1011224518|verificacion=APROBADO|umbrales_k6=NO cumplidos (codigo 99)
+e4|e4-1011224629|verificacion=APROBADO|umbrales_k6=cumplidos

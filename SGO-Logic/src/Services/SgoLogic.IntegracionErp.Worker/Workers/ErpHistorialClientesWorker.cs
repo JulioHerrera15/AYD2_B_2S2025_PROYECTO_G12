@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -53,6 +54,42 @@ public sealed class ErpHistorialClientesWorker : BackgroundService
             var cliente = scope.ServiceProvider.GetRequiredService<IClienteErp>();
             var outbox = scope.ServiceProvider.GetRequiredService<IOutboxWriter>();
             var contexto = scope.ServiceProvider.GetRequiredService<IntegracionErpDbContext>();
+
+            var pagosPendientes = await contexto.PagosCredito
+                .Where(pago => pago.Estado == "PENDIENTE")
+                .OrderBy(pago => pago.RecibidoEn)
+                .ToListAsync(cancellationToken);
+            if (pagosPendientes.Count > 0)
+            {
+                var respuestaPagos = await cliente.EnviarPagosCreditoAsync(
+                    pagosPendientes.Select(pago => new PagoCreditoErpRequest(
+                        pago.EventId,
+                        pago.CuentaId,
+                        pago.OrdenId,
+                        pago.ClienteId,
+                        pago.PagadaEn,
+                        pago.Puntual)).ToList(),
+                    cancellationToken);
+
+                if (!respuestaPagos.Exitoso)
+                {
+                    _logger.LogWarning(
+                        "ERP no acepto el lote de {Cantidad} pagos de credito: {Estado} HTTP {CodigoHttp}",
+                        pagosPendientes.Count, respuestaPagos.Estado, respuestaPagos.CodigoHttp);
+                    return;
+                }
+
+                var enviadoEn = DateTime.UtcNow;
+                foreach (var pago in pagosPendientes)
+                {
+                    pago.Estado = "ENVIADO";
+                    pago.EnviadoEn = enviadoEn;
+                }
+
+                await contexto.SaveChangesAsync(cancellationToken);
+                _logger.LogInformation("ERP acepto {Cantidad} pagos de credito", pagosPendientes.Count);
+            }
+
             var clientes = await cliente.ObtenerHistorialClientesAsync(cancelacion: cancellationToken);
 
             var contador = 0;

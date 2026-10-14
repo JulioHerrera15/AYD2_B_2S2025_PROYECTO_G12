@@ -29,6 +29,11 @@ public sealed class SucursalConfiguration : IEntityTypeConfiguration<Sucursal>
             .HasMaxLength(30)
             .IsRequired();
 
+        builder.Property(sucursal => sucursal.Pais)
+            .HasColumnName("pais")
+            .HasMaxLength(60)
+            .IsRequired();
+
         builder.Property(sucursal => sucursal.Departamento)
             .HasColumnName("departamento")
             .HasMaxLength(60)

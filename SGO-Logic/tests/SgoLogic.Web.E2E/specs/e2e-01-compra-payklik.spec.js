@@ -60,7 +60,7 @@ test.describe('E2E-01: Compra completa con pasarela PayKlik (Tarjeta)', () => {
     }
 
     // 6. Confirmar pedido
-    const btnConfirmar = page.locator('#btn-confirmar-pedido');
+    const btnConfirmar = page.locator('#btn-confirmar');
     await expect(btnConfirmar).toBeEnabled({ timeout: 10000 });
     await btnConfirmar.click();
 

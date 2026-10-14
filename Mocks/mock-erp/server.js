@@ -127,6 +127,7 @@ const clientesHistorialBase = [
 let estadoERP = {
   ultimaSecuenciaAceptada: 0,
   lotesProcesados: {}, // loteId -> confirmación (ACEPTADO o RECHAZADO_CUADRE)
+  pagosCreditoProcesados: {}, // eventId -> pago aplicado al historial
   bitacora: [],        // historial simple de todas las solicitudes recibidas
   clientesHistorial: clientesHistorialBase.map((c) => ({ ...c })),
   modoCaida: {
@@ -387,6 +388,75 @@ app.post("/erp/lotes", (req, res) => {
   return res.status(200).json(confirmacion);
 });
 
+app.post("/erp/clientes/pagos", (req, res) => {
+  const pagos = req.body?.pagos;
+  if (!Array.isArray(pagos) || pagos.length === 0) {
+    return res.status(400).json({ estado: "FORMATO_INVALIDO", mensaje: "Se esperaba un arreglo no vacio en pagos[]." });
+  }
+
+  const normalizados = pagos.map((pago) => ({
+    eventId: String(pago?.eventId || "").trim(),
+    clienteId: String(pago?.clienteId || "").trim().toLowerCase(),
+    cuentaId: String(pago?.cuentaId || "").trim(),
+    ordenId: String(pago?.ordenId || "").trim(),
+    pagadaEn: pago?.pagadaEn,
+    puntual: pago?.puntual,
+  }));
+  const ids = new Set(normalizados.map((pago) => pago.eventId));
+  if (normalizados.some((pago) => !pago.eventId || !pago.clienteId || !pago.cuentaId || !pago.ordenId
+      || !Number.isFinite(Date.parse(pago.pagadaEn)) || typeof pago.puntual !== "boolean")
+      || ids.size !== normalizados.length) {
+    return res.status(400).json({ estado: "FORMATO_INVALIDO", mensaje: "Cada pago requiere eventId, cuentaId, ordenId, clienteId, pagadaEn y puntual booleano, sin eventId repetidos." });
+  }
+
+  if (caidaActiva()) {
+    const tipo = estadoERP.modoCaida.tipo;
+    registrarBitacora({ evento: "PAGOS_CREDITO_CAIDA_SIMULADA", tipo, cantidad: pagos.length });
+    if (tipo === "timeout") {
+      return setTimeout(() => res.status(504).json({ estado: "TIMEOUT", mensaje: "ERP no respondió pagos de crédito a tiempo." }), 8000);
+    }
+    if (tipo === "error500") {
+      return res.status(500).json({ estado: "ERROR_INTERNO", mensaje: "Falla interna al actualizar pagos de crédito." });
+    }
+    return res.status(503).json({ estado: "NO_DISPONIBLE", mensaje: "ERP no disponible para pagos de crédito." });
+  }
+
+  const clientes = new Map(estadoERP.clientesHistorial.map((cliente) => [cliente.email.trim().toLowerCase(), cliente]));
+  const desconocido = normalizados.find((pago) => !clientes.has(pago.clienteId));
+  if (desconocido) {
+    return res.status(404).json({ estado: "CLIENTE_NO_ENCONTRADO", clienteId: desconocido.clienteId });
+  }
+
+  let aplicados = 0;
+  let duplicados = 0;
+  const actualizadoEn = new Date().toISOString();
+  for (const pago of normalizados) {
+    if (estadoERP.pagosCreditoProcesados[pago.eventId]) {
+      duplicados++;
+      continue;
+    }
+
+    const historial = clientes.get(pago.clienteId);
+    if (pago.puntual) historial.pagosPuntuales++;
+    else historial.pagosTardios++;
+    historial.actualizadoEn = actualizadoEn;
+    historial.fechaCorte = actualizadoEn;
+    historial.loteOrigen = `PAGO-CREDITO-${pago.eventId}`;
+    estadoERP.pagosCreditoProcesados[pago.eventId] = {
+      clienteId: pago.clienteId,
+      cuentaId: pago.cuentaId,
+      ordenId: pago.ordenId,
+      pagadaEn: pago.pagadaEn,
+      puntual: pago.puntual,
+      aplicadoEn: actualizadoEn,
+    };
+    aplicados++;
+  }
+
+  registrarBitacora({ evento: "PAGOS_CREDITO_APLICADOS", aplicados, duplicados });
+  return res.json({ estado: aplicados > 0 ? "ACEPTADO" : "DUPLICADO", aplicados, duplicados, actualizadoEn });
+});
+
 // Consultas de apoyo a la reconciliación
 app.get("/erp/lotes/:loteId", (req, res) => {
   const confirmacion = estadoERP.lotesProcesados[req.params.loteId];
@@ -402,6 +472,45 @@ app.get("/erp/lotes", (_req, res) => {
     totalLotesAceptados: Object.values(estadoERP.lotesProcesados).filter((l) => l.estado === "ACEPTADO").length,
     lotes: Object.values(estadoERP.lotesProcesados),
   });
+});
+
+app.post("/erp/clientes", (req, res) => {
+  const email = String(req.body?.email || "").trim().toLowerCase();
+  const clienteDesde = new Date(req.body?.clienteDesde);
+  const eventId = String(req.body?.eventId || "").trim();
+  if (!email || !email.includes("@") || !eventId || Number.isNaN(clienteDesde.getTime())) {
+    return res.status(400).json({ estado: "FORMATO_INVALIDO", mensaje: "Se requiere email, clienteDesde y eventId validos." });
+  }
+
+  const existente = estadoERP.clientesHistorial.find(
+    (cliente) => cliente.email.trim().toLowerCase() === email
+  );
+  if (existente) {
+    return res.json({ estado: "DUPLICADO", email, cliente: existente });
+  }
+
+  const actualizadoEn = new Date().toISOString();
+  const cliente = {
+    codigoCliente: `ERP-CLI-${Date.now()}`,
+    email,
+    clienteDesde: clienteDesde.toISOString(),
+    comprasUltimos12Meses: 0,
+    montoCompradoUltimos12Meses: 0,
+    moneda: "GTQ",
+    pagosPuntuales: 0,
+    pagosTardios: 0,
+    maxDiasAtraso: 0,
+    devoluciones: 0,
+    incidentesGraves: 0,
+    otrosIncidentes: 0,
+    fechaCorte: actualizadoEn,
+    actualizadoEn,
+    loteOrigen: `ALTA-CLIENTE-${eventId}`,
+  };
+
+  estadoERP.clientesHistorial.push(cliente);
+  registrarBitacora({ evento: "CLIENTE_VERIFICADO_REGISTRADO", email, eventId });
+  return res.status(201).json({ estado: "CREADO", email, cliente });
 });
 
 app.get("/erp/clientes/historial", (req, res) => {
@@ -508,6 +617,7 @@ app.post("/erp/admin/reset", (_req, res) => {
   estadoERP = {
     ultimaSecuenciaAceptada: 0,
     lotesProcesados: {},
+    pagosCreditoProcesados: {},
     bitacora: [],
     clientesHistorial: clientesHistorialBase.map((c) => ({ ...c })),
     modoCaida: { activo: false, tipo: null, expiraEn: null },
@@ -523,7 +633,9 @@ app.get("/", (_req, res) => {
       "POST /erp/lotes": "Recibir lote (JSON, text/csv o application/xml)",
       "GET /erp/lotes/:loteId": "Confirmación de un lote ya procesado",
       "GET /erp/lotes": "Listado de lotes procesados y última secuencia",
+      "POST /erp/clientes": "Registrar idempotentemente un cliente con correo verificado e historial inicial vacio",
       "GET /erp/clientes/historial": "Snapshot de historial crediticio por cliente, listo para Crédito",
+      "POST /erp/clientes/pagos": "Batch idempotente de cuentas de crédito pagadas; actualiza pagos puntuales/tardíos del snapshot",
       "GET /erp/admin/estado": "Estado interno del mock (para depuración)",
       "POST /erp/admin/caida": "{ activar, tipo: 'timeout'|'error500'|'no_disponible', duracionMs? }",
       "PUT /erp/admin/clientes/:email/historial": "Actualizar el snapshot de historial para un cliente de prueba",

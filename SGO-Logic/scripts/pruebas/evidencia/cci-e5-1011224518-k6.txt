@@ -1,0 +1,54 @@
+time="2026-10-12T04:45:19Z" level=info msg="[e5-1011224518] SKU SKU-CCI-E5-1011224518: 400 unidades en CD-01 a Q100" source=console
+time="2026-10-12T04:45:19Z" level=info msg="[e5-1011224518] 5 clientes r: elegibilidad de cci-e5-1011224518-r0@carga.sgo.local -> 200 {\"estado\":\"DISPONIBLE\",\"ofrecer\":true,\"codigoMotivo\":null,\"titulo\":\"Tienes crédito disponible\",\"mensaje\":\"Tienes Q1,500.00 disponibles de un límite de Q1,500.00. Puedes comprar ahora y pagar en 30 días, sin recargo. Si pagas esta compra de Q100.00 con crédito, la fecha límite de pago será el 11 de noviembre de 2026.\",\"recomendacion\":\"Elige crédito al pagar y cancela el total desde Mi crédito dentro de los 30 días.\",\"limiteAprobado\":\"1500.00\",\"disponible\":\"1500.00\",\"montoSolicitado\":\"100.00\",\"moneda\":\"GTQ\",\"plazoDias\":30,\"fechaPagoEstimada\":\"2026-11-11T00:00:00.000Z\",\"calculadoEn\":\"2026-10-12T04:45:19.260Z\"}" source=console
+time="2026-10-12T04:45:20Z" level=warning msg="[e5-1011224518] crear credito -> 500 {\"title\":\"Ocurrio un error interno\",\"status\":500,\"detail\":\"Ocurrio un error inesperado al procesar la solicitud.\",\"instance\":\"/api/ordenes\",\"transactionId\":null}" source=console
+time="2026-10-12T04:45:20Z" level=warning msg="[e5-1011224518] crear credito -> 500 {\"title\":\"Ocurrio un error interno\",\"status\":500,\"detail\":\"Ocurrio un error inesperado al procesar la solicitud.\",\"instance\":\"/api/ordenes\",\"transactionId\":null}" source=console
+time="2026-10-12T04:45:20Z" level=info msg="[e5-1011224518] E5: fin de la generacion de carga. La saga sigue en curso: espera el drenado y corre verificar.sh con RUN_ID=e5-1011224518 (ejecutar.sh lo hace solo). Maximo esperado por cliente: floor(1500 / 200) aprobadas." source=console
+
+
+  █ THRESHOLDS 
+
+    sgo_exito_checkout{ruta:credito}
+    ✗ 'rate>0.99' rate=98.00%
+
+    sgo_latencia_checkout_ms{ruta:credito}
+    ✓ 'p(95)<3000' p(95)=828.34ms
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 198    215.834044/s
+    checks_succeeded...: 98.98% 196 out of 198
+    checks_failed......: 1.01%  2 out of 198
+
+    ✗ orden credito creada (201)
+      ↳  98% — ✓ 98 / ✗ 2
+    ✓ orden credito confirmada (200)
+
+    CUSTOM
+    sgo_exito_checkout.............: 98.00% 98 out of 100
+      { ruta:credito }.............: 98.00% 98 out of 100
+    sgo_fallos_sincronos...........: 2      2.180142/s
+    sgo_latencia_checkout_ms.......: avg=708.97ms min=126.1ms  med=771.06ms max=834.71ms p(90)=824.65ms p(95)=828.34ms p(99)=834.7ms 
+      { ruta:credito }.............: avg=708.97ms min=126.1ms  med=771.06ms max=834.71ms p(90)=824.65ms p(95)=828.34ms p(99)=834.7ms 
+    sgo_latencia_confirmar_ms......: avg=348.49ms min=27.76ms  med=355.02ms max=803.33ms p(90)=527.43ms p(95)=586.7ms  p(99)=802.04ms
+    sgo_latencia_crear_ms..........: avg=368.51ms min=17.23ms  med=343.47ms max=806.94ms p(90)=704.22ms p(95)=725.5ms  p(99)=786.21ms
+    sgo_ordenes_confirmadas........: 98     106.826951/s
+    sgo_ordenes_enviadas...........: 100    109.007093/s
+
+    HTTP
+    http_req_duration..............: avg=345.25ms min=4.33ms   med=343.47ms max=806.94ms p(90)=591.11ms p(95)=705.75ms p(99)=801.2ms 
+      { expected_response:true }...: avg=341.16ms min=4.33ms   med=342.13ms max=806.94ms p(90)=578.05ms p(95)=703.99ms p(99)=801.52ms
+    http_req_failed................: 0.97%  2 out of 206
+    http_reqs......................: 206    224.554612/s
+
+    EXECUTION
+    iteration_duration.............: avg=738.64ms min=129.02ms med=795.94ms max=864.55ms p(90)=851.2ms  p(95)=854.47ms p(99)=861.43ms
+    iterations.....................: 100    109.007093/s
+
+    NETWORK
+    data_received..................: 213 kB 232 kB/s
+    data_sent......................: 185 kB 201 kB/s
+
+
+
+time="2026-10-12T04:45:20Z" level=error msg="thresholds on metrics 'sgo_exito_checkout{ruta:credito}' have been crossed"

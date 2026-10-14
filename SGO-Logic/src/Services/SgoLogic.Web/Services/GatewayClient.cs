@@ -85,6 +85,7 @@ public sealed record SucursalModel(
     string Id,
     string Nombre,
     string TipoUbicacion,
+    string Pais,
     string Departamento,
     string Municipio,
     double? Latitud,
@@ -95,11 +96,49 @@ public sealed record SucursalModel(
     public bool EsTienda => string.Equals(TipoUbicacion, "TIENDA", StringComparison.OrdinalIgnoreCase);
 }
 
+/// <summary>
+/// Orden en que se muestran los paises donde opera MegaStore en los selectores de
+/// sucursal (catalogo, checkout y POS). Un pais que no este en la lista va al final.
+/// </summary>
+public static class PaisesSucursal
+{
+    public const string CentrosDistribucion = "Centros de Distribución";
+
+    public static readonly IReadOnlyList<string> Orden = new[] { "Guatemala", "El Salvador", "Costa Rica" };
+
+    public static int Posicion(string? pais)
+    {
+        for (var i = 0; i < Orden.Count; i++)
+        {
+            if (string.Equals(Orden[i], pais, StringComparison.OrdinalIgnoreCase))
+            {
+                return i;
+            }
+        }
+
+        return Orden.Count;
+    }
+
+    /// <summary>
+    /// Agrupa las tiendas por pais en el orden de <see cref="Orden" /> y, dentro de
+    /// cada pais, por nombre. Los centros de distribucion no se incluyen.
+    /// </summary>
+    public static IReadOnlyList<IGrouping<string, SucursalModel>> TiendasPorPais(IEnumerable<SucursalModel> sucursales) =>
+        sucursales
+            .Where(s => s.EsTienda)
+            .OrderBy(s => Posicion(s.Pais))
+            .ThenBy(s => s.Pais, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(s => s.Nombre, StringComparer.CurrentCulture)
+            .GroupBy(s => string.IsNullOrWhiteSpace(s.Pais) ? "Sin país" : s.Pais)
+            .ToList();
+}
+
 public sealed record SucursalCercanaModel(
     [property: JsonPropertyName("sku")] string? Sku,
     [property: JsonPropertyName("desde")] string? Desde,
     [property: JsonPropertyName("ubicacionId")] string UbicacionId,
     [property: JsonPropertyName("nombre")] string Nombre,
+    [property: JsonPropertyName("pais")] string? Pais,
     [property: JsonPropertyName("departamento")] string? Departamento,
     [property: JsonPropertyName("municipio")] string? Municipio,
     [property: JsonPropertyName("disponible")] int Disponible,
@@ -582,7 +621,8 @@ public sealed record DespachoPreparacionDto(
     [property: JsonPropertyName("metodoEntrega")] string MetodoEntrega,
     [property: JsonPropertyName("estado")] string Estado,
     [property: JsonPropertyName("guiaId")] string? GuiaId,
-    [property: JsonPropertyName("creadoEn")] DateTime? CreadoEn)
+    [property: JsonPropertyName("creadoEn")] DateTime? CreadoEn,
+    [property: JsonPropertyName("ubicacionRecogidaId")] string? UbicacionRecogidaId = null)
 {
     [JsonPropertyName("despachoId")]
     public string DespachoId => !string.IsNullOrWhiteSpace(Id) ? Id : (!string.IsNullOrWhiteSpace(OrdenId) ? OrdenId : string.Empty);
@@ -1110,6 +1150,30 @@ public sealed class GatewayClient
         var res = await _http.GetAsync(url, ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<List<DespachoPreparacionDto>>(JsonOptions, ct);
+    }
+
+    /// <summary>
+    /// Panel de despacho via GET /api/despacho/preparacion: todas las ubicaciones de
+    /// origen, o solo <paramref name="ubicacionId" /> si se indica. Retorna null si el
+    /// servicio no responde, para que la vista no lo confunda con "no hay despachos".
+    /// </summary>
+    public async Task<List<DespachoPreparacionDto>?> ListarDespachosAsync(string? ubicacionId = null, string? estado = null, CancellationToken ct = default)
+    {
+        var query = new List<string>();
+        if (!string.IsNullOrWhiteSpace(ubicacionId)) query.Add($"ubicacionId={Uri.EscapeDataString(ubicacionId)}");
+        if (!string.IsNullOrWhiteSpace(estado)) query.Add($"estado={Uri.EscapeDataString(estado)}");
+        var url = "/api/despacho/preparacion" + (query.Count > 0 ? "?" + string.Join("&", query) : "");
+
+        try
+        {
+            var res = await _http.GetAsync(url, ct);
+            if (!res.IsSuccessStatusCode) return null;
+            return await res.Content.ReadFromJsonAsync<List<DespachoPreparacionDto>>(JsonOptions, ct);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            return null;
+        }
     }
 
     public async Task<(bool Exito, string? Error)> ActualizarEstadoDespachoAsync(string ordenId, string estado, string? detalle = null, CancellationToken ct = default)

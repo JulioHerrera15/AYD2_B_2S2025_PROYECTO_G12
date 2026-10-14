@@ -1,0 +1,46 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<mxfile host="app.diagrams.net" agent="SGO-Logic diagram generator" scale="1" border="0"><diagram name="CU-17" id="cu17">
+    <mxGraphModel dx="900" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1280" pageHeight="700" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="b17" value="«contexto» Crédito" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=top;align=center;fontStyle=1;fontSize=13;fillColor=none;strokeColor=#000000;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="420" y="60" width="680" height="600" as="geometry" />
+        </mxCell>
+        <mxCell id="a17_cliente" value="Cliente" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;verticalLabelPosition=bottom;verticalAlign=top;fontSize=12;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="280" width="50" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="a17_web" value="Web&lt;br&gt;(Checkout)" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;verticalLabelPosition=bottom;verticalAlign=top;fontSize=12;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="160" y="280" width="50" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="a17_gw" value="API Gateway" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;verticalLabelPosition=bottom;verticalAlign=top;fontSize=12;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="290" y="280" width="50" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="uc17_main" value="Determinar elegibilidad&lt;br&gt;y ofrecer crédito" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="580" y="160" width="320" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="uc17_ext1" value="Negar oferta: sin historial,&lt;br&gt;perfil no elegible o cupo insuficiente" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="480" y="320" width="280" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="uc17_ext2" value="Aplicar límite de consulta ante&lt;br&gt;timeout o indisponibilidad de Crédito" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="800" y="320" width="280" height="100" as="geometry" />
+        </mxCell>
+        <mxCell id="e17_1" value="inicia checkout" style="endArrow=none;html=1;rounded=0;fontSize=10;" edge="1" parent="1" source="a17_cliente" target="a17_web">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e17_2" value="solicita elegibilidad (email del claim)" style="endArrow=none;html=1;rounded=0;fontSize=10;" edge="1" parent="1" source="a17_web" target="a17_gw">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e17_3" value="enruta solicitud" style="endArrow=none;html=1;rounded=0;fontSize=10;" edge="1" parent="1" source="a17_gw" target="uc17_main">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e17_4" value="&lt;&lt;extend&gt;&gt;" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;fontColor=#AA5500;" edge="1" parent="1" source="uc17_ext1" target="uc17_main">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e17_5" value="&lt;&lt;extend&gt;&gt;" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;fontColor=#AA5500;" edge="1" parent="1" source="uc17_ext2" target="uc17_main">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  </mxfile>

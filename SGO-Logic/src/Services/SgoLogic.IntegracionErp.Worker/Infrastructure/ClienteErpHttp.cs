@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
@@ -11,9 +12,19 @@ public sealed record RespuestaErp(bool Exitoso, bool Duplicado, string Estado, i
 public interface IClienteErp
 {
     Task<RespuestaErp> EnviarLoteAsync(string contenido, string contentType, CancellationToken cancelacion = default);
+    Task<RespuestaErp> EnviarPagosCreditoAsync(IReadOnlyList<PagoCreditoErpRequest> pagos, CancellationToken cancelacion = default);
+    Task<RespuestaErp> RegistrarClienteAsync(string email, DateTime clienteDesde, string eventId, CancellationToken cancelacion = default);
     Task<ResumenErp?> ObtenerResumenAsync(CancellationToken cancelacion = default);
     Task<IReadOnlyList<ClienteHistorialErp>> ObtenerHistorialClientesAsync(DateTime? modificadosDesde = null, CancellationToken cancelacion = default);
 }
+
+public sealed record PagoCreditoErpRequest(
+    string EventId,
+    string CuentaId,
+    string OrdenId,
+    string ClienteId,
+    DateTime PagadaEn,
+    bool Puntual);
 
 public sealed record ResumenErp(long UltimaSecuenciaAceptada, IReadOnlyList<ConfirmacionErp> Lotes);
 public sealed record ConfirmacionErp(string LoteId, long Secuencia, string Estado, int CantidadRegistros, decimal MontoTotal);
@@ -39,6 +50,79 @@ public sealed class ClienteErpHttp : IClienteErp
     private readonly HttpClient _http;
     private readonly ErpOptions _opciones;
     public ClienteErpHttp(HttpClient http, IOptions<ErpOptions> opciones) { _http = http; _opciones = opciones.Value; }
+
+    public async Task<RespuestaErp> EnviarPagosCreditoAsync(
+        IReadOnlyList<PagoCreditoErpRequest> pagos,
+        CancellationToken cancelacion = default)
+    {
+        if (pagos.Count == 0)
+            return new RespuestaErp(true, false, "SIN_PAGOS", null, null, null);
+
+        for (var intento = 0; ; intento++)
+        {
+            try
+            {
+                using var respuesta = await _http.PostAsJsonAsync("/erp/clientes/pagos", new { pagos }, cancelacion);
+                var raw = await respuesta.Content.ReadAsStringAsync(cancelacion);
+                var estado = LeerEstado(raw, respuesta.StatusCode.ToString());
+                if (respuesta.IsSuccessStatusCode)
+                    return new RespuestaErp(true, estado == "DUPLICADO", estado, (int)respuesta.StatusCode, null, raw);
+                if (!EsReintentable(respuesta.StatusCode) || intento >= _opciones.MaxReintentos)
+                    return new RespuestaErp(false, false, estado, (int)respuesta.StatusCode, raw, raw);
+                await Task.Delay(Backoff(intento), cancelacion);
+            }
+            catch (OperationCanceledException) when (!cancelacion.IsCancellationRequested)
+            {
+                if (intento >= _opciones.MaxReintentos)
+                    return new RespuestaErp(false, false, "TIMEOUT", 504, "Timeout ERP", null);
+                await Task.Delay(Backoff(intento), cancelacion);
+            }
+            catch (HttpRequestException ex)
+            {
+                if (intento >= _opciones.MaxReintentos)
+                    return new RespuestaErp(false, false, "ERROR_RED", 500, ex.Message, ex.Message);
+                await Task.Delay(Backoff(intento), cancelacion);
+            }
+        }
+    }
+
+    public async Task<RespuestaErp> RegistrarClienteAsync(
+        string email,
+        DateTime clienteDesde,
+        string eventId,
+        CancellationToken cancelacion = default)
+    {
+        for (var intento = 0; ; intento++)
+        {
+            try
+            {
+                using var respuesta = await _http.PostAsJsonAsync(
+                    "/erp/clientes",
+                    new { email, clienteDesde, eventId },
+                    cancelacion);
+                var raw = await respuesta.Content.ReadAsStringAsync(cancelacion);
+                var estado = LeerEstado(raw, respuesta.StatusCode.ToString());
+                var duplicado = estado == "DUPLICADO";
+                if (respuesta.IsSuccessStatusCode || duplicado)
+                    return new RespuestaErp(true, duplicado, estado, (int)respuesta.StatusCode, null, raw);
+                if (!EsReintentable(respuesta.StatusCode) || intento >= _opciones.MaxReintentos)
+                    return new RespuestaErp(false, false, estado, (int)respuesta.StatusCode, raw, raw);
+                await Task.Delay(Backoff(intento), cancelacion);
+            }
+            catch (OperationCanceledException) when (!cancelacion.IsCancellationRequested)
+            {
+                if (intento >= _opciones.MaxReintentos)
+                    return new RespuestaErp(false, false, "TIMEOUT", 504, "Timeout ERP", null);
+                await Task.Delay(Backoff(intento), cancelacion);
+            }
+            catch (HttpRequestException ex)
+            {
+                if (intento >= _opciones.MaxReintentos)
+                    return new RespuestaErp(false, false, "ERROR_RED", 500, ex.Message, ex.Message);
+                await Task.Delay(Backoff(intento), cancelacion);
+            }
+        }
+    }
 
     public async Task<RespuestaErp> EnviarLoteAsync(string contenido, string contentType, CancellationToken cancelacion = default)
     {

@@ -1,0 +1,75 @@
+Esperando el drenado de cci-c1-1011215306 (maximo 600s)...
+  t=1s ordenes_en_transito=0 mensajes_en_colas=0
+=== Credito + Inventario — prueba c1 — RUN_ID=c1-1011215306 (prefijo cci-c1-1011215306-, SKU SKU-CCI-C1-1011215306) ===
+ordenes_total=56
+ordenes_credito=56
+ordenes_tarjeta=0
+ordenes_en_transito=0
+ordenes_sin_confirmar=0
+estado.CREDITO.DESPACHO_SOLICITADO=56
+decision_credito_p50_s=0.59
+decision_credito_p95_s=1.00
+decision_credito_max_s=1.07
+retencion_credito_max_s=1.07
+creacion_a_resultado_credito_p95_s=1.76
+recuperacion_decision_credito_p95_s=1.04
+rechazos_stock_tarjeta=0
+rechazos_stock_credito=0
+rechazos_credito=0
+timeouts_credito=0
+rechazos_cobro_tarjeta=0
+canceladas_reserva_vencida=0
+rechazadas_grupo_b=0
+rechazadas_grupo_t=0
+no_rechazadas_grupo_x=0
+stock_fisico=165
+stock_reservado=56
+stock_disponible_final=109
+sobreventa=0
+inventario_dif_existencia_vs_reservas=0
+inventario_dif_existencia_vs_ordenes=0
+fugas_stock=0
+huecos_stock=0
+unidades_vendidas_tarjeta=0
+unidades_vendidas_credito=56
+credito_negativas_con_reserva=0
+rechazos_sin_evento_liberacion=0
+liberacion_tras_rechazo_p50_s=
+liberacion_tras_rechazo_p95_s=
+liberacion_tras_rechazo_max_s=
+retencion_esteril_p50_s=
+retencion_esteril_p95_s=
+retencion_esteril_max_s=
+retencion_esteril_unidades=0
+retencion_esteril_unidad_segundos=0
+tarjetas_rechazadas_mientras_credito_retenia=0
+ventas_tarjeta_perdidas_por_retencion=0
+credito_decision.APROBADA=56
+credito_cuentas.VIGENTE=56
+lineas_sobre_limite=0
+lineas_incoherentes=0
+cargos_huerfanos=0
+max_aprobadas_por_cliente=2
+max_uso_linea_pct=2.7
+primer_minuto_degradado=ninguno
+ordenes_en_primer_minuto_degradado=ninguno
+pico_unidades_esperando_credito=0
+--- por minuto desde la primera orden ---
+minuto | ordenes | credito | decision_credito_p95_s | decision_credito_max_s | timeouts | rechazos_stock | unidades_esperando_credito_al_cierre
+1 | 12 | 12 | 0.71 | 0.73 | 0 | 0 | 0
+2 | 11 | 11 | 0.90 | 0.90 | 0 | 0 | 0
+3 | 11 | 11 | 0.97 | 1.03 | 0 | 0 | 0
+4 | 11 | 11 | 1.05 | 1.07 | 0 | 0 | 0
+5 | 11 | 11 | 0.98 | 0.99 | 0 | 0 | 0
+===
+RESULTADO=APROBADO (c1, 56 ordenes)
+--- recursos (maximos durante la corrida, muestreo cada 10 s) ---
+contenedor                                     cpu_max_%  mem_max_MiB
+sgo-logic-inventario-api-1                          12.6        249.5
+sgo-logic-db-finanzas-1                              7.0         72.0
+sgo-logic-db-operacional-1                          13.2        100.7
+sgo-logic-pagos-api-1                               19.7        193.5
+sgo-logic-rabbitmq-1                               325.8        204.6
+sgo-logic-ordenes-api-1                             29.4        292.3
+sgo-logic-credito-api-1                              8.6        242.6
+max_mensajes_en_colas_credito_inventario_ordenes=0

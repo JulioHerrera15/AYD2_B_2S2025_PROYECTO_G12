@@ -105,6 +105,11 @@ services:
       ASPNETCORE_URLS: http://+:8080
       ConnectionStrings__Postgres: Host=db-operacional;Port=5432;Database=sgo_auth;Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       ConnectionStrings__Redis: redis:6379,password=${REDIS_PASSWORD}
+      ConnectionStrings__RabbitMq: amqp://${RABBITMQ_USER}:${RABBITMQ_PASSWORD}@rabbitmq:5672/
+      Outbox__Source: auth
+      Outbox__PollingIntervalMs: ${OUTBOX_POLLING_MS}
+      Outbox__MaxReintentos: ${OUTBOX_MAX_REINTENTOS}
+      Outbox__BatchSize: ${OUTBOX_BATCH_SIZE}
       Auth__JwtSecret: ${JWT_SECRET}
       Auth__JwtExpiracionMinutos: ${AUTH_JWT_EXPIRACION_MINUTOS}
       Auth__CarritoTtlSegundos: ${AUTH_CARRITO_TTL_SEGUNDOS}
@@ -117,6 +122,8 @@ services:
       db-operacional:
         condition: service_healthy
       redis:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
       inventario-api:
         condition: service_healthy

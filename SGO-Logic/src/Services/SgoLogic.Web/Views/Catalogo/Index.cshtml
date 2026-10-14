@@ -6,13 +6,13 @@
     var sucursales = ViewBag.Sucursales as IReadOnlyList<SgoLogic.Web.Services.SucursalModel>
         ?? Array.Empty<SgoLogic.Web.Services.SucursalModel>();
     var sucursalSeleccionada = ViewBag.SucursalSeleccionada as string ?? SgoLogic.Web.Controllers.CatalogoController.SucursalPorDefecto;
-    var centrosDistribucion = sucursales.Where(s => !s.EsTienda).ToList();
-    var tiendasPorDepartamento = sucursales
-        .Where(s => s.EsTienda)
-        .GroupBy(s => s.Departamento)
-        .OrderBy(g => g.Key == "Guatemala" ? 0 : 1)
-        .ThenBy(g => g.Key)
+    // Orden del selector: Centros de Distribucion, Guatemala, El Salvador y Costa Rica;
+    // dentro de cada grupo, por nombre.
+    var centrosDistribucion = sucursales
+        .Where(s => !s.EsTienda)
+        .OrderBy(s => s.Nombre, StringComparer.CurrentCulture)
         .ToList();
+    var tiendasPorPais = SgoLogic.Web.Services.PaisesSucursal.TiendasPorPais(sucursales);
 }
 
 <div class="mb-8">
@@ -41,14 +41,14 @@
                     {
                         if (centrosDistribucion.Count > 0)
                         {
-                            <optgroup label="Centros de Distribución">
+                            <optgroup label="@SgoLogic.Web.Services.PaisesSucursal.CentrosDistribucion">
                                 @foreach (var cd in centrosDistribucion)
                                 {
                                     <option value="@cd.Id" selected="@(cd.Id == sucursalSeleccionada)">@cd.Nombre</option>
                                 }
                             </optgroup>
                         }
-                        foreach (var grupo in tiendasPorDepartamento)
+                        foreach (var grupo in tiendasPorPais)
                         {
                             <optgroup label="@grupo.Key">
                                 @foreach (var tienda in grupo)

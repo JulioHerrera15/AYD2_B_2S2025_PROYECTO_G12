@@ -1,0 +1,77 @@
+Esperando el drenado de cci-c5-1011221701 (maximo 600s)...
+  t=1s ordenes_en_transito=0 mensajes_en_colas=0
+=== Credito + Inventario — prueba c5 — RUN_ID=c5-1011221701 (prefijo cci-c5-1011221701-, SKU SKU-CCI-C5-1011221701) ===
+ordenes_total=161
+ordenes_credito=161
+ordenes_tarjeta=0
+ordenes_en_transito=0
+ordenes_sin_confirmar=0
+estado.CREDITO.DESPACHO_SOLICITADO=60
+estado.CREDITO.RECHAZADA=101
+decision_credito_p50_s=0.73
+decision_credito_p95_s=0.98
+decision_credito_max_s=1.14
+retencion_credito_max_s=1.14
+creacion_a_resultado_credito_p95_s=1.91
+recuperacion_decision_credito_p95_s=1.00
+rechazos_stock_tarjeta=0
+rechazos_stock_credito=0
+rechazos_credito=101
+timeouts_credito=0
+rechazos_cobro_tarjeta=0
+canceladas_reserva_vencida=0
+rechazadas_grupo_b=0
+rechazadas_grupo_t=0
+no_rechazadas_grupo_x=0
+stock_fisico=1600
+stock_reservado=300
+stock_disponible_final=1300
+sobreventa=0
+inventario_dif_existencia_vs_reservas=0
+inventario_dif_existencia_vs_ordenes=0
+fugas_stock=0
+huecos_stock=0
+unidades_vendidas_tarjeta=0
+unidades_vendidas_credito=300
+credito_negativas_con_reserva=101
+rechazos_sin_evento_liberacion=0
+liberacion_tras_rechazo_p50_s=0.35
+liberacion_tras_rechazo_p95_s=0.66
+liberacion_tras_rechazo_max_s=0.71
+retencion_esteril_p50_s=1.26
+retencion_esteril_p95_s=1.85
+retencion_esteril_max_s=2.28
+retencion_esteril_unidades=505
+retencion_esteril_unidad_segundos=684.1
+tarjetas_rechazadas_mientras_credito_retenia=0
+ventas_tarjeta_perdidas_por_retencion=0
+credito_decision.APROBADA=60
+credito_decision.RECHAZADA=101
+credito_motivo.CUPO_INSUFICIENTE=101
+credito_cuentas.VIGENTE=60
+lineas_sobre_limite=0
+lineas_incoherentes=0
+cargos_huerfanos=0
+max_aprobadas_por_cliente=3
+max_uso_linea_pct=100.0
+primer_minuto_degradado=ninguno
+ordenes_en_primer_minuto_degradado=ninguno
+pico_unidades_esperando_credito=5
+--- por minuto desde la primera orden ---
+minuto | ordenes | credito | decision_credito_p95_s | decision_credito_max_s | timeouts | rechazos_stock | unidades_esperando_credito_al_cierre
+1 | 41 | 41 | 0.87 | 0.91 | 0 | 0 | 5
+2 | 40 | 40 | 0.79 | 0.81 | 0 | 0 | 0
+3 | 40 | 40 | 0.99 | 1.01 | 0 | 0 | 0
+4 | 40 | 40 | 1.03 | 1.14 | 0 | 0 | 0
+===
+RESULTADO=APROBADO (c5, 161 ordenes)
+--- recursos (maximos durante la corrida, muestreo cada 10 s) ---
+contenedor                                     cpu_max_%  mem_max_MiB
+sgo-logic-inventario-api-1                           7.6        341.9
+sgo-logic-db-finanzas-1                              6.9         66.8
+sgo-logic-db-operacional-1                          14.6        232.6
+sgo-logic-pagos-api-1                               52.3        319.3
+sgo-logic-rabbitmq-1                               312.0        298.4
+sgo-logic-ordenes-api-1                             16.4        366.5
+sgo-logic-credito-api-1                              8.9        331.2
+max_mensajes_en_colas_credito_inventario_ordenes=1

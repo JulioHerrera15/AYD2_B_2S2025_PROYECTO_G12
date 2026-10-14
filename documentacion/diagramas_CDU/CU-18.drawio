@@ -1,0 +1,79 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<mxfile host="app.diagrams.net" agent="SGO-Logic diagram generator" scale="1" border="0"><diagram name="CU-18" id="cu18">
+    <mxGraphModel dx="900" dy="700" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1320" pageHeight="800" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="b18" value="«contexto» Crédito" style="rounded=0;whiteSpace=wrap;html=1;verticalAlign=top;align=center;fontStyle=1;fontSize=13;fillColor=none;strokeColor=#000000;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="260" y="60" width="620" height="680" as="geometry" />
+        </mxCell>
+        <mxCell id="a18_ordenes" value="Órdenes&lt;br&gt;(sistema)" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;verticalLabelPosition=bottom;verticalAlign=top;fontSize=12;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="330" width="50" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="uc18_main" value="Evaluar crédito&lt;br&gt;dentro de la saga" style="ellipse;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="420" y="150" width="300" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="uc18_inc1" value="Verificar elegibilidad y cupo&lt;br&gt;(bloqueo optimista)" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="320" y="300" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc18_inc2" value="Crear cargo a 30 días y&lt;br&gt;publicar CreditoAprobado" style="ellipse;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="620" y="300" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc18_ext1" value="Rechazar por cupo insuficiente&lt;br&gt;o cliente no elegible" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="300" y="440" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="uc18_ext2" value="Manejar timeout del worker:&lt;br&gt;libera reserva, ofrece PayKlik" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="620" y="440" width="260" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="uc18_ext3" value="Reintentar ante conflicto&lt;br&gt;de cupo concurrente" style="ellipse;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="460" y="580" width="260" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="a18_inventario" value="Inventario&lt;br&gt;(sistema)" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;verticalLabelPosition=bottom;verticalAlign=top;fontSize=12;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="950" y="160" width="50" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="a18_facturacion" value="Facturación&lt;br&gt;(sistema)" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;verticalLabelPosition=bottom;verticalAlign=top;fontSize=12;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="950" y="300" width="50" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="a18_notif" value="Notificaciones&lt;br&gt;(sistema)" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;verticalLabelPosition=bottom;verticalAlign=top;fontSize=12;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="950" y="440" width="50" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="a18_auditoria" value="Auditoría&lt;br&gt;(sistema)" style="shape=actor;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#000000;verticalLabelPosition=bottom;verticalAlign=top;fontSize=12;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="950" y="580" width="50" height="90" as="geometry" />
+        </mxCell>
+        <mxCell id="e18_1" value="publica EvaluacionCreditoSolicitada" style="endArrow=none;html=1;rounded=0;fontSize=10;" edge="1" parent="1" source="a18_ordenes" target="uc18_main">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18_2" value="&lt;&lt;include&gt;&gt;" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;fontColor=#006600;" edge="1" parent="1" source="uc18_main" target="uc18_inc1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18_3" value="&lt;&lt;include&gt;&gt;" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;fontColor=#006600;" edge="1" parent="1" source="uc18_main" target="uc18_inc2">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18_4" value="&lt;&lt;extend&gt;&gt;" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;fontColor=#AA5500;" edge="1" parent="1" source="uc18_ext1" target="uc18_main">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18_5" value="&lt;&lt;extend&gt;&gt;" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;fontColor=#AA5500;" edge="1" parent="1" source="uc18_ext2" target="uc18_main">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18_6" value="&lt;&lt;extend&gt;&gt;" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;fontColor=#AA5500;" edge="1" parent="1" source="uc18_ext3" target="uc18_main">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18_7" value="solicita liberar reserva" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#333333;" edge="1" parent="1" source="uc18_ext1" target="a18_inventario">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18_8" value="solicita liberar reserva" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#333333;" edge="1" parent="1" source="uc18_ext2" target="a18_inventario">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18_9" value="referencia para documentación del cargo" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#333333;" edge="1" parent="1" source="uc18_inc2" target="a18_facturacion">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18_10" value="notifica aprobación o rechazo" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#333333;" edge="1" parent="1" source="uc18_main" target="a18_notif">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="e18_11" value="registra la evaluación" style="endArrow=open;endFill=0;dashed=1;html=1;fontSize=10;strokeColor=#333333;" edge="1" parent="1" source="uc18_main" target="a18_auditoria">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+  </mxfile>

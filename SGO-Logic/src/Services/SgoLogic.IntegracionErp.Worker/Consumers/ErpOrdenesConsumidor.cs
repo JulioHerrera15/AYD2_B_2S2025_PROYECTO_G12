@@ -10,6 +10,8 @@ using SgoLogic.BuildingBlocks.Metricas;
 using SgoLogic.BuildingBlocks.Outbox;
 using SgoLogic.BuildingBlocks.Serialization;
 using SgoLogic.Contracts;
+using SgoLogic.Contracts.Eventos.Auth;
+using SgoLogic.Contracts.Eventos.Credito;
 using SgoLogic.Contracts.Eventos.Ordenes;
 using SgoLogic.IntegracionErp.Worker.Infrastructure;
 
@@ -24,7 +26,9 @@ public sealed class ErpOrdenesConsumidor : BackgroundService
         new BindingCola(TopologiaMensajeria.ExchangeEventos, OrdenConfirmada.RoutingKey),
         new BindingCola(TopologiaMensajeria.ExchangeEventos, OrdenCancelada.RoutingKey),
         new BindingCola(TopologiaMensajeria.ExchangeEventos, OrdenCertificadaFiscalmente.RoutingKey),
-        new BindingCola(TopologiaMensajeria.ExchangeEventos, DevolucionRegistrada.RoutingKey)
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, DevolucionRegistrada.RoutingKey),
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, CuentaCreditoPagada.RoutingKey),
+        new BindingCola(TopologiaMensajeria.ExchangeEventos, ClienteVerificado.RoutingKey)
     ];
 
     private readonly IServiceScopeFactory _scopeFactory; private readonly IConexionRabbitMq _conexion; private readonly ISuscriptorMensajes _suscriptor; private readonly ILogger<ErpOrdenesConsumidor> _logger; private IDisposable? _suscripcion;
@@ -52,6 +56,8 @@ public sealed class ErpOrdenesConsumidor : BackgroundService
                 case OrdenCancelada.EventType: await AplicarCancelada(evento, contexto, cancelacion); break;
                 case OrdenCertificadaFiscalmente.EventType: await AplicarCertificada(evento, contexto, cancelacion); break;
                 case DevolucionRegistrada.EventType: await AplicarDevolucion(evento, contexto, cancelacion); break;
+                case CuentaCreditoPagada.EventType: AplicarPagoCredito(evento, contexto); break;
+                case ClienteVerificado.EventType: await AplicarClienteVerificado(evento, scope.ServiceProvider, cancelacion); break;
                 default: _logger.LogWarning("Evento ERP no soportado {EventType}", evento.EventType); return true;
             }
             contexto.MensajesProcesados.Add(new MensajeProcesado(evento.EventId, NombreServicio, DateTime.UtcNow)); await contexto.SaveChangesAsync(cancelacion); MetricasSgo.MensajesConsumidosTotal.Inc(); return true;
@@ -116,5 +122,40 @@ public sealed class ErpOrdenesConsumidor : BackgroundService
             c.Ventas.Add(new VentaErp { EventoId = e.EventId, DevolucionId = d.DevolucionId, TipoDevolucion = d.Tipo.ToString(), OrdenId = d.OrdenOriginalId, NumeroOrden = d.OrdenOriginalId, Canal = "DEVOLUCION", Tienda = d.UbicacionReingresoId, Monto = -monto, FechaVenta = d.RegistradaEn, Estado = "PENDIENTE" });
         }
         return Task.CompletedTask;
+    }
+
+    private static void AplicarPagoCredito(IntegrationEvent<JsonElement> e, IntegracionErpDbContext c)
+    {
+        var d = e.Data.Deserialize<CuentaCreditoPagadaData>(SgoJsonSerializerOptions.Default)
+            ?? throw new InvalidOperationException("CuentaCreditoPagada invalida");
+
+        c.PagosCredito.Add(new PagoCreditoErp
+        {
+            EventId = e.EventId,
+            CuentaId = d.CuentaId,
+            OrdenId = d.OrdenId,
+            ClienteId = d.ClienteId.Trim().ToLowerInvariant(),
+            PagadaEn = d.PagadaEn,
+            Puntual = d.Puntual,
+            Estado = "PENDIENTE",
+            RecibidoEn = DateTime.UtcNow
+        });
+    }
+
+    private static async Task AplicarClienteVerificado(
+        IntegrationEvent<JsonElement> e,
+        IServiceProvider servicios,
+        CancellationToken ct)
+    {
+        var datos = e.Data.Deserialize<ClienteVerificadoData>(SgoJsonSerializerOptions.Default)
+            ?? throw new InvalidOperationException("ClienteVerificado invalido");
+        var respuesta = await servicios.GetRequiredService<IClienteErp>()
+            .RegistrarClienteAsync(datos.ClienteId, datos.ClienteDesde, e.EventId, ct);
+
+        if (!respuesta.Exitoso)
+        {
+            throw new InvalidOperationException(
+                $"ERP no registro el cliente {datos.ClienteId}: {respuesta.Estado} HTTP {respuesta.CodigoHttp}.");
+        }
     }
 }

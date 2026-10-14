@@ -1,0 +1,54 @@
+time="2026-10-12T04:43:23Z" level=info msg="[e4-1011224322] PayKlik -> NORMAL (200)" source=console
+time="2026-10-12T04:43:23Z" level=info msg="[e4-1011224322] SKU SKU-CCI-E4-1011224322: 40 unidades en CD-01 a Q100" source=console
+time="2026-10-12T04:43:23Z" level=info msg="[e4-1011224322] 30 clientes x: elegibilidad de cci-e4-1011224322-x0@carga.sgo.local -> 200 {\"estado\":\"NO_ELEGIBLE\",\"ofrecer\":false,\"codigoMotivo\":\"INCIDENTE_GRAVE\",\"titulo\":\"Necesitamos revisar tu cuenta\",\"mensaje\":\"Hay un caso pendiente asociado a tu cuenta que debe resolverse antes de habilitar el crédito.\",\"recomendacion\":\"Comunícate con atención al cliente para resolverlo. Tus compras con tarjeta funcionan con normalidad.\",\"limiteAprobado\":\"0.00\",\"disponible\":\"0.00\",\"montoSolicitado\":\"100.00\",\"moneda\":\"GTQ\",\"plazoDias\":30,\"fechaPagoEstimada\":null,\"calculadoEn\":\"2026-10-12T04:43:23.325Z\"}" source=console
+time="2026-10-12T04:43:56Z" level=info msg="[e4-1011224322] E4: fin de la generacion de carga. La saga sigue en curso: espera el drenado y corre verificar.sh con RUN_ID=e4-1011224322 (ejecutar.sh lo hace solo). Stock inicial 40. Modo credito + tarjeta." source=console
+
+
+  █ THRESHOLDS 
+
+    sgo_exito_checkout{ruta:tarjeta}
+    ✓ 'rate>0.99' rate=100.00%
+
+    sgo_latencia_checkout_ms{ruta:tarjeta}
+    ✓ 'p(95)<1000' p(95)=55.65ms
+
+
+  █ TOTAL RESULTS 
+
+    checks_total.......: 244     7.30414/s
+    checks_succeeded...: 100.00% 244 out of 244
+    checks_failed......: 0.00%   0 out of 244
+
+    ✓ orden credito creada (201)
+    ✓ orden credito confirmada (200)
+    ✓ orden tarjeta creada (201)
+    ✓ orden tarjeta confirmada (200)
+
+    CUSTOM
+    sgo_exito_checkout.............: 100.00% 122 out of 122
+      { ruta:tarjeta }.............: 100.00% 61 out of 61
+    sgo_latencia_checkout_ms.......: avg=32.97ms min=14ms    med=29.62ms max=113.79ms p(90)=46.61ms p(95)=56.68ms p(99)=88.58ms 
+      { ruta:tarjeta }.............: avg=31.65ms min=14ms    med=29.19ms max=93.38ms  p(90)=46.63ms p(95)=55.65ms p(99)=77.51ms 
+    sgo_latencia_confirmar_ms......: avg=20.25ms min=7.72ms  med=17.86ms max=84.08ms  p(90)=30.57ms p(95)=39.12ms p(99)=63.35ms 
+    sgo_latencia_crear_ms..........: avg=12.71ms min=4.56ms  med=12.03ms max=36.28ms  p(90)=18.69ms p(95)=21.91ms p(99)=30.48ms 
+    sgo_ordenes_confirmadas........: 122     3.65207/s
+    sgo_ordenes_enviadas...........: 122     3.65207/s
+
+    HTTP
+    http_req_duration..............: avg=17.49ms min=877.2µs med=13.22ms max=142.07ms p(90)=26.39ms p(95)=32.61ms p(99)=133.86ms
+      { expected_response:true }...: avg=17.49ms min=877.2µs med=13.22ms max=142.07ms p(90)=26.39ms p(95)=32.61ms p(99)=133.86ms
+    http_req_failed................: 0.00%   0 out of 339
+    http_reqs......................: 339     10.147965/s
+
+    EXECUTION
+    iteration_duration.............: avg=39.68ms min=15.58ms med=37.29ms max=120.27ms p(90)=58.98ms p(95)=65.26ms p(99)=109.97ms
+    iterations.....................: 122     3.65207/s
+    vus............................: 0       min=0          max=2 
+    vus_max........................: 40      min=40         max=40
+
+    NETWORK
+    data_received..................: 298 kB  8.9 kB/s
+    data_sent......................: 195 kB  5.8 kB/s
+
+
+
