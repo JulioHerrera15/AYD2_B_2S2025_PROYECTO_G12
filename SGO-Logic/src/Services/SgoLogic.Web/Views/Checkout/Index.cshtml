@@ -175,7 +175,7 @@
                         {
                             <option value="@sucursalSeleccionada" selected>@sucursalSeleccionada</option>
                         }
-                        @foreach (var grupo in tiendas.GroupBy(t => t.Departamento).OrderBy(g => g.Key == "Guatemala" ? 0 : 1).ThenBy(g => g.Key))
+                        @foreach (var grupo in SgoLogic.Web.Services.PaisesSucursal.TiendasPorPais(tiendas))
                         {
                             <optgroup label="@grupo.Key">
                                 @foreach (var tienda in grupo)

@@ -4,13 +4,16 @@ namespace SgoLogic.Inventario.Api.Domain;
 
 /// <summary>
 /// Ubicacion fisica de MegaStore (tienda o centro de distribucion) con la metadata
-/// que la vista de existencias no tiene: nombre visible, departamento, municipio y
-/// coordenadas. <see cref="Id" /> es el mismo identificador que usa
+/// que la vista de existencias no tiene: nombre visible, pais, departamento,
+/// municipio y coordenadas. <see cref="Id" /> es el mismo identificador que usa
 /// <see cref="Existencia.UbicacionId" />, asi que ambas tablas se cruzan sin
 /// traduccion.
 ///
 /// Las coordenadas son opcionales: una sucursal sin ellas sigue siendo valida,
 /// solo que no participa del orden por distancia (<see cref="SelectorSucursalCercana" />).
+///
+/// <see cref="Departamento" /> es la division de primer nivel del pais: departamento
+/// en Guatemala y El Salvador, provincia en Costa Rica.
 /// </summary>
 public sealed class Sucursal
 {
@@ -18,6 +21,7 @@ public sealed class Sucursal
     {
         Id = string.Empty;
         Nombre = string.Empty;
+        Pais = string.Empty;
         Departamento = string.Empty;
         Municipio = string.Empty;
     }
@@ -26,6 +30,7 @@ public sealed class Sucursal
         string id,
         string nombre,
         TipoUbicacion tipoUbicacion,
+        string pais,
         string departamento,
         string municipio,
         double? latitud,
@@ -42,6 +47,11 @@ public sealed class Sucursal
             throw new ArgumentException("El nombre de la sucursal es obligatorio.", nameof(nombre));
         }
 
+        if (string.IsNullOrWhiteSpace(pais))
+        {
+            throw new ArgumentException("El pais de la sucursal es obligatorio.", nameof(pais));
+        }
+
         if (latitud is < -90 or > 90)
         {
             throw new ArgumentOutOfRangeException(nameof(latitud), "La latitud debe estar entre -90 y 90.");
@@ -55,6 +65,7 @@ public sealed class Sucursal
         Id = id;
         Nombre = nombre;
         TipoUbicacion = tipoUbicacion;
+        Pais = pais;
         Departamento = departamento ?? string.Empty;
         Municipio = municipio ?? string.Empty;
         Latitud = latitud;
@@ -69,6 +80,8 @@ public sealed class Sucursal
 
     public TipoUbicacion TipoUbicacion { get; private set; }
 
+    public string Pais { get; private set; }
+
     public string Departamento { get; private set; }
 
     public string Municipio { get; private set; }
@@ -80,6 +93,12 @@ public sealed class Sucursal
     public bool Activa { get; private set; }
 
     public bool TieneCoordenadas => Latitud is not null && Longitud is not null;
+
+    public bool MismoPaisQue(Sucursal otra)
+    {
+        ArgumentNullException.ThrowIfNull(otra);
+        return string.Equals(Pais, otra.Pais, StringComparison.OrdinalIgnoreCase);
+    }
 
     /// <summary>
     /// Distancia en kilometros sobre la superficie terrestre (formula de Haversine)

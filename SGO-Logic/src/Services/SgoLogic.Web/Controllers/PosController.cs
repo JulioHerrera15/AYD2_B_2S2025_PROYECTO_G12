@@ -54,7 +54,11 @@ public class PosController : Controller
             // se evita informar al operador sobre una ubicacion no verificada.
         }
 
-        var tiendasOpciones = TodasLasTiendasPos.Select(t =>
+        // Nombre y pais salen del catalogo de sucursales de Inventario, la fuente
+        // unica de verdad. La lista fija solo se usa si Inventario no responde.
+        var tiendasCatalogo = await CargarTiendasPosAsync();
+
+        var tiendasOpciones = tiendasCatalogo.Select(t =>
         {
             var stock = stockMap.TryGetValue(t.Id, out var s) ? s : 0;
             return new TiendaPosOpcion(t.Id, t.Nombre, t.PosId, stock, t.Pais);
@@ -440,6 +444,25 @@ public class PosController : Controller
     }
 
 
+    /// <summary>
+    /// Tiendas que pueden operar como terminal POS, en orden de pais (Guatemala, El
+    /// Salvador, Costa Rica) y de terminal. Vienen de GET /api/inventario/sucursales;
+    /// si Inventario no responde se usa <see cref="TodasLasTiendasPos" />.
+    /// </summary>
+    private async Task<IReadOnlyList<(string Id, string Nombre, string PosId, string Pais)>> CargarTiendasPosAsync()
+    {
+        var tiendas = (await _gateway.ObtenerSucursalesAsync())
+            .Where(s => s.EsTienda)
+            .OrderBy(s => PaisesSucursal.Posicion(s.Pais))
+            .ThenBy(s => s.Id, StringComparer.Ordinal)
+            .Select(s => (s.Id, s.Nombre, MapearTiendaAPos(s.Id), s.Pais))
+            .ToList();
+
+        return tiendas.Count > 0
+            ? tiendas
+            : TodasLasTiendasPos.Select(t => (t.Id, t.Nombre, t.PosId, t.Pais)).ToList();
+    }
+
     public static string MapearTiendaAPos(string ubicacionId)
     {
         var normalizada = ubicacionId.Trim().ToUpperInvariant();
@@ -462,44 +485,49 @@ public class PosController : Controller
         return "T01";
     }
 
-    public static readonly List<(string Id, string Nombre, string PosId, int Stock, string Pais)> TodasLasTiendasPos = new()
+    /// <summary>
+    /// Respaldo para cuando Inventario no responde. Debe ser identica (Id, nombre y
+    /// pais) a SucursalesSemilla de Inventario, que es la fuente de verdad. Los Id
+    /// son heredados: TIENDA-17-XELA a TIENDA-32-SALAMA no reflejan la ciudad.
+    /// </summary>
+    public static readonly List<(string Id, string Nombre, string PosId, string Pais)> TodasLasTiendasPos = new()
     {
         // ── Guatemala (16 sucursales: T01 a T16) ──────────────────────────────────
-        ("TIENDA-01-CENTRAL", "MegaStore Central — Zona 10, Guatemala (POS T01)", "T01", 400, "Guatemala"),
-        ("TIENDA-02-MIRAFLORES", "MegaStore Miraflores — Zona 11, Guatemala (POS T02)", "T02", 400, "Guatemala"),
-        ("TIENDA-03-PORTALES", "MegaStore Portales — Zona 17, Guatemala (POS T03)", "T03", 389, "Guatemala"),
-        ("TIENDA-04-PRADERA", "MegaStore Pradera Concepción, Guatemala (POS T04)", "T04", 400, "Guatemala"),
-        ("TIENDA-05-OAKLAND", "MegaStore Oakland Mall — Zona 10, Guatemala (POS T05)", "T05", 400, "Guatemala"),
-        ("TIENDA-06-NARANJO", "MegaStore Naranjo Mall — Mixco, Guatemala (POS T06)", "T06", 395, "Guatemala"),
-        ("TIENDA-07-CAYALA", "MegaStore Paseo Cayalá — Zona 16, Guatemala (POS T07)", "T07", 400, "Guatemala"),
-        ("TIENDA-08-ROOSEVELT", "MegaStore Peri-Roosevelt — Zona 7, Guatemala (POS T08)", "T08", 380, "Guatemala"),
-        ("TIENDA-09-FONTABELLA", "MegaStore Plaza Fontabella — Zona 10, Guatemala (POS T09)", "T09", 400, "Guatemala"),
-        ("TIENDA-10-METRONORTE", "MegaStore Metronorte — Zona 17, Guatemala (POS T10)", "T10", 390, "Guatemala"),
-        ("TIENDA-11-MAJADAS", "MegaStore Parque Las Majadas — Zona 11, Guatemala (POS T11)", "T11", 400, "Guatemala"),
-        ("TIENDA-12-AMERICAS", "MegaStore Plaza Las Américas — Zona 13, Guatemala (POS T12)", "T12", 375, "Guatemala"),
-        ("TIENDA-13-SANCRISTOBAL", "MegaStore San Cristóbal — Mixco, Guatemala (POS T13)", "T13", 390, "Guatemala"),
-        ("TIENDA-14-VILLANUEVA", "MegaStore Metrocentro — Villa Nueva, Guatemala (POS T14)", "T14", 385, "Guatemala"),
-        ("TIENDA-15-CARRETERA", "MegaStore Pradera Express — Carretera a El Salvador, Guatemala (POS T15)", "T15", 400, "Guatemala"),
-        ("TIENDA-16-CENTRALNORTE", "MegaStore Centra Norte — Zona 18, Guatemala (POS T16)", "T16", 370, "Guatemala"),
+        ("TIENDA-01-CENTRAL", "MegaStore Central — Zona 10 (T01)", "T01", "Guatemala"),
+        ("TIENDA-02-MIRAFLORES", "MegaStore Miraflores — Zona 11 (T02)", "T02", "Guatemala"),
+        ("TIENDA-03-PORTALES", "MegaStore Portales — Zona 17 (T03)", "T03", "Guatemala"),
+        ("TIENDA-04-PRADERA", "MegaStore Pradera Concepción (T04)", "T04", "Guatemala"),
+        ("TIENDA-05-OAKLAND", "MegaStore Oakland Mall — Zona 10 (T05)", "T05", "Guatemala"),
+        ("TIENDA-06-NARANJO", "MegaStore Naranjo Mall — Mixco (T06)", "T06", "Guatemala"),
+        ("TIENDA-07-CAYALA", "MegaStore Paseo Cayalá — Zona 16 (T07)", "T07", "Guatemala"),
+        ("TIENDA-08-ROOSEVELT", "MegaStore Peri-Roosevelt — Zona 7 (T08)", "T08", "Guatemala"),
+        ("TIENDA-09-FONTABELLA", "MegaStore Plaza Fontabella — Zona 10 (T09)", "T09", "Guatemala"),
+        ("TIENDA-10-METRONORTE", "MegaStore Metronorte — Zona 17 (T10)", "T10", "Guatemala"),
+        ("TIENDA-11-MAJADAS", "MegaStore Parque Las Majadas — Zona 11 (T11)", "T11", "Guatemala"),
+        ("TIENDA-12-AMERICAS", "MegaStore Plaza Las Américas — Zona 13 (T12)", "T12", "Guatemala"),
+        ("TIENDA-13-SANCRISTOBAL", "MegaStore San Cristóbal — Mixco (T13)", "T13", "Guatemala"),
+        ("TIENDA-14-VILLANUEVA", "MegaStore Metrocentro — Villa Nueva (T14)", "T14", "Guatemala"),
+        ("TIENDA-15-CARRETERA", "MegaStore Pradera Express — Km 14 (T15)", "T15", "Guatemala"),
+        ("TIENDA-16-CENTRALNORTE", "MegaStore Centra Norte — Zona 18 (T16)", "T16", "Guatemala"),
 
         // ── El Salvador (8 sucursales: T17 a T24) ─────────────────────────────────
-        ("TIENDA-17-XELA", "MegaStore Multiplaza — San Salvador, El Salvador (POS T17)", "T17", 400, "El Salvador"),
-        ("TIENDA-18-INTERPLAZA", "MegaStore Metrocentro — San Salvador, El Salvador (POS T18)", "T18", 390, "El Salvador"),
-        ("TIENDA-19-ANTIGUA", "MegaStore Galerías Escalón — San Salvador, El Salvador (POS T19)", "T19", 400, "El Salvador"),
-        ("TIENDA-20-ESCUINTLA", "MegaStore La Gran Vía — Santa Tecla, El Salvador (POS T20)", "T20", 380, "El Salvador"),
-        ("TIENDA-21-MAZATENANGO", "MegaStore Plaza Mundo — Soyapango, El Salvador (POS T21)", "T21", 375, "El Salvador"),
-        ("TIENDA-22-COBAN", "MegaStore Metrocentro — Santa Ana, El Salvador (POS T22)", "T22", 390, "El Salvador"),
-        ("TIENDA-23-HUEHUETENANGO", "MegaStore Metrocentro — San Miguel, El Salvador (POS T23)", "T23", 385, "El Salvador"),
-        ("TIENDA-24-CHIMALTENANGO", "MegaStore Plaza El Encuentro — Sonsonate, El Salvador (POS T24)", "T24", 395, "El Salvador"),
+        ("TIENDA-17-XELA", "MegaStore Multiplaza — San Salvador (T17)", "T17", "El Salvador"),
+        ("TIENDA-18-INTERPLAZA", "MegaStore Metrocentro — San Salvador (T18)", "T18", "El Salvador"),
+        ("TIENDA-19-ANTIGUA", "MegaStore Galerías Escalón — San Salvador (T19)", "T19", "El Salvador"),
+        ("TIENDA-20-ESCUINTLA", "MegaStore La Gran Vía — Santa Tecla (T20)", "T20", "El Salvador"),
+        ("TIENDA-21-MAZATENANGO", "MegaStore Plaza Mundo — Soyapango (T21)", "T21", "El Salvador"),
+        ("TIENDA-22-COBAN", "MegaStore Metrocentro — Santa Ana (T22)", "T22", "El Salvador"),
+        ("TIENDA-23-HUEHUETENANGO", "MegaStore Metrocentro — San Miguel (T23)", "T23", "El Salvador"),
+        ("TIENDA-24-CHIMALTENANGO", "MegaStore Plaza El Encuentro — Sonsonate (T24)", "T24", "El Salvador"),
 
         // ── Costa Rica (8 sucursales: T25 a T32) ──────────────────────────────────
-        ("TIENDA-25-ZACAPA", "MegaStore Multiplaza Escazú — San José, Costa Rica (POS T25)", "T25", 370, "Costa Rica"),
-        ("TIENDA-26-CHIQUIMULA", "MegaStore Mall San Pedro — San José, Costa Rica (POS T26)", "T26", 380, "Costa Rica"),
-        ("TIENDA-27-PUERTOBARRIOS", "MegaStore City Mall — Alajuela, Costa Rica (POS T27)", "T27", 365, "Costa Rica"),
-        ("TIENDA-28-PETEN", "MegaStore Multiplaza del Este — Curridabat, Costa Rica (POS T28)", "T28", 370, "Costa Rica"),
-        ("TIENDA-29-RETALHULEU", "MegaStore Paseo de las Flores — Heredia, Costa Rica (POS T29)", "T29", 380, "Costa Rica"),
-        ("TIENDA-30-COATEPEQUE", "MegaStore Paseo Metrópoli — Cartago, Costa Rica (POS T30)", "T30", 375, "Costa Rica"),
-        ("TIENDA-31-JUTIAPA", "MegaStore Plaza Liberia — Guanacaste, Costa Rica (POS T31)", "T31", 385, "Costa Rica"),
-        ("TIENDA-32-SALAMA", "MegaStore Paseo del Mar — Puntarenas, Costa Rica (POS T32)", "T32", 390, "Costa Rica")
+        ("TIENDA-25-ZACAPA", "MegaStore Multiplaza Escazú — San José (T25)", "T25", "Costa Rica"),
+        ("TIENDA-26-CHIQUIMULA", "MegaStore Mall San Pedro — San José (T26)", "T26", "Costa Rica"),
+        ("TIENDA-27-PUERTOBARRIOS", "MegaStore City Mall — Alajuela (T27)", "T27", "Costa Rica"),
+        ("TIENDA-28-PETEN", "MegaStore Multiplaza del Este — Curridabat (T28)", "T28", "Costa Rica"),
+        ("TIENDA-29-RETALHULEU", "MegaStore Paseo de las Flores — Heredia (T29)", "T29", "Costa Rica"),
+        ("TIENDA-30-COATEPEQUE", "MegaStore Paseo Metrópoli — Cartago (T30)", "T30", "Costa Rica"),
+        ("TIENDA-31-JUTIAPA", "MegaStore Plaza Liberia — Guanacaste (T31)", "T31", "Costa Rica"),
+        ("TIENDA-32-SALAMA", "MegaStore Paseo del Mar — Puntarenas (T32)", "T32", "Costa Rica")
     };
 }
