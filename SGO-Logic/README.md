@@ -1,16 +1,16 @@
-# SGO-Logic: MVP de la Fase 2
+# SGO-Logic: Fase 3
 
-Esta carpeta contiene el código del MVP de SGO-Logic, el sistema de registro de órdenes y operación omnicanal de MegaStore. El MVP implementa la saga de la orden de punta a punta (reserva de inventario, cobro, certificación fiscal, despacho y entrega), la devolución con reingreso de stock, nota de crédito y reembolso, la integración con el ERP y el POS, las notificaciones al cliente, la consulta de estado y la auditoría append-only. Todo corre en contenedores con Docker Compose (ADR-013), y los sistemas externos se reemplazan por mocks con fallas configurables (ADR-019).
+Esta carpeta contiene el código de SGO-Logic, el sistema de registro de órdenes y operación omnicanal de MegaStore, en su versión de cierre de la Fase 3. El sistema implementa la saga de la orden de punta a punta (reserva de inventario, cobro con tarjeta o crédito propio, certificación fiscal, despacho y entrega), la devolución con reingreso de stock, nota de crédito y reembolso, la integración con el ERP y el POS, las notificaciones al cliente, la consulta de estado y la auditoría append-only. La Fase 3 agrega el crédito "Compra ahora, paga en 30 días" (ADR-023), el microkernel de plugins de Notificaciones (ADR-024) y el CI/CD con despliegue en AWS EC2 (ADR-025). Todo corre en contenedores con Docker Compose (ADR-013), y los sistemas externos se reemplazan por mocks con fallas configurables (ADR-019).
 
-## Relación con la Fase 1
+## Relación con las fases anteriores
 
-La arquitectura se definió en la Fase 1 y está en `../documentacion/`: el Documento de Definición de Arquitectura (`../documentacion/docs/DDA_SGOLogic.md`, secciones 1 a 13) y los ADR-001 a ADR-012. Esta carpeta es su materialización: la Fase 2 no rediseña esa arquitectura. Las decisiones tomadas al construir el MVP se registran como ADR-013 en adelante (`../documentacion/ADR/`) y se resumen en la sección 14 del DDA, junto con los límites conocidos del MVP (sección 14.9). Los contratos de eventos entre contextos están en `../documentacion/docs/contratos/`.
+La arquitectura se definió en la Fase 1 y está en `../documentacion/`: el Documento de Definición de Arquitectura (`../documentacion/docs/DDA_SGOLogic.md`, secciones 1 a 13) y los ADR-001 a ADR-012. Esta carpeta es su materialización: ni la Fase 2 ni la Fase 3 rediseñan esa arquitectura. Las decisiones posteriores se registran como ADR-013 en adelante (`../documentacion/ADR/`); las de la Fase 2 se resumen en la sección 14 del DDA, junto con los límites conocidos del MVP (sección 14.9), y las de la Fase 3 en la sección 15. Los contratos de eventos entre contextos están en `../documentacion/docs/contratos/`.
 
 Clone el repositorio completo, no solo esta carpeta: `docker-compose.yml` construye `mock-erp` y `mock-pos` desde `../Mocks/`.
 
 ## Contextos y servicios
 
-Los 12 contextos delimitados de la sección 6.1 del DDA corresponden a estos servicios. Los puertos son los que `docker-compose.yml` publica en el host; dentro de la red de Docker, los servicios .NET escuchan en el 8080.
+Los 13 contextos delimitados de la sección 6.1 del DDA corresponden a estos servicios. Los puertos son los que `docker-compose.yml` publica en el host; dentro de la red de Docker, los servicios .NET escuchan en el 8080.
 
 | Contexto | Servicio | Puerto en el host | Responsabilidad |
 |---|---|---|---|
@@ -18,28 +18,29 @@ Los 12 contextos delimitados de la sección 6.1 del DDA corresponden a estos ser
 | Auth | `auth-api` | 8088 | Registro, verificación e inicio de sesión; emisión del JWT; carrito unificado en Redis. |
 | Órdenes | `ordenes-api` | 8083 | Ciclo de vida de la orden y orquestación de la saga (ADR-016); devoluciones. |
 | Inventario | `inventario-api` | 8094 | Existencias por ubicación, reservas con TTL, liberación por compensación y reingreso por devolución (ADR-022). |
-| Pagos | `pagos-api` | 8085 | Cobro contra PayKlik con disyuntor y reintento, reembolsos. |
-| Crédito | `credito-api` | 8099 | Perfil crediticio precalculado desde el historial del ERP y oferta "Compra ahora, paga en 30 días". |
+| Pagos | `pagos-api` | 8085 | Tokenización y bóveda transitoria de tarjetas, cobro contra PayKlik con disyuntor y reintento, abonos de crédito y reembolsos. |
+| Crédito | `credito-api` | 8099 | Perfil crediticio precalculado desde el historial del ERP, oferta "Compra ahora, paga en 30 días", evaluación dentro de la saga, cuentas por cobrar, abonos, vencimientos y reversos (ADR-023). |
 | Facturación | `facturacion-api` | 8087 | Documento fiscal y certificación asíncrona ante la SAT, nota de crédito. |
 | Auditoría | `auditoria-worker` | 8093 | Bitácora append-only de todos los eventos del bus, en su propia instancia de base de datos. |
 | Consulta de Estado | `consulta-estado-api` | 8091 | Modelo de lectura de las órdenes en Redis con respaldo en PostgreSQL; incidencias. |
 | Despacho | `despacho-api` | 8097 | Origen del despacho, guía con LogiExpress y estados de entrega. |
-| Integración ERP | `integracion-erp-worker` | 8096 | Lotes de ventas hacia el ERP-Core (AS/400) cada `ERP_INTERVALO_MINUTOS` y conciliación. |
+| Integración ERP | `integracion-erp-worker` | 8096 | Lotes de ventas hacia el ERP-Core (AS/400) cada `ERP_INTERVALO_MINUTOS`, importación del historial de clientes para Crédito, envío de pagos de crédito y conciliación. |
 | Integración POS | `integracion-pos-worker` | 8095 | Propagación confiable de eventos de venta a las 32 instancias de POS. |
-| Notificaciones | `notificaciones-api` | 8090 | Avisos al cliente por el proveedor de mensajería, aislados del flujo principal. |
+| Notificaciones | `notificaciones-api` | 8090 | Avisos al cliente aislados del flujo principal, con un microkernel de plugins por canal (Email, SMS, Push y Webhook) y reintentos por canal (ADR-024). `GET /api/kernel/plugins` lista los plugins. |
 
 Otros contenedores del stack:
 
 | Servicio | Puerto en el host | Función |
 |---|---|---|
 | `web` | 8092 | Aplicación web ASP.NET Core MVC que consume el gateway. |
-| `payklik-mock` | 8084 | Mock de PayKlik (pasarela de pago y tokenización). |
+| `payklik-mock` | 8084 | Mock de PayKlik (pasarela de pago y bóveda de tarjetas guardadas); el puerto queda publicado para su administración. |
 | `sat-mock` | 8086 | Mock de la SAT (certificación fiscal). |
 | `logiexpress-mock` | 8098 | Mock de LogiExpress (guías y rastreo). |
 | `mock-mensajeria` | 8089 | Mock del proveedor de SMS, correo y push. |
 | `mock-erp` | 4000 | Mock del ERP-Core sobre AS/400. |
 | `mock-pos` | 4001 | Mock de las 32 instancias de POS (`T01` a `T32`). |
-| `sample-api`, `sample-worker` | 8081, 8082 | Plantillas para crear servicios nuevos. |
+| `seed-datos` | sin publicar | Corre una vez al levantar el stack y siembra usuarios, inventario, órdenes, despachos, pagos y facturas de demo (`scripts/seed/`). |
+| `seed-demo` | sin publicar | Corre una vez al levantar el stack: registra y verifica usuarios de demo por el gateway y carga existencias (`scripts/demo/sembrar-demo.sh`). |
 | `rabbitmq` | 5672, 15672 | Broker de eventos; la consola de administración está en el 15672. |
 | `redis` | 6379 | Carrito y caché de Consulta de Estado. |
 | `db-operacional`, `db-finanzas`, `db-auditoria` | sin publicar | Tres instancias de PostgreSQL con una base por contexto. |
@@ -62,6 +63,7 @@ Versiones fijadas en el repositorio:
 | Grafana | 11.3.1 | `grafana/grafana:11.3.1` |
 | Testcontainers | 4.15.0 | `Testcontainers.PostgreSql` y `Testcontainers.RabbitMq` en las suites de integración |
 | xUnit | 2.5.3 | proyectos de `tests/` |
+| Playwright | `@playwright/test` ^1.48.0 | `tests/SgoLogic.Web.E2E/package.json` |
 
 En la máquina que levanta el sistema se necesita:
 
@@ -70,6 +72,7 @@ En la máquina que levanta el sistema se necesita:
 - PowerShell para `scripts/dev/dn.ps1` y `scripts/pruebas/camino-feliz.ps1`; este último es compatible con Windows PowerShell 5.1.
 - El SDK de .NET 8 instalado en el host solo si se van a correr las suites de Testcontainers (ver "Build y pruebas"). Para levantar el sistema no hace falta.
 - k6 no se instala: los scripts de carga lo corren con la imagen `grafana/k6`.
+- Node.js 18 o superior y npm solo para las pruebas E2E con Playwright.
 
 ## Instalación y despliegue
 
@@ -105,7 +108,7 @@ Copy-Item .env.example .env
 
 Los scripts de demostración (`sembrar-demo.sh`) y de carga llaman al gateway sin token, así que requieren `GATEWAY_EXIGIR_JWT=false`. `camino-feliz.ps1` llama directamente a los puertos de cada servicio y no depende de la bandera.
 
-3. Construya y levante el stack. La primera construcción compila las 19 imágenes .NET y las 2 de Node.
+3. Construya y levante el stack. La primera construcción compila las 18 imágenes .NET y las 2 de Node.
 
 ```bash
 docker compose up -d --build
@@ -141,15 +144,27 @@ docker compose down -v
 
 ## Datos de demo
 
-`scripts/demo/sembrar-demo.sh` registra el usuario `demo@sgo.local` (contraseña `Demo1234!`), lo verifica, inicia sesión y carga existencias de `SKU-DEMO-001` a `SKU-DEMO-003` en `CD-CENTRAL` y `TIENDA-001`, todo a través del gateway en `http://localhost:8080`.
+Los datos de demo se siembran solos al levantar el stack, con dos servicios del compose que corren una vez:
 
-1. Primera ejecución: registra el usuario y termina pidiendo el código de verificación.
+- `seed-datos` ejecuta `scripts/seed/sembrar.sh` con los archivos de `scripts/seed/sql/`. Asegura los usuarios con contraseña `1234` (`admin@sgo.local` y `admin2@sgo.local` como ADMIN, `operador@sgo.local` como OPERADOR y `cliente1@sgo.local` a `cliente6@sgo.local` como CLIENTE) y siembra inventario, órdenes, despachos, consulta de estado, pagos y facturas solo en bases vacías. `SEED_HABILITADO=false` lo desactiva.
+- `seed-demo` ejecuta `scripts/demo/sembrar-demo.sh` contra el gateway: registra y verifica `demo@sgo.local` y los demás usuarios de demo con la contraseña `Demo1234!` (un correo ya registrado responde 409 y conserva su contraseña), lee el código de verificación de `mock-mensajeria`, asigna los roles ADMIN y OPERADOR por prefijo de correo y carga existencias de `SKU-DEMO-001` a `SKU-DEMO-003`, `PROD-001` a `PROD-008` y `PROD-101` a `PROD-105`.
+
+Crédito siembra además el historial de `cliente1` a `cliente6` al arrancar con su base vacía (`Credito__SembrarDemo=true`), y `integracion-erp-worker` lo reemplaza con el snapshot de `mock-erp` en su ciclo batch.
+
+```bash
+docker compose logs seed-datos
+docker compose logs seed-demo
+```
+
+`sembrar-demo.sh` también se puede correr a mano, por ejemplo con otro correo, contra el gateway en `http://localhost:8080`:
+
+1. Primera ejecución: registra el usuario y termina pidiendo el código de verificación si no lo encuentra en `mock-mensajeria`.
 
 ```bash
 ./scripts/demo/sembrar-demo.sh
 ```
 
-2. Obtenga el código. Auth no envía correo en el MVP: escribe el código de 6 dígitos en su log con el texto `DEMO — Codigo de verificacion para <correo>: <codigo>`. El código vence a los 15 minutos.
+2. Obtenga el código. Auth escribe el código de 6 dígitos en su log con el texto `DEMO -- Codigo de verificacion para <correo>: <codigo>`. El código vence a los 15 minutos.
 
 ```bash
 docker compose logs auth-api | grep -i codigo
@@ -169,7 +184,7 @@ DEMO_VERIFICATION_CODE=123456 ./scripts/demo/sembrar-demo.sh
 
 Reemplace `123456` por el código del log. Las existencias se cargan con `PUT /api/inventario/existencias`, que fija la cantidad física, así que el script se puede repetir sin acumular stock. Se pueden cambiar `BASE_URL`, `DEMO_EMAIL`, `DEMO_PASSWORD`, `DEMO_NOMBRE` y `DEMO_VERIFICATION_CODE` por variables de entorno.
 
-Auth solo genera el código al registrar un correo nuevo: un correo ya registrado no produce otro. Si el código venció o ya no está en el log, use otro correo con `DEMO_EMAIL`.
+Si el código venció, `POST /api/auth/reenviar-codigo` genera uno nuevo (el script lo pide solo cuando no recibe `DEMO_VERIFICATION_CODE`); también puede usar otro correo con `DEMO_EMAIL`.
 
 ## Build y pruebas
 
@@ -187,10 +202,10 @@ Hay dos formas de ejecutar `dotnet`, y cuál usar depende de la suite.
 .\scripts\dev\dn.ps1 test tests/SgoLogic.Ordenes.Tests
 ```
 
-Suites que corren con `dn.ps1`: `SgoLogic.Auth.Tests`, `SgoLogic.BuildingBlocks.Tests`, `SgoLogic.ConsultaEstado.Tests`, `SgoLogic.Despacho.Tests`, `SgoLogic.Facturacion.Tests`, `SgoLogic.IntegracionErp.Tests`, `SgoLogic.IntegracionPos.Tests`, `SgoLogic.Inventario.Tests`, `SgoLogic.Notificaciones.Tests`, `SgoLogic.Ordenes.Tests` y `SgoLogic.Pagos.Tests`. Para correrlas todas en una sola línea:
+Suites que corren con `dn.ps1`: `SgoLogic.Auth.Tests`, `SgoLogic.BuildingBlocks.Tests`, `SgoLogic.ConsultaEstado.Tests`, `SgoLogic.Credito.Tests`, `SgoLogic.Despacho.Tests`, `SgoLogic.Facturacion.Tests`, `SgoLogic.IntegracionErp.Tests`, `SgoLogic.IntegracionPos.Tests`, `SgoLogic.Inventario.Tests`, `SgoLogic.Notificaciones.Tests`, `SgoLogic.Ordenes.Tests` y `SgoLogic.Pagos.Tests`. Para correrlas todas en una sola línea:
 
 ```powershell
-Get-ChildItem tests -Directory | Where-Object { $_.Name -notin 'SgoLogic.Auditoria.Tests','SgoLogic.BuildingBlocks.IntegrationTests','SgoLogic.Inventario.IntegrationTests' } | ForEach-Object { .\scripts\dev\dn.ps1 test "tests/$($_.Name)" }
+Get-ChildItem tests -Directory | Where-Object { $_.Name -notin 'SgoLogic.Auditoria.Tests','SgoLogic.BuildingBlocks.IntegrationTests','SgoLogic.Credito.IntegrationTests','SgoLogic.Inventario.IntegrationTests','SgoLogic.Web.E2E' } | ForEach-Object { .\scripts\dev\dn.ps1 test "tests/$($_.Name)" }
 ```
 
 `dn.ps1` también sirve para las migraciones de EF Core:
@@ -201,10 +216,14 @@ Get-ChildItem tests -Directory | Where-Object { $_.Name -notin 'SgoLogic.Auditor
 
 ### Suites de Testcontainers, en forma nativa
 
-Tres suites levantan sus propios contenedores de PostgreSQL o RabbitMQ con Testcontainers y necesitan el socket de Docker, que el contenedor de `dn.ps1` no monta. Dentro de `dn.ps1` fallan al no encontrar el daemon, sin que sea un error del código. Se corren con el SDK de .NET 8 del host y Docker encendido:
+Cuatro suites levantan sus propios contenedores de PostgreSQL o RabbitMQ con Testcontainers y necesitan el socket de Docker, que el contenedor de `dn.ps1` no monta. Dentro de `dn.ps1` fallan al no encontrar el daemon, sin que sea un error del código. Se corren con el SDK de .NET 8 del host y Docker encendido:
 
 ```bash
 dotnet test tests/SgoLogic.BuildingBlocks.IntegrationTests
+```
+
+```bash
+dotnet test tests/SgoLogic.Credito.IntegrationTests
 ```
 
 ```bash
@@ -215,7 +234,34 @@ dotnet test tests/SgoLogic.Inventario.IntegrationTests
 dotnet test tests/SgoLogic.Auditoria.Tests
 ```
 
-`SgoLogic.Inventario.IntegrationTests` contiene la prueba de reservas concurrentes de EAC-05, y `SgoLogic.Auditoria.Tests` la de carga y recuperación de EAC-03.
+`SgoLogic.Inventario.IntegrationTests` contiene la prueba de reservas concurrentes de EAC-05, `SgoLogic.Credito.IntegrationTests` la persistencia del perfil, la evaluación, la cobranza y las devoluciones de Crédito, y `SgoLogic.Auditoria.Tests` la de carga y recuperación de EAC-03. En el pipeline, los proyectos `*IntegrationTests` corren en el job `test-integracion` y el resto, incluido `SgoLogic.Auditoria.Tests`, en `test-unitarias`.
+
+### Pruebas end-to-end (Playwright)
+
+La suite `tests/SgoLogic.Web.E2E/` recorre la Web en Chromium: compra con tarjeta, compra a crédito, cliente sin crédito, reserva de stock en el carrito, rastreo con factura e incidencias (E2E-01 a E2E-05) y el recorrido completo de la opción de crédito (E2E-06). Con el stack levantado y la Web en `http://localhost:8092`:
+
+```bash
+cd tests/SgoLogic.Web.E2E
+npm install
+npx playwright install chromium
+npm test
+```
+
+`WEB_BASE_URL` cambia la URL de destino y `npm run report` abre el reporte HTML. El CD corre E2E-01 a E2E-05 contra la EC2; E2E-06 se corre en local porque usa un endpoint interno de Crédito. Detalle en [`../documentacion/docs/PRUEBAS-E2E.md`](../documentacion/docs/PRUEBAS-E2E.md).
+
+### Pruebas de carga y estrés (k6)
+
+La suite `scripts/pruebas-carga/credito-inventario/` tiene cinco pruebas de carga (C1 a C5) y cinco de estrés (E1 a E5) sobre la ruta de crédito y su efecto en el inventario. k6 corre en contenedor dentro de la red `sgo-logic_default`; el orquestador mide recursos, espera el drenado de la saga y verifica la integridad en las bases:
+
+```bash
+bash scripts/pruebas-carga/credito-inventario/ejecutar.sh carga
+```
+
+```bash
+bash scripts/pruebas-carga/credito-inventario/ejecutar.sh estres
+```
+
+La evidencia queda en `scripts/pruebas/evidencia/cci-*.txt`. Umbrales, comandos y resultados en [`../documentacion/docs/PRUEBAS-CARGA-ESTRES-CREDITO.md`](../documentacion/docs/PRUEBAS-CARGA-ESTRES-CREDITO.md).
 
 ## Mocks de sistemas externos
 
@@ -227,7 +273,7 @@ Los mocks guardan su configuración en memoria: al reiniciar el contenedor vuelv
 | `sat-mock` | 8086 | `NORMAL` (certifica), `LENTO`, `CAIDO` (503), `RECHAZO` (no certifica). Además, con `probabilidadFallo` mayor que 0 cualquier modo responde 503 al azar. Por defecto: `NORMAL`, `latenciaMs` 2000, `probabilidadFallo` 0. | `PUT /admin/modo` con `{"modo", "latenciaMs", "probabilidadFallo"}` | `GET /admin/modo`, `GET /admin/estado`, `GET /admin/certificaciones` |
 | `logiexpress-mock` | 8098 | `NORMAL` (emite la guía, salvo la solicitud número `unoDeCada`, que agota el tiempo), `LENTO`, `CAIDO` (ninguna solicitud responde a tiempo). Por defecto: `NORMAL`, `latenciaMs` 5000, `unoDeCada` 50. | `PUT /admin/modo` con `{"modo", "latenciaMs", "unoDeCada"}` | `GET /admin/modo`, `GET /admin/guias`, `GET /admin/intentos`; `POST /admin/guias/{guiaId}/estado` cambia el estado de rastreo de una guía |
 | `mock-mensajeria` | 8089 | Envío normal o falla forzada (500 en SMS, correo y push). Por defecto, el valor de `MOCK_MENSAJERIA_FORZAR_FALLA`. | `POST /api/mensajes/config/falla?activa=true` o `?activa=false`, sin reiniciar el contenedor. | Los envíos quedan en el log del contenedor. |
-| `mock-erp` | 4000 | En línea, o caído con `tipo` `timeout` (504 a los 8 segundos), `error500` o `no_disponible` (503), por tiempo indefinido o durante `duracionMs`. | `POST /erp/admin/caida` con `{"activar", "tipo", "duracionMs"}`; `POST /erp/admin/reset` restaura el estado inicial. | `GET /erp/admin/estado`, `GET /erp/lotes` |
+| `mock-erp` | 4000 | En línea, o caído con `tipo` `timeout` (504 a los 8 segundos), `error500` o `no_disponible` (503), por tiempo indefinido o durante `duracionMs`. | `POST /erp/admin/caida` con `{"activar", "tipo", "duracionMs"}`; `POST /erp/admin/reset` restaura el estado inicial. | `GET /erp/admin/estado`, `GET /erp/lotes`; historial de clientes en `GET /erp/clientes/historial` y `PUT /erp/admin/clientes/{email}/historial` |
 | `mock-pos` | 4001 | Cada tienda `T01` a `T32` en línea o desconectada con `tipo` `timeout`, `error500` o `no_disponible`, por tiempo indefinido o durante `duracionMs`. | `POST /pos/admin/{tiendaId}/caida` con `{"activar", "tipo", "duracionMs"}`; `POST /pos/admin/caida-masiva` con `{"tiendas", "activar", "tipo", "duracionMs"}`; `POST /pos/admin/reset`. | `GET /pos`, `GET /pos/{tiendaId}/estado`, `GET /pos/{tiendaId}/eventos` |
 
 ## Camino feliz de punta a punta
@@ -322,7 +368,7 @@ curl -X PUT http://localhost:8098/admin/modo -H "Content-Type: application/json"
 curl -X PUT http://localhost:8098/admin/modo -H "Content-Type: application/json" -d '{"modo":"NORMAL"}'
 ```
 
-Proveedor de mensajería caído. La orden avanza igual; el aviso se pierde y queda una advertencia en el log de `notificaciones-api` (límite del MVP, sección 14.9 del DDA):
+Proveedor de mensajería caído. La orden avanza igual; el microkernel de `notificaciones-api` guarda el aviso en `notificacion_pendiente` con su canal y lo reintenta con backoff hasta 6 veces (ADR-024):
 
 ```bash
 curl -X POST "http://localhost:8089/api/mensajes/config/falla?activa=true"
@@ -375,3 +421,19 @@ Las pruebas de carga con fallas intermitentes de PayKlik (EAC-01) y de consulta 
 | Consola de RabbitMQ | http://localhost:15672 | `RABBITMQ_USER` y `RABBITMQ_PASSWORD` de `.env`. |
 
 Grafana se aprovisiona desde `observabilidad/grafana/provisioning/` con Prometheus como fuente de datos y dos tableros: "SGO-Logic - Salud del sistema" y "SGO-Logic - Mensajeria y resiliencia". Las métricas propias son `outbox_pendientes`, `outbox_publicados_total`, `outbox_fallidos_total`, `outbox_latencia_publicacion_segundos`, `mensajes_consumidos_total`, `mensajes_duplicados_total` y `alertas_fiscales_levantadas_total`, además de las métricas HTTP estándar. Prometheus no raspa los mocks de sistemas externos, salvo `mock-mensajeria`.
+
+## CI/CD y despliegue
+
+El repositorio usa GitHub Actions. `.github/workflows/ci.yml` compila la solución y corre las pruebas unitarias y de integración en cada pull request hacia `develop` o `main` y en cada push a `develop`, `release/**` y `hotfix/**`. `.github/workflows/cd.yml` se dispara con el merge a `main` o a mano: corre el CI, publica 20 imágenes en GHCR, despliega en una instancia AWS EC2 con `docker-compose.yml` más `docker-compose.prod.yml` (script `../deploy/aws/deploy.sh`) y corre las pruebas E2E contra la Web desplegada. Si el build o las pruebas fallan, no se publica ni se despliega (ADR-025).
+
+Detalle, secrets, Security Group, rollback y problemas frecuentes en [`../documentacion/docs/CICD-DESPLIEGUE.md`](../documentacion/docs/CICD-DESPLIEGUE.md) y en el [Manual Técnico](../documentacion/manuales/Manual_Tecnico.md), secciones 10 y 11.
+
+## Documentación
+
+| Documento | Contenido |
+|---|---|
+| [DDA](../documentacion/docs/DDA_SGOLogic.md) | Arquitectura completa; la sección 14 cubre la Fase 2 y la sección 15 la Fase 3 |
+| [ADR](../documentacion/ADR/) | Decisiones de arquitectura ADR-001 a ADR-025 |
+| [Manual Técnico](../documentacion/manuales/Manual_Tecnico.md) | Instalación, servicios, Crédito, microkernel, pruebas, CI/CD, despliegue y operación |
+| [Manual de Usuario](../documentacion/manuales/Manual_Usuario.md) | Uso de la Web paso a paso para clientes, personal y administradores |
+| [Contratos](../documentacion/docs/contratos/) | Contratos de eventos entre contextos |
