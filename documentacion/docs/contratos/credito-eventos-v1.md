@@ -710,12 +710,11 @@ Sin cuenta por cobrar para la orden, se confirma el mensaje sin cambios.
 
 Migración `DevolucionesYReembolsos`.
 
-## 5. Contrato para Integración ERP y mock ERP (pendiente, lo implementa su dueño)
+## 5. Contrato para Integración ERP y mock ERP
 
-Crédito ya consume `HistorialClienteErpActualizado` y, mientras tanto, se alimenta
-con la siembra de demo (`Credito:SembrarDemo`) y con `POST /interno/credito/historiales`.
-Lo siguiente queda escrito para que lo implemente el dueño de `Mocks/mock-erp` y de
-`SgoLogic.IntegracionErp.Worker`.
+Crédito consume `HistorialClienteErpActualizado`. Integración ERP obtiene el snapshot
+por lotes y envía también los cierres de cuentas de crédito como pagos puntuales o
+tardíos; no consulta al ERP desde el checkout.
 
 ### 5.1 Mock ERP
 
@@ -770,33 +769,47 @@ Datos iniciales: los mismos seis clientes de la siembra de demo de Crédito
 cliente para pruebas (mismo cuerpo que un elemento de `clientes`, sin `email`) y
 actualiza su `actualizadoEn`.
 
+**`POST /erp/clientes/pagos`**: recibe los cierres de cuentas de crédito en lotes.
+Cada `eventId` se aplica como máximo una vez; el pago incrementa `pagosPuntuales` o
+`pagosTardios`, actualiza `fechaCorte`, `actualizadoEn` y `loteOrigen`, y el siguiente
+snapshot refleja esos contadores.
+
+```json
+{
+  "pagos": [
+    {
+      "eventId": "evt-cuenta-pagada-001",
+      "cuentaId": "cuenta-001",
+      "ordenId": "orden-001",
+      "clienteId": "cliente1@sgo.local",
+      "pagadaEn": "2026-10-14T18:00:00Z",
+      "puntual": true
+    }
+  ]
+}
+```
+
 **`POST /erp/admin/reset`**: además de lo que ya reinicia, restaura los seis
 clientes iniciales.
 
 ### 5.2 Integración ERP
 
-- Worker nuevo `ErpHistorialClientesWorker`: corre al arrancar y luego cada
-  `Erp:IntervaloHistorialMinutos` (por defecto 30).
-- Método nuevo en `IClienteErp` para `GET /erp/clientes/historial`, con la misma
-  política de reintentos que `EnviarLoteAsync` (`Erp:MaxReintentos`, backoff
-  exponencial de 250 ms hasta 4 s, reintenta 500, 503, 504, timeout y error de red).
-- Lock propio de PostgreSQL `sgo-logic.integracion-erp.historial-clientes`. No
-  reutilizar el de lotes (`sgo-logic.integracion-erp.batch`): son ciclos
-  independientes.
-- Tabla propia con la última versión publicada por cliente (por ejemplo, email,
-  `actualizadoEn` y un hash del contenido) para publicar solo los clientes que
-  cambiaron.
-- Por cada cliente que cambió, un `HistorialClienteErpActualizado` vía outbox, con
-  `aggregateId` = email en minúsculas y `data.fechaCorte` = `fechaCorte` de la
-  respuesta; `data.clienteId` = email en minúsculas y
-  `data.codigoClienteErp` = `codigoCliente`.
-- Si el ERP está caído (reintentos agotados) no publica nada y lo intenta en el
-  siguiente ciclo. Crédito sigue respondiendo con el último perfil calculado.
-- Recomendación: incluir `MEDIO_PAGO` en cada registro del lote de ventas que se
-  envía al ERP. `OrdenConfirmada` ya lo trae (`medioPago`), así que no hace falta
-  otra consulta. Con él el ERP distingue las ventas a crédito (cuya cobranza sigue
-  abierta y cuyas devoluciones bajan una deuda en vez de reembolsar) y puede
-  calcular el historial de pagos que luego devuelve a Crédito.
+- `ErpOrdenesConsumidor` consume `CuentaCreditoPagada` y la guarda en la tabla
+  durable `pagos_credito_erp`, deduplicada por `eventId`.
+- `ErpHistorialClientesWorker` corre al arrancar y luego cada
+  `Erp:IntervaloHistorialMinutos`. Antes de consultar el snapshot, envía los pagos
+  pendientes a `POST /erp/clientes/pagos`; solo los marca enviados tras una respuesta
+  exitosa. Si el ERP falla, conserva los pagos y no publica un snapshot anterior.
+- El envío batch usa `eventId` como clave de idempotencia: si el ERP aceptó el lote
+  pero se perdió la respuesta, el reintento no incrementa dos veces el historial.
+- Después de aceptar los pagos, el worker consulta `GET /erp/clientes/historial` y
+  encola un `HistorialClienteErpActualizado` por cliente mediante Outbox. Crédito
+  consume el snapshot y recalcula perfil y línea.
+- El lock del ciclo de historial es
+  `sgo-logic.integracion-erp.historial-clientes`, independiente del lock de ventas.
+- Si el ERP está caído después de agotar reintentos, los pagos siguen pendientes y
+  se reintentan en el siguiente ciclo; checkout continúa usando el último perfil
+  aplicado en Crédito.
 
 ## 6. Configuración
 

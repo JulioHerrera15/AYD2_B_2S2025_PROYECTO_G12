@@ -361,6 +361,68 @@ namespace SgoLogic.IntegracionErp.Worker.Infrastructure.Migraciones
                     b.ToTable("ventas_erp", (string)null);
                 });
 
+            modelBuilder.Entity("SgoLogic.IntegracionErp.Worker.Infrastructure.PagoCreditoErp", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("ClienteId")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("cliente_id");
+
+                    b.Property<string>("CuentaId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("cuenta_id");
+
+                    b.Property<string>("EventId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("event_id");
+
+                    b.Property<DateTime?>("EnviadoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("enviado_en");
+
+                    b.Property<DateTime>("PagadaEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("pagada_en");
+
+                    b.Property<bool>("Puntual")
+                        .HasColumnType("boolean")
+                        .HasColumnName("puntual");
+
+                    b.Property<DateTime>("RecibidoEn")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recibido_en");
+
+                    b.Property<string>("Estado")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("estado");
+
+                    b.Property<string>("OrdenId")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("orden_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EventId")
+                        .IsUnique();
+
+                    b.HasIndex("Estado", "RecibidoEn");
+
+                    b.ToTable("pagos_credito_erp", (string)null);
+                });
+
             modelBuilder.Entity("SgoLogic.IntegracionErp.Worker.Infrastructure.RegistroLoteErp", b =>
                 {
                     b.HasOne("SgoLogic.IntegracionErp.Worker.Infrastructure.LoteErp", "Lote")

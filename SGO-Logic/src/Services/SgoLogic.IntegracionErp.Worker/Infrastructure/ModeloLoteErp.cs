@@ -11,6 +11,7 @@ public sealed class IntegracionErpDbContext : DbContext
     public IntegracionErpDbContext(DbContextOptions<IntegracionErpDbContext> options) : base(options) { }
 
     public DbSet<VentaErp> Ventas => Set<VentaErp>();
+    public DbSet<PagoCreditoErp> PagosCredito => Set<PagoCreditoErp>();
     public DbSet<LoteErp> Lotes => Set<LoteErp>();
     public DbSet<RegistroLoteErp> RegistrosLote => Set<RegistroLoteErp>();
     public DbSet<ConciliacionErp> Conciliaciones => Set<ConciliacionErp>();
@@ -22,9 +23,44 @@ public sealed class IntegracionErpDbContext : DbContext
         modelBuilder.ApplyConfiguration(new OutboxMessageConfiguration());
         modelBuilder.ApplyConfiguration(new MensajeProcesadoConfiguration());
         modelBuilder.ApplyConfiguration(new VentaErpConfiguration());
+        modelBuilder.ApplyConfiguration(new PagoCreditoErpConfiguration());
         modelBuilder.ApplyConfiguration(new LoteErpConfiguration());
         modelBuilder.ApplyConfiguration(new RegistroLoteErpConfiguration());
         modelBuilder.ApplyConfiguration(new ConciliacionErpConfiguration());
+    }
+}
+
+public sealed class PagoCreditoErp
+{
+    public Guid Id { get; private set; } = Guid.NewGuid();
+    public string EventId { get; set; } = string.Empty;
+    public string CuentaId { get; set; } = string.Empty;
+    public string OrdenId { get; set; } = string.Empty;
+    public string ClienteId { get; set; } = string.Empty;
+    public DateTime PagadaEn { get; set; }
+    public bool Puntual { get; set; }
+    public string Estado { get; set; } = "PENDIENTE";
+    public DateTime RecibidoEn { get; set; } = DateTime.UtcNow;
+    public DateTime? EnviadoEn { get; set; }
+}
+
+public sealed class PagoCreditoErpConfiguration : IEntityTypeConfiguration<PagoCreditoErp>
+{
+    public void Configure(EntityTypeBuilder<PagoCreditoErp> b)
+    {
+        b.ToTable("pagos_credito_erp");
+        b.HasKey(x => x.Id);
+        b.Property(x => x.EventId).HasColumnName("event_id").HasMaxLength(64).IsRequired();
+        b.Property(x => x.CuentaId).HasColumnName("cuenta_id").HasMaxLength(64).IsRequired();
+        b.Property(x => x.OrdenId).HasColumnName("orden_id").HasMaxLength(200).IsRequired();
+        b.Property(x => x.ClienteId).HasColumnName("cliente_id").HasMaxLength(254).IsRequired();
+        b.Property(x => x.PagadaEn).HasColumnName("pagada_en").HasColumnType("timestamp with time zone").IsRequired();
+        b.Property(x => x.Puntual).HasColumnName("puntual").IsRequired();
+        b.Property(x => x.Estado).HasColumnName("estado").HasMaxLength(20).IsRequired();
+        b.Property(x => x.RecibidoEn).HasColumnName("recibido_en").HasColumnType("timestamp with time zone").IsRequired();
+        b.Property(x => x.EnviadoEn).HasColumnName("enviado_en").HasColumnType("timestamp with time zone");
+        b.HasIndex(x => x.EventId).IsUnique();
+        b.HasIndex(x => new { x.Estado, x.RecibidoEn });
     }
 }
 
