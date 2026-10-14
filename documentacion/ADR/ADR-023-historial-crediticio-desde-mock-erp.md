@@ -16,7 +16,7 @@ Se amplía `mock-erp` para simular la exportación de un historial comercial por
 
 El flujo adoptado es:
 
-1. `mock-erp` mantiene fixtures de clientes y genera un snapshot de historial con código ERP, email normalizado, antigüedad, compras y monto de los últimos 12 meses, pagos puntuales/tardíos, máximo atraso, devoluciones, incidentes, moneda, fecha de corte y lote de origen. Al aceptar un lote de ventas con `clienteId`, incrementa compras y monto del snapshot correspondiente; las demás métricas solo cambian mediante datos explícitos del ERP o la administración de pruebas.
+1. `mock-erp` mantiene fixtures de clientes y genera un snapshot de historial con código ERP, email normalizado, antigüedad, compras y monto de los últimos 12 meses, pagos puntuales/tardíos, máximo atraso, devoluciones, incidentes, moneda, fecha de corte y lote de origen. Al aceptar un lote de ventas con `clienteId`, incrementa compras y monto. También recibe lotes idempotentes de `CuentaCreditoPagada` por `eventId` para incrementar pagos puntuales o tardíos.
 2. El worker de Integración ERP obtiene el snapshot en su proceso batch, valida el formato legado en la capa anticorrupción y lo transforma a `HistorialClienteErpActualizadoData`.
 3. Integración ERP publica `HistorialClienteErpActualizado` por Outbox, con `source=integracion-erp`, `aggregateId` igual al email normalizado, `fechaCorte` y `loteOrigen`. Un mismo lote o un corte anterior no vuelve a publicar datos efectivos.
 4. Crédito consume el evento en su cola propia y, en una sola transacción, guarda el último snapshot, recalcula `PerfilCrediticio`, actualiza la línea y publica `PerfilCrediticioActualizado` si cambió el resultado.
@@ -51,6 +51,7 @@ El mock debe soportar, como mínimo, los siguientes escenarios reproducibles: hi
 - La elegibilidad refleja el último corte aplicado y puede tener una antigüedad de hasta la ventana batch; no es una consulta contable en tiempo real.
 - El mock requiere mantener fixtures, validaciones y documentación de un contrato adicional.
 - El snapshot de prueba refleja ventas nuevas solo después de aceptar su lote y del siguiente ciclo de consulta de historial; ambos intervalos son configurables y el de historial hereda el de lotes por defecto.
+- Los pagos de las cuentas propias se originan en Crédito; Integración ERP los conserva durablemente y los envía en su siguiente ciclo batch. El mock deduplica por `eventId` antes de cambiar los contadores.
 - La prueba completa requiere levantar RabbitMQ, Integración ERP, Crédito y el mock, además de sus bases.
 - El snapshot actual de Crédito conserva la versión vigente; si Finanzas necesita reconstruir cada cambio histórico, debe agregarse una tabla de versiones o apoyarse en Auditoría y Outbox.
 
