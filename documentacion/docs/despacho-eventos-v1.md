@@ -63,3 +63,50 @@ transportista no revive un despacho cerrado**.
 `ENTREGADA` tambien es alcanzable directo desde `GUIA_ASIGNADA` y
 `GUIA_PENDIENTE`: un transportista puede reportar solo el estado final, y perder
 esa entrega por rigidez seria peor que aceptar el salto.
+
+## 6. Consultas REST de preparacion
+
+Las dos devuelven una lista de `DespachoDto` (mismo cuerpo que
+`GET /api/despacho/{ordenId}`, con sus lineas) y aceptan `estado` opcional; un
+estado que no exista en `EstadoDespacho` responde 400 con el problem
+`Estado invalido`.
+
+| Endpoint | Uso | Orden |
+|---|---|---|
+| `GET /api/despacho/ubicaciones/{ubicacionId}/preparacion?estado=` | Cola del operador de una ubicacion (HU-019). | `creadoEn` ascendente |
+| `GET /api/despacho/preparacion?estado=&ubicacionId=` | Panel de despacho. Sin `ubicacionId`, todas las ubicaciones de origen. | `creadoEn` descendente |
+
+El panel web usa el segundo sin `ubicacionId` y filtra la sede en memoria: el
+origen lo decide Inventario al reservar (seccion 4), asi que puede ser cualquier
+CD o tienda y el panel no puede asumir una lista fija de sedes. El segmento
+literal `preparacion` tiene precedencia sobre `/{ordenId}` en el enrutamiento, y
+el gateway lo pasa por la ruta `despacho-route` sin cambios.
+
+```http
+GET /api/despacho/preparacion?ubicacionId=CD-CENTRAL&estado=EN_PREPARACION
+```
+
+```json
+[
+  {
+    "id": "DES-2026-000004",
+    "ordenId": "ORD-2026-000004",
+    "reservaId": "RSV-2026-000004",
+    "metodoEntrega": "DOMICILIO",
+    "ubicacionOrigenId": "CD-CENTRAL",
+    "tipoUbicacionOrigen": "CENTRO_DISTRIBUCION",
+    "ubicacionRecogidaId": null,
+    "direccionEntrega": "Calzada Roosevelt 22-43 Zona 11, Mixco, Guatemala",
+    "estado": "EN_PREPARACION",
+    "guiaId": "LGX-2026-100004",
+    "trackingUrl": "http://localhost:8098/api/guias/LGX-2026-100004",
+    "transportista": "LogiExpress",
+    "detalleEstado": "Alistando pedido",
+    "creadoEn": "2026-10-14T03:12:40.512Z",
+    "entregadoEn": null,
+    "lineas": [
+      { "sku": "PROD-005", "descripcion": "Laptop Gamer Ultra 16\" Ryzen 9", "cantidad": 1 }
+    ]
+  }
+]
+```

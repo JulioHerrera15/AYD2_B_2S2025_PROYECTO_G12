@@ -582,7 +582,8 @@ public sealed record DespachoPreparacionDto(
     [property: JsonPropertyName("metodoEntrega")] string MetodoEntrega,
     [property: JsonPropertyName("estado")] string Estado,
     [property: JsonPropertyName("guiaId")] string? GuiaId,
-    [property: JsonPropertyName("creadoEn")] DateTime? CreadoEn)
+    [property: JsonPropertyName("creadoEn")] DateTime? CreadoEn,
+    [property: JsonPropertyName("ubicacionRecogidaId")] string? UbicacionRecogidaId = null)
 {
     [JsonPropertyName("despachoId")]
     public string DespachoId => !string.IsNullOrWhiteSpace(Id) ? Id : (!string.IsNullOrWhiteSpace(OrdenId) ? OrdenId : string.Empty);
@@ -1110,6 +1111,30 @@ public sealed class GatewayClient
         var res = await _http.GetAsync(url, ct);
         if (!res.IsSuccessStatusCode) return null;
         return await res.Content.ReadFromJsonAsync<List<DespachoPreparacionDto>>(JsonOptions, ct);
+    }
+
+    /// <summary>
+    /// Panel de despacho via GET /api/despacho/preparacion: todas las ubicaciones de
+    /// origen, o solo <paramref name="ubicacionId" /> si se indica. Retorna null si el
+    /// servicio no responde, para que la vista no lo confunda con "no hay despachos".
+    /// </summary>
+    public async Task<List<DespachoPreparacionDto>?> ListarDespachosAsync(string? ubicacionId = null, string? estado = null, CancellationToken ct = default)
+    {
+        var query = new List<string>();
+        if (!string.IsNullOrWhiteSpace(ubicacionId)) query.Add($"ubicacionId={Uri.EscapeDataString(ubicacionId)}");
+        if (!string.IsNullOrWhiteSpace(estado)) query.Add($"estado={Uri.EscapeDataString(estado)}");
+        var url = "/api/despacho/preparacion" + (query.Count > 0 ? "?" + string.Join("&", query) : "");
+
+        try
+        {
+            var res = await _http.GetAsync(url, ct);
+            if (!res.IsSuccessStatusCode) return null;
+            return await res.Content.ReadFromJsonAsync<List<DespachoPreparacionDto>>(JsonOptions, ct);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        {
+            return null;
+        }
     }
 
     public async Task<(bool Exito, string? Error)> ActualizarEstadoDespachoAsync(string ordenId, string estado, string? detalle = null, CancellationToken ct = default)

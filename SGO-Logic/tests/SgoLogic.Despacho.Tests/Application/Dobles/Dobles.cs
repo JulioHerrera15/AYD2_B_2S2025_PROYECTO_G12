@@ -26,6 +26,17 @@ public sealed class RepositorioDespachosFalso : IRepositorioDespachos
                 .Where(d => estado is null || d.Estado == estado)
                 .ToList());
 
+    public Task<IReadOnlyList<Despacho.Api.Domain.Despacho>> ListarAsync(
+        string? ubicacionOrigenId,
+        EstadoDespacho? estado,
+        CancellationToken cancelacion) =>
+        Task.FromResult<IReadOnlyList<Despacho.Api.Domain.Despacho>>(
+            _despachos
+                .Where(d => ubicacionOrigenId is null || d.UbicacionOrigenId == ubicacionOrigenId)
+                .Where(d => estado is null || d.Estado == estado)
+                .OrderByDescending(d => d.CreadoEn)
+                .ToList());
+
     public Task AgregarAsync(Despacho.Api.Domain.Despacho despacho, CancellationToken cancelacion)
     {
         _despachos.Add(despacho);

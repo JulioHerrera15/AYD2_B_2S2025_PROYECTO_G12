@@ -13,6 +13,15 @@ public interface IRepositorioDespachos
         EstadoDespacho? estado,
         CancellationToken cancelacion);
 
+    /// <summary>
+    /// Despachos de todas las ubicaciones de origen, o solo de una si se indica,
+    /// del mas reciente al mas antiguo.
+    /// </summary>
+    Task<IReadOnlyList<Domain.Despacho>> ListarAsync(
+        string? ubicacionOrigenId,
+        EstadoDespacho? estado,
+        CancellationToken cancelacion);
+
     Task AgregarAsync(Domain.Despacho despacho, CancellationToken cancelacion);
 }
 

@@ -380,6 +380,21 @@ public sealed class ServicioDespacho
         return despachos.Select(DespachoDto.Desde).ToList();
     }
 
+    /// <summary>
+    /// Panel de despacho: todos los despachos sin importar de que ubicacion salen, o
+    /// los de una sola si se indica. El origen lo decide Inventario al reservar, asi
+    /// que el panel no puede asumir una lista fija de sedes.
+    /// </summary>
+    public async Task<IReadOnlyList<DespachoDto>> ListarAsync(
+        string? ubicacionOrigenId,
+        EstadoDespacho? estado,
+        CancellationToken cancelacion)
+    {
+        var ubicacion = string.IsNullOrWhiteSpace(ubicacionOrigenId) ? null : ubicacionOrigenId.Trim();
+        var despachos = await _despachos.ListarAsync(ubicacion, estado, cancelacion);
+        return despachos.Select(DespachoDto.Desde).ToList();
+    }
+
     private static IReadOnlyList<LineaDespachoData> LineasEvento(Domain.Despacho despacho) =>
         despacho.Lineas.Select(l => new LineaDespachoData(l.Sku, l.Descripcion, l.Cantidad)).ToList();
 }

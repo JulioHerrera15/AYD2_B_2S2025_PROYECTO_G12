@@ -37,6 +37,29 @@ public sealed class RepositorioDespachos : IRepositorioDespachos
         return await consulta.OrderBy(d => d.CreadoEn).ToListAsync(cancelacion);
     }
 
+    public async Task<IReadOnlyList<Domain.Despacho>> ListarAsync(
+        string? ubicacionOrigenId,
+        EstadoDespacho? estado,
+        CancellationToken cancelacion)
+    {
+        var consulta = _contexto.Despachos
+            .AsNoTracking()
+            .Include(d => d.Lineas)
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(ubicacionOrigenId))
+        {
+            consulta = consulta.Where(d => d.UbicacionOrigenId == ubicacionOrigenId);
+        }
+
+        if (estado is not null)
+        {
+            consulta = consulta.Where(d => d.Estado == estado);
+        }
+
+        return await consulta.OrderByDescending(d => d.CreadoEn).ToListAsync(cancelacion);
+    }
+
     public async Task AgregarAsync(Domain.Despacho despacho, CancellationToken cancelacion) =>
         await _contexto.Despachos.AddAsync(despacho, cancelacion);
 }
