@@ -566,4 +566,90 @@ public class CuentaController : Controller
         TempData["Exito"] = $"Tu solicitud formal de supresion y derecho al olvido ha sido registrada con folio {folio}. Conforme al Codigo Tributario SAT, las facturas DTE y auditorias emitidas se resguardan por 5 anos, procediendo con la baja y anonimizacion de datos promocionales y de contacto en un plazo maximo de 72 horas.";
         return RedirectToAction("Privacidad");
     }
+
+    [HttpGet]
+    public async Task<IActionResult> Notificaciones(string? canal = null)
+    {
+        var userEmail = Request.Cookies["sgo_user_email"];
+        if (string.IsNullOrWhiteSpace(userEmail))
+        {
+            return RedirectToAction("Login", "Auth", new { returnUrl = "/Cuenta/Notificaciones" });
+        }
+
+        ViewBag.UserEmail = userEmail;
+        ViewBag.CanalFiltro = canal;
+
+        // 1. Obtener mensajes enviados desde MockMensajeria
+        var mensajes = await _gateway.ObtenerMensajesAsync(destinatario: userEmail, canal: canal, HttpContext.RequestAborted);
+
+        // 2. Si el mock en memoria esta vacio (p. ej. reinicio de contenedores), consultar historial de ordenes
+        // para asegurar que el cliente siempre vea la trazabilidad de sus estados y motivos
+        if (mensajes.Count == 0)
+        {
+            var historial = await _gateway.ObtenerHistorialClienteAsync(userEmail, pagina: 1, tamano: 20, HttpContext.RequestAborted);
+            if (historial?.Ordenes is not null)
+            {
+                foreach (var ord in historial.Ordenes)
+                {
+                    var num = !string.IsNullOrWhiteSpace(ord.NumeroOrden) ? ord.NumeroOrden : ord.OrdenId;
+                    var estado = ord.Estado ?? "CONFIRMADA";
+
+                    string asunto;
+                    string cuerpo;
+                    switch (estado.ToUpperInvariant())
+                    {
+                        case "CONFIRMADA":
+                        case "CONFIRMADA_PENDIENTE_FISCAL":
+                            asunto = $"Tu orden {num} ha sido confirmada";
+                            cuerpo = $"Tu orden {num} fue confirmada exitosamente. Estamos preparando tus productos para la entrega.";
+                            break;
+                        case "RECHAZADA":
+                            asunto = $"Tu orden {num} ha sido rechazada";
+                            cuerpo = $"Lamentamos informarte que tu orden {num} fue rechazada. Motivo del rechazo: Evaluacion de credito o fondos insuficientes.";
+                            break;
+                        case "CANCELADA":
+                        case "CANCELADA_RESERVA_VENCIDA":
+                            asunto = $"Tu orden {num} ha sido cancelada";
+                            cuerpo = $"Tu orden {num} fue cancelada. La reserva de inventario fue liberada.";
+                            break;
+                        case "LISTA_PARA_RECOGER":
+                            asunto = $"Tu orden {num} esta lista para recoger";
+                            cuerpo = $"Tu orden {num} ya esta lista en sucursal. Presenta tu numero de orden para recogerla.";
+                            break;
+                        case "EN_TRANSITO":
+                        case "EN_RUTA":
+                            asunto = $"Tu orden {num} esta en camino";
+                            cuerpo = $"Tu orden {num} va en camino a tu direccion de entrega via LogiExpress.";
+                            break;
+                        case "ENTREGADA":
+                            asunto = $"Tu orden {num} ha sido entregada";
+                            cuerpo = $"Tu orden {num} fue entregada exitosamente. Gracias por tu compra en MegaStore.";
+                            break;
+                        default:
+                            asunto = $"Tu orden {num} cambio de estado";
+                            cuerpo = $"El estado de tu orden {num} es ahora: {estado}.";
+                            break;
+                    }
+
+                    mensajes.Add(new NotificacionMensajeModel(
+                        MensajeId: $"NOTIF-{Guid.NewGuid().ToString("N")[..8].ToUpperInvariant()}",
+                        Canal: "EMAIL",
+                        Destinatario: userEmail,
+                        Asunto: asunto,
+                        Cuerpo: cuerpo,
+                        Fecha: ord.CreadaEn ?? DateTime.UtcNow
+                    ));
+                }
+            }
+        }
+
+        if (!string.IsNullOrWhiteSpace(canal))
+        {
+            mensajes = mensajes.Where(m => string.Equals(m.Canal, canal, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        mensajes = mensajes.OrderByDescending(m => m.Fecha).ToList();
+
+        return View(mensajes);
+    }
 }

@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using SgoLogic.Contracts.Enumeraciones;
 using SgoLogic.Contracts.Eventos.Despacho;
 using SgoLogic.Contracts.Eventos.Ordenes;
 using SgoLogic.Contracts.Eventos.Pagos;
@@ -85,14 +86,86 @@ public sealed class ServicioNotificaciones
     {
     }
 
-    public Task NotificarEstadoOrdenAsync(OrdenEstadoCambiadoData data, string eventId, CancellationToken cancelacion) =>
-        EnviarOGuardarAsync(
-            new NotificacionSaliente(
-                data.ClienteId,
-                $"Tu orden {data.OrdenId} cambio de estado",
-                $"El estado de tu orden {data.OrdenId} es ahora: {data.EstadoNuevo}"),
+    /// <summary>
+    /// Notifica al cliente las transiciones de estado de su orden (CU-18, CU-07, etc.).
+    /// Utiliza el numero de orden legible (NumeroOrden) y el motivo explicito (Motivo)
+    /// informado por los servicios participantes (Credito, Pagos, Inventario o Despacho).
+    /// </summary>
+    public Task NotificarEstadoOrdenAsync(OrdenEstadoCambiadoData data, string eventId, CancellationToken cancelacion)
+    {
+        if (string.IsNullOrWhiteSpace(data.ClienteId))
+        {
+            _logger.LogWarning(
+                "OrdenEstadoCambiado de la orden {OrdenId} sin ClienteId: no hay destinatario, el aviso no se envia.",
+                data.OrdenId);
+            return Task.CompletedTask;
+        }
+
+        var numero = !string.IsNullOrWhiteSpace(data.NumeroOrden) ? data.NumeroOrden : data.OrdenId;
+        string asunto;
+        string cuerpo;
+
+        switch (data.EstadoNuevo)
+        {
+            case EstadoOrden.CONFIRMADA:
+                asunto = $"Tu orden {numero} ha sido confirmada";
+                cuerpo = string.IsNullOrWhiteSpace(data.Motivo)
+                    ? $"Tu orden {numero} fue confirmada exitosamente. Estamos preparando tus productos para la entrega."
+                    : $"Tu orden {numero} fue confirmada exitosamente. {data.Motivo}";
+                break;
+
+            case EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL:
+                asunto = $"Tu orden {numero} ha sido confirmada";
+                cuerpo = string.IsNullOrWhiteSpace(data.Motivo)
+                    ? $"Tu orden {numero} fue confirmada exitosamente y esta pendiente de emision fiscal."
+                    : $"Tu orden {numero} fue confirmada exitosamente. {data.Motivo}";
+                break;
+
+            case EstadoOrden.RECHAZADA:
+                asunto = $"Tu orden {numero} ha sido rechazada";
+                cuerpo = string.IsNullOrWhiteSpace(data.Motivo)
+                    ? $"Lamentamos informarte que tu orden {numero} no pudo ser procesada y fue rechazada."
+                    : $"Lamentamos informarte que tu orden {numero} fue rechazada. Motivo del rechazo: {data.Motivo}.";
+                break;
+
+            case EstadoOrden.CANCELADA:
+            case EstadoOrden.CANCELADA_RESERVA_VENCIDA:
+                asunto = $"Tu orden {numero} ha sido cancelada";
+                cuerpo = string.IsNullOrWhiteSpace(data.Motivo)
+                    ? $"Tu orden {numero} ha sido cancelada."
+                    : $"Tu orden {numero} ha sido cancelada. Motivo: {data.Motivo}.";
+                break;
+
+            case EstadoOrden.LISTA_PARA_RECOGER:
+                asunto = $"Tu orden {numero} esta lista para recoger";
+                cuerpo = $"Tu orden {numero} ya esta lista para que pases a recogerla en la tienda presentando tu numero de orden." +
+                         (!string.IsNullOrWhiteSpace(data.Motivo) ? $" Detalle: {data.Motivo}." : "");
+                break;
+
+            case EstadoOrden.EN_TRANSITO:
+                asunto = $"Tu orden {numero} esta en camino";
+                cuerpo = $"Tu orden {numero} va en camino a tu direccion de entrega." +
+                         (!string.IsNullOrWhiteSpace(data.Motivo) ? $" Detalle: {data.Motivo}." : "");
+                break;
+
+            case EstadoOrden.ENTREGADA:
+                asunto = $"Tu orden {numero} ha sido entregada";
+                cuerpo = $"Tu orden {numero} fue entregada exitosamente. Gracias por tu compra." +
+                         (!string.IsNullOrWhiteSpace(data.Motivo) ? $" Detalle: {data.Motivo}." : "");
+                break;
+
+            default:
+                asunto = $"Tu orden {numero} cambio de estado";
+                cuerpo = $"El estado de tu orden {numero} es ahora: {data.EstadoNuevo}." +
+                         (!string.IsNullOrWhiteSpace(data.Motivo) ? $" Motivo: {data.Motivo}." : "");
+                break;
+        }
+
+        return EnviarOGuardarAsync(
+            new NotificacionSaliente(data.ClienteId, asunto, cuerpo),
             eventId,
             cancelacion);
+    }
 
     public Task NotificarListoParaRecogerAsync(PedidoListoParaRecogerData data, string eventId, CancellationToken cancelacion)
     {

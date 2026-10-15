@@ -1,0 +1,164 @@
+@model List<SgoLogic.Web.Services.NotificacionMensajeModel>
+@{
+    ViewData["Title"] = "Mis Notificaciones - MegaStore";
+    var userEmail = ViewBag.UserEmail as string ?? "usuario@megastore.com";
+    var canalFiltro = ViewBag.CanalFiltro as string ?? "";
+    var totalMensajes = Model?.Count ?? 0;
+}
+
+<div class="w-full max-w-container-max mx-auto flex flex-col gap-8">
+    <!-- Header -->
+    <div class="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-border-subtle">
+        <div>
+            <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-secondary-fixed text-on-secondary-fixed text-xs font-semibold mb-2">
+                <span class="material-symbols-outlined text-[15px]" style="font-variation-settings: 'FILL' 1;">notifications_active</span>
+                Centro de Notificaciones &bull; Microkernel Multicanal
+            </div>
+            <h1 class="text-2xl sm:text-3xl font-bold text-primary tracking-tight">Mis Notificaciones</h1>
+            <p class="text-xs sm:text-sm text-text-muted">Avisos transaccionales en tiempo real sobre confirmaciones, estado de pagos, motivos de rechazo y entregas.</p>
+        </div>
+
+        <div class="flex items-center gap-3">
+            <a href="/Cuenta/Ordenes" class="bg-surface-white border border-border-subtle text-primary px-4 py-2 rounded-xl text-xs font-semibold hover:bg-surface-container-low active:scale-95 transition-all flex items-center gap-1.5 shadow-sm">
+                <span class="material-symbols-outlined text-[16px]">receipt_long</span>
+                Mis Pedidos
+            </a>
+            <a href="/Catalogo" class="bg-primary text-on-primary px-4 py-2 rounded-xl text-xs font-semibold hover:opacity-90 active:scale-95 transition-all flex items-center gap-1.5 shadow-sm">
+                <span class="material-symbols-outlined text-[16px]">storefront</span>
+                Seguir Comprando
+            </a>
+        </div>
+    </div>
+
+    <!-- Filters & Search -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-surface-white p-4 rounded-2xl border border-border-subtle shadow-sm">
+        <div class="flex flex-wrap items-center gap-2">
+            <a href="/Cuenta/Notificaciones" class="px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors @(string.IsNullOrWhiteSpace(canalFiltro) ? "bg-primary text-on-primary" : "bg-surface-container-low text-text-muted hover:text-primary")">
+                Todas (@totalMensajes)
+            </a>
+            <a href="/Cuenta/Notificaciones?canal=EMAIL" class="px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors @(string.Equals(canalFiltro, "EMAIL", StringComparison.OrdinalIgnoreCase) ? "bg-primary text-on-primary" : "bg-surface-container-low text-text-muted hover:text-primary")">
+                Email
+            </a>
+            <a href="/Cuenta/Notificaciones?canal=SMS" class="px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors @(string.Equals(canalFiltro, "SMS", StringComparison.OrdinalIgnoreCase) ? "bg-primary text-on-primary" : "bg-surface-container-low text-text-muted hover:text-primary")">
+                SMS
+            </a>
+            <a href="/Cuenta/Notificaciones?canal=PUSH" class="px-3.5 py-1.5 rounded-full text-xs font-semibold transition-colors @(string.Equals(canalFiltro, "PUSH", StringComparison.OrdinalIgnoreCase) ? "bg-primary text-on-primary" : "bg-surface-container-low text-text-muted hover:text-primary")">
+                Push
+            </a>
+        </div>
+
+        <div class="relative w-full sm:w-64">
+            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-text-muted">search</span>
+            <input type="text" id="filtroTexto" placeholder="Buscar en notificaciones..." class="w-full pl-9 pr-3 py-1.5 text-xs rounded-xl border border-border-subtle bg-surface-container-lowest focus:outline-none focus:border-secondary transition-colors" oninput="filtrarNotificaciones()" />
+        </div>
+    </div>
+
+    <!-- Notifications List -->
+    @if (Model is null || Model.Count == 0)
+    {
+        <div class="flex flex-col items-center justify-center py-16 px-4 bg-surface-white rounded-3xl border border-border-subtle shadow-sm text-center">
+            <div class="w-16 h-16 rounded-2xl bg-surface-container-low flex items-center justify-center mb-4 text-text-muted">
+                <span class="material-symbols-outlined text-[32px]">notifications_off</span>
+            </div>
+            <h3 class="text-base font-bold text-primary mb-1">No tienes notificaciones en este canal</h3>
+            <p class="text-xs text-text-muted max-w-md">Cuando realices compras o cambie el estado de tus pedidos y evaluaciones de credito, veras tus avisos reflejados aqui en tiempo real.</p>
+        </div>
+    }
+    else
+    {
+        <div class="flex flex-col gap-3" id="contenedorNotificaciones">
+            @foreach (var notif in Model)
+            {
+                var iconCanal = notif.Canal switch
+                {
+                    "EMAIL" => "mail",
+                    "SMS" => "sms",
+                    "PUSH" => "notifications",
+                    "WEBHOOK" => "webhook",
+                    _ => "chat"
+                };
+
+                var colorCanal = notif.Canal switch
+                {
+                    "EMAIL" => "bg-blue-50 text-blue-700 border-blue-200",
+                    "SMS" => "bg-emerald-50 text-emerald-700 border-emerald-200",
+                    "PUSH" => "bg-purple-50 text-purple-700 border-purple-200",
+                    "WEBHOOK" => "bg-amber-50 text-amber-700 border-amber-200",
+                    _ => "bg-gray-50 text-gray-700 border-gray-200"
+                };
+
+                var esRechazo = (notif.Asunto?.Contains("rechazada", StringComparison.OrdinalIgnoreCase) ?? false)
+                             || (notif.Cuerpo?.Contains("rechazada", StringComparison.OrdinalIgnoreCase) ?? false)
+                             || (notif.Cuerpo?.Contains("cancelada", StringComparison.OrdinalIgnoreCase) ?? false);
+
+                var esConfirmada = (notif.Asunto?.Contains("confirmada", StringComparison.OrdinalIgnoreCase) ?? false)
+                                || (notif.Cuerpo?.Contains("confirmada", StringComparison.OrdinalIgnoreCase) ?? false);
+
+                <div class="notif-item bg-surface-white p-5 rounded-2xl border border-border-subtle shadow-sm hover:border-secondary/40 transition-all flex flex-col md:flex-row md:items-start justify-between gap-4"
+                     data-texto="@((notif.Asunto ?? "") + " " + notif.Cuerpo + " " + notif.Canal)">
+                    <div class="flex items-start gap-4">
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 @(esRechazo ? "bg-red-50 text-red-600" : (esConfirmada ? "bg-emerald-50 text-emerald-600" : "bg-secondary-fixed text-on-secondary-fixed"))">
+                            <span class="material-symbols-outlined text-[20px]">@iconCanal</span>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <div class="flex flex-wrap items-center gap-2">
+                                <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border @colorCanal">
+                                    @notif.Canal
+                                </span>
+                                @if (esRechazo)
+                                {
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-red-100 text-red-700 border border-red-200">
+                                        Rechazo / Cancelacion
+                                    </span>
+                                }
+                                else if (esConfirmada)
+                                {
+                                    <span class="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-emerald-100 text-emerald-700 border border-emerald-200">
+                                        Confirmada
+                                    </span>
+                                }
+                                <span class="text-[11px] text-text-muted font-mono">
+                                    ID: @notif.MensajeId
+                                </span>
+                            </div>
+                            <h3 class="text-sm font-bold text-primary mt-1">
+                                @(string.IsNullOrWhiteSpace(notif.Asunto) ? "Aviso de SGO-Logic" : notif.Asunto)
+                            </h3>
+                            <p class="text-xs text-on-surface-variant leading-relaxed mt-0.5">
+                                @notif.Cuerpo
+                            </p>
+                            <div class="flex items-center gap-2 mt-2 text-[11px] text-text-muted">
+                                <span class="material-symbols-outlined text-[14px]">schedule</span>
+                                <span>@notif.Fecha.ToLocalTime().ToString("dd/MM/yyyy HH:mm:ss")</span>
+                                <span>&bull;</span>
+                                <span>Destino: <strong class="font-mono text-primary">@notif.Destinatario</strong></span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="flex md:flex-col items-center md:items-end justify-between gap-2 flex-shrink-0 border-t md:border-t-0 pt-2 md:pt-0 border-border-subtle/40">
+                        <span class="inline-flex items-center gap-1 text-[11px] font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded-full border border-emerald-100">
+                            <span class="material-symbols-outlined text-[13px]">check_circle</span>
+                            Entregado
+                        </span>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+<script>
+    function filtrarNotificaciones() {
+        const busqueda = document.getElementById('filtroTexto').value.toLowerCase().trim();
+        const items = document.querySelectorAll('.notif-item');
+        items.forEach(item => {
+            const texto = item.getAttribute('data-texto').toLowerCase();
+            if (texto.includes(busqueda)) {
+                item.style.display = 'flex';
+            } else {
+                item.style.display = 'none';
+            }
+        });
+    }
+</script>
