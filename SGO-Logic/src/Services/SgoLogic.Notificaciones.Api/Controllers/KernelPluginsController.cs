@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using SgoLogic.Notificaciones.Api.Infrastructure;
 using SgoLogic.Notificaciones.Api.Kernel.Abstractions;
 
 namespace SgoLogic.Notificaciones.Api.Controllers;
@@ -86,5 +88,32 @@ public sealed class KernelPluginsController : ControllerBase
         var resultado = await _kernel.DespacharAsync(solicitud, ct);
 
         return Ok(resultado);
+    }
+
+    /// <summary>Lista las notificaciones pendientes de reintento gestionadas por el Microkernel.</summary>
+    [HttpGet("pendientes")]
+    public async Task<IActionResult> ObtenerPendientes([FromServices] NotificacionesDbContext db, CancellationToken ct)
+    {
+        var pendientes = await db.NotificacionesPendientes
+            .OrderByDescending(p => p.CreadaEn)
+            .Take(50)
+            .Select(p => new
+            {
+                p.Id,
+                p.EventId,
+                p.Canal,
+                p.Destinatario,
+                p.Asunto,
+                p.Cuerpo,
+                Estado = p.Estado.ToString(),
+                p.Intentos,
+                p.ProximoIntentoEn,
+                p.UltimoError,
+                p.CreadaEn,
+                p.EnviadaEn
+            })
+            .ToListAsync(ct);
+
+        return Ok(pendientes);
     }
 }

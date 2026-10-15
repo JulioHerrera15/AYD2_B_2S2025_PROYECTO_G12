@@ -39,9 +39,12 @@ public sealed class MicrokernelTests
         public Task EnviarAsync(string clienteId, string estadoOrden, string ordenId, CancellationToken ct = default) =>
             EnviarEmailAsync(clienteId, $"Orden {ordenId}", $"Estado {estadoOrden}", ct);
 
+        public List<(string Destinatario, string Asunto, string Cuerpo)> EmailsDetalle { get; } = new();
+
         public Task EnviarEmailAsync(string destinatario, string asunto, string cuerpo, CancellationToken ct = default)
         {
             EmailsEnviados++;
+            EmailsDetalle.Add((destinatario, asunto, cuerpo));
             if (FallarEmail) throw new HttpRequestException("Fallo simulado en Email");
             return Task.CompletedTask;
         }
@@ -212,5 +215,85 @@ public sealed class MicrokernelTests
 
         Assert.Equal(1, mock.EmailsEnviados);
         Assert.Empty(repo.Agregadas);
+    }
+
+    [Fact]
+    public async Task NotificarEstadoOrdenAsync_con_rechazo_y_motivo_usa_numero_y_motivo_segun_cu18()
+    {
+        var registry = new PluginRegistry();
+        var mock = new MockMensajeriaSimulada();
+        var repo = new RepositorioPendientesMemoria();
+
+        registry.Registrar(new EmailNotificacionPlugin(mock, NullLogger<EmailNotificacionPlugin>.Instance));
+        var kernel = new NotificacionesKernel(registry, repo, NullLogger<NotificacionesKernel>.Instance);
+
+        var servicio = new ServicioNotificaciones(
+            mock,
+            repo,
+            NullLogger<ServicioNotificaciones>.Instance,
+            kernel
+        );
+
+        var data = new OrdenEstadoCambiadoData(
+            OrdenId: "ORD-GUID-RECHAZADA-01",
+            NumeroOrden: "MS-000123",
+            ClienteId: "cliente1@sgo.local",
+            EstadoAnterior: EstadoOrden.EVALUACION_CREDITO_SOLICITADA,
+            EstadoNuevo: EstadoOrden.RECHAZADA,
+            Motivo: "Cupo de credito insuficiente para el total solicitado",
+            PasoSaga: null,
+            EsCompensacion: true,
+            CambiadoEn: DateTime.UtcNow
+        );
+
+        await servicio.NotificarEstadoOrdenAsync(data, "EVT-CU18-RECHAZO", CancellationToken.None);
+
+        Assert.Equal(1, mock.EmailsEnviados);
+        var enviado = Assert.Single(mock.EmailsDetalle);
+        Assert.Equal("cliente1@sgo.local", enviado.Destinatario);
+        Assert.Contains("MS-000123", enviado.Asunto);
+        Assert.Contains("rechazada", enviado.Asunto);
+        Assert.DoesNotContain("ORD-GUID-RECHAZADA-01", enviado.Asunto);
+        Assert.Contains("Cupo de credito insuficiente para el total solicitado", enviado.Cuerpo);
+        Assert.Contains("MS-000123", enviado.Cuerpo);
+    }
+
+    [Fact]
+    public async Task NotificarEstadoOrdenAsync_con_confirmacion_usa_numero_de_orden()
+    {
+        var registry = new PluginRegistry();
+        var mock = new MockMensajeriaSimulada();
+        var repo = new RepositorioPendientesMemoria();
+
+        registry.Registrar(new EmailNotificacionPlugin(mock, NullLogger<EmailNotificacionPlugin>.Instance));
+        var kernel = new NotificacionesKernel(registry, repo, NullLogger<NotificacionesKernel>.Instance);
+
+        var servicio = new ServicioNotificaciones(
+            mock,
+            repo,
+            NullLogger<ServicioNotificaciones>.Instance,
+            kernel
+        );
+
+        var data = new OrdenEstadoCambiadoData(
+            OrdenId: "ORD-GUID-CONFIRMADA-01",
+            NumeroOrden: "MS-000456",
+            ClienteId: "cliente1@sgo.local",
+            EstadoAnterior: EstadoOrden.CONFIRMADA_PENDIENTE_FISCAL,
+            EstadoNuevo: EstadoOrden.CONFIRMADA,
+            Motivo: null,
+            PasoSaga: null,
+            EsCompensacion: false,
+            CambiadoEn: DateTime.UtcNow
+        );
+
+        await servicio.NotificarEstadoOrdenAsync(data, "EVT-CU18-CONFIRMADA", CancellationToken.None);
+
+        Assert.Equal(1, mock.EmailsEnviados);
+        var enviado = Assert.Single(mock.EmailsDetalle);
+        Assert.Equal("cliente1@sgo.local", enviado.Destinatario);
+        Assert.Contains("MS-000456", enviado.Asunto);
+        Assert.Contains("confirmada", enviado.Asunto);
+        Assert.DoesNotContain("ORD-GUID-CONFIRMADA-01", enviado.Asunto);
     }
 }
