@@ -663,6 +663,53 @@ public sealed record ExistenciaUbicacionDto(
     public int CantidadDisponible => Disponible;
 }
 
+// ── Modelos de Notificaciones y Microkernel ─────────────────────────────────
+public sealed record PluginMetadataModel(
+    string Id,
+    string Nombre,
+    string Canal,
+    string Version,
+    int Prioridad,
+    bool Habilitado
+);
+
+public sealed record MicrokernelInfoModel(
+    string Arquitectura,
+    int TotalPlugins,
+    List<PluginMetadataModel> Plugins
+);
+
+public sealed record DespachoResultadoModel(
+    bool Exitoso,
+    string? PluginUtilizado,
+    string? Error,
+    bool AisladoFalla
+);
+
+public sealed record NotificacionMensajeModel(
+    string MensajeId,
+    string Canal,
+    string Destinatario,
+    string? Asunto,
+    string Cuerpo,
+    DateTime Fecha
+);
+
+public sealed record NotificacionPendienteModel(
+    Guid Id,
+    string EventId,
+    string Canal,
+    string Destinatario,
+    string Asunto,
+    string Cuerpo,
+    string Estado,
+    int Intentos,
+    DateTime ProximoIntentoEn,
+    string? UltimoError,
+    DateTime CreadaEn,
+    DateTime? EnviadaEn
+);
+
 /// <summary>
 /// Cliente tipado hacia el API Gateway. No modifica DefaultRequestHeaders: los
 /// encabezados de la sesion (Authorization y X-Session-Id) los agrega
@@ -1677,6 +1724,113 @@ public sealed class GatewayClient
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
         {
             return new ResultadoReintentoModel(false, null, "No pudimos comunicarnos con el servicio de pagos.");
+        }
+    }
+
+    // ── Notificaciones & Microkernel ─────────────────────────────────────────
+
+    public async Task<MicrokernelInfoModel?> ObtenerPluginsKernelAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            return await _http.GetFromJsonAsync<MicrokernelInfoModel>("/api/kernel/plugins", JsonOptions, ct);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    public async Task<(bool Exito, string? Error)> TogglePluginKernelAsync(string pluginId, bool habilitado, CancellationToken ct = default)
+    {
+        try
+        {
+            var res = await _http.PostAsync($"/api/kernel/plugins/{Uri.EscapeDataString(pluginId)}/toggle?habilitado={habilitado.ToString().ToLowerInvariant()}", null, ct);
+            if (res.IsSuccessStatusCode)
+            {
+                return (true, null);
+            }
+            var err = await ParseProblemDetailsOrStringAsync(res, ct);
+            return (false, err);
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message);
+        }
+    }
+
+    public async Task<(bool Exito, string? Error, DespachoResultadoModel? Resultado)> DespacharKernelAsync(
+        string destinatario,
+        string asunto,
+        string cuerpo,
+        string canal = "EMAIL",
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var payload = new
+            {
+                Destinatario = destinatario,
+                Asunto = asunto,
+                Cuerpo = cuerpo,
+                Canal = canal
+            };
+            var res = await _http.PostAsJsonAsync("/api/kernel/despachar", payload, JsonOptions, ct);
+            if (res.IsSuccessStatusCode)
+            {
+                var resultado = await res.Content.ReadFromJsonAsync<DespachoResultadoModel>(JsonOptions, ct);
+                return (true, null, resultado);
+            }
+            var err = await ParseProblemDetailsOrStringAsync(res, ct);
+            return (false, err, null);
+        }
+        catch (Exception ex)
+        {
+            return (false, ex.Message, null);
+        }
+    }
+
+    public async Task<List<NotificacionMensajeModel>> ObtenerMensajesAsync(
+        string? destinatario = null,
+        string? canal = null,
+        CancellationToken ct = default)
+    {
+        try
+        {
+            var url = "/api/mensajes";
+            var queryParams = new List<string>();
+            if (!string.IsNullOrWhiteSpace(destinatario))
+            {
+                queryParams.Add($"destinatario={Uri.EscapeDataString(destinatario)}");
+            }
+            if (!string.IsNullOrWhiteSpace(canal))
+            {
+                queryParams.Add($"canal={Uri.EscapeDataString(canal)}");
+            }
+            if (queryParams.Count > 0)
+            {
+                url += "?" + string.Join("&", queryParams);
+            }
+
+            var mensajes = await _http.GetFromJsonAsync<List<NotificacionMensajeModel>>(url, JsonOptions, ct);
+            return mensajes ?? new List<NotificacionMensajeModel>();
+        }
+        catch
+        {
+            return new List<NotificacionMensajeModel>();
+        }
+    }
+
+    public async Task<List<NotificacionPendienteModel>> ObtenerPendientesKernelAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            var pendientes = await _http.GetFromJsonAsync<List<NotificacionPendienteModel>>("/api/kernel/pendientes", JsonOptions, ct);
+            return pendientes ?? new List<NotificacionPendienteModel>();
+        }
+        catch
+        {
+            return new List<NotificacionPendienteModel>();
         }
     }
 }

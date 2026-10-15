@@ -24,6 +24,14 @@ public sealed record EnviarMensajeResponse(
     string Estado,
     string? Error);
 
+public sealed record MensajeEnviado(
+    string MensajeId,
+    string Canal,
+    string Destinatario,
+    string? Asunto,
+    string Cuerpo,
+    DateTime Fecha);
+
 /// <summary>
 /// Mock del proveedor externo de mensajeria (SMS, email, push).
 /// Permite simular envios exitosos o fallidos segun la variable de entorno
@@ -33,7 +41,7 @@ public sealed record EnviarMensajeResponse(
 [Route("api/mensajes")]
 public sealed class MensajesController : ControllerBase
 {
-    private static readonly ConcurrentQueue<object> _mensajesEnviados = new();
+    private static readonly ConcurrentQueue<MensajeEnviado> _mensajesEnviados = new();
     private static bool? _forzarFallaOverride;
     private readonly IConfiguration _config;
     private readonly bool _forzarFallaConfig;
@@ -48,11 +56,24 @@ public sealed class MensajesController : ControllerBase
         _logger = logger;
     }
 
-    /// <summary>Retorna los mensajes enviados registrados en memoria.</summary>
+    /// <summary>Retorna los mensajes enviados registrados en memoria, con filtrado opcional por destinatario y canal.</summary>
     [HttpGet]
-    public IActionResult ObtenerMensajes()
+    public IActionResult ObtenerMensajes([FromQuery] string? destinatario = null, [FromQuery] string? canal = null)
     {
-        return Ok(_mensajesEnviados.ToArray());
+        IEnumerable<MensajeEnviado> query = _mensajesEnviados;
+        if (!string.IsNullOrWhiteSpace(destinatario))
+        {
+            var d = destinatario.Trim();
+            query = query.Where(m => string.Equals(m.Destinatario, d, StringComparison.OrdinalIgnoreCase)
+                                  || m.Destinatario.Contains(d, StringComparison.OrdinalIgnoreCase));
+        }
+        if (!string.IsNullOrWhiteSpace(canal))
+        {
+            var c = canal.Trim();
+            query = query.Where(m => string.Equals(m.Canal, c, StringComparison.OrdinalIgnoreCase));
+        }
+
+        return Ok(query.Reverse().ToArray());
     }
 
     /// <summary>Permite activar o desactivar la falla forzada dinamicamente para pruebas de resiliencia.</summary>
@@ -119,15 +140,14 @@ public sealed class MensajesController : ControllerBase
             "MOCK [{Canal}] ENVIADO -> {Destinatario} | Asunto: {Asunto} | Cuerpo: {Cuerpo} | MensajeId: {Id}",
             canal, request.Destinatario, request.Asunto ?? "(sin asunto)", request.Cuerpo, mensajeId);
 
-        _mensajesEnviados.Enqueue(new
-        {
-            MensajeId = mensajeId,
-            Canal = canal,
-            Destinatario = request.Destinatario,
-            Asunto = request.Asunto,
-            Cuerpo = request.Cuerpo,
-            Fecha = DateTime.UtcNow
-        });
+        _mensajesEnviados.Enqueue(new MensajeEnviado(
+            MensajeId: mensajeId,
+            Canal: canal,
+            Destinatario: request.Destinatario,
+            Asunto: request.Asunto,
+            Cuerpo: request.Cuerpo,
+            Fecha: DateTime.UtcNow
+        ));
 
         if (canal == "EMAIL" || (request.Destinatario != null && request.Destinatario.Contains('@')))
         {
