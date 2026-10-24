@@ -14,3 +14,4 @@ public interface INotificacionesKernel
 
     Task<ResultadoDespachoPlugin> DespacharReintentoAsync(string canal, string destinatario, string asunto, string cuerpo, CancellationToken cancelacion = default);
 }
+//prueba
